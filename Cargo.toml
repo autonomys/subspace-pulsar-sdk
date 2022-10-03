@@ -12,3 +12,6 @@ tempdir = "0.3"
 bytesize = "1.1"
 
 subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "8007a0acd57064264aa03a8c71eb1c9cc9466994" }
+
+[dev-dependencies]
+tokio = { version = "1.21", features = ["rt-multi-thread", "macros"] }
