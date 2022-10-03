@@ -1,14 +1,17 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+pub mod farmer;
+pub mod node;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub use farmer::{
+    Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotDescription, Solution,
+};
+pub use node::{Builder as NodeBuilder, Info as FarmerInfo, Mode as NodeMode, Network, Node};
+pub use subspace_core_primitives::PublicKey;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+#[derive(Default)]
+#[non_exhaustive]
+enum Directory {
+    #[default]
+    Default,
+    Tmp,
+    Custom(std::path::PathBuf),
 }

@@ -6,3 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+libp2p-core = "0.36"
+either = "1.8"
+tempdir = "0.3"
+bytesize = "1.1"
+
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "8007a0acd57064264aa03a8c71eb1c9cc9466994" }
