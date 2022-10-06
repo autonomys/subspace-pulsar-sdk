@@ -35,32 +35,13 @@ impl PlotDescription {
 
 #[derive(Default)]
 pub struct Builder {
-    reward_address: Option<PublicKey>,
-    node: Option<Node>,
     listen_on: Option<Multiaddr>,
     ws_rpc: Option<SocketAddr>,
-    // TODO: Should we just require a single plot?
-    plots: Vec<PlotDescription>,
 }
 
 impl Builder {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    pub fn node(mut self, node: Node) -> Self {
-        self.node = Some(node);
-        self
-    }
-
-    pub fn reward_address(mut self, reward_address: PublicKey) -> Self {
-        self.reward_address = Some(reward_address);
-        self
-    }
-
-    pub fn plot(mut self, plot: PlotDescription) -> Self {
-        self.plots.push(plot);
-        self
     }
 
     pub fn listen_on(mut self, multiaddr: Multiaddr) -> Self {
@@ -74,7 +55,14 @@ impl Builder {
     }
 
     /// It supposed to open node at the supplied location
-    pub async fn build(self) -> Result<Farmer, ()> {
+    // TODO: Should we just require multiple plots?
+    pub async fn build(
+        self,
+        reward_address: PublicKey,
+        node: Node,
+        plot: PlotDescription,
+    ) -> Result<Farmer, ()> {
+        let _ = (reward_address, node, plot);
         todo!()
     }
 }

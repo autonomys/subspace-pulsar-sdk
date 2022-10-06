@@ -1,6 +1,8 @@
 pub mod farmer;
 pub mod node;
 
+use std::path::PathBuf;
+
 pub use farmer::{
     Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotDescription, Solution,
 };
@@ -9,9 +11,15 @@ pub use subspace_core_primitives::PublicKey;
 
 #[derive(Default)]
 #[non_exhaustive]
-enum Directory {
+pub enum Directory {
     #[default]
     Default,
     Tmp,
-    Custom(std::path::PathBuf),
+    Custom(PathBuf),
+}
+
+impl<P: Into<PathBuf>> From<P> for Directory {
+    fn from(path: P) -> Self {
+        Self::Custom(path.into())
+    }
 }

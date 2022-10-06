@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use crate::Directory;
 
 #[non_exhaustive]
@@ -23,7 +21,6 @@ pub struct Builder {
     mode: Mode,
     network: Network,
     name: Option<String>,
-    directory: Directory,
     port: u16,
 }
 
@@ -49,23 +46,14 @@ impl Builder {
         self
     }
 
-    pub fn directory(mut self, path: impl Into<PathBuf>) -> Self {
-        self.directory = Directory::Custom(path.into());
-        self
-    }
-
-    pub fn tmp_directory(mut self) -> Self {
-        self.directory = Directory::Tmp;
-        self
-    }
-
     pub fn port(mut self, port: u16) -> Self {
         self.port = port;
         self
     }
 
     /// It supposed to open node at the supplied location
-    pub async fn build(self) -> Result<Node, ()> {
+    pub async fn build(self, directory: impl Into<Directory>) -> Result<Node, ()> {
+        let _ = directory;
         todo!()
     }
 }
