@@ -1,3 +1,5 @@
+use futures::Stream;
+
 use crate::Directory;
 
 #[non_exhaustive]
@@ -82,6 +84,20 @@ pub struct Block {
     _ensure_cant_construct: (),
 }
 
+pub struct BlockStream {
+    _ensure_cant_construct: (),
+}
+
+impl Stream for BlockStream {
+    type Item = Block;
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        todo!()
+    }
+}
+
 impl Node {
     pub fn builder() -> Builder {
         Builder::new()
@@ -99,11 +115,7 @@ impl Node {
         todo!()
     }
 
-    pub async fn on_block<H, F>(&mut self, callback: H)
-    where
-        H: Clone + Send + Sync + 'static + FnMut(Block) -> F,
-        F: Send + 'static + std::future::Future<Output = ()>,
-    {
-        let _ = callback;
+    pub async fn subscribe_new_blocks(&mut self) -> BlockStream {
+        todo!()
     }
 }

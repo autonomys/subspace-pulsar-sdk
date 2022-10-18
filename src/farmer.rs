@@ -2,6 +2,7 @@ use std::{io, net::SocketAddr, path::PathBuf};
 
 use bytesize::ByteSize;
 use either::Either;
+use futures::Stream;
 use libp2p_core::multiaddr::Multiaddr;
 use tempdir::TempDir;
 
@@ -93,6 +94,20 @@ impl Plot {
     pub async fn delete(&mut self) {}
 }
 
+pub struct SolutionStream {
+    _ensure_cant_construct: (),
+}
+
+impl Stream for SolutionStream {
+    type Item = Solution;
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        todo!()
+    }
+}
+
 impl Farmer {
     pub fn builder() -> Builder {
         Builder::new()
@@ -108,12 +123,8 @@ impl Farmer {
         todo!()
     }
 
-    pub async fn on_solution<H, F>(&mut self, on_solution: H)
-    where
-        H: Clone + Send + Sync + 'static + FnMut(Solution) -> F,
-        F: Send + 'static + std::future::Future<Output = ()>,
-    {
-        let _ = on_solution;
+    pub async fn subscribe_solutions(&mut self) -> SolutionStream {
+        todo!()
     }
 
     pub async fn plots(&mut self) -> &mut [Plot] {
