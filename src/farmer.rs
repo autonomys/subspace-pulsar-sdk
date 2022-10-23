@@ -56,14 +56,13 @@ impl Builder {
     }
 
     /// It supposed to open node at the supplied location
-    // TODO: Should we just require multiple plots?
     pub async fn build(
         self,
         reward_address: PublicKey,
         node: Node,
-        plot: PlotDescription,
+        plots: Vec<PlotDescription>,
     ) -> Result<Farmer, ()> {
-        let _ = (reward_address, node, plot);
+        let _ = (reward_address, node, plots);
         todo!()
     }
 }

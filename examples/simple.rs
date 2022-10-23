@@ -22,7 +22,7 @@ async fn main() {
         .build(
             reward_address,
             node.clone(),
-            PlotDescription::new("plot", ByteSize::gb(10)),
+            vec![PlotDescription::new("plot", ByteSize::gb(10))],
         )
         .await
         .expect("Failed to init a farmer");
@@ -68,7 +68,7 @@ async fn main() {
         .build(
             reward_address,
             node.clone(),
-            PlotDescription::new("plot", ByteSize::gb(10)),
+            vec![PlotDescription::new("plot", ByteSize::gb(10))],
         )
         .await
         .expect("Failed to init a farmer");
