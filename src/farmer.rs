@@ -1,12 +1,16 @@
-use std::{io, net::SocketAddr, path::PathBuf};
+use std::{io, path::PathBuf};
 
+use anyhow::Context;
 use bytesize::ByteSize;
-use either::Either;
-use futures::Stream;
-use libp2p_core::multiaddr::Multiaddr;
+use either::*;
+use futures::stream::{FuturesUnordered, Stream, StreamExt};
 use tempdir::TempDir;
 
 use crate::{Node, PublicKey};
+
+use subspace_farmer::single_disk_plot::{
+    SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotOptions,
+};
 
 // TODO: Should it be non-exhaustive?
 pub struct PlotDescription {
@@ -36,8 +40,18 @@ impl PlotDescription {
 
 #[derive(Default)]
 pub struct Builder {
-    listen_on: Option<Multiaddr>,
-    ws_rpc: Option<SocketAddr>,
+    _ensure_cant_construct: (),
+    // TODO: add once those will be used
+    // listen_on: Option<Multiaddr>,
+    // ws_rpc: Option<SocketAddr>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum BuildError {
+    #[error("Single disk plot creation error: {0}")]
+    SingleDiskPlotCreate(#[from] SingleDiskPlotError),
+    #[error("No plots error")]
+    NoPlotsSupplied,
 }
 
 impl Builder {
@@ -45,25 +59,56 @@ impl Builder {
         Self::default()
     }
 
-    pub fn listen_on(mut self, multiaddr: Multiaddr) -> Self {
-        self.listen_on = Some(multiaddr);
-        self
-    }
-
-    pub fn ws_rpc(mut self, ws_rpc: SocketAddr) -> Self {
-        self.ws_rpc = Some(ws_rpc);
-        self
-    }
+    // TODO: add once those will be used
+    // pub fn listen_on(mut self, multiaddr: Multiaddr) -> Self {
+    //     self.listen_on = Some(multiaddr);
+    //     self
+    // }
+    //
+    // pub fn ws_rpc(mut self, ws_rpc: SocketAddr) -> Self {
+    //     self.ws_rpc = Some(ws_rpc);
+    //     self
+    // }
 
     /// It supposed to open node at the supplied location
     pub async fn build(
         self,
         reward_address: PublicKey,
         node: Node,
-        plots: Vec<PlotDescription>,
-    ) -> Result<Farmer, ()> {
-        let _ = (reward_address, node, plots);
-        todo!()
+        plots: &[PlotDescription],
+    ) -> Result<Farmer, BuildError> {
+        if plots.is_empty() {
+            return Err(BuildError::NoPlotsSupplied);
+        }
+
+        let mut single_disk_plots_stream = plots
+            .iter()
+            .map(|description| SingleDiskPlotOptions {
+                allocated_space: description.space_pledged.as_u64(),
+                directory: description
+                    .directory
+                    .as_ref()
+                    .map_left(AsRef::as_ref)
+                    .left_or_else(|tempdir| tempdir.path())
+                    .to_owned(),
+                reward_address,
+                rpc_client: node.clone(),
+            })
+            .map(SingleDiskPlot::new)
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(SingleDiskPlot::wait)
+            .collect::<FuturesUnordered<_>>();
+
+        tokio::spawn(async move {
+            single_disk_plots_stream
+                .next()
+                .await
+                .expect("We always have at least ")
+        });
+        Ok(Farmer {
+            _ensure_cant_construct: (),
+        })
     }
 }
 

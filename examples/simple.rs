@@ -17,12 +17,12 @@ async fn main() {
 
     let reward_address = PublicKey::from([0; 32]);
     let mut farmer: Farmer = Farmer::builder()
-        .ws_rpc("127.0.0.1:9955".parse().unwrap())
-        .listen_on("/ip4/0.0.0.0/tcp/40333".parse().unwrap())
+        // .ws_rpc("127.0.0.1:9955".parse().unwrap())
+        // .listen_on("/ip4/0.0.0.0/tcp/40333".parse().unwrap())
         .build(
             reward_address,
             node.clone(),
-            vec![PlotDescription::new("plot", ByteSize::gb(10))],
+            &[PlotDescription::new("plot", ByteSize::gb(10))],
         )
         .await
         .expect("Failed to init a farmer");
@@ -68,7 +68,7 @@ async fn main() {
         .build(
             reward_address,
             node.clone(),
-            vec![PlotDescription::new("plot", ByteSize::gb(10))],
+            &[PlotDescription::new("plot", ByteSize::gb(10))],
         )
         .await
         .expect("Failed to init a farmer");
