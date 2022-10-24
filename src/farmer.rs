@@ -1,9 +1,11 @@
 use std::{io, path::PathBuf};
 
-use anyhow::Context;
 use bytesize::ByteSize;
 use either::*;
-use futures::stream::{FuturesUnordered, Stream, StreamExt};
+use futures::{
+    stream::{FuturesUnordered, Stream, StreamExt},
+    SinkExt,
+};
 use tempdir::TempDir;
 
 use crate::{Node, PublicKey};
@@ -70,6 +72,9 @@ impl Builder {
     //     self
     // }
 
+    // TODO: put some proper value
+    const CMD_CHANNEL_SIZE: usize = 10;
+
     /// It supposed to open node at the supplied location
     pub async fn build(
         self,
@@ -100,20 +105,49 @@ impl Builder {
             .map(SingleDiskPlot::wait)
             .collect::<FuturesUnordered<_>>();
 
+        let (cmd_sender, mut cmd_receiver) =
+            futures::channel::mpsc::channel(Self::CMD_CHANNEL_SIZE);
         tokio::spawn(async move {
-            single_disk_plots_stream
-                .next()
+            let maybe_stop_sender = loop {
+                let cmd = match futures::future::select(
+                    single_disk_plots_stream.next(),
+                    cmd_receiver.next(),
+                )
                 .await
-                .expect("We always have at least ")
+                {
+                    futures::future::Either::Left((Some(result), _)) => {
+                        result?;
+                        continue;
+                    }
+                    futures::future::Either::Left((None, _)) => return anyhow::Ok(()),
+                    futures::future::Either::Right((None, _)) => break None,
+                    futures::future::Either::Right((Some(cmd), _)) => cmd,
+                };
+
+                match cmd {
+                    FarmerCommand::Stop(stop_sender) => {
+                        break Some(stop_sender);
+                    }
+                }
+            };
+
+            drop(single_disk_plots_stream);
+            if let Some(stop_sender) = maybe_stop_sender {
+                let _ = stop_sender.send(());
+            }
+            Ok(())
         });
-        Ok(Farmer {
-            _ensure_cant_construct: (),
-        })
+
+        Ok(Farmer { cmd_sender })
     }
 }
 
+enum FarmerCommand {
+    Stop(futures::channel::oneshot::Sender<()>),
+}
+
 pub struct Farmer {
-    _ensure_cant_construct: (),
+    cmd_sender: futures::channel::mpsc::Sender<FarmerCommand>,
 }
 
 #[derive(Debug)]
@@ -176,8 +210,27 @@ impl Farmer {
     }
 
     // Stops farming, closes plots, and sends signal to the node
-    pub async fn close(self) {}
+    pub async fn close(mut self) -> anyhow::Result<()> {
+        let (stop_sender, stop_receiver) = futures::channel::oneshot::channel();
+        if self
+            .cmd_sender
+            .send(FarmerCommand::Stop(stop_sender))
+            .await
+            .is_err()
+        {
+            return Err(anyhow::anyhow!("Noone is listening for our commands"));
+        }
+
+        stop_receiver
+            .await
+            .expect("We should always receive here, as task is alive");
+        Ok(())
+    }
 
     // Runs `.close()` and also wipes farmer's state
-    pub async fn wipe(self) {}
+    pub async fn wipe(self) -> anyhow::Result<()> {
+        self.close().await?;
+        // TODO: add actual wiping of data
+        Ok(())
+    }
 }
