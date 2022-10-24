@@ -2,10 +2,7 @@ use std::{io, path::PathBuf};
 
 use bytesize::ByteSize;
 use either::*;
-use futures::{
-    stream::{FuturesUnordered, Stream, StreamExt},
-    SinkExt,
-};
+use futures::{prelude::*, stream::FuturesUnordered};
 use tempdir::TempDir;
 
 use crate::{Node, PublicKey};
@@ -86,9 +83,10 @@ impl Builder {
             return Err(BuildError::NoPlotsSupplied);
         }
 
-        let mut single_disk_plots_stream = plots
-            .iter()
-            .map(|description| SingleDiskPlotOptions {
+        let mut single_disk_plots = Vec::with_capacity(plots.len());
+
+        for description in plots {
+            let description = SingleDiskPlotOptions {
                 allocated_space: description.space_pledged.as_u64(),
                 directory: description
                     .directory
@@ -98,9 +96,15 @@ impl Builder {
                     .to_owned(),
                 reward_address,
                 rpc_client: node.clone(),
-            })
-            .map(SingleDiskPlot::new)
-            .collect::<Result<Vec<_>, _>>()?
+            };
+            let single_disk_plot =
+                tokio::task::spawn_blocking(move || SingleDiskPlot::new(description))
+                    .await
+                    .expect("Single disk plot never panics")?;
+            single_disk_plots.push(single_disk_plot);
+        }
+
+        let mut single_disk_plots_stream = single_disk_plots
             .into_iter()
             .map(SingleDiskPlot::wait)
             .collect::<FuturesUnordered<_>>();
