@@ -25,6 +25,7 @@ pub struct Builder {
     directory: Directory,
     name: Option<String>,
     port: u16,
+    validate: bool,
 }
 
 impl Builder {
@@ -39,6 +40,11 @@ impl Builder {
 
     pub fn chain(mut self, chain: Chain) -> Self {
         self.chain = chain;
+        self
+    }
+
+    pub fn validator(mut self, validate: bool) -> Self {
+        self.validate = validate;
         self
     }
 
