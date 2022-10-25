@@ -1,12 +1,12 @@
 use bytesize::ByteSize;
 use futures::StreamExt;
-use subspace_sdk::{Farmer, Network, Node, NodeMode, PlotDescription, PublicKey};
+use subspace_sdk::{Chain, Farmer, Node, NodeMode, PlotDescription, PublicKey};
 
 #[tokio::main]
 async fn main() {
     let mut node: Node = Node::builder()
         .mode(NodeMode::Full)
-        .network(Network::Gemini2a)
+        .chain(Chain::Gemini2a)
         .name("i1i1")
         .port(1337)
         .at_directory("node")
@@ -59,7 +59,7 @@ async fn main() {
     // Restarting
     let mut node = Node::builder()
         .mode(NodeMode::Full)
-        .network(Network::Gemini2a)
+        .chain(Chain::Gemini2a)
         .at_directory("node")
         .build()
         .await

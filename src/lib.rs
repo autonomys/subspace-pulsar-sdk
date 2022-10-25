@@ -6,7 +6,7 @@ use std::path::PathBuf;
 pub use farmer::{
     Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotDescription, Solution,
 };
-pub use node::{Builder as NodeBuilder, Info as FarmerInfo, Mode as NodeMode, Network, Node};
+pub use node::{Builder as NodeBuilder, Chain, Info as FarmerInfo, Mode as NodeMode, Node};
 pub use subspace_core_primitives::PublicKey;
 
 #[derive(Default)]

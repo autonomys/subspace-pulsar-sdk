@@ -11,7 +11,7 @@ pub enum Mode {
 
 #[non_exhaustive]
 #[derive(Debug, Default)]
-pub enum Network {
+pub enum Chain {
     #[default]
     Gemini2a,
     // TODO: put proper type here
@@ -21,7 +21,7 @@ pub enum Network {
 #[derive(Default)]
 pub struct Builder {
     mode: Mode,
-    network: Network,
+    chain: Chain,
     directory: Directory,
     name: Option<String>,
     port: u16,
@@ -37,8 +37,8 @@ impl Builder {
         self
     }
 
-    pub fn network(mut self, network: Network) -> Self {
-        self.network = network;
+    pub fn chain(mut self, chain: Chain) -> Self {
+        self.chain = chain;
         self
     }
 
@@ -74,7 +74,7 @@ pub struct Node {
 #[non_exhaustive]
 pub struct Info {
     pub version: String,
-    pub network: Network,
+    pub chain: Chain,
     pub mode: Mode,
     pub name: Option<String>,
     pub connected_peers: u64,
