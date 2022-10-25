@@ -9,7 +9,8 @@ async fn main() {
         .network(Network::Gemini2a)
         .name("i1i1")
         .port(1337)
-        .build("node")
+        .at_directory("node")
+        .build()
         .await
         .expect("Failed to init a node");
 
@@ -59,7 +60,8 @@ async fn main() {
     let mut node = Node::builder()
         .mode(NodeMode::Full)
         .network(Network::Gemini2a)
-        .build("node")
+        .at_directory("node")
+        .build()
         .await
         .expect("Failed to init a node");
     node.sync().await;

@@ -22,6 +22,7 @@ pub enum Network {
 pub struct Builder {
     mode: Mode,
     network: Network,
+    directory: Directory,
     name: Option<String>,
     port: u16,
 }
@@ -53,9 +54,13 @@ impl Builder {
         self
     }
 
+    pub fn at_directory(mut self, directory: impl Into<Directory>) -> Self {
+        self.directory = directory.into();
+        self
+    }
+
     /// It supposed to open node at the supplied location
-    pub async fn build(self, directory: impl Into<Directory>) -> Result<Node, ()> {
-        let _ = directory;
+    pub async fn build(self) -> Result<Node, ()> {
         todo!()
     }
 }
