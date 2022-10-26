@@ -143,6 +143,13 @@ impl Builder {
             }
         }
 
+        #[derive(clap::Parser)]
+        #[clap(version = "0.1-some-version-so-clippy-won't-panic")]
+        struct Cli {
+            #[clap(flatten)]
+            node: subspace_node::Cli,
+        }
+
         let Self {
             mode: Mode::Full,
             chain,
@@ -171,7 +178,7 @@ impl Builder {
         }
         args.extend_from_slice(&["--port".into(), port.to_string().into()]);
 
-        let mut cli = <subspace_node::Cli as clap::Parser>::parse_from(args);
+        let Cli { node: mut cli } = <Cli as clap::Parser>::parse_from(args);
 
         // Increase default number of peers
         cli.run.network_params.out_peers = 50;
