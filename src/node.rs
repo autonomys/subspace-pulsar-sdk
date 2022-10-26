@@ -127,7 +127,7 @@ impl Builder {
         self
     }
 
-    /// It supposed to open node at the supplied location
+    /// Start a node with supplied parameters
     pub async fn build(self) -> Result<Node, BuildError> {
         struct SecondaryExecutorDispatch;
 
@@ -168,7 +168,12 @@ impl Builder {
         match &directory {
             Directory::Tmp => args.extend_from_slice(&["--tmp".into()]),
             Directory::Custom(path) => args.extend_from_slice(&["--base-path".into(), path.into()]),
-            Directory::Default => (), // TODO: add default path here
+            Directory::Default => {
+                let path = dirs::data_local_dir()
+                    .expect("Can't find local data directory, needs to be specified explicitly")
+                    .join("subspace-node");
+                args.extend_from_slice(&["--base-path".into(), path.into()])
+            }
         };
         if let Some(name) = name {
             args.extend_from_slice(&["--name".into(), name.into()]);

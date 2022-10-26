@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 bytesize = "1.1"
 clap = { version = "3", features = ["derive"] }
+dirs = "4"
 either = "1.8"
 futures = "0.3"
 libp2p-core = "0.34"
