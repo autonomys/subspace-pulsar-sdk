@@ -29,13 +29,21 @@ pub enum Chain {
     Custom(std::convert::Infallible),
 }
 
+struct Port(u16);
+
+impl Default for Port {
+    fn default() -> Self {
+        Self(30_333)
+    }
+}
+
 #[derive(Default)]
 pub struct Builder {
     mode: Mode,
     chain: Chain,
     directory: Directory,
     name: Option<String>,
-    port: u16,
+    port: Port,
     validate: bool,
 }
 
@@ -107,7 +115,7 @@ impl Builder {
     }
 
     pub fn port(mut self, port: u16) -> Self {
-        self.port = port;
+        self.port = Port(port);
         self
     }
 
@@ -137,7 +145,7 @@ impl Builder {
             chain,
             directory,
             name,
-            port,
+            port: Port(port),
             validate,
         } = self;
         let mut args = vec![std::ffi::OsString::from("node-binary-place-holder")];
