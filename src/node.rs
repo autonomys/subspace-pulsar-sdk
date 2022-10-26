@@ -11,7 +11,10 @@ use subspace_node::{ExecutorDispatch, SecondaryChainCli};
 use subspace_runtime::RuntimeApi;
 use subspace_service::SubspaceConfiguration;
 
-use crate::Directory;
+use crate::{
+    utils::{self, AbortingJoinHandle},
+    Directory,
+};
 
 #[non_exhaustive]
 #[derive(Debug, Default)]
@@ -312,14 +315,14 @@ impl Builder {
         });
 
         Ok(Node {
-            _handle: Arc::new(handle),
+            _handle: Arc::new(AbortingJoinHandle::new(handle)),
         })
     }
 }
 
 #[derive(Clone)]
 pub struct Node {
-    _handle: Arc<tokio::task::JoinHandle<Result<(), BuildError>>>,
+    _handle: Arc<utils::AbortingJoinHandle<Result<(), BuildError>>>,
 }
 
 #[derive(Debug)]
@@ -374,5 +377,15 @@ impl Node {
 
     pub async fn subscribe_new_blocks(&mut self) -> BlockStream {
         todo!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_start_node() {
+        Node::builder().build().await.unwrap();
     }
 }
