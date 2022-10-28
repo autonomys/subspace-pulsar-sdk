@@ -1,5 +1,4 @@
 use futures::Stream;
-use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 
 use anyhow::Context;
@@ -17,10 +16,9 @@ use sc_service::{
     TracingReceiver,
 };
 use sc_subspace_chain_specs::ConsensusChainSpec;
-use subspace_fraud_proof::VerifyFraudProof;
 use subspace_node::ExecutorDispatch;
 use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
-use subspace_service::{FullClient, NewFull, SubspaceConfiguration};
+use subspace_service::{FullClient, SubspaceConfiguration};
 
 use crate::Directory;
 
@@ -39,14 +37,21 @@ pub enum Chain {
     Custom(ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>),
 }
 
+impl std::fmt::Debug for Chain {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Gemini2a => write!(f, "Gemini2a"),
+            Self::Custom(custom) => write!(f, "Custom({})", custom.name()),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct Builder {
     mode: Mode,
     chain: Chain,
     directory: Directory,
     name: Option<String>,
-    port: u16,
-    validate: bool,
 }
 
 impl Builder {
@@ -71,11 +76,6 @@ impl Builder {
         self
     }
 
-    pub fn port(mut self, port: u16) -> Self {
-        self.port = port;
-        self
-    }
-
     pub fn at_directory(mut self, directory: impl Into<Directory>) -> Self {
         self.directory = directory.into();
         self
@@ -88,8 +88,6 @@ impl Builder {
             chain,
             directory,
             name,
-            port: _,
-            validate: _,
         } = self;
 
         let chain_spec = match chain {
@@ -99,12 +97,25 @@ impl Builder {
             .expect("Chain spec is always valid"),
             Chain::Custom(chain_spec) => chain_spec,
         };
-        let base_directory = match directory {
-            Directory::Custom(path) => path,
-            _ => todo!("Handle other cases"),
+        let base_path = match directory {
+            Directory::Custom(path) => BasePath::Permanenent(path),
+            Directory::Tmp => {
+                BasePath::new_temp_dir().context("Failed to create temporary directory")?
+            }
+            Directory::Default => BasePath::Permanenent(
+                dirs::data_local_dir()
+                    .expect("Can't find local data directory, needs to be specified explicitly")
+                    .join("subspace-node"),
+            ),
         };
-        let mut full_client =
-            create_full_client(base_directory, chain_spec, name.unwrap_or_default()).await?;
+
+        let mut full_client = subspace_service::new_full::<RuntimeApi, ExecutorDispatch>(
+            create_configuration(base_path, chain_spec, name).await,
+            true,
+            sc_consensus_slots::SlotProportion::new(2f32 / 3f32),
+        )
+        .await
+        .context("Failed to build a full subspace node")?;
 
         full_client.network_starter.start_network();
 
@@ -120,44 +131,16 @@ impl Builder {
     }
 }
 
-// TODO: Allow customization of a bunch of these things
-async fn create_full_client<CS: ChainSpec + 'static>(
-    base_path: PathBuf,
-    chain_spec: CS,
-    node_name: String,
-) -> anyhow::Result<
-    NewFull<
-        FullClient<RuntimeApi, ExecutorDispatch>,
-        impl VerifyFraudProof + Clone + Send + Sync + 'static,
-    >,
-> {
-    let config = create_configuration(
-        BasePath::Permanenent(base_path),
-        chain_spec,
-        tokio::runtime::Handle::current(),
-        node_name,
-    );
-
-    subspace_service::new_full::<RuntimeApi, ExecutorDispatch>(
-        config,
-        true,
-        sc_consensus_slots::SlotProportion::new(2f32 / 3f32),
-    )
-    .await
-    .context("Failed to build a full subspace node")
-}
-
-fn create_configuration<CS: ChainSpec + 'static>(
+async fn create_configuration<CS: ChainSpec + 'static>(
     base_path: BasePath,
     chain_spec: CS,
-    tokio_handle: tokio::runtime::Handle,
-    node_name: String,
+    node_name: Option<String>,
 ) -> SubspaceConfiguration {
-    const DEFAULT_NETWORK_CONFIG_PATH: &str = "default-network-config-path";
-    const NODE_KEY_ED25519_FILE: &str = "node_key_ed25519_file";
+    const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
+    const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
 
-    let impl_name = "Subspace-sdk".to_owned();
-    let impl_version = "sc_cli_impl_version".to_string(); // env!("SUBSTRATE_CLI_IMPL_VERSION")
+    let impl_name = env!("CARGO_PKG_NAME").to_owned();
+    let impl_version = env!("CARGO_PKG_VERSION").to_string(); // TODO: include git revision here
     let config_dir = base_path.config_dir(chain_spec.id());
     let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
     let client_id = format!("{}/v{}", impl_name, impl_version);
@@ -170,7 +153,7 @@ fn create_configuration<CS: ChainSpec + 'static>(
         ],
         boot_nodes: chain_spec.boot_nodes().to_vec(),
         ..NetworkConfiguration::new(
-            node_name,
+            node_name.unwrap_or_default(),
             client_id,
             NodeKeyConfig::Ed25519(Secret::File(net_config_dir.join(NODE_KEY_ED25519_FILE))),
             Some(net_config_dir),
@@ -181,7 +164,7 @@ fn create_configuration<CS: ChainSpec + 'static>(
     network.default_peers_set.out_peers = 50;
     // Full + Light clients
     network.default_peers_set.in_peers = 25 + 100;
-    let role = Role::Authority;
+    let role = Role::Full;
     let (keystore_remote, keystore) = (None, KeystoreConfig::InMemory);
     let telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
 
@@ -190,7 +173,7 @@ fn create_configuration<CS: ChainSpec + 'static>(
         base: Configuration {
             impl_name,
             impl_version,
-            tokio_handle,
+            tokio_handle: tokio::runtime::Handle::current(),
             transaction_pool: Default::default(),
             network,
             keystore_remote,
@@ -201,8 +184,8 @@ fn create_configuration<CS: ChainSpec + 'static>(
             state_cache_size: 67_108_864,
             state_cache_child_ratio: None,
             // TODO: Change to constrained eventually (need DSN for this)
-            state_pruning: Some(PruningMode::blocks_pruning(1024)),
-            blocks_pruning: BlocksPruning::Some(1024),
+            state_pruning: Some(PruningMode::ArchiveAll),
+            blocks_pruning: BlocksPruning::All,
             wasm_method: WasmExecutionMethod::Compiled {
                 instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
             },
@@ -265,6 +248,7 @@ pub struct Node {
     _weak: Weak<FullClient<RuntimeApi, ExecutorDispatch>>,
 }
 
+#[derive(Debug)]
 #[non_exhaustive]
 pub struct Info {
     pub version: String,
@@ -325,9 +309,8 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_start_node() {
-        let dir = tempdir::TempDir::new("ab").unwrap();
         Node::builder()
-            .at_directory(dir.as_ref())
+            .at_directory(Directory::Tmp)
             .build()
             .await
             .unwrap();

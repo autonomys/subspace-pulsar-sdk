@@ -8,7 +8,6 @@ async fn main() {
         .mode(NodeMode::Full)
         .chain(Chain::Gemini2a)
         .name("i1i1")
-        .port(1337)
         .at_directory("node")
         .build()
         .await
