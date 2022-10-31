@@ -22,6 +22,8 @@ use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
 use crate::Directory;
 
+mod chain_spec;
+
 #[non_exhaustive]
 #[derive(Debug, Default)]
 pub enum Mode {
