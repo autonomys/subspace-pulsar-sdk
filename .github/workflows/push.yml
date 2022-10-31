@@ -1,19 +1,32 @@
 on: push
-name: Clippy check
+name: Rust checks and tests
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  clippy:
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
+
       - name: Install Protoc
         uses: arduino/setup-protoc@v1
+
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: "14.0"
+
       - uses: actions-rs/toolchain@v1
         with:
-            toolchain: nightly
+            toolchain: nightly-2022-08-12
             components: clippy
             override: true
+
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features
+          args: --all-features --all-targets -- -D warnings
+
+      - run: cargo test
