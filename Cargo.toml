@@ -7,12 +7,14 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
+async-trait = "0.1"
 bytesize = "1.1"
 dirs = "4"
 either = "1.8"
 futures = "0.3"
 libp2p-core = "0.34"
 tempdir = "0.3"
+thiserror = "1"
 tokio = { version = "1.21", features = ["rt"] }
 
 sc-consensus-slots = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
@@ -23,9 +25,12 @@ sc-service = { version = "0.10.0-dev", git = "https://github.com/subspace/substr
 
 cirrus-runtime = { git = "https://github.com/subspace/subspace", rev = "8007a0acd57064264aa03a8c71eb1c9cc9466994" }
 sc-subspace-chain-specs = { git = "https://github.com/subspace/subspace", rev = "8007a0acd57064264aa03a8c71eb1c9cc9466994" }
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "8007a0acd57064264aa03a8c71eb1c9cc9466994" }
+subspace-archiving = { git = "https://github.com/subspace/subspace", rev = "0b47b586d30e2fbde94956d4f1b6473591954492" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "0b47b586d30e2fbde94956d4f1b6473591954492" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "0b47b586d30e2fbde94956d4f1b6473591954492" }
 subspace-fraud-proof = { git = "https://github.com/subspace/subspace", rev = "8007a0acd57064264aa03a8c71eb1c9cc9466994" }
 subspace-node = { git = "https://github.com/subspace/subspace", rev = "8007a0acd57064264aa03a8c71eb1c9cc9466994" }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "0b47b586d30e2fbde94956d4f1b6473591954492" }
 subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "8007a0acd57064264aa03a8c71eb1c9cc9466994" }
 subspace-service = { git = "https://github.com/subspace/subspace", rev = "8007a0acd57064264aa03a8c71eb1c9cc9466994" }
 

@@ -17,12 +17,12 @@ async fn main() {
 
     let reward_address = PublicKey::from([0; 32]);
     let mut farmer: Farmer = Farmer::builder()
-        .ws_rpc("127.0.0.1:9955".parse().unwrap())
-        .listen_on("/ip4/0.0.0.0/tcp/40333".parse().unwrap())
+        // .ws_rpc("127.0.0.1:9955".parse().unwrap())
+        // .listen_on("/ip4/0.0.0.0/tcp/40333".parse().unwrap())
         .build(
             reward_address,
             node.clone(),
-            PlotDescription::new("plot", ByteSize::gb(10)),
+            &[PlotDescription::new("plot", ByteSize::gb(10))],
         )
         .await
         .expect("Failed to init a farmer");
@@ -52,7 +52,7 @@ async fn main() {
     dbg!(farmer.get_info().await);
 
     farmer.stop_farming().await;
-    farmer.close().await;
+    farmer.close().await.expect("Failed to close the farmer");
     node.close().await;
 
     // Restarting
@@ -69,7 +69,7 @@ async fn main() {
         .build(
             reward_address,
             node.clone(),
-            PlotDescription::new("plot", ByteSize::gb(10)),
+            &[PlotDescription::new("plot", ByteSize::gb(10))],
         )
         .await
         .expect("Failed to init a farmer");
@@ -81,6 +81,6 @@ async fn main() {
     for plot in farmer.plots().await {
         plot.delete().await;
     }
-    farmer.wipe().await;
+    farmer.wipe().await.expect("Failed to wipe the farmer");
     node.wipe().await;
 }
