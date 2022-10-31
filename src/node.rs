@@ -3,7 +3,6 @@ use std::sync::{Arc, Weak};
 
 use anyhow::Context;
 
-use cirrus_runtime::GenesisConfig as ExecutionGenesisConfig;
 use sc_chain_spec::ChainSpec;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
@@ -19,6 +18,7 @@ use sc_subspace_chain_specs::ConsensusChainSpec;
 use subspace_node::ExecutorDispatch;
 use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
 use subspace_service::{FullClient, SubspaceConfiguration};
+use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
 use crate::Directory;
 
