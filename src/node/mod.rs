@@ -15,14 +15,13 @@ use sc_service::{
     TracingReceiver,
 };
 use sc_subspace_chain_specs::ConsensusChainSpec;
-use subspace_node::ExecutorDispatch;
 use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
 use subspace_service::{FullClient, SubspaceConfiguration};
 use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
 use crate::Directory;
 
-mod chain_spec;
+pub mod chain_spec;
 
 #[non_exhaustive]
 #[derive(Debug, Default)]
@@ -115,9 +114,7 @@ impl Builder {
         } = self;
 
         let chain_spec = match chain {
-            Chain::Gemini2a => {
-                subspace_node::chain_spec::gemini_2a().expect("Gemini-2a spec should be compiled")
-            }
+            Chain::Gemini2a => chain_spec::gemini_2a().expect("Gemini-2a spec should be compiled"),
             Chain::Custom(chain_spec) => *chain_spec,
         };
         let base_path = match directory {
@@ -264,6 +261,26 @@ async fn create_configuration<CS: ChainSpec + 'static>(
         },
         force_new_slot_notifications: false,
         dsn_config: None,
+    }
+}
+
+/// Executor dispatch for subspace runtime
+struct ExecutorDispatch;
+
+impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
+    // /// Only enable the benchmarking host functions when we actually want to benchmark.
+    // #[cfg(feature = "runtime-benchmarks")]
+    // type ExtendHostFunctions = frame_benchmarking::benchmarking::HostFunctions;
+    // /// Otherwise we only use the default Substrate host functions.
+    // #[cfg(not(feature = "runtime-benchmarks"))]
+    type ExtendHostFunctions = ();
+
+    fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+        subspace_runtime::api::dispatch(method, data)
+    }
+
+    fn native_version() -> sc_executor::NativeVersion {
+        subspace_runtime::native_version()
     }
 }
 
@@ -451,9 +468,7 @@ mod tests {
     async fn test_rpc() {
         let node = Node::builder()
             .at_directory(Directory::Tmp)
-            .chain(Chain::Custom(Box::new(
-                subspace_node::chain_spec::dev_config().unwrap(),
-            )))
+            .chain(Chain::Custom(Box::new(chain_spec::dev_config().unwrap())))
             .build()
             .await
             .unwrap();

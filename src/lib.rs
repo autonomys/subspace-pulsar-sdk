@@ -6,7 +6,9 @@ use std::path::PathBuf;
 pub use farmer::{
     Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotDescription, Solution,
 };
-pub use node::{Builder as NodeBuilder, Chain, Info as FarmerInfo, Mode as NodeMode, Node};
+pub use node::{
+    chain_spec, Builder as NodeBuilder, Chain, Info as FarmerInfo, Mode as NodeMode, Node,
+};
 pub use subspace_core_primitives::PublicKey;
 
 #[derive(Default)]
@@ -36,7 +38,7 @@ mod tests {
         let node = Node::builder()
             .at_directory(Directory::Tmp)
             .chain(Chain::Custom(Box::new(
-                subspace_node::chain_spec::dev_config().unwrap(),
+                node::chain_spec::gemini_2a().unwrap(),
             )))
             .force_authoring(true)
             .role(sc_service::Role::Authority)
