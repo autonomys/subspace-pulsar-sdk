@@ -11,7 +11,7 @@ use sc_service::config::{
     OffchainWorkerConfig,
 };
 use sc_service::{
-    BasePath, BlocksPruning, Configuration, DatabaseSource, PruningMode, Role, RpcMethods,
+    BasePath, BlocksPruning, Configuration, DatabaseSource, PruningMode, RpcMethods,
     TracingReceiver,
 };
 use sc_subspace_chain_specs::ConsensusChainSpec;
@@ -46,12 +46,22 @@ impl std::fmt::Debug for Chain {
     }
 }
 
+struct Role(sc_service::Role);
+
+impl Default for Role {
+    fn default() -> Self {
+        Self(sc_service::Role::Full)
+    }
+}
+
 #[derive(Default)]
 pub struct Builder {
     mode: Mode,
     chain: Chain,
     directory: Directory,
     name: Option<String>,
+    force_authoring: bool,
+    role: Role,
 }
 
 impl Builder {
@@ -81,6 +91,16 @@ impl Builder {
         self
     }
 
+    pub fn force_authoring(mut self, force_authoring: bool) -> Self {
+        self.force_authoring = force_authoring;
+        self
+    }
+
+    pub fn role(mut self, role: sc_service::Role) -> Self {
+        self.role = Role(role);
+        self
+    }
+
     /// Start a node with supplied parameters
     pub async fn build(self) -> anyhow::Result<Node> {
         let Self {
@@ -88,6 +108,8 @@ impl Builder {
             chain,
             directory,
             name,
+            force_authoring,
+            role: Role(role),
         } = self;
 
         let chain_spec = match chain {
@@ -109,7 +131,7 @@ impl Builder {
         };
 
         let mut full_client = subspace_service::new_full::<RuntimeApi, ExecutorDispatch>(
-            create_configuration(base_path, chain_spec, name).await,
+            create_configuration(base_path, chain_spec, name, force_authoring, role).await,
             true,
             sc_consensus_slots::SlotProportion::new(2f32 / 3f32),
         )
@@ -137,6 +159,8 @@ async fn create_configuration<CS: ChainSpec + 'static>(
     base_path: BasePath,
     chain_spec: CS,
     node_name: Option<String>,
+    force_authoring: bool,
+    role: sc_service::Role,
 ) -> SubspaceConfiguration {
     const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
     const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
@@ -166,7 +190,6 @@ async fn create_configuration<CS: ChainSpec + 'static>(
     network.default_peers_set.out_peers = 50;
     // Full + Light clients
     network.default_peers_set.in_peers = 25 + 100;
-    let role = Role::Full;
     let (keystore_remote, keystore) = (None, KeystoreConfig::InMemory);
     let telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
 
@@ -223,9 +246,7 @@ async fn create_configuration<CS: ChainSpec + 'static>(
             telemetry_endpoints,
             default_heap_pages: None,
             offchain_worker: OffchainWorkerConfig::default(),
-            force_authoring: std::env::var("FORCE_AUTHORING")
-                .map(|force_authoring| force_authoring.as_str() == "1")
-                .unwrap_or_default(),
+            force_authoring,
             disable_grandpa: false,
             dev_key_seed: None,
             tracing_targets: None,
