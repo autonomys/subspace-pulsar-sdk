@@ -34,7 +34,7 @@ pub enum Mode {
 pub enum Chain {
     #[default]
     Gemini2a,
-    Custom(ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>),
+    Custom(Box<ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>>),
 }
 
 impl std::fmt::Debug for Chain {
@@ -95,7 +95,7 @@ impl Builder {
                 include_bytes!("../res/chain-spec-raw-gemini-2a.json").as_ref(),
             )
             .expect("Chain spec is always valid"),
-            Chain::Custom(chain_spec) => chain_spec,
+            Chain::Custom(chain_spec) => *chain_spec,
         };
         let base_path = match directory {
             Directory::Custom(path) => BasePath::Permanenent(path),
