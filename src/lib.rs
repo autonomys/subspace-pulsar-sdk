@@ -47,8 +47,13 @@ mod tests {
         let mut slot_info_sub = node.subscribe_slot_info().await.unwrap();
 
         let plot_descriptions = [PlotDescription::with_tempdir(bytesize::ByteSize::gb(1)).unwrap()];
-        let _farmer = Farmer::builder().build(Default::default(), node.clone(), &plot_descriptions);
+        let _farmer = Farmer::builder()
+            .build(Default::default(), node.clone(), &plot_descriptions)
+            .await;
 
-        assert!(slot_info_sub.next().await.is_some());
+        // New slots arrive at each block. So basically we wait for 3 blocks to produce
+        for _ in 0..3 {
+            assert!(slot_info_sub.next().await.is_some());
+        }
     }
 }
