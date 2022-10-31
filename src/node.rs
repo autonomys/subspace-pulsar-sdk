@@ -347,7 +347,7 @@ mod farmer_rpc_client {
         futures::stream::poll_fn(move |cx| {
             Box::pin(subscription.next())
                 .poll_unpin(cx)
-                .map(|x| x.map(Result::ok).flatten().map(|(x, _)| x))
+                .map(|x| x.and_then(Result::ok).map(|(x, _)| x))
         })
     }
 
