@@ -6,13 +6,25 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1"
+async-trait = "0.1"
 bytesize = "1.1"
 either = "1.8"
 futures = "0.3"
 libp2p-core = "0.36"
 tempdir = "0.3"
+thiserror = "1"
+tokio = { version = "1.21", features = ["rt"] }
 
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "8007a0acd57064264aa03a8c71eb1c9cc9466994" }
+subspace-archiving = { git = "https://github.com/subspace/subspace", rev = "0b47b586d30e2fbde94956d4f1b6473591954492" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "0b47b586d30e2fbde94956d4f1b6473591954492" }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "0b47b586d30e2fbde94956d4f1b6473591954492" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "0b47b586d30e2fbde94956d4f1b6473591954492" }
 
 [dev-dependencies]
 tokio = { version = "1.21", features = ["rt-multi-thread", "macros"] }
+
+[patch.crates-io]
+# TODO: Remove once chacha20poly1305 0.10 appears in libp2p's dependencies
+chacha20poly1305 = { git = "https://github.com/RustCrypto/AEADs", rev = "06dbfb5571687fd1bbe9d3c9b2193a1ba17f8e99" }
+libp2p = { git = "https://github.com/subspace/rust-libp2p", branch = "subspace-v3" }
