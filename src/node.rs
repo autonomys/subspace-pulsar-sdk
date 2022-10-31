@@ -117,6 +117,8 @@ impl Builder {
         .await
         .context("Failed to build a full subspace node")?;
 
+        let rpc_handle = full_client.rpc_handlers.handle();
+
         full_client.network_starter.start_network();
 
         let handle = tokio::spawn(async move {
@@ -127,6 +129,7 @@ impl Builder {
         Ok(Node {
             _handle: Arc::new(handle),
             _weak: Arc::downgrade(&full_client.client),
+            rpc_handle,
         })
     }
 }
@@ -246,6 +249,7 @@ async fn create_configuration<CS: ChainSpec + 'static>(
 pub struct Node {
     _handle: Arc<tokio::task::JoinHandle<anyhow::Result<()>>>,
     _weak: Weak<FullClient<RuntimeApi, ExecutorDispatch>>,
+    rpc_handle: Arc<jsonrpsee_core::server::rpc_module::RpcModule<()>>,
 }
 
 #[derive(Debug)]
@@ -306,7 +310,8 @@ impl Node {
 mod farmer_rpc_client {
     use super::*;
 
-    use futures::Stream;
+    use futures::{FutureExt, Stream};
+    use jsonrpsee_core::server::rpc_module::Subscription;
     use std::pin::Pin;
 
     use subspace_archiving::archiver::ArchivedSegment;
@@ -316,64 +321,91 @@ mod farmer_rpc_client {
         FarmerProtocolInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
     };
 
+    fn subscription_to_stream<T: serde::de::DeserializeOwned>(
+        mut subscription: Subscription,
+    ) -> impl Stream<Item = T> {
+        futures::stream::poll_fn(move |cx| {
+            Box::pin(subscription.next())
+                .poll_unpin(cx)
+                .map(|x| x.map(Result::ok).flatten().map(|(x, _)| x))
+        })
+    }
+
     #[async_trait::async_trait]
     impl RpcClient for Node {
         async fn farmer_protocol_info(&self) -> Result<FarmerProtocolInfo, Error> {
-            todo!()
+            Ok(self
+                .rpc_handle
+                .call("subspace_getFarmerProtocolInfo", &[] as &[()])
+                .await?)
         }
 
-        /// Subscribe to slot
         async fn subscribe_slot_info(
             &self,
         ) -> Result<Pin<Box<dyn Stream<Item = SlotInfo> + Send + 'static>>, Error> {
-            todo!()
+            Ok(Box::pin(subscription_to_stream(
+                self.rpc_handle
+                    .subscribe("subspace_subscribeSlotInfo", &[] as &[()])
+                    .await?,
+            )))
         }
 
-        /// Submit a slot solution
         async fn submit_solution_response(
             &self,
             solution_response: SolutionResponse,
         ) -> Result<(), Error> {
-            let _ = solution_response;
-            todo!()
+            Ok(self
+                .rpc_handle
+                .call("subspace_submitSolutionResponse", [solution_response])
+                .await?)
         }
 
-        /// Subscribe to block signing request
         async fn subscribe_reward_signing(
             &self,
         ) -> Result<Pin<Box<dyn Stream<Item = RewardSigningInfo> + Send + 'static>>, Error>
         {
-            todo!()
+            Ok(Box::pin(subscription_to_stream(
+                self.rpc_handle
+                    .subscribe("subspace_subscribeRewardSigning", &[] as &[()])
+                    .await?,
+            )))
         }
 
-        /// Submit a block signature
         async fn submit_reward_signature(
             &self,
             reward_signature: RewardSignatureResponse,
         ) -> Result<(), Error> {
-            let _ = reward_signature;
-            todo!()
+            Ok(self
+                .rpc_handle
+                .call("subspace_submitRewardSignature", [reward_signature])
+                .await?)
         }
 
-        /// Subscribe to archived segments
         async fn subscribe_archived_segments(
             &self,
         ) -> Result<Pin<Box<dyn Stream<Item = ArchivedSegment> + Send + 'static>>, Error> {
-            todo!()
+            Ok(Box::pin(subscription_to_stream(
+                self.rpc_handle
+                    .subscribe("subspace_subscribeArchivedSegment", &[] as &[()])
+                    .await?,
+            )))
         }
 
-        /// Get records roots for the segments
         async fn records_roots(
             &self,
             segment_indexes: Vec<SegmentIndex>,
         ) -> Result<Vec<Option<RecordsRoot>>, Error> {
-            let _ = segment_indexes;
-            todo!()
+            Ok(self
+                .rpc_handle
+                .call("subspace_recordsRoots", [segment_indexes])
+                .await?)
         }
 
         async fn get_piece(&self, piece_index: PieceIndex) -> Result<Option<Piece>, Error> {
-            let _ = piece_index;
-            todo!()
+            Ok(self
+                .rpc_handle
+                .call("subspace_getPiece", [piece_index])
+                .await?)
         }
     }
 }

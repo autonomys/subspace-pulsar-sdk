@@ -12,7 +12,9 @@ bytesize = "1.1"
 dirs = "4"
 either = "1.8"
 futures = "0.3"
+jsonrpsee-core = "0.15.1"
 libp2p-core = "0.34"
+serde = "1"
 tempdir = "0.3"
 thiserror = "1"
 tokio = { version = "1.21", features = ["rt"] }
@@ -24,6 +26,7 @@ sc-network = { version = "0.10.0-dev", git = "https://github.com/subspace/substr
 sc-service = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598", default-features = false, features = ["wasmtime"] }
 
 sc-subspace-chain-specs = { git = "https://github.com/subspace/subspace", rev = "c3a4eee7c72ebd65ca6cbc63c3aad661e4411fe5" }
+sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "c3a4eee7c72ebd65ca6cbc63c3aad661e4411fe5" }
 subspace-archiving = { git = "https://github.com/subspace/subspace", rev = "c3a4eee7c72ebd65ca6cbc63c3aad661e4411fe5" }
 subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "c3a4eee7c72ebd65ca6cbc63c3aad661e4411fe5" }
 subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "c3a4eee7c72ebd65ca6cbc63c3aad661e4411fe5" }
@@ -42,3 +45,58 @@ tokio = { version = "1.21", features = ["rt-multi-thread", "macros"] }
 # TODO: Remove once chacha20poly1305 0.10 appears in libp2p's dependencies
 chacha20poly1305 = { git = "https://github.com/RustCrypto/AEADs", rev = "06dbfb5571687fd1bbe9d3c9b2193a1ba17f8e99" }
 libp2p = { git = "https://github.com/subspace/rust-libp2p", branch = "subspace-v3" }
+
+# The list of dependencies below (which can be both direct and indirect dependencies) are crates
+# that are suspected to be CPU-intensive, and that are unlikely to require debugging (as some of
+# their debug info might be missing) or to require to be frequently recompiled. We compile these
+# dependencies with `opt-level=3` even in "dev" mode in order to make "dev" mode more usable.
+# The majority of these crates are cryptographic libraries.
+#
+# This list is ordered alphabetically.
+[profile.dev.package]
+blake2 = { opt-level = 3 }
+blake2-rfc = { opt-level = 3 }
+blake2b_simd = { opt-level = 3 }
+chacha20poly1305 = { opt-level = 3 }
+cranelift-codegen = { opt-level = 3 }
+cranelift-wasm = { opt-level = 3 }
+crc32fast = { opt-level = 3 }
+crossbeam-deque = { opt-level = 3 }
+crypto-mac = { opt-level = 3 }
+curve25519-dalek = { opt-level = 3 }
+dusk-bls12_381 = { opt-level = 3 }
+dusk-plonk = { opt-level = 3 }
+ed25519-dalek = { opt-level = 3 }
+flate2 = { opt-level = 3 }
+futures-channel = { opt-level = 3 }
+hashbrown = { opt-level = 3 }
+hash-db = { opt-level = 3 }
+hmac = { opt-level = 3 }
+httparse = { opt-level = 3 }
+integer-sqrt = { opt-level = 3 }
+keccak = { opt-level = 3 }
+libm = { opt-level = 3 }
+libsecp256k1 = { opt-level = 3 }
+libz-sys = { opt-level = 3 }
+mio = { opt-level = 3 }
+nalgebra = { opt-level = 3 }
+num-bigint = { opt-level = 3 }
+parking_lot = { opt-level = 3 }
+parking_lot_core = { opt-level = 3 }
+percent-encoding = { opt-level = 3 }
+primitive-types = { opt-level = 3 }
+reed-solomon-erasure = { opt-level = 3 }
+ring = { opt-level = 3 }
+rustls = { opt-level = 3 }
+sha2 = { opt-level = 3 }
+sha3 = { opt-level = 3 }
+smallvec = { opt-level = 3 }
+snow = { opt-level = 3 }
+subspace-core-primitives = { opt-level = 3 }
+subspace-archiving = { opt-level = 3 }
+twox-hash = { opt-level = 3 }
+uint = { opt-level = 3 }
+wasmi = { opt-level = 3 }
+x25519-dalek = { opt-level = 3 }
+yamux = { opt-level = 3 }
+zeroize = { opt-level = 3 }
