@@ -91,10 +91,9 @@ impl Builder {
         } = self;
 
         let chain_spec = match chain {
-            Chain::Gemini2a => ConsensusChainSpec::from_json_bytes(
-                include_bytes!("../res/chain-spec-raw-gemini-2a.json").as_ref(),
-            )
-            .expect("Chain spec is always valid"),
+            Chain::Gemini2a => {
+                subspace_node::chain_spec::gemini_2a().expect("Gemini-2a spec should be compiled")
+            }
             Chain::Custom(chain_spec) => *chain_spec,
         };
         let base_path = match directory {
@@ -412,6 +411,8 @@ mod farmer_rpc_client {
 
 #[cfg(test)]
 mod tests {
+    use subspace_farmer::RpcClient;
+
     use super::*;
 
     #[tokio::test(flavor = "multi_thread")]
@@ -421,5 +422,19 @@ mod tests {
             .build()
             .await
             .unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_rpc() {
+        let node = Node::builder()
+            .at_directory(Directory::Tmp)
+            .chain(Chain::Custom(Box::new(
+                subspace_node::chain_spec::dev_config().unwrap(),
+            )))
+            .build()
+            .await
+            .unwrap();
+
+        assert!(node.farmer_protocol_info().await.is_ok());
     }
 }
