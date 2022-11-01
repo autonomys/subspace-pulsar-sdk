@@ -1,79 +1,40 @@
 use bytesize::ByteSize;
-use futures::StreamExt;
-use subspace_sdk::{chain_spec, Farmer, Node, NodeMode, PlotDescription, PublicKey};
+use subspace_sdk::{chain_spec, Farmer, Node, PlotDescription, PublicKey};
 
 #[tokio::main]
 async fn main() {
-    let mut node: Node = Node::builder()
-        .mode(NodeMode::Full)
-        .name("i1i1")
-        .build("node", chain_spec::gemini_2a().unwrap())
+    tracing_subscriber::fmt().init();
+
+    let node = Node::builder()
+        .force_authoring(true)
+        .role(sc_service::Role::Authority)
+        .build("node", chain_spec::dev_config().unwrap())
         .await
-        .expect("Failed to init a node");
+        .unwrap();
 
-    node.sync().await;
-
-    let reward_address = PublicKey::from([0; 32]);
-    let plots = [PlotDescription::new("plot", ByteSize::gb(10))];
-    let mut farmer: Farmer = Farmer::builder()
-        // .ws_rpc("127.0.0.1:9955".parse().unwrap())
-        // .listen_on("/ip4/0.0.0.0/tcp/40333".parse().unwrap())
-        .build(reward_address, node.clone(), &plots)
+    let plots = [PlotDescription::new("plot", ByteSize::mb(100))];
+    let farmer: Farmer = Farmer::builder()
+        .listen_on(vec!["/ip4/0.0.0.0/tcp/40333".parse().unwrap()])
+        .build(PublicKey::from([13; 32]), node.clone(), &plots)
         .await
         .expect("Failed to init a farmer");
 
-    farmer.sync().await;
+    tracing::error!("Waiting for plotting to complete");
+    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
 
-    tokio::spawn({
-        let mut solutions = farmer.subscribe_solutions().await;
-        async move {
-            while let Some(solution) = solutions.next().await {
-                eprintln!("Found solution: {solution:?}");
-            }
+    {
+        use futures::StreamExt;
+        use subspace_farmer::RpcClient;
+
+        let mut slot_info_sub = node.subscribe_slot_info().await.unwrap().take(10);
+        while let Some(slot_info) = slot_info_sub.next().await {
+            tracing::info!(?slot_info, "New slot");
         }
-    });
-    tokio::spawn({
-        let mut new_blocks = node.subscribe_new_blocks().await;
-        async move {
-            while let Some(block) = new_blocks.next().await {
-                eprintln!("New block: {block:?}");
-            }
-        }
-    });
-
-    farmer.start_farming().await;
-
-    dbg!(node.get_info().await);
-    dbg!(farmer.get_info().await);
-
-    farmer.stop_farming().await;
-    farmer.close().await;
-    node.close().await;
-
-    // Restarting
-    let mut node = Node::builder()
-        .mode(NodeMode::Full)
-        .build("node", chain_spec::gemini_2a().unwrap())
-        .await
-        .expect("Failed to init a node");
-    node.sync().await;
-
-    let mut farmer = Farmer::builder()
-        .build(
-            reward_address,
-            node.clone(),
-            &[PlotDescription::new("plot", ByteSize::gb(10))],
-        )
-        .await
-        .expect("Failed to init a farmer");
-
-    farmer.sync().await;
-    farmer.start_farming().await;
+    }
 
     farmer.close().await;
     node.close().await;
 
-    // Delete everything
     for plot in plots {
         plot.wipe().await.unwrap();
     }
