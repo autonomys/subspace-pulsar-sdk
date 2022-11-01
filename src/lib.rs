@@ -5,6 +5,7 @@ pub use farmer::{
     Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotDescription, Solution,
 };
 pub use node::{chain_spec, Builder as NodeBuilder, Info as FarmerInfo, Mode as NodeMode, Node};
+pub use parse_ss58::Ss58ParsingError;
 
 use derive_more::{Deref, DerefMut};
 use subspace_core_primitives::PUBLIC_KEY_LENGTH;
@@ -145,10 +146,11 @@ mod tests {
         let mut slot_info_sub = node.subscribe_slot_info().await.unwrap();
 
         let dir = TempDir::new("test").unwrap();
-        let plot_descriptions = [PlotDescription::new(dir.path(), bytesize::ByteSize::gb(1))];
+        let plot_descriptions = [PlotDescription::new(dir.path(), bytesize::ByteSize::mb(10))];
         let _farmer = Farmer::builder()
             .build(Default::default(), node.clone(), &plot_descriptions)
-            .await;
+            .await
+            .unwrap();
 
         // New slots arrive at each block. So basically we wait for 3 blocks to produce
         for _ in 0..3 {

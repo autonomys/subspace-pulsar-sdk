@@ -1,4 +1,5 @@
-use futures::Stream;
+use futures::channel::{mpsc, oneshot};
+use futures::{FutureExt, SinkExt, Stream, StreamExt};
 use std::io;
 use std::path::Path;
 use std::sync::{Arc, Weak};
@@ -102,18 +103,30 @@ impl Builder {
         .context("Failed to build a full subspace node")?;
 
         let rpc_handle = full_client.rpc_handlers.handle();
-
         full_client.network_starter.start_network();
+        let (stop_sender, mut stop_receiver) = mpsc::channel::<oneshot::Sender<()>>(1);
 
-        let handle = tokio::spawn(async move {
-            full_client.task_manager.future().await?;
-            Ok(())
+        tokio::spawn(async move {
+            let stop_sender = futures::select! {
+                opt_sender = stop_receiver.next() => {
+                    match opt_sender {
+                        Some(sender) => sender,
+                        None => return,
+                    }
+                }
+                result = full_client.task_manager.future().fuse() => {
+                    let _ = result;
+                    return;
+                }
+            };
+            drop(full_client.task_manager);
+            let _ = stop_sender.send(());
         });
 
         Ok(Node {
-            _handle: Arc::new(handle),
             _weak: Arc::downgrade(&full_client.client),
             rpc_handle,
+            stop_sender,
         })
     }
 }
@@ -250,9 +263,9 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 
 #[derive(Clone)]
 pub struct Node {
-    _handle: Arc<tokio::task::JoinHandle<anyhow::Result<()>>>,
     _weak: Weak<FullClient<RuntimeApi, ExecutorDispatch>>,
     rpc_handle: Arc<jsonrpsee_core::server::rpc_module::RpcModule<()>>,
+    stop_sender: mpsc::Sender<oneshot::Sender<()>>,
 }
 
 #[derive(Debug)]
@@ -302,7 +315,11 @@ impl Node {
     pub async fn sync(&mut self) {}
 
     // Leaves the network and gracefully shuts down
-    pub async fn close(self) {}
+    pub async fn close(mut self) {
+        let (stop_sender, stop_receiver) = oneshot::channel();
+        drop(self.stop_sender.send(stop_sender).await);
+        let _ = stop_receiver.await;
+    }
 
     // Runs `.close()` and also wipes node's state
     pub async fn wipe(path: impl AsRef<Path>) -> io::Result<()> {
@@ -426,6 +443,8 @@ mod tests {
     use subspace_farmer::RpcClient;
     use tempdir::TempDir;
 
+    use crate::{Farmer, PlotDescription};
+
     use super::*;
 
     #[tokio::test(flavor = "multi_thread")]
@@ -446,5 +465,27 @@ mod tests {
             .unwrap();
 
         assert!(node.farmer_protocol_info().await.is_ok());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_closing() {
+        let dir = TempDir::new("test").unwrap();
+        let node = Node::builder()
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
+        let plot_dir = TempDir::new("test").unwrap();
+        let plots = [PlotDescription::new(
+            plot_dir.as_ref(),
+            bytesize::ByteSize::mb(10),
+        )];
+        let farmer = Farmer::builder()
+            .build(Default::default(), node.clone(), &plots)
+            .await
+            .unwrap();
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        farmer.close().await;
+        node.close().await;
     }
 }
