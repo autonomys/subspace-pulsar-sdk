@@ -1,4 +1,6 @@
 use futures::Stream;
+use std::io;
+use std::path::Path;
 use std::sync::{Arc, Weak};
 
 use anyhow::Context;
@@ -19,8 +21,6 @@ use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
 use subspace_service::{FullClient, SubspaceConfiguration};
 use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
-use crate::Directory;
-
 pub mod chain_spec;
 
 #[non_exhaustive]
@@ -28,23 +28,6 @@ pub mod chain_spec;
 pub enum Mode {
     #[default]
     Full,
-}
-
-#[non_exhaustive]
-#[derive(Default)]
-pub enum Chain {
-    #[default]
-    Gemini2a,
-    Custom(Box<ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>>),
-}
-
-impl std::fmt::Debug for Chain {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Gemini2a => write!(f, "Gemini2a"),
-            Self::Custom(custom) => write!(f, "Custom({})", custom.name()),
-        }
-    }
 }
 
 struct Role(sc_service::Role);
@@ -58,8 +41,6 @@ impl Default for Role {
 #[derive(Default)]
 pub struct Builder {
     mode: Mode,
-    chain: Chain,
-    directory: Directory,
     name: Option<String>,
     force_authoring: bool,
     role: Role,
@@ -75,20 +56,10 @@ impl Builder {
         self
     }
 
-    pub fn chain(mut self, chain: Chain) -> Self {
-        self.chain = chain;
-        self
-    }
-
     pub fn name(mut self, name: impl AsRef<str>) -> Self {
         if !name.as_ref().is_empty() {
             self.name = Some(name.as_ref().to_owned());
         }
-        self
-    }
-
-    pub fn at_directory(mut self, directory: impl Into<Directory>) -> Self {
-        self.directory = directory.into();
         self
     }
 
@@ -103,34 +74,27 @@ impl Builder {
     }
 
     /// Start a node with supplied parameters
-    pub async fn build(self) -> anyhow::Result<Node> {
+    pub async fn build(
+        self,
+        directory: impl AsRef<Path>,
+        chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
+    ) -> anyhow::Result<Node> {
         let Self {
             mode: Mode::Full,
-            chain,
-            directory,
             name,
             force_authoring,
             role: Role(role),
         } = self;
 
-        let chain_spec = match chain {
-            Chain::Gemini2a => chain_spec::gemini_2a().expect("Gemini-2a spec should be compiled"),
-            Chain::Custom(chain_spec) => *chain_spec,
-        };
-        let base_path = match directory {
-            Directory::Custom(path) => BasePath::Permanenent(path),
-            Directory::Tmp => {
-                BasePath::new_temp_dir().context("Failed to create temporary directory")?
-            }
-            Directory::Default => BasePath::Permanenent(
-                dirs::data_local_dir()
-                    .expect("Can't find local data directory, needs to be specified explicitly")
-                    .join("subspace-node"),
-            ),
-        };
-
         let mut full_client = subspace_service::new_full::<RuntimeApi, ExecutorDispatch>(
-            create_configuration(base_path, chain_spec, name, force_authoring, role).await,
+            create_configuration(
+                BasePath::new(directory),
+                chain_spec,
+                name,
+                force_authoring,
+                role,
+            )
+            .await,
             true,
             sc_consensus_slots::SlotProportion::new(2f32 / 3f32),
         )
@@ -293,9 +257,15 @@ pub struct Node {
 
 #[derive(Debug)]
 #[non_exhaustive]
+pub struct ChainInfo {
+    _ensure_cant_construct: (),
+}
+
+#[derive(Debug)]
+#[non_exhaustive]
 pub struct Info {
     pub version: String,
-    pub chain: Chain,
+    pub chain: ChainInfo,
     pub mode: Mode,
     pub name: Option<String>,
     pub connected_peers: u64,
@@ -335,7 +305,9 @@ impl Node {
     pub async fn close(self) {}
 
     // Runs `.close()` and also wipes node's state
-    pub async fn wipe(self) {}
+    pub async fn wipe(path: impl AsRef<Path>) -> io::Result<()> {
+        tokio::fs::remove_dir_all(path).await
+    }
 
     pub async fn get_info(&mut self) -> Info {
         todo!()
@@ -452,24 +424,24 @@ mod farmer_rpc_client {
 #[cfg(test)]
 mod tests {
     use subspace_farmer::RpcClient;
+    use tempdir::TempDir;
 
     use super::*;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_start_node() {
+        let dir = TempDir::new("test").unwrap();
         Node::builder()
-            .at_directory(Directory::Tmp)
-            .build()
+            .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_rpc() {
+        let dir = TempDir::new("test").unwrap();
         let node = Node::builder()
-            .at_directory(Directory::Tmp)
-            .chain(Chain::Custom(Box::new(chain_spec::dev_config().unwrap())))
-            .build()
+            .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
 

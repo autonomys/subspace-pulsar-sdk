@@ -1,11 +1,9 @@
 use std::{io, path::PathBuf};
 
 use bytesize::ByteSize;
-use either::*;
 use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p_core::Multiaddr;
 use subspace_networking::{Node as DSNNode, NodeRunner as DSNNodeRunner};
-use tempdir::TempDir;
 
 use crate::{Node, PublicKey};
 
@@ -15,7 +13,7 @@ use subspace_farmer::single_disk_plot::{
 
 // TODO: Should it be non-exhaustive?
 pub struct PlotDescription {
-    pub directory: Either<PathBuf, TempDir>,
+    pub directory: PathBuf,
     pub space_pledged: ByteSize,
 }
 
@@ -24,18 +22,13 @@ impl PlotDescription {
     // Or it can be literally a description of a plot
     pub fn new(directory: impl Into<PathBuf>, space_pledged: ByteSize) -> Self {
         Self {
-            directory: Either::Left(directory.into()),
+            directory: directory.into(),
             space_pledged,
         }
     }
 
-    pub fn with_tempdir(space_pledged: ByteSize) -> io::Result<Self> {
-        TempDir::new("plot")
-            .map(Either::Right)
-            .map(|directory| Self {
-                directory,
-                space_pledged,
-            })
+    pub async fn wipe(self) -> io::Result<()> {
+        tokio::fs::remove_dir_all(self.directory).await
     }
 }
 
@@ -128,12 +121,7 @@ impl Builder {
         for description in plots {
             let description = SingleDiskPlotOptions {
                 allocated_space: description.space_pledged.as_u64(),
-                directory: description
-                    .directory
-                    .as_ref()
-                    .map_left(AsRef::as_ref)
-                    .left_or_else(|tempdir| tempdir.path())
-                    .to_owned(),
+                directory: description.directory.clone(),
                 reward_address,
                 rpc_client: node.clone(),
                 dsn_node: dsn_node.clone(),
@@ -220,10 +208,6 @@ pub struct Plot {
     _ensure_cant_construct: (),
 }
 
-impl Plot {
-    pub async fn delete(&mut self) {}
-}
-
 pub struct SolutionStream {
     _ensure_cant_construct: (),
 }
@@ -276,13 +260,6 @@ impl Farmer {
         stop_receiver
             .await
             .expect("We should always receive here, as task is alive");
-        Ok(())
-    }
-
-    // Runs `.close()` and also wipes farmer's state
-    pub async fn wipe(self) -> anyhow::Result<()> {
-        self.close().await?;
-        // TODO: add actual wiping of data
         Ok(())
     }
 }

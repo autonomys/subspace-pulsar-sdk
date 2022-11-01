@@ -9,15 +9,12 @@ edition = "2021"
 anyhow = "1"
 async-trait = "0.1"
 bytesize = "1.1"
-dirs = "4"
-either = "1.8"
 futures = "0.3"
 jsonrpsee-core = "0.15.1"
 libp2p-core = "0.34"
 serde = "1"
-tempdir = "0.3"
 thiserror = "1"
-tokio = { version = "1.21", features = ["rt"] }
+tokio = { version = "1.21", features = ["fs", "rt"] }
 
 frame-support = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
 sc-chain-spec = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
@@ -46,6 +43,7 @@ system-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "7
 
 [dev-dependencies]
 tokio = { version = "1.21", features = ["rt-multi-thread", "macros"] }
+tempdir = "0.3"
 
 [patch.crates-io]
 # TODO: Remove once chacha20poly1305 0.10 appears in libp2p's dependencies

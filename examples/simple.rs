@@ -1,29 +1,24 @@
 use bytesize::ByteSize;
 use futures::StreamExt;
-use subspace_sdk::{Chain, Farmer, Node, NodeMode, PlotDescription, PublicKey};
+use subspace_sdk::{chain_spec, Farmer, Node, NodeMode, PlotDescription, PublicKey};
 
 #[tokio::main]
 async fn main() {
     let mut node: Node = Node::builder()
         .mode(NodeMode::Full)
-        .chain(Chain::Gemini2a)
         .name("i1i1")
-        .at_directory("node")
-        .build()
+        .build("node", chain_spec::gemini_2a().unwrap())
         .await
         .expect("Failed to init a node");
 
     node.sync().await;
 
     let reward_address = PublicKey::from([0; 32]);
+    let plots = [PlotDescription::new("plot", ByteSize::gb(10))];
     let mut farmer: Farmer = Farmer::builder()
         // .ws_rpc("127.0.0.1:9955".parse().unwrap())
         // .listen_on("/ip4/0.0.0.0/tcp/40333".parse().unwrap())
-        .build(
-            reward_address,
-            node.clone(),
-            &[PlotDescription::new("plot", ByteSize::gb(10))],
-        )
+        .build(reward_address, node.clone(), &plots)
         .await
         .expect("Failed to init a farmer");
 
@@ -58,9 +53,7 @@ async fn main() {
     // Restarting
     let mut node = Node::builder()
         .mode(NodeMode::Full)
-        .chain(Chain::Gemini2a)
-        .at_directory("node")
-        .build()
+        .build("node", chain_spec::gemini_2a().unwrap())
         .await
         .expect("Failed to init a node");
     node.sync().await;
@@ -77,10 +70,12 @@ async fn main() {
     farmer.sync().await;
     farmer.start_farming().await;
 
+    farmer.close().await.unwrap();
+    node.close().await;
+
     // Delete everything
-    for plot in farmer.plots().await {
-        plot.delete().await;
+    for plot in plots {
+        plot.wipe().await.unwrap();
     }
-    farmer.wipe().await.expect("Failed to wipe the farmer");
-    node.wipe().await;
+    Node::wipe("node").await.unwrap();
 }
