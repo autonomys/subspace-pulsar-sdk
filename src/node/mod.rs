@@ -30,23 +30,6 @@ pub enum Mode {
     Full,
 }
 
-#[non_exhaustive]
-#[derive(Default)]
-pub enum Chain {
-    #[default]
-    Gemini2a,
-    Custom(Box<ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>>),
-}
-
-impl std::fmt::Debug for Chain {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Gemini2a => write!(f, "Gemini2a"),
-            Self::Custom(custom) => write!(f, "Custom({})", custom.name()),
-        }
-    }
-}
-
 struct Role(sc_service::Role);
 
 impl Default for Role {
@@ -58,7 +41,6 @@ impl Default for Role {
 #[derive(Default)]
 pub struct Builder {
     mode: Mode,
-    chain: Chain,
     name: Option<String>,
     force_authoring: bool,
     role: Role,
@@ -71,11 +53,6 @@ impl Builder {
 
     pub fn mode(mut self, ty: Mode) -> Self {
         self.mode = ty;
-        self
-    }
-
-    pub fn chain(mut self, chain: Chain) -> Self {
-        self.chain = chain;
         self
     }
 
@@ -97,19 +74,17 @@ impl Builder {
     }
 
     /// Start a node with supplied parameters
-    pub async fn build(self, directory: impl AsRef<Path>) -> anyhow::Result<Node> {
+    pub async fn build(
+        self,
+        directory: impl AsRef<Path>,
+        chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
+    ) -> anyhow::Result<Node> {
         let Self {
             mode: Mode::Full,
-            chain,
             name,
             force_authoring,
             role: Role(role),
         } = self;
-
-        let chain_spec = match chain {
-            Chain::Gemini2a => chain_spec::gemini_2a().expect("Gemini-2a spec should be compiled"),
-            Chain::Custom(chain_spec) => *chain_spec,
-        };
 
         let mut full_client = subspace_service::new_full::<RuntimeApi, ExecutorDispatch>(
             create_configuration(
@@ -282,9 +257,15 @@ pub struct Node {
 
 #[derive(Debug)]
 #[non_exhaustive]
+pub struct ChainInfo {
+    _ensure_cant_construct: (),
+}
+
+#[derive(Debug)]
+#[non_exhaustive]
 pub struct Info {
     pub version: String,
-    pub chain: Chain,
+    pub chain: ChainInfo,
     pub mode: Mode,
     pub name: Option<String>,
     pub connected_peers: u64,
@@ -450,15 +431,17 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_start_node() {
         let dir = TempDir::new("test").unwrap();
-        Node::builder().build(dir.path()).await.unwrap();
+        Node::builder()
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_rpc() {
         let dir = TempDir::new("test").unwrap();
         let node = Node::builder()
-            .chain(Chain::Custom(Box::new(chain_spec::dev_config().unwrap())))
-            .build(dir.path())
+            .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
 

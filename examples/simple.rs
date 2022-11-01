@@ -1,14 +1,13 @@
 use bytesize::ByteSize;
 use futures::StreamExt;
-use subspace_sdk::{Chain, Farmer, Node, NodeMode, PlotDescription, PublicKey};
+use subspace_sdk::{chain_spec, Farmer, Node, NodeMode, PlotDescription, PublicKey};
 
 #[tokio::main]
 async fn main() {
     let mut node: Node = Node::builder()
         .mode(NodeMode::Full)
-        .chain(Chain::Gemini2a)
         .name("i1i1")
-        .build("node")
+        .build("node", chain_spec::gemini_2a().unwrap())
         .await
         .expect("Failed to init a node");
 
@@ -54,8 +53,7 @@ async fn main() {
     // Restarting
     let mut node = Node::builder()
         .mode(NodeMode::Full)
-        .chain(Chain::Gemini2a)
-        .build("node")
+        .build("node", chain_spec::gemini_2a().unwrap())
         .await
         .expect("Failed to init a node");
     node.sync().await;

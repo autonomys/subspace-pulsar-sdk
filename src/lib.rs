@@ -5,7 +5,7 @@ pub use farmer::{
     Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotDescription, Solution,
 };
 pub use node::{
-    chain_spec, Builder as NodeBuilder, Chain, Info as FarmerInfo, Mode as NodeMode, Node,
+    chain_spec, Builder as NodeBuilder, Info as FarmerInfo, Mode as NodeMode, Node,
 };
 pub use subspace_core_primitives::PublicKey;
 
@@ -21,12 +21,9 @@ mod tests {
     async fn test_integration() {
         let dir = TempDir::new("test").unwrap();
         let node = Node::builder()
-            .chain(Chain::Custom(Box::new(
-                node::chain_spec::dev_config().unwrap(),
-            )))
             .force_authoring(true)
             .role(sc_service::Role::Authority)
-            .build(dir)
+            .build(dir, node::chain_spec::dev_config().unwrap(),)
             .await
             .unwrap();
 
