@@ -47,7 +47,7 @@ async fn main() {
     dbg!(farmer.get_info().await);
 
     farmer.stop_farming().await;
-    farmer.close().await.expect("Failed to close the farmer");
+    farmer.close().await;
     node.close().await;
 
     // Restarting
@@ -70,7 +70,7 @@ async fn main() {
     farmer.sync().await;
     farmer.start_farming().await;
 
-    farmer.close().await.unwrap();
+    farmer.close().await;
     node.close().await;
 
     // Delete everything

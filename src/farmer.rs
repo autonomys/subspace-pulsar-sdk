@@ -4,6 +4,7 @@ use bytesize::ByteSize;
 use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p_core::Multiaddr;
 use subspace_networking::{Node as DSNNode, NodeRunner as DSNNodeRunner};
+use tokio::sync::oneshot;
 
 use crate::{Node, PublicKey};
 
@@ -97,9 +98,6 @@ impl Builder {
     //     self
     // }
 
-    // TODO: put some proper value
-    const CMD_CHANNEL_SIZE: usize = 10;
-
     /// It supposed to open node at the supplied location
     pub async fn build(
         self,
@@ -138,8 +136,7 @@ impl Builder {
             .map(SingleDiskPlot::wait)
             .collect::<FuturesUnordered<_>>();
 
-        let (cmd_sender, mut cmd_receiver) =
-            futures::channel::mpsc::channel(Self::CMD_CHANNEL_SIZE);
+        let (cmd_sender, cmd_receiver) = oneshot::channel();
 
         if let Some(mut node_runner) = dsn_node_runner {
             tokio::spawn(async move {
@@ -147,47 +144,33 @@ impl Builder {
             });
         }
 
+        let handle = tokio::spawn(async move {
+            while let Some(result) = single_disk_plots_stream.next().await {
+                result?;
+            }
+            anyhow::Ok(())
+        });
+
         tokio::spawn(async move {
-            let maybe_stop_sender = loop {
-                let cmd = match futures::future::select(
-                    single_disk_plots_stream.next(),
-                    cmd_receiver.next(),
-                )
-                .await
-                {
-                    futures::future::Either::Left((Some(result), _)) => {
-                        result?;
-                        continue;
-                    }
-                    futures::future::Either::Left((None, _)) => return anyhow::Ok(()),
-                    futures::future::Either::Right((None, _)) => break None,
-                    futures::future::Either::Right((Some(cmd), _)) => cmd,
-                };
-
-                match cmd {
-                    FarmerCommand::Stop(stop_sender) => {
-                        break Some(stop_sender);
-                    }
-                }
-            };
-
-            drop(single_disk_plots_stream);
-            if let Some(stop_sender) = maybe_stop_sender {
+            let maybe_stop_sender = cmd_receiver.await;
+            // TODO: remove once there won't be joining on drop in monorepo
+            handle.abort();
+            if let Ok(FarmerCommand::Stop(stop_sender)) = maybe_stop_sender {
                 let _ = stop_sender.send(());
             }
-            Ok(())
         });
 
         Ok(Farmer { cmd_sender })
     }
 }
 
+#[derive(Debug)]
 enum FarmerCommand {
-    Stop(futures::channel::oneshot::Sender<()>),
+    Stop(oneshot::Sender<()>),
 }
 
 pub struct Farmer {
-    cmd_sender: futures::channel::mpsc::Sender<FarmerCommand>,
+    cmd_sender: oneshot::Sender<FarmerCommand>,
 }
 
 #[derive(Debug)]
@@ -246,20 +229,18 @@ impl Farmer {
     }
 
     // Stops farming, closes plots, and sends signal to the node
-    pub async fn close(mut self) -> anyhow::Result<()> {
-        let (stop_sender, stop_receiver) = futures::channel::oneshot::channel();
+    pub async fn close(self) {
+        let (stop_sender, stop_receiver) = oneshot::channel();
         if self
             .cmd_sender
             .send(FarmerCommand::Stop(stop_sender))
-            .await
             .is_err()
         {
-            return Err(anyhow::anyhow!("Noone is listening for our commands"));
+            return;
         }
 
         stop_receiver
             .await
             .expect("We should always receive here, as task is alive");
-        Ok(())
     }
 }
