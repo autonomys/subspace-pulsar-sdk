@@ -122,7 +122,7 @@ impl Builder {
             let description = SingleDiskPlotOptions {
                 allocated_space: description.space_pledged.as_u64(),
                 directory: description.directory.clone(),
-                reward_address,
+                reward_address: *reward_address,
                 rpc_client: node.clone(),
                 dsn_node: dsn_node.clone(),
             };
