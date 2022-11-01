@@ -1,8 +1,6 @@
 pub mod farmer;
 pub mod node;
 
-use std::path::PathBuf;
-
 pub use farmer::{
     Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotDescription, Solution,
 };
@@ -11,44 +9,31 @@ pub use node::{
 };
 pub use subspace_core_primitives::PublicKey;
 
-#[derive(Default)]
-#[non_exhaustive]
-pub enum Directory {
-    #[default]
-    Default,
-    Tmp,
-    Custom(PathBuf),
-}
-
-impl<P: Into<PathBuf>> From<P> for Directory {
-    fn from(path: P) -> Self {
-        Self::Custom(path.into())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use futures::StreamExt;
     use subspace_farmer::RpcClient;
+    use tempdir::TempDir;
 
     use super::*;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_integration() {
+        let dir = TempDir::new("test").unwrap();
         let node = Node::builder()
-            .at_directory(Directory::Tmp)
             .chain(Chain::Custom(Box::new(
-                node::chain_spec::gemini_2a().unwrap(),
+                node::chain_spec::dev_config().unwrap(),
             )))
             .force_authoring(true)
             .role(sc_service::Role::Authority)
-            .build()
+            .build(dir)
             .await
             .unwrap();
 
         let mut slot_info_sub = node.subscribe_slot_info().await.unwrap();
 
-        let plot_descriptions = [PlotDescription::with_tempdir(bytesize::ByteSize::gb(1)).unwrap()];
+        let dir = TempDir::new("test").unwrap();
+        let plot_descriptions = [PlotDescription::new(dir.path(), bytesize::ByteSize::gb(1))];
         let _farmer = Farmer::builder()
             .build(Default::default(), node.clone(), &plot_descriptions)
             .await;
