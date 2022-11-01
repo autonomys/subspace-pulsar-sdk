@@ -3,6 +3,8 @@ use std::{io, path::PathBuf};
 use bytesize::ByteSize;
 use either::*;
 use futures::{prelude::*, stream::FuturesUnordered};
+use libp2p_core::Multiaddr;
+use subspace_networking::{Node as DSNNode, NodeRunner as DSNNodeRunner};
 use tempdir::TempDir;
 
 use crate::{Node, PublicKey};
@@ -39,10 +41,8 @@ impl PlotDescription {
 
 #[derive(Default)]
 pub struct Builder {
-    _ensure_cant_construct: (),
-    // TODO: add once those will be used
-    // listen_on: Option<Multiaddr>,
-    // ws_rpc: Option<SocketAddr>,
+    listen_on: Vec<Multiaddr>,
+    bootstrap_nodes: Vec<Multiaddr>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -51,6 +51,37 @@ pub enum BuildError {
     SingleDiskPlotCreate(#[from] SingleDiskPlotError),
     #[error("No plots error")]
     NoPlotsSupplied,
+    #[error("Failed to connect to dsn: {0}")]
+    DSNCreate(#[from] subspace_networking::CreationError),
+}
+
+async fn configure_dsn(
+    listen_on: Vec<Multiaddr>,
+    bootstrap_nodes: Vec<Multiaddr>,
+) -> Result<(Option<DSNNode>, Option<DSNNodeRunner>), BuildError> {
+    if bootstrap_nodes.is_empty() {
+        return Ok((None, None));
+    }
+
+    let config =
+        subspace_networking::Config {
+            listen_on,
+            allow_non_globals_in_dht: true,
+            networking_parameters_registry:
+                subspace_networking::BootstrappedNetworkingParameters::new(bootstrap_nodes).boxed(),
+            request_response_protocols: vec![
+                subspace_networking::PieceByHashRequestHandler::create(move |_req| {
+                    // TODO: Implement actual handler
+                    Some(subspace_networking::PieceByHashResponse { piece: None })
+                }),
+            ],
+            ..subspace_networking::Config::with_generated_keypair()
+        };
+
+    subspace_networking::create(config)
+        .await
+        .map(|(node, node_runner)| (Some(node), Some(node_runner)))
+        .map_err(Into::into)
 }
 
 impl Builder {
@@ -58,12 +89,16 @@ impl Builder {
         Self::default()
     }
 
-    // TODO: add once those will be used
-    // pub fn listen_on(mut self, multiaddr: Multiaddr) -> Self {
-    //     self.listen_on = Some(multiaddr);
-    //     self
-    // }
-    //
+    pub fn listen_on(mut self, multiaddrs: impl IntoIterator<Item = Multiaddr>) -> Self {
+        self.listen_on = multiaddrs.into_iter().collect();
+        self
+    }
+
+    pub fn bootstrap_nodes(mut self, multiaddrs: impl IntoIterator<Item = Multiaddr>) -> Self {
+        self.bootstrap_nodes = multiaddrs.into_iter().collect();
+        self
+    }
+
     // pub fn ws_rpc(mut self, ws_rpc: SocketAddr) -> Self {
     //     self.ws_rpc = Some(ws_rpc);
     //     self
@@ -82,8 +117,13 @@ impl Builder {
         if plots.is_empty() {
             return Err(BuildError::NoPlotsSupplied);
         }
+        let Self {
+            listen_on,
+            bootstrap_nodes,
+        } = self;
 
         let mut single_disk_plots = Vec::with_capacity(plots.len());
+        let (dsn_node, dsn_node_runner) = configure_dsn(listen_on, bootstrap_nodes).await?;
 
         for description in plots {
             let description = SingleDiskPlotOptions {
@@ -96,6 +136,7 @@ impl Builder {
                     .to_owned(),
                 reward_address,
                 rpc_client: node.clone(),
+                dsn_node: dsn_node.clone(),
             };
             let single_disk_plot =
                 tokio::task::spawn_blocking(move || SingleDiskPlot::new(description))
@@ -111,6 +152,13 @@ impl Builder {
 
         let (cmd_sender, mut cmd_receiver) =
             futures::channel::mpsc::channel(Self::CMD_CHANNEL_SIZE);
+
+        if let Some(mut node_runner) = dsn_node_runner {
+            tokio::spawn(async move {
+                node_runner.run().await;
+            });
+        }
+
         tokio::spawn(async move {
             let maybe_stop_sender = loop {
                 let cmd = match futures::future::select(

@@ -3,7 +3,6 @@ use std::sync::{Arc, Weak};
 
 use anyhow::Context;
 
-use cirrus_runtime::GenesisConfig as ExecutionGenesisConfig;
 use sc_chain_spec::ChainSpec;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
@@ -12,15 +11,17 @@ use sc_service::config::{
     OffchainWorkerConfig,
 };
 use sc_service::{
-    BasePath, BlocksPruning, Configuration, DatabaseSource, PruningMode, Role, RpcMethods,
+    BasePath, BlocksPruning, Configuration, DatabaseSource, PruningMode, RpcMethods,
     TracingReceiver,
 };
 use sc_subspace_chain_specs::ConsensusChainSpec;
-use subspace_node::ExecutorDispatch;
 use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
 use subspace_service::{FullClient, SubspaceConfiguration};
+use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
 use crate::Directory;
+
+pub mod chain_spec;
 
 #[non_exhaustive]
 #[derive(Debug, Default)]
@@ -46,12 +47,22 @@ impl std::fmt::Debug for Chain {
     }
 }
 
+struct Role(sc_service::Role);
+
+impl Default for Role {
+    fn default() -> Self {
+        Self(sc_service::Role::Full)
+    }
+}
+
 #[derive(Default)]
 pub struct Builder {
     mode: Mode,
     chain: Chain,
     directory: Directory,
     name: Option<String>,
+    force_authoring: bool,
+    role: Role,
 }
 
 impl Builder {
@@ -81,6 +92,16 @@ impl Builder {
         self
     }
 
+    pub fn force_authoring(mut self, force_authoring: bool) -> Self {
+        self.force_authoring = force_authoring;
+        self
+    }
+
+    pub fn role(mut self, role: sc_service::Role) -> Self {
+        self.role = Role(role);
+        self
+    }
+
     /// Start a node with supplied parameters
     pub async fn build(self) -> anyhow::Result<Node> {
         let Self {
@@ -88,13 +109,12 @@ impl Builder {
             chain,
             directory,
             name,
+            force_authoring,
+            role: Role(role),
         } = self;
 
         let chain_spec = match chain {
-            Chain::Gemini2a => ConsensusChainSpec::from_json_bytes(
-                include_bytes!("../res/chain-spec-raw-gemini-2a.json").as_ref(),
-            )
-            .expect("Chain spec is always valid"),
+            Chain::Gemini2a => chain_spec::gemini_2a().expect("Gemini-2a spec should be compiled"),
             Chain::Custom(chain_spec) => *chain_spec,
         };
         let base_path = match directory {
@@ -110,12 +130,14 @@ impl Builder {
         };
 
         let mut full_client = subspace_service::new_full::<RuntimeApi, ExecutorDispatch>(
-            create_configuration(base_path, chain_spec, name).await,
+            create_configuration(base_path, chain_spec, name, force_authoring, role).await,
             true,
             sc_consensus_slots::SlotProportion::new(2f32 / 3f32),
         )
         .await
         .context("Failed to build a full subspace node")?;
+
+        let rpc_handle = full_client.rpc_handlers.handle();
 
         full_client.network_starter.start_network();
 
@@ -127,6 +149,7 @@ impl Builder {
         Ok(Node {
             _handle: Arc::new(handle),
             _weak: Arc::downgrade(&full_client.client),
+            rpc_handle,
         })
     }
 }
@@ -135,6 +158,8 @@ async fn create_configuration<CS: ChainSpec + 'static>(
     base_path: BasePath,
     chain_spec: CS,
     node_name: Option<String>,
+    force_authoring: bool,
+    role: sc_service::Role,
 ) -> SubspaceConfiguration {
     const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
     const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
@@ -164,7 +189,6 @@ async fn create_configuration<CS: ChainSpec + 'static>(
     network.default_peers_set.out_peers = 50;
     // Full + Light clients
     network.default_peers_set.in_peers = 25 + 100;
-    let role = Role::Full;
     let (keystore_remote, keystore) = (None, KeystoreConfig::InMemory);
     let telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
 
@@ -221,9 +245,7 @@ async fn create_configuration<CS: ChainSpec + 'static>(
             telemetry_endpoints,
             default_heap_pages: None,
             offchain_worker: OffchainWorkerConfig::default(),
-            force_authoring: std::env::var("FORCE_AUTHORING")
-                .map(|force_authoring| force_authoring.as_str() == "1")
-                .unwrap_or_default(),
+            force_authoring,
             disable_grandpa: false,
             dev_key_seed: None,
             tracing_targets: None,
@@ -242,10 +264,31 @@ async fn create_configuration<CS: ChainSpec + 'static>(
     }
 }
 
+/// Executor dispatch for subspace runtime
+struct ExecutorDispatch;
+
+impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
+    // /// Only enable the benchmarking host functions when we actually want to benchmark.
+    // #[cfg(feature = "runtime-benchmarks")]
+    // type ExtendHostFunctions = frame_benchmarking::benchmarking::HostFunctions;
+    // /// Otherwise we only use the default Substrate host functions.
+    // #[cfg(not(feature = "runtime-benchmarks"))]
+    type ExtendHostFunctions = ();
+
+    fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+        subspace_runtime::api::dispatch(method, data)
+    }
+
+    fn native_version() -> sc_executor::NativeVersion {
+        subspace_runtime::native_version()
+    }
+}
+
 #[derive(Clone)]
 pub struct Node {
     _handle: Arc<tokio::task::JoinHandle<anyhow::Result<()>>>,
     _weak: Weak<FullClient<RuntimeApi, ExecutorDispatch>>,
+    rpc_handle: Arc<jsonrpsee_core::server::rpc_module::RpcModule<()>>,
 }
 
 #[derive(Debug)]
@@ -306,7 +349,8 @@ impl Node {
 mod farmer_rpc_client {
     use super::*;
 
-    use futures::Stream;
+    use futures::{FutureExt, Stream};
+    use jsonrpsee_core::server::rpc_module::Subscription;
     use std::pin::Pin;
 
     use subspace_archiving::archiver::ArchivedSegment;
@@ -316,70 +360,99 @@ mod farmer_rpc_client {
         FarmerProtocolInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
     };
 
+    fn subscription_to_stream<T: serde::de::DeserializeOwned>(
+        mut subscription: Subscription,
+    ) -> impl Stream<Item = T> {
+        futures::stream::poll_fn(move |cx| {
+            Box::pin(subscription.next())
+                .poll_unpin(cx)
+                .map(|x| x.and_then(Result::ok).map(|(x, _)| x))
+        })
+    }
+
     #[async_trait::async_trait]
     impl RpcClient for Node {
         async fn farmer_protocol_info(&self) -> Result<FarmerProtocolInfo, Error> {
-            todo!()
+            Ok(self
+                .rpc_handle
+                .call("subspace_getFarmerProtocolInfo", &[] as &[()])
+                .await?)
         }
 
-        /// Subscribe to slot
         async fn subscribe_slot_info(
             &self,
         ) -> Result<Pin<Box<dyn Stream<Item = SlotInfo> + Send + 'static>>, Error> {
-            todo!()
+            Ok(Box::pin(subscription_to_stream(
+                self.rpc_handle
+                    .subscribe("subspace_subscribeSlotInfo", &[] as &[()])
+                    .await?,
+            )))
         }
 
-        /// Submit a slot solution
         async fn submit_solution_response(
             &self,
             solution_response: SolutionResponse,
         ) -> Result<(), Error> {
-            let _ = solution_response;
-            todo!()
+            Ok(self
+                .rpc_handle
+                .call("subspace_submitSolutionResponse", [solution_response])
+                .await?)
         }
 
-        /// Subscribe to block signing request
         async fn subscribe_reward_signing(
             &self,
         ) -> Result<Pin<Box<dyn Stream<Item = RewardSigningInfo> + Send + 'static>>, Error>
         {
-            todo!()
+            Ok(Box::pin(subscription_to_stream(
+                self.rpc_handle
+                    .subscribe("subspace_subscribeRewardSigning", &[] as &[()])
+                    .await?,
+            )))
         }
 
-        /// Submit a block signature
         async fn submit_reward_signature(
             &self,
             reward_signature: RewardSignatureResponse,
         ) -> Result<(), Error> {
-            let _ = reward_signature;
-            todo!()
+            Ok(self
+                .rpc_handle
+                .call("subspace_submitRewardSignature", [reward_signature])
+                .await?)
         }
 
-        /// Subscribe to archived segments
         async fn subscribe_archived_segments(
             &self,
         ) -> Result<Pin<Box<dyn Stream<Item = ArchivedSegment> + Send + 'static>>, Error> {
-            todo!()
+            Ok(Box::pin(subscription_to_stream(
+                self.rpc_handle
+                    .subscribe("subspace_subscribeArchivedSegment", &[] as &[()])
+                    .await?,
+            )))
         }
 
-        /// Get records roots for the segments
         async fn records_roots(
             &self,
             segment_indexes: Vec<SegmentIndex>,
         ) -> Result<Vec<Option<RecordsRoot>>, Error> {
-            let _ = segment_indexes;
-            todo!()
+            Ok(self
+                .rpc_handle
+                .call("subspace_recordsRoots", [segment_indexes])
+                .await?)
         }
 
         async fn get_piece(&self, piece_index: PieceIndex) -> Result<Option<Piece>, Error> {
-            let _ = piece_index;
-            todo!()
+            Ok(self
+                .rpc_handle
+                .call("subspace_getPiece", [piece_index])
+                .await?)
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use subspace_farmer::RpcClient;
+
     use super::*;
 
     #[tokio::test(flavor = "multi_thread")]
@@ -389,5 +462,17 @@ mod tests {
             .build()
             .await
             .unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_rpc() {
+        let node = Node::builder()
+            .at_directory(Directory::Tmp)
+            .chain(Chain::Custom(Box::new(chain_spec::dev_config().unwrap())))
+            .build()
+            .await
+            .unwrap();
+
+        assert!(node.farmer_protocol_info().await.is_ok());
     }
 }
