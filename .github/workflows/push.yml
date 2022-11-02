@@ -38,12 +38,7 @@ jobs:
             override: true
 
       - name: Configure cache
-        uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+        uses: Swatinem/rust-cache@v2
 
       - uses: actions-rs/clippy-check@v1
         with:
@@ -70,11 +65,6 @@ jobs:
             override: true
 
       - name: Configure cache
-        uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+        uses: Swatinem/rust-cache@v2
 
       - run: cargo test
