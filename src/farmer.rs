@@ -1,15 +1,18 @@
-use std::{io, path::PathBuf};
+use std::{collections::HashMap, io, path::PathBuf};
 
+use anyhow::Context;
 use bytesize::ByteSize;
 use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p_core::Multiaddr;
+use subspace_core_primitives::SectorIndex;
 use subspace_networking::{Node as DSNNode, NodeRunner as DSNNodeRunner};
 use tokio::sync::oneshot;
 
 use crate::{Node, PublicKey};
 
 use subspace_farmer::single_disk_plot::{
-    SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotOptions,
+    SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
+    SingleDiskPlotOptions, SingleDiskPlotSummary,
 };
 
 // TODO: Should it be non-exhaustive?
@@ -160,7 +163,11 @@ impl Builder {
             }
         });
 
-        Ok(Farmer { cmd_sender })
+        Ok(Farmer {
+            cmd_sender,
+            reward_address,
+            plot_directories: plots.iter().map(|desc| desc.directory.clone()).collect(),
+        })
     }
 }
 
@@ -171,6 +178,47 @@ enum FarmerCommand {
 
 pub struct Farmer {
     cmd_sender: oneshot::Sender<FarmerCommand>,
+    plot_directories: Vec<PathBuf>,
+    reward_address: PublicKey,
+}
+
+#[derive(Debug)]
+#[non_exhaustive]
+// TODO: Should it be versioned?
+pub struct PlotInfo {
+    /// ID of the plot
+    pub id: SingleDiskPlotId,
+    /// Genesis hash of the chain used for plot creation
+    pub genesis_hash: [u8; 32],
+    /// Public key of identity used for plot creation
+    pub public_key: PublicKey,
+    /// First sector index in this plot
+    ///
+    /// Multiple plots can reuse the same identity, but they have to use different ranges for
+    /// sector indexes or else they'll essentially plot the same data and will not result in
+    /// increased probability of winning the reward.
+    pub first_sector_index: SectorIndex,
+    /// How much space in bytes is allocated for this plot
+    pub allocated_space: ByteSize,
+}
+
+impl From<SingleDiskPlotInfo> for PlotInfo {
+    fn from(info: SingleDiskPlotInfo) -> Self {
+        let SingleDiskPlotInfo::V0 {
+            id,
+            genesis_hash,
+            public_key,
+            first_sector_index,
+            allocated_space,
+        } = info;
+        Self {
+            id,
+            genesis_hash,
+            public_key: super::PublicKey(public_key),
+            first_sector_index,
+            allocated_space: ByteSize::b(allocated_space),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -178,8 +226,9 @@ pub struct Farmer {
 pub struct Info {
     pub version: String,
     pub reward_address: PublicKey,
-    pub dsn_peers: u64,
-    pub space_pledged: ByteSize,
+    // TODO: add dsn peers info
+    // pub dsn_peers: u64,
+    pub plots_info: HashMap<PathBuf, PlotInfo>,
 }
 
 #[derive(Debug)]
@@ -216,8 +265,33 @@ impl Farmer {
 
     pub async fn stop_farming(&mut self) {}
 
-    pub async fn get_info(&mut self) -> Info {
-        todo!()
+    pub async fn get_info(&mut self) -> anyhow::Result<Info> {
+        let plots_info = tokio::task::spawn_blocking({
+            let dirs = self.plot_directories.clone();
+            || {
+                dirs.into_iter()
+                    .map(SingleDiskPlot::collect_summary)
+                    .collect::<Vec<_>>()
+            }
+        })
+        .await?
+        .into_iter()
+        .map(|summary| match summary {
+            SingleDiskPlotSummary::Found { info, directory } => Ok((directory, info.into())),
+            SingleDiskPlotSummary::NotFound { directory } => {
+                Err(anyhow::anyhow!("Didn't found plot at `{directory:?}'"))
+            }
+            SingleDiskPlotSummary::Error { directory, error } => {
+                Err(error).context(format!("Failed to get plot summary at `{directory:?}'"))
+            }
+        })
+        .collect::<anyhow::Result<_>>()?;
+
+        Ok(Info {
+            plots_info,
+            version: env!("CARGO_PKG_VERSION").to_string(), // TODO: include git revision here
+            reward_address: self.reward_address,
+        })
     }
 
     pub async fn subscribe_solutions(&mut self) -> SolutionStream {
@@ -242,5 +316,46 @@ impl Farmer {
         stop_receiver
             .await
             .expect("We should always receive here, as task is alive");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::node::{chain_spec, Node};
+    use tempdir::TempDir;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_get_info() {
+        let dir = TempDir::new("test").unwrap();
+        let node = Node::builder()
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
+        let plot_dir = TempDir::new("test").unwrap();
+        let plots = [PlotDescription::new(
+            plot_dir.as_ref(),
+            bytesize::ByteSize::mb(10),
+        )];
+        let mut farmer = Farmer::builder()
+            .build(Default::default(), node.clone(), &plots)
+            .await
+            .unwrap();
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        let Info {
+            reward_address,
+            plots_info,
+            ..
+        } = farmer.get_info().await.unwrap();
+        assert_eq!(reward_address, Default::default());
+        assert_eq!(plots_info.len(), 1);
+        assert_eq!(
+            plots_info[plot_dir.as_ref()].allocated_space,
+            bytesize::ByteSize::mb(10)
+        );
+
+        farmer.close().await;
+        node.close().await;
     }
 }
