@@ -196,7 +196,7 @@ impl Builder {
         };
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);
-        let mut full_client = subspace_service::new_full::<RuntimeApi, ExecutorDispatch>(
+        let full_client = subspace_service::new_full::<RuntimeApi, ExecutorDispatch>(
             configuration,
             true,
             slot_proportion,
@@ -204,8 +204,25 @@ impl Builder {
         .await
         .context("Failed to build a full subspace node")?;
 
-        let rpc_handle = full_client.rpc_handlers.handle();
-        full_client.network_starter.start_network();
+        let subspace_service::NewFull {
+            mut task_manager,
+            client,
+            rpc_handlers,
+            network_starter,
+
+            select_chain: _,
+            network: _,
+            backend: _,
+            new_slot_notification_stream: _,
+            reward_signing_notification_stream: _,
+            imported_block_notification_stream: _,
+            archived_segment_notification_stream: _,
+            transaction_pool: _,
+        } = full_client;
+
+        let client = Arc::downgrade(&client);
+        let rpc_handle = rpc_handlers.handle();
+        network_starter.start_network();
         let (stop_sender, mut stop_receiver) = mpsc::channel::<oneshot::Sender<()>>(1);
 
         tokio::spawn(async move {
@@ -216,17 +233,17 @@ impl Builder {
                         None => return,
                     }
                 }
-                result = full_client.task_manager.future().fuse() => {
+                result = task_manager.future().fuse() => {
                     let _ = result;
                     return;
                 }
             };
-            drop(full_client.task_manager);
+            drop(task_manager);
             let _ = stop_sender.send(());
         });
 
         Ok(Node {
-            _weak: Arc::downgrade(&full_client.client),
+            client,
             rpc_handle,
             stop_sender,
         })
@@ -255,7 +272,7 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 
 #[derive(Clone)]
 pub struct Node {
-    _weak: Weak<FullClient<RuntimeApi, ExecutorDispatch>>,
+    client: Weak<FullClient<RuntimeApi, ExecutorDispatch>>,
     rpc_handle: Arc<jsonrpsee_core::server::rpc_module::RpcModule<()>>,
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
 }
