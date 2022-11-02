@@ -5,16 +5,14 @@ use std::path::Path;
 use std::sync::{Arc, Weak};
 
 use anyhow::Context;
-
+use libp2p_core::Multiaddr;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
 use sc_service::config::{
-    ExecutionStrategies, ExecutionStrategy, KeystoreConfig, NetworkConfiguration,
-    OffchainWorkerConfig,
+    ExecutionStrategies, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
 };
 use sc_service::{
-    BasePath, BlocksPruning, Configuration, DatabaseSource, PruningMode, RpcMethods,
-    TracingReceiver,
+    BasePath, Configuration, DatabaseSource, PruningMode, RpcMethods, TracingReceiver,
 };
 use sc_subspace_chain_specs::ConsensusChainSpec;
 use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
@@ -22,13 +20,6 @@ use subspace_service::{FullClient, SubspaceConfiguration};
 use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
 pub mod chain_spec;
-
-#[non_exhaustive]
-#[derive(Debug, Default)]
-pub enum Mode {
-    #[default]
-    Full,
-}
 
 struct Role(sc_service::Role);
 
@@ -38,22 +29,29 @@ impl Default for Role {
     }
 }
 
+struct BlocksPruning(sc_service::BlocksPruning);
+
+impl Default for BlocksPruning {
+    fn default() -> Self {
+        Self(sc_service::BlocksPruning::All)
+    }
+}
+
 #[derive(Default)]
 pub struct Builder {
-    mode: Mode,
     name: Option<String>,
     force_authoring: bool,
     role: Role,
+    blocks_pruning: BlocksPruning,
+    state_pruning: Option<PruningMode>,
+    listen_on: Vec<Multiaddr>,
+    rpc_methods: RpcMethods,
+    execution_strategies: ExecutionStrategies,
 }
 
 impl Builder {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    pub fn mode(mut self, ty: Mode) -> Self {
-        self.mode = ty;
-        self
     }
 
     pub fn name(mut self, name: impl AsRef<str>) -> Self {
@@ -73,6 +71,21 @@ impl Builder {
         self
     }
 
+    pub fn blocks_pruning(mut self, pruning: sc_service::BlocksPruning) -> Self {
+        self.blocks_pruning = BlocksPruning(pruning);
+        self
+    }
+
+    pub fn state_pruning(mut self, pruning: Option<PruningMode>) -> Self {
+        self.state_pruning = pruning;
+        self
+    }
+
+    pub fn rpc_methods(mut self, rpc_methods: RpcMethods) -> Self {
+        self.rpc_methods = rpc_methods;
+        self
+    }
+
     /// Start a node with supplied parameters
     pub async fn build(
         self,
@@ -83,10 +96,14 @@ impl Builder {
         const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
 
         let Self {
-            mode: Mode::Full,
             name,
             force_authoring,
             role: Role(role),
+            blocks_pruning: BlocksPruning(blocks_pruning),
+            state_pruning,
+            listen_on,
+            rpc_methods,
+            execution_strategies,
         } = self;
 
         let base_path = BasePath::new(directory);
@@ -96,12 +113,7 @@ impl Builder {
         let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
         let client_id = format!("{}/v{}", impl_name, impl_version);
         let mut network = NetworkConfiguration {
-            listen_addresses: vec![
-                "/ip6/::/tcp/30333".parse().expect("Multiaddr is correct"),
-                "/ip4/0.0.0.0/tcp/30333"
-                    .parse()
-                    .expect("Multiaddr is correct"),
-            ],
+            listen_addresses: listen_on,
             boot_nodes: chain_spec.boot_nodes().to_vec(),
             ..NetworkConfiguration::new(
                 name.unwrap_or_default(),
@@ -134,24 +146,18 @@ impl Builder {
                 state_cache_size: 67_108_864,
                 state_cache_child_ratio: None,
                 // TODO: Change to constrained eventually (need DSN for this)
-                state_pruning: Some(PruningMode::ArchiveAll),
-                blocks_pruning: BlocksPruning::All,
+                state_pruning,
+                blocks_pruning,
                 wasm_method: WasmExecutionMethod::Compiled {
                     instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
                 },
                 wasm_runtime_overrides: None,
-                execution_strategies: ExecutionStrategies {
-                    syncing: ExecutionStrategy::AlwaysWasm,
-                    importing: ExecutionStrategy::AlwaysWasm,
-                    block_construction: ExecutionStrategy::AlwaysWasm,
-                    offchain_worker: ExecutionStrategy::AlwaysWasm,
-                    other: ExecutionStrategy::AlwaysWasm,
-                },
+                execution_strategies,
                 rpc_http: None,
                 rpc_ws: Some("127.0.0.1:9947".parse().expect("IP and port are valid")),
                 rpc_ipc: None,
                 // necessary in order to use `peers` method to show number of node peers during sync
-                rpc_methods: RpcMethods::Unsafe,
+                rpc_methods,
                 rpc_ws_max_connections: Default::default(),
                 // Below CORS are default from Substrate
                 rpc_cors: Some(vec![
@@ -265,7 +271,6 @@ pub struct ChainInfo {
 pub struct Info {
     pub version: String,
     pub chain: ChainInfo,
-    pub mode: Mode,
     pub name: Option<String>,
     pub connected_peers: u64,
     pub best_block: u64,
