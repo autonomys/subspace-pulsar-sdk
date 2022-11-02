@@ -260,6 +260,15 @@ pub struct Node {
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
 }
 
+impl std::fmt::Debug for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Node")
+            .field("rpc_handle", &self.rpc_handle)
+            .field("stop_sender", &self.stop_sender)
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct ChainInfo {
