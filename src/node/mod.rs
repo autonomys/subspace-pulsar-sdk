@@ -8,7 +8,8 @@ use std::sync::{Arc, Weak};
 use anyhow::Context;
 use libp2p_core::Multiaddr;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
-use sc_network::config::{NodeKeyConfig, Secret};
+use sc_network::config::{MultiaddrWithPeerId, NodeKeyConfig, Secret};
+use sc_network::{NetworkService, NetworkStateInfo};
 use sc_service::config::{
     ExecutionStrategies, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
 };
@@ -17,6 +18,7 @@ use sc_service::{
 };
 use sc_subspace_chain_specs::ConsensusChainSpec;
 use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
+use subspace_runtime_primitives::opaque::Block as RuntimeBlock;
 use subspace_service::{FullClient, SubspaceConfiguration};
 use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
@@ -46,6 +48,7 @@ pub struct Builder {
     blocks_pruning: BlocksPruning,
     state_pruning: Option<PruningMode>,
     listen_on: Vec<Multiaddr>,
+    boot_nodes: Vec<MultiaddrWithPeerId>,
     rpc_methods: RpcMethods,
     execution_strategies: ExecutionStrategies,
 }
@@ -87,6 +90,16 @@ impl Builder {
         self
     }
 
+    pub fn listen_on(mut self, listen_on: Vec<Multiaddr>) -> Self {
+        self.listen_on = listen_on;
+        self
+    }
+
+    pub fn boot_nodes(mut self, boot_nodes: Vec<MultiaddrWithPeerId>) -> Self {
+        self.boot_nodes = boot_nodes;
+        self
+    }
+
     /// Start a node with supplied parameters
     pub async fn build(
         self,
@@ -103,6 +116,7 @@ impl Builder {
             blocks_pruning: BlocksPruning(blocks_pruning),
             state_pruning,
             listen_on,
+            boot_nodes,
             rpc_methods,
             execution_strategies,
         } = self;
@@ -115,7 +129,12 @@ impl Builder {
         let client_id = format!("{}/v{}", impl_name, impl_version);
         let mut network = NetworkConfiguration {
             listen_addresses: listen_on,
-            boot_nodes: chain_spec.boot_nodes().to_vec(),
+            boot_nodes: chain_spec
+                .boot_nodes()
+                .iter()
+                .cloned()
+                .chain(boot_nodes)
+                .collect(),
             ..NetworkConfiguration::new(
                 name.unwrap_or_default(),
                 client_id,
@@ -210,9 +229,9 @@ impl Builder {
             client,
             rpc_handlers,
             network_starter,
+            network,
 
             select_chain: _,
-            network: _,
             backend: _,
             new_slot_notification_stream: _,
             reward_signing_notification_stream: _,
@@ -245,6 +264,7 @@ impl Builder {
 
         Ok(Node {
             client,
+            network,
             rpc_handle,
             stop_sender,
         })
@@ -274,6 +294,7 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 #[derive(Clone)]
 pub struct Node {
     client: Weak<FullClient<RuntimeApi, ExecutorDispatch>>,
+    network: Arc<NetworkService<RuntimeBlock, Hash>>,
     rpc_handle: Arc<jsonrpsee_core::server::rpc_module::RpcModule<()>>,
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
 }
@@ -337,6 +358,21 @@ impl Node {
         Builder::new()
     }
 
+    pub async fn listen_addresses(&mut self) -> anyhow::Result<Vec<MultiaddrWithPeerId>> {
+        let peer_id = self.network.local_peer_id();
+        self.network
+            .network_state()
+            .await
+            .map(|state| {
+                state
+                    .listened_addresses
+                    .into_iter()
+                    .map(|multiaddr| MultiaddrWithPeerId { multiaddr, peer_id })
+                    .collect()
+            })
+            .map_err(|()| anyhow::anyhow!("Network worker exited"))
+    }
+
     pub async fn sync(&mut self) {}
 
     // Leaves the network and gracefully shuts down
@@ -381,11 +417,20 @@ impl Node {
     }
 }
 
+fn subscription_to_stream<T: serde::de::DeserializeOwned>(
+    mut subscription: jsonrpsee_core::server::rpc_module::Subscription,
+) -> impl Stream<Item = T> + Unpin {
+    futures::stream::poll_fn(move |cx| {
+        Box::pin(subscription.next())
+            .poll_unpin(cx)
+            .map(|x| x.and_then(Result::ok).map(|(x, _)| x))
+    })
+}
+
 mod farmer_rpc_client {
     use super::*;
 
-    use futures::{FutureExt, Stream};
-    use jsonrpsee_core::server::rpc_module::Subscription;
+    use futures::Stream;
     use std::pin::Pin;
 
     use subspace_archiving::archiver::ArchivedSegment;
@@ -394,17 +439,6 @@ mod farmer_rpc_client {
     use subspace_rpc_primitives::{
         FarmerProtocolInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
     };
-
-    fn subscription_to_stream<T: serde::de::DeserializeOwned>(
-        mut subscription: Subscription,
-    ) -> impl Stream<Item = T> {
-        futures::stream::poll_fn(move |cx| {
-            Box::pin(subscription.next())
-                .poll_unpin(cx)
-                .map(|x| x.and_then(Result::ok).map(|(x, _)| x))
-        })
-    }
-
     #[async_trait::async_trait]
     impl RpcClient for Node {
         async fn farmer_protocol_info(&self) -> Result<FarmerProtocolInfo, Error> {

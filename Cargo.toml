@@ -47,8 +47,8 @@ subspace-service = { git = "https://github.com/subspace/subspace", rev = "7ddb32
 system-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "7ddb32d2d4a25837bff8669d698218cffb2abd7f" }
 
 [dev-dependencies]
-tokio = { version = "1.21", features = ["rt-multi-thread", "macros"] }
 tempdir = "0.3"
+tokio = { version = "1.21", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 
