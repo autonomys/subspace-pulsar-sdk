@@ -1,5 +1,6 @@
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
+use sp_core::H256;
 use std::io;
 use std::path::Path;
 use std::sync::{Arc, Weak};
@@ -286,23 +287,30 @@ impl std::fmt::Debug for Node {
     }
 }
 
+pub type Hash = H256;
+pub type BlockNumber = u32;
+
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct ChainInfo {
-    _ensure_cant_construct: (),
+    pub genesis_hash: Hash,
 }
 
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct Info {
-    pub version: String,
     pub chain: ChainInfo,
-    pub name: Option<String>,
-    pub connected_peers: u64,
-    pub best_block: u64,
-    pub total_space_pledged: u64,
-    pub total_history_size: u64,
-    pub space_pledged: u64,
+    pub best_block: (Hash, BlockNumber),
+    pub finalized_block: (Hash, BlockNumber),
+    pub block_gap: Option<std::ops::Range<BlockNumber>>,
+    // TODO: fetch this info
+    // pub version: String,
+    // pub name: Option<String>,
+    // pub connected_peers: u64,
+    // pub best_block: u64,
+    // pub total_space_pledged: u64,
+    // pub total_history_size: u64,
+    // pub space_pledged: u64,
 }
 
 #[derive(Debug)]
@@ -343,8 +351,29 @@ impl Node {
         tokio::fs::remove_dir_all(path).await
     }
 
-    pub async fn get_info(&mut self) -> Info {
-        todo!()
+    pub async fn get_info(&mut self) -> anyhow::Result<Info> {
+        self.client
+            .upgrade()
+            .map(|client| client.chain_info())
+            .map(
+                |sp_blockchain::Info {
+                     best_hash,
+                     best_number,
+                     genesis_hash,
+                     finalized_hash,
+                     finalized_number,
+                     block_gap,
+                     ..
+                 }| Info {
+                    chain: ChainInfo { genesis_hash },
+                    best_block: (best_hash, best_number),
+                    finalized_block: (finalized_hash, finalized_number),
+                    block_gap: block_gap.map(|(from, to)| from..to),
+                },
+            )
+            .ok_or_else(|| {
+                anyhow::anyhow!("Failed to fetch node info: the node was already closed")
+            })
     }
 
     pub async fn subscribe_new_blocks(&mut self) -> BlockStream {
