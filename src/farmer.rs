@@ -16,6 +16,7 @@ use subspace_farmer::single_disk_plot::{
 };
 
 // TODO: Should it be non-exhaustive?
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlotDescription {
     pub directory: PathBuf,
     pub space_pledged: ByteSize,
