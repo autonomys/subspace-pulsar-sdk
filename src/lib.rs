@@ -26,6 +26,7 @@ use subspace_core_primitives::PUBLIC_KEY_LENGTH;
     Serialize,
     Deserialize,
 )]
+#[serde(transparent)]
 pub struct PublicKey(pub subspace_core_primitives::PublicKey);
 
 impl From<[u8; PUBLIC_KEY_LENGTH]> for PublicKey {
