@@ -8,9 +8,25 @@ pub use node::{chain_spec, Builder as NodeBuilder, Info as FarmerInfo, Mode as N
 pub use parse_ss58::Ss58ParsingError;
 
 use derive_more::{Deref, DerefMut};
+use serde::{Deserialize, Serialize};
 use subspace_core_primitives::PUBLIC_KEY_LENGTH;
 
-#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Deref, DerefMut)]
+#[derive(
+    Debug,
+    Default,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Deref,
+    DerefMut,
+    Serialize,
+    Deserialize,
+)]
+#[serde(transparent)]
 pub struct PublicKey(pub subspace_core_primitives::PublicKey);
 
 impl From<[u8; PUBLIC_KEY_LENGTH]> for PublicKey {
