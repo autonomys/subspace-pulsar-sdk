@@ -12,7 +12,7 @@ async fn main() {
         .await
         .expect("Failed to init a node");
 
-    node.sync().await;
+    node.sync().await.expect("Failed to sync node");
 
     let reward_address = PublicKey::from([0; 32]);
     let plots = [PlotDescription::new("plot", ByteSize::gb(10))];
@@ -34,7 +34,7 @@ async fn main() {
         }
     });
     tokio::spawn({
-        let mut new_blocks = node.subscribe_new_blocks().await;
+        let mut new_blocks = node.subscribe_new_blocks().await.unwrap();
         async move {
             while let Some(block) = new_blocks.next().await {
                 eprintln!("New block: {block:?}");
@@ -58,7 +58,7 @@ async fn main() {
         .build("node", chain_spec::gemini_2a().unwrap())
         .await
         .expect("Failed to init a node");
-    node.sync().await;
+    node.sync().await.expect("Failed to sync node");
 
     let mut farmer = Farmer::builder()
         .build(

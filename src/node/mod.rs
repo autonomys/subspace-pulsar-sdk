@@ -1,12 +1,12 @@
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
-use sp_core::H256;
 use std::io;
 use std::path::Path;
 use std::sync::{Arc, Weak};
 
 use anyhow::Context;
 use libp2p_core::Multiaddr;
+use sc_client_api::client::BlockImportNotification;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{MultiaddrWithPeerId, NodeKeyConfig, Secret};
 use sc_network::{NetworkService, NetworkStateInfo};
@@ -17,8 +17,10 @@ use sc_service::{
     BasePath, Configuration, DatabaseSource, PruningMode, RpcMethods, TracingReceiver,
 };
 use sc_subspace_chain_specs::ConsensusChainSpec;
+use sp_consensus::SyncOracle;
+use sp_core::H256;
 use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
-use subspace_runtime_primitives::opaque::Block as RuntimeBlock;
+use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::{FullClient, SubspaceConfiguration};
 use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
@@ -311,13 +313,13 @@ impl std::fmt::Debug for Node {
 pub type Hash = H256;
 pub type BlockNumber = u32;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct ChainInfo {
     pub genesis_hash: Hash,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct Info {
     pub chain: ChainInfo,
@@ -334,23 +336,15 @@ pub struct Info {
     // pub space_pledged: u64,
 }
 
-#[derive(Debug)]
-pub struct Block {
-    _ensure_cant_construct: (),
-}
-
-pub struct BlockStream {
-    _ensure_cant_construct: (),
-}
-
-impl Stream for BlockStream {
-    type Item = Block;
-    fn poll_next(
-        self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        todo!()
-    }
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct BlockNotification {
+    pub hash: Hash,
+    pub number: BlockNumber,
+    pub parent_hash: Hash,
+    pub state_root: Hash,
+    pub extrinsics_root: Hash,
+    pub is_new_best: bool,
 }
 
 impl Node {
@@ -373,7 +367,25 @@ impl Node {
             .map_err(|()| anyhow::anyhow!("Network worker exited"))
     }
 
-    pub async fn sync(&mut self) {}
+    pub async fn sync(&mut self) -> anyhow::Result<()> {
+        const CHECK_SYNCED_EVERY: std::time::Duration = std::time::Duration::from_millis(100);
+
+        while self.network.is_offline() {
+            tokio::time::sleep(CHECK_SYNCED_EVERY).await;
+        }
+
+        todo!("This doesn't work though substrate node shows info from this status")
+        // while self
+        //     .network
+        //     .status()
+        //     .await
+        //     .map_err(|()| anyhow::anyhow!("Network worker exited"))?
+        //     .sync_state
+        //     == sc_network::SyncState::Downloading
+        // {
+        //     tokio::time::sleep(CHECK_SYNCED_EVERY).await;
+        // }
+    }
 
     // Leaves the network and gracefully shuts down
     pub async fn close(mut self) {
@@ -387,9 +399,14 @@ impl Node {
         tokio::fs::remove_dir_all(path).await
     }
 
-    pub async fn get_info(&mut self) -> anyhow::Result<Info> {
+    fn client(&self) -> anyhow::Result<Arc<FullClient<RuntimeApi, ExecutorDispatch>>> {
         self.client
             .upgrade()
+            .ok_or_else(|| anyhow::anyhow!("The node was already closed"))
+    }
+
+    pub async fn get_info(&mut self) -> anyhow::Result<Info> {
+        self.client()
             .map(|client| client.chain_info())
             .map(
                 |sp_blockchain::Info {
@@ -407,13 +424,42 @@ impl Node {
                     block_gap: block_gap.map(|(from, to)| from..to),
                 },
             )
-            .ok_or_else(|| {
-                anyhow::anyhow!("Failed to fetch node info: the node was already closed")
-            })
+            .context("Failed to fetch node info")
     }
 
-    pub async fn subscribe_new_blocks(&mut self) -> BlockStream {
-        todo!()
+    pub async fn subscribe_new_blocks(
+        &mut self,
+    ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
+        use sc_client_api::client::BlockchainEvents;
+
+        let stream = self
+            .client()
+            .context("Failed to subscribe to new blocks")?
+            .import_notification_stream()
+            .map(
+                |BlockImportNotification {
+                     hash,
+                     header:
+                         Header {
+                             parent_hash,
+                             number,
+                             state_root,
+                             extrinsics_root,
+                             digest: _,
+                         },
+                     origin: _,
+                     is_new_best,
+                     tree_route: _,
+                 }| BlockNotification {
+                    hash,
+                    number,
+                    parent_hash,
+                    state_root,
+                    extrinsics_root,
+                    is_new_best,
+                },
+            );
+        Ok(stream)
     }
 }
 
@@ -567,5 +613,57 @@ mod tests {
 
         farmer.close().await;
         node.close().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "No way to be sure that we are synced for now"]
+    async fn test_sync_block() {
+        let dir = TempDir::new("test").unwrap();
+        let chain = chain_spec::dev_config().unwrap();
+        let mut node = Node::builder()
+            .force_authoring(true)
+            .role(sc_service::Role::Authority)
+            .listen_on(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
+            .build(dir.path(), chain.clone())
+            .await
+            .unwrap();
+        let plot_dir = TempDir::new("test").unwrap();
+        let farmer = Farmer::builder()
+            .build(
+                Default::default(),
+                node.clone(),
+                &[PlotDescription::new(
+                    plot_dir.as_ref(),
+                    bytesize::ByteSize::gb(2),
+                )],
+            )
+            .await
+            .unwrap();
+
+        let mut sub = node.subscribe_new_blocks().await.unwrap();
+        while let Some(BlockNotification { number, .. }) = sub.next().await {
+            if number == 128 {
+                break;
+            }
+        }
+        farmer.close().await;
+
+        let dir = TempDir::new("test").unwrap();
+        let mut other_node = Node::builder()
+            .force_authoring(true)
+            .role(sc_service::Role::Authority)
+            .boot_nodes(node.listen_addresses().await.unwrap())
+            .build(dir.path(), chain)
+            .await
+            .unwrap();
+
+        tokio::time::timeout(std::time::Duration::from_secs(10), other_node.sync())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(other_node.get_info().await.unwrap().best_block.1 >= 4);
+
+        node.close().await;
+        other_node.close().await;
     }
 }
