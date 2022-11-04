@@ -10,12 +10,8 @@ use sc_client_api::client::BlockImportNotification;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{MultiaddrWithPeerId, NodeKeyConfig, Secret};
 use sc_network::{NetworkService, NetworkStateInfo};
-use sc_service::config::{
-    ExecutionStrategies, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
-};
-use sc_service::{
-    BasePath, Configuration, DatabaseSource, PruningMode, RpcMethods, TracingReceiver,
-};
+use sc_service::config::{KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig};
+use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use sc_subspace_chain_specs::ConsensusChainSpec;
 use sp_consensus::SyncOracle;
 use sp_core::H256;
@@ -24,21 +20,27 @@ use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::{FullClient, SubspaceConfiguration};
 use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
+pub use sc_service::{
+    config::{ExecutionStrategies, ExecutionStrategy},
+    BlocksPruning, PruningMode, Role, RpcMethods,
+};
+pub use sc_state_db::Constraints;
+
 pub mod chain_spec;
 
-struct Role(sc_service::Role);
+struct RoleInner(Role);
 
-impl Default for Role {
+impl Default for RoleInner {
     fn default() -> Self {
-        Self(sc_service::Role::Full)
+        Self(Role::Full)
     }
 }
 
-struct BlocksPruning(sc_service::BlocksPruning);
+struct BlocksPruningInner(BlocksPruning);
 
-impl Default for BlocksPruning {
+impl Default for BlocksPruningInner {
     fn default() -> Self {
-        Self(sc_service::BlocksPruning::All)
+        Self(BlocksPruning::All)
     }
 }
 
@@ -46,8 +48,8 @@ impl Default for BlocksPruning {
 pub struct Builder {
     name: Option<String>,
     force_authoring: bool,
-    role: Role,
-    blocks_pruning: BlocksPruning,
+    role: RoleInner,
+    blocks_pruning: BlocksPruningInner,
     state_pruning: Option<PruningMode>,
     listen_on: Vec<Multiaddr>,
     boot_nodes: Vec<MultiaddrWithPeerId>,
@@ -72,13 +74,13 @@ impl Builder {
         self
     }
 
-    pub fn role(mut self, role: sc_service::Role) -> Self {
-        self.role = Role(role);
+    pub fn role(mut self, role: Role) -> Self {
+        self.role = RoleInner(role);
         self
     }
 
-    pub fn blocks_pruning(mut self, pruning: sc_service::BlocksPruning) -> Self {
-        self.blocks_pruning = BlocksPruning(pruning);
+    pub fn blocks_pruning(mut self, pruning: BlocksPruning) -> Self {
+        self.blocks_pruning = BlocksPruningInner(pruning);
         self
     }
 
@@ -114,8 +116,8 @@ impl Builder {
         let Self {
             name,
             force_authoring,
-            role: Role(role),
-            blocks_pruning: BlocksPruning(blocks_pruning),
+            role: RoleInner(role),
+            blocks_pruning: BlocksPruningInner(blocks_pruning),
             state_pruning,
             listen_on,
             boot_nodes,
