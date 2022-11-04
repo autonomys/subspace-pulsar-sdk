@@ -26,7 +26,9 @@ sc-consensus-slots = { version = "0.10.0-dev", git = "https://github.com/subspac
 sc-executor = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598", features = ["wasmtime"] }
 sc-network = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
 sc-service = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598", default-features = false, features = ["wasmtime"] }
+sp-consensus = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
 sc-telemetry = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
+sc-client-api = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
 sp-blockchain = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
 sp-core = { version = "6.0.0", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
 sp-runtime = { version = "6.0.0", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
@@ -47,8 +49,8 @@ subspace-service = { git = "https://github.com/subspace/subspace", rev = "7ddb32
 system-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "7ddb32d2d4a25837bff8669d698218cffb2abd7f" }
 
 [dev-dependencies]
-tokio = { version = "1.21", features = ["rt-multi-thread", "macros"] }
 tempdir = "0.3"
+tokio = { version = "1.21", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 
