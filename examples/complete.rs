@@ -47,7 +47,6 @@ async fn main() {
     dbg!(node.get_info().await.unwrap());
     dbg!(farmer.get_info().await.unwrap());
 
-    farmer.stop_farming().await;
     farmer.close().await;
     node.close().await;
 

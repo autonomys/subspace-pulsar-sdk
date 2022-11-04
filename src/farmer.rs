@@ -6,12 +6,12 @@ use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p_core::Multiaddr;
 use subspace_core_primitives::SectorIndex;
 use subspace_networking::{Node as DSNNode, NodeRunner as DSNNodeRunner};
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, watch};
 
 use crate::{Node, PublicKey};
 
 use subspace_farmer::single_disk_plot::{
-    SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
+    PlottingProgress, SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
     SingleDiskPlotOptions, SingleDiskPlotSummary,
 };
 
@@ -118,12 +118,15 @@ impl Builder {
         } = self;
 
         let mut single_disk_plots = Vec::with_capacity(plots.len());
+        let mut plot_info = HashMap::with_capacity(plots.len());
         let (dsn_node, dsn_node_runner) = configure_dsn(listen_on, bootstrap_nodes).await?;
 
         for description in plots {
+            let directory = description.directory.clone();
+            let allocated_space = description.space_pledged.as_u64();
             let description = SingleDiskPlotOptions {
-                allocated_space: description.space_pledged.as_u64(),
-                directory: description.directory.clone(),
+                allocated_space,
+                directory: directory.clone(),
                 reward_address: *reward_address,
                 rpc_client: node.clone(),
                 dsn_node: dsn_node.clone(),
@@ -132,15 +135,21 @@ impl Builder {
                 tokio::task::spawn_blocking(move || SingleDiskPlot::new(description))
                     .await
                     .expect("Single disk plot never panics")?;
+            plot_info.insert(
+                directory.clone(),
+                Plot {
+                    directory,
+                    allocated_space,
+                    progress: single_disk_plot.subscribe_initial_plotting_progress(),
+                },
+            );
             single_disk_plots.push(single_disk_plot);
         }
 
         let mut single_disk_plots_stream = single_disk_plots
             .into_iter()
-            .map(SingleDiskPlot::wait)
+            .map(SingleDiskPlot::run)
             .collect::<FuturesUnordered<_>>();
-
-        let (cmd_sender, cmd_receiver) = oneshot::channel();
 
         if let Some(mut node_runner) = dsn_node_runner {
             tokio::spawn(async move {
@@ -148,12 +157,10 @@ impl Builder {
             });
         }
 
-        let handle = tokio::spawn(async move {
-            while let Some(result) = single_disk_plots_stream.next().await {
-                result?;
-            }
-            anyhow::Ok(())
-        });
+        let handle =
+            tokio::spawn(async move { single_disk_plots_stream.next().await.unwrap().unwrap() });
+
+        let (cmd_sender, cmd_receiver) = oneshot::channel();
 
         tokio::spawn(async move {
             let maybe_stop_sender = cmd_receiver.await;
@@ -167,7 +174,7 @@ impl Builder {
         Ok(Farmer {
             cmd_sender,
             reward_address,
-            plot_directories: plots.iter().map(|desc| desc.directory.clone()).collect(),
+            plot_info,
         })
     }
 }
@@ -179,8 +186,8 @@ enum FarmerCommand {
 
 pub struct Farmer {
     cmd_sender: oneshot::Sender<FarmerCommand>,
-    plot_directories: Vec<PathBuf>,
     reward_address: PublicKey,
+    plot_info: HashMap<PathBuf, Plot>,
 }
 
 #[derive(Debug)]
@@ -238,7 +245,25 @@ pub struct Solution {
 }
 
 pub struct Plot {
-    _ensure_cant_construct: (),
+    directory: PathBuf,
+    progress: watch::Receiver<PlottingProgress>,
+    allocated_space: u64,
+}
+
+impl Plot {
+    pub fn directory(&self) -> &PathBuf {
+        &self.directory
+    }
+
+    pub fn allocated_space(&self) -> ByteSize {
+        ByteSize::b(self.allocated_space)
+    }
+
+    pub async fn subscribe_plotting_progress(
+        &self,
+    ) -> impl Stream<Item = PlottingProgress> + Send + Sync + Unpin {
+        tokio_stream::wrappers::WatchStream::new(self.progress.clone())
+    }
 }
 
 pub struct SolutionStream {
@@ -264,11 +289,9 @@ impl Farmer {
 
     pub async fn start_farming(&mut self) {}
 
-    pub async fn stop_farming(&mut self) {}
-
     pub async fn get_info(&mut self) -> anyhow::Result<Info> {
         let plots_info = tokio::task::spawn_blocking({
-            let dirs = self.plot_directories.clone();
+            let dirs = self.plot_info.keys().cloned().collect::<Vec<_>>();
             || {
                 dirs.into_iter()
                     .map(SingleDiskPlot::collect_summary)
@@ -299,8 +322,8 @@ impl Farmer {
         todo!()
     }
 
-    pub async fn plots(&mut self) -> &mut [Plot] {
-        todo!()
+    pub async fn iter_plots(&'_ mut self) -> impl Iterator<Item = &'_ Plot> + '_ {
+        self.plot_info.values()
     }
 
     // Stops farming, closes plots, and sends signal to the node
@@ -355,6 +378,44 @@ mod tests {
             plots_info[plot_dir.as_ref()].allocated_space,
             bytesize::ByteSize::mb(10)
         );
+
+        farmer.close().await;
+        node.close().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_track_progress() {
+        let dir = TempDir::new("test").unwrap();
+        let node = Node::builder()
+            .force_authoring(true)
+            .role(sc_service::Role::Authority)
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
+        let plot_dir = TempDir::new("test").unwrap();
+        let n_sectors = 1;
+        let mut farmer = Farmer::builder()
+            .build(
+                Default::default(),
+                node.clone(),
+                &[PlotDescription::new(
+                    plot_dir.as_ref(),
+                    bytesize::ByteSize::mib(4 * n_sectors),
+                )],
+            )
+            .await
+            .unwrap();
+
+        let progress = farmer
+            .iter_plots()
+            .await
+            .next()
+            .unwrap()
+            .subscribe_plotting_progress()
+            .await
+            .collect::<Vec<_>>()
+            .await;
+        assert_eq!(progress.len(), n_sectors as usize + 1);
 
         farmer.close().await;
         node.close().await;
