@@ -136,29 +136,30 @@ impl Builder {
                 tokio::task::spawn_blocking(move || SingleDiskPlot::new(description))
                     .await
                     .expect("Single disk plot never panics")?;
+            let mut handlers = Vec::new();
+            let progress = {
+                let (sender, receiver) = watch::channel::<Option<_>>(None);
+                let handler =
+                    single_disk_plot.on_sector_plotted(std::sync::Arc::new(move |sector| {
+                        let _ = sender.send(Some(sector.clone()));
+                    }));
+                handlers.push(handler);
+                receiver
+            };
+            let solutions = {
+                let (sender, receiver) = watch::channel::<Option<_>>(None);
+                let handler = single_disk_plot.on_solution(std::sync::Arc::new(move |solution| {
+                    let _ = sender.send(Some(solution.clone()));
+                }));
+                handlers.push(handler);
+                receiver
+            };
             let plot = Plot {
                 directory: directory.clone(),
                 allocated_space,
-                progress: {
-                    let (sender, receiver) = watch::channel::<Option<_>>(None);
-                    single_disk_plot
-                        .on_sector_plotted(std::sync::Arc::new(move |sector| {
-                            let _ = sender.send(Some(sector.clone()));
-                        }))
-                        // TODO: save handler id and do not detach
-                        .detach();
-                    receiver
-                },
-                solutions: {
-                    let (sender, receiver) = watch::channel::<Option<_>>(None);
-                    single_disk_plot
-                        .on_solution(std::sync::Arc::new(move |solution| {
-                            let _ = sender.send(Some(solution.clone()));
-                        }))
-                        // TODO: save handler id and do not detach
-                        .detach();
-                    receiver
-                },
+                progress,
+                solutions,
+                _handlers: handlers,
             };
             plot_info.insert(directory, plot);
             single_disk_plots.push(single_disk_plot);
@@ -267,6 +268,7 @@ pub struct Plot {
     progress: watch::Receiver<Option<PlottedSector>>,
     solutions: watch::Receiver<Option<SolutionResponse>>,
     allocated_space: u64,
+    _handlers: Vec<event_listener_primitives::HandlerId>,
 }
 
 impl Plot {
