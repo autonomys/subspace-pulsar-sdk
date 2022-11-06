@@ -26,7 +26,13 @@ async fn main() {
     farmer.sync().await;
 
     tokio::spawn({
-        let mut solutions = farmer.subscribe_solutions().await;
+        let mut solutions = farmer
+            .iter_plots()
+            .await
+            .next()
+            .unwrap()
+            .subscribe_new_solutions()
+            .await;
         async move {
             while let Some(solution) = solutions.next().await {
                 eprintln!("Found solution: {solution:?}");
