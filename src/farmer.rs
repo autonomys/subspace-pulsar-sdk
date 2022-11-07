@@ -265,11 +265,6 @@ pub struct Info {
     pub sector_size: u64,
 }
 
-#[derive(Debug)]
-pub struct Solution {
-    _ensure_cant_construct: (),
-}
-
 pub struct Plot {
     directory: PathBuf,
     progress: watch::Receiver<Option<PlottedSector>>,
@@ -302,28 +297,18 @@ impl Plot {
     }
 }
 
-pub struct SolutionStream {
-    _ensure_cant_construct: (),
-}
-
-impl Stream for SolutionStream {
-    type Item = Solution;
-    fn poll_next(
-        self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        todo!()
-    }
-}
-
 impl Farmer {
     pub fn builder() -> Builder {
         Builder::new()
     }
 
-    pub async fn sync(&mut self) {}
+    pub async fn sync(&mut self) {
+        todo!()
+    }
 
-    pub async fn start_farming(&mut self) {}
+    pub async fn start_farming(&mut self) {
+        todo!()
+    }
 
     pub async fn get_info(&mut self) -> anyhow::Result<Info> {
         let plots_info = tokio::task::spawn_blocking({
