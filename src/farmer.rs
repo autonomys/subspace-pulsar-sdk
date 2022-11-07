@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io, path::PathBuf};
+use std::{collections::HashMap, io, path::PathBuf, sync::Arc};
 
 use anyhow::Context;
 use bytesize::ByteSize;
@@ -7,7 +7,7 @@ use libp2p_core::Multiaddr;
 use subspace_core_primitives::SectorIndex;
 use subspace_networking::{Node as DSNNode, NodeRunner as DSNNodeRunner};
 use subspace_rpc_primitives::SolutionResponse;
-use tokio::sync::{oneshot, watch};
+use tokio::sync::{oneshot, watch, Mutex};
 
 use crate::{Node, PublicKey};
 
@@ -55,6 +55,8 @@ pub enum BuildError {
     NoPlotsSupplied,
     #[error("Failed to connect to dsn: {0}")]
     DSNCreate(#[from] subspace_networking::CreationError),
+    #[error("Failed to fetch data from node: {0}")]
+    RPCError(#[source] subspace_farmer::RpcClientError),
 }
 
 async fn configure_dsn(
@@ -124,6 +126,11 @@ impl Builder {
         let mut single_disk_plots = Vec::with_capacity(plots.len());
         let mut plot_info = HashMap::with_capacity(plots.len());
         let (dsn_node, dsn_node_runner) = configure_dsn(listen_on, bootstrap_nodes).await?;
+        let space_l = node
+            .farmer_protocol_info()
+            .await
+            .map_err(BuildError::RPCError)?
+            .space_l;
 
         for description in plots {
             let directory = description.directory.clone();
@@ -139,6 +146,7 @@ impl Builder {
                 tokio::task::spawn_blocking(move || SingleDiskPlot::new(description))
                     .await
                     .expect("Single disk plot never panics")?;
+
             let mut handlers = Vec::new();
             let progress = {
                 let (sender, receiver) = watch::channel::<Option<_>>(None);
@@ -162,6 +170,12 @@ impl Builder {
                 allocated_space,
                 progress,
                 solutions,
+                initial_plotting_progress: Arc::new(Mutex::new(InitialPlottingProgress {
+                    starting_sector: single_disk_plot.plotted_sectors_count(),
+                    current_sector: single_disk_plot.plotted_sectors_count(),
+                    total_sectors: allocated_space
+                        / subspace_core_primitives::plot_sector_size(space_l),
+                })),
                 _handlers: handlers,
             };
             plot_info.insert(directory, plot);
@@ -265,10 +279,21 @@ pub struct Info {
     pub sector_size: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InitialPlottingProgress {
+    /// Number of sectors from which we started plotting
+    pub starting_sector: u64,
+    /// Current number of sectors
+    pub current_sector: u64,
+    /// Total number of sectors on disk
+    pub total_sectors: u64,
+}
+
 pub struct Plot {
     directory: PathBuf,
     progress: watch::Receiver<Option<PlottedSector>>,
     solutions: watch::Receiver<Option<SolutionResponse>>,
+    initial_plotting_progress: Arc<Mutex<InitialPlottingProgress>>,
     allocated_space: u64,
     _handlers: Vec<event_listener_primitives::HandlerId>,
 }
@@ -282,11 +307,34 @@ impl Plot {
         ByteSize::b(self.allocated_space)
     }
 
-    pub async fn subscribe_plotting_progress(
+    pub async fn subscribe_initial_plotting_progress(
         &self,
-    ) -> impl Stream<Item = PlottedSector> + Send + Sync + Unpin {
-        tokio_stream::wrappers::WatchStream::new(self.progress.clone())
-            .filter_map(futures::future::ready)
+    ) -> impl Stream<Item = InitialPlottingProgress> + Send + Sync + Unpin + 'static {
+        let stream = tokio_stream::wrappers::WatchStream::new(self.progress.clone())
+            .filter_map({
+                let initial_plotting_progress = Arc::clone(&self.initial_plotting_progress);
+                move |_| {
+                    let initial_plotting_progress = Arc::clone(&initial_plotting_progress);
+                    async move {
+                        let mut guard = initial_plotting_progress.lock().await;
+                        guard.current_sector += 1;
+                        Some(*guard)
+                    }
+                }
+            })
+            .take_while(
+                |InitialPlottingProgress {
+                     current_sector,
+                     total_sectors,
+                     ..
+                 }| futures::future::ready(current_sector != total_sectors),
+            )
+            .chain(futures::stream::once({
+                let mut initial_progress = *self.initial_plotting_progress.lock().await;
+                initial_progress.current_sector = initial_progress.total_sectors;
+                futures::future::ready(initial_progress)
+            }));
+        Box::pin(stream)
     }
 
     pub async fn subscribe_new_solutions(
@@ -434,7 +482,7 @@ mod tests {
             .await
             .next()
             .unwrap()
-            .subscribe_plotting_progress()
+            .subscribe_initial_plotting_progress()
             .await
             .take(n_sectors as usize)
             .collect::<Vec<_>>()
