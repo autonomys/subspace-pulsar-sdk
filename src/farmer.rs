@@ -11,9 +11,12 @@ use tokio::sync::{oneshot, watch};
 
 use crate::{Node, PublicKey};
 
-use subspace_farmer::single_disk_plot::{
-    plotting::PlottedSector, SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId,
-    SingleDiskPlotInfo, SingleDiskPlotOptions, SingleDiskPlotSummary,
+use subspace_farmer::{
+    single_disk_plot::{
+        plotting::PlottedSector, SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId,
+        SingleDiskPlotInfo, SingleDiskPlotOptions, SingleDiskPlotSummary,
+    },
+    RpcClient,
 };
 
 // TODO: Should it be non-exhaustive?
@@ -194,6 +197,7 @@ impl Builder {
             cmd_sender,
             reward_address,
             plot_info,
+            node,
         })
     }
 }
@@ -207,6 +211,7 @@ pub struct Farmer {
     cmd_sender: oneshot::Sender<FarmerCommand>,
     reward_address: PublicKey,
     plot_info: HashMap<PathBuf, Plot>,
+    node: Node,
 }
 
 #[derive(Debug)]
@@ -256,6 +261,8 @@ pub struct Info {
     // TODO: add dsn peers info
     // pub dsn_peers: u64,
     pub plots_info: HashMap<PathBuf, PlotInfo>,
+    // In bits
+    pub sector_size: u64,
 }
 
 #[derive(Debug)]
@@ -344,6 +351,12 @@ impl Farmer {
             plots_info,
             version: env!("CARGO_PKG_VERSION").to_string(), // TODO: include git revision here
             reward_address: self.reward_address,
+            sector_size: self
+                .node
+                .farmer_protocol_info()
+                .await
+                .map(|info| subspace_core_primitives::plot_sector_size(info.space_l))
+                .map_err(|err| anyhow::anyhow!("Failed to get farmer protocol info: {err}"))?,
         })
     }
 
