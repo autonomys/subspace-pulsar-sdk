@@ -388,15 +388,19 @@ pub fn subspace_genesis_config(
 mod secondary_chain {
     use super::*;
 
+    use frame_support::weights::Weight;
     use sc_service::ChainType;
     use sc_subspace_chain_specs::ExecutionChainSpec;
     use sp_core::crypto::Ss58Codec;
     use sp_domains::ExecutorPublicKey;
+    use sp_runtime::Percent;
     use subspace_runtime_primitives::SSC;
     use system_domain_runtime::{
-        AccountId, Balance, BalancesConfig, ExecutorRegistryConfig, GenesisConfig, SystemConfig,
-        WASM_BINARY,
+        AccountId, Balance, BalancesConfig, DomainRegistryConfig, ExecutorRegistryConfig,
+        GenesisConfig, Hash, SystemConfig, WASM_BINARY,
     };
+
+    type DomainConfig = sp_domains::DomainConfig<Hash, Balance, Weight>;
 
     pub fn development_config() -> ExecutionChainSpec<GenesisConfig> {
         ExecutionChainSpec::from_genesis(
@@ -418,6 +422,20 @@ mod secondary_chain {
                         1_000 * SSC,
                         utils::get_account_id_from_seed("Alice"),
                         utils::get_public_key_from_seed::<ExecutorPublicKey>("Alice"),
+                    )],
+                    vec![(
+                        utils::get_account_id_from_seed("Alice"),
+                        1_000 * SSC,
+                        // TODO: proper genesis domain config
+                        DomainConfig {
+                            wasm_runtime_hash: Hash::random(),
+                            max_bundle_size: 1024 * 1024,
+                            bundle_frequency: 100,
+                            max_bundle_weight: Weight::MAX,
+                            min_operator_stake: 100 * SSC,
+                        },
+                        utils::get_account_id_from_seed("Alice"),
+                        Percent::one(),
                     )],
                 )
             },
@@ -458,6 +476,20 @@ mod secondary_chain {
                         1_000 * SSC,
                         utils::get_account_id_from_seed("Alice"),
                         utils::get_public_key_from_seed::<ExecutorPublicKey>("Alice"),
+                    )],
+                    vec![(
+                        utils::get_account_id_from_seed("Alice"),
+                        1_000 * SSC,
+                        // TODO: proper genesis domain config
+                        DomainConfig {
+                            wasm_runtime_hash: Hash::random(),
+                            max_bundle_size: 1024 * 1024,
+                            bundle_frequency: 100,
+                            max_bundle_weight: Weight::MAX,
+                            min_operator_stake: 100 * SSC,
+                        },
+                        utils::get_account_id_from_seed("Alice"),
+                        Percent::one(),
                     )],
                 )
             },
@@ -506,6 +538,20 @@ mod secondary_chain {
                         )
                         .expect("Wrong executor public key"),
                     )],
+                    vec![(
+                        utils::get_account_id_from_seed("Alice"),
+                        1_000 * SSC,
+                        // TODO: proper genesis domain config
+                        DomainConfig {
+                            wasm_runtime_hash: Hash::random(),
+                            max_bundle_size: 1024 * 1024,
+                            bundle_frequency: 100,
+                            max_bundle_weight: Weight::MAX,
+                            min_operator_stake: 100 * SSC,
+                        },
+                        utils::get_account_id_from_seed("Alice"),
+                        Percent::one(),
+                    )],
                 )
             },
             // Bootnodes
@@ -525,6 +571,7 @@ mod secondary_chain {
     fn testnet_genesis(
         endowed_accounts: Vec<AccountId>,
         executors: Vec<(AccountId, Balance, AccountId, ExecutorPublicKey)>,
+        domains: Vec<(AccountId, Balance, DomainConfig, AccountId, Percent)>,
     ) -> GenesisConfig {
         GenesisConfig {
             system: SystemConfig {
@@ -544,6 +591,7 @@ mod secondary_chain {
                 executors,
                 slot_probability: (1, 1),
             },
+            domain_registry: DomainRegistryConfig { domains },
         }
     }
 }
