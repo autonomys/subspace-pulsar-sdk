@@ -6,13 +6,14 @@ use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p_core::Multiaddr;
 use subspace_core_primitives::SectorIndex;
 use subspace_networking::{Node as DSNNode, NodeRunner as DSNNodeRunner};
+use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch};
 
 use crate::{Node, PublicKey};
 
 use subspace_farmer::single_disk_plot::{
-    PlottingProgress, SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
-    SingleDiskPlotOptions, SingleDiskPlotSummary,
+    plotting::PlottedSector, SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId,
+    SingleDiskPlotInfo, SingleDiskPlotOptions, SingleDiskPlotSummary,
 };
 
 // TODO: Should it be non-exhaustive?
@@ -135,14 +136,32 @@ impl Builder {
                 tokio::task::spawn_blocking(move || SingleDiskPlot::new(description))
                     .await
                     .expect("Single disk plot never panics")?;
-            plot_info.insert(
-                directory.clone(),
-                Plot {
-                    directory,
-                    allocated_space,
-                    progress: single_disk_plot.subscribe_initial_plotting_progress(),
-                },
-            );
+            let mut handlers = Vec::new();
+            let progress = {
+                let (sender, receiver) = watch::channel::<Option<_>>(None);
+                let handler =
+                    single_disk_plot.on_sector_plotted(std::sync::Arc::new(move |sector| {
+                        let _ = sender.send(Some(sector.clone()));
+                    }));
+                handlers.push(handler);
+                receiver
+            };
+            let solutions = {
+                let (sender, receiver) = watch::channel::<Option<_>>(None);
+                let handler = single_disk_plot.on_solution(std::sync::Arc::new(move |solution| {
+                    let _ = sender.send(Some(solution.clone()));
+                }));
+                handlers.push(handler);
+                receiver
+            };
+            let plot = Plot {
+                directory: directory.clone(),
+                allocated_space,
+                progress,
+                solutions,
+                _handlers: handlers,
+            };
+            plot_info.insert(directory, plot);
             single_disk_plots.push(single_disk_plot);
         }
 
@@ -246,8 +265,10 @@ pub struct Solution {
 
 pub struct Plot {
     directory: PathBuf,
-    progress: watch::Receiver<PlottingProgress>,
+    progress: watch::Receiver<Option<PlottedSector>>,
+    solutions: watch::Receiver<Option<SolutionResponse>>,
     allocated_space: u64,
+    _handlers: Vec<event_listener_primitives::HandlerId>,
 }
 
 impl Plot {
@@ -261,8 +282,16 @@ impl Plot {
 
     pub async fn subscribe_plotting_progress(
         &self,
-    ) -> impl Stream<Item = PlottingProgress> + Send + Sync + Unpin {
+    ) -> impl Stream<Item = PlottedSector> + Send + Sync + Unpin {
         tokio_stream::wrappers::WatchStream::new(self.progress.clone())
+            .filter_map(futures::future::ready)
+    }
+
+    pub async fn subscribe_new_solutions(
+        &self,
+    ) -> impl Stream<Item = SolutionResponse> + Send + Sync + Unpin {
+        tokio_stream::wrappers::WatchStream::new(self.solutions.clone())
+            .filter_map(futures::future::ready)
     }
 }
 
@@ -316,10 +345,6 @@ impl Farmer {
             version: env!("CARGO_PKG_VERSION").to_string(), // TODO: include git revision here
             reward_address: self.reward_address,
         })
-    }
-
-    pub async fn subscribe_solutions(&mut self) -> SolutionStream {
-        todo!()
     }
 
     pub async fn iter_plots(&'_ mut self) -> impl Iterator<Item = &'_ Plot> + '_ {
@@ -413,9 +438,47 @@ mod tests {
             .unwrap()
             .subscribe_plotting_progress()
             .await
+            .take(n_sectors as usize)
             .collect::<Vec<_>>()
             .await;
-        assert_eq!(progress.len(), n_sectors as usize + 1);
+        assert_eq!(progress.len(), n_sectors as usize);
+
+        farmer.close().await;
+        node.close().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_new_solution() {
+        let dir = TempDir::new("test").unwrap();
+        let node = Node::builder()
+            .force_authoring(true)
+            .role(sc_service::Role::Authority)
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
+        let plot_dir = TempDir::new("test").unwrap();
+        let mut farmer = Farmer::builder()
+            .build(
+                Default::default(),
+                node.clone(),
+                &[PlotDescription::new(
+                    plot_dir.as_ref(),
+                    bytesize::ByteSize::mib(4),
+                )],
+            )
+            .await
+            .unwrap();
+
+        farmer
+            .iter_plots()
+            .await
+            .next()
+            .unwrap()
+            .subscribe_new_solutions()
+            .await
+            .next()
+            .await
+            .expect("Farmer should send new solutions");
 
         farmer.close().await;
         node.close().await;
