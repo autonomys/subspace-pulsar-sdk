@@ -1,9 +1,7 @@
 pub mod farmer;
 pub mod node;
 
-pub use farmer::{
-    Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotDescription, Solution,
-};
+pub use farmer::{Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotDescription};
 pub use node::{chain_spec, Builder as NodeBuilder, Info as FarmerInfo, Node};
 pub use parse_ss58::Ss58ParsingError;
 
