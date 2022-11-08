@@ -7,7 +7,7 @@ use libp2p_core::Multiaddr;
 use subspace_core_primitives::SectorIndex;
 use subspace_networking::{Node as DSNNode, NodeRunner as DSNNodeRunner};
 use subspace_rpc_primitives::SolutionResponse;
-use tokio::sync::{oneshot, watch, Mutex};
+use tokio::sync::{mpsc, oneshot, watch, Mutex};
 
 use crate::{Node, PublicKey};
 
@@ -196,13 +196,13 @@ impl Builder {
         let handle =
             tokio::spawn(async move { single_disk_plots_stream.next().await.unwrap().unwrap() });
 
-        let (cmd_sender, cmd_receiver) = oneshot::channel();
+        let (cmd_sender, mut cmd_receiver) = mpsc::channel(1);
 
         tokio::spawn(async move {
-            let maybe_stop_sender = cmd_receiver.await;
+            let maybe_stop_sender = cmd_receiver.recv().await;
             // TODO: remove once there won't be joining on drop in monorepo
             handle.abort();
-            if let Ok(FarmerCommand::Stop(stop_sender)) = maybe_stop_sender {
+            if let Some(FarmerCommand::Stop(stop_sender)) = maybe_stop_sender {
                 let _ = stop_sender.send(());
             }
         });
@@ -210,7 +210,7 @@ impl Builder {
         Ok(Farmer {
             cmd_sender,
             reward_address,
-            plot_info,
+            plot_info: Arc::new(plot_info),
             node,
         })
     }
@@ -221,10 +221,11 @@ enum FarmerCommand {
     Stop(oneshot::Sender<()>),
 }
 
+#[derive(Clone, Debug)]
 pub struct Farmer {
-    cmd_sender: oneshot::Sender<FarmerCommand>,
+    cmd_sender: mpsc::Sender<FarmerCommand>,
     reward_address: PublicKey,
-    plot_info: HashMap<PathBuf, Plot>,
+    plot_info: Arc<HashMap<PathBuf, Plot>>,
     node: Node,
 }
 
@@ -289,6 +290,7 @@ pub struct InitialPlottingProgress {
     pub total_sectors: u64,
 }
 
+#[derive(Debug)]
 pub struct Plot {
     directory: PathBuf,
     progress: watch::Receiver<Option<PlottedSector>>,
@@ -350,15 +352,7 @@ impl Farmer {
         Builder::new()
     }
 
-    pub async fn sync(&mut self) {
-        todo!()
-    }
-
-    pub async fn start_farming(&mut self) {
-        todo!()
-    }
-
-    pub async fn get_info(&mut self) -> anyhow::Result<Info> {
+    pub async fn get_info(&self) -> anyhow::Result<Info> {
         let plots_info = tokio::task::spawn_blocking({
             let dirs = self.plot_info.keys().cloned().collect::<Vec<_>>();
             || {
@@ -393,7 +387,7 @@ impl Farmer {
         })
     }
 
-    pub async fn iter_plots(&'_ mut self) -> impl Iterator<Item = &'_ Plot> + '_ {
+    pub async fn iter_plots(&'_ self) -> impl Iterator<Item = &'_ Plot> + '_ {
         self.plot_info.values()
     }
 
@@ -403,6 +397,7 @@ impl Farmer {
         if self
             .cmd_sender
             .send(FarmerCommand::Stop(stop_sender))
+            .await
             .is_err()
         {
             return;
@@ -432,7 +427,7 @@ mod tests {
             plot_dir.as_ref(),
             bytesize::ByteSize::mb(10),
         )];
-        let mut farmer = Farmer::builder()
+        let farmer = Farmer::builder()
             .build(Default::default(), node.clone(), &plots)
             .await
             .unwrap();
@@ -465,7 +460,7 @@ mod tests {
             .unwrap();
         let plot_dir = TempDir::new("test").unwrap();
         let n_sectors = 1;
-        let mut farmer = Farmer::builder()
+        let farmer = Farmer::builder()
             .build(
                 Default::default(),
                 node.clone(),
@@ -503,7 +498,7 @@ mod tests {
             .await
             .unwrap();
         let plot_dir = TempDir::new("test").unwrap();
-        let mut farmer = Farmer::builder()
+        let farmer = Farmer::builder()
             .build(
                 Default::default(),
                 node.clone(),
