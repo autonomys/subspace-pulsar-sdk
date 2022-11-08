@@ -300,6 +300,39 @@ pub struct Plot {
     _handlers: Vec<event_listener_primitives::HandlerId>,
 }
 
+#[pin_project::pin_project]
+struct InitialPlottingProgressStream<S> {
+    last_initial_plotting_progress: InitialPlottingProgress,
+    #[pin]
+    stream: S,
+}
+
+impl<S: Stream> Stream for InitialPlottingProgressStream<S>
+where
+    S: Stream<Item = InitialPlottingProgress>,
+{
+    type Item = InitialPlottingProgress;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        let this = self.project();
+        match this.stream.poll_next(cx) {
+            result @ std::task::Poll::Ready(Some(progress)) => {
+                *this.last_initial_plotting_progress = progress;
+                result
+            }
+            result => result,
+        }
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let left = self.last_initial_plotting_progress.total_sectors
+            - self.last_initial_plotting_progress.current_sector;
+        (left as usize, Some(left as usize))
+    }
+}
+
 impl Plot {
     pub fn directory(&self) -> &PathBuf {
         &self.directory
@@ -336,7 +369,11 @@ impl Plot {
                 initial_progress.current_sector = initial_progress.total_sectors;
                 futures::future::ready(initial_progress)
             }));
-        Box::pin(stream)
+        let last_initial_plotting_progress = *self.initial_plotting_progress.lock().await;
+        Box::pin(InitialPlottingProgressStream {
+            stream,
+            last_initial_plotting_progress,
+        })
     }
 
     pub async fn subscribe_new_solutions(
