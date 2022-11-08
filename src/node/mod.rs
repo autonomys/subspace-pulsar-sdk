@@ -354,7 +354,7 @@ impl Node {
         Builder::new()
     }
 
-    pub async fn listen_addresses(&mut self) -> anyhow::Result<Vec<MultiaddrWithPeerId>> {
+    pub async fn listen_addresses(&self) -> anyhow::Result<Vec<MultiaddrWithPeerId>> {
         let peer_id = self.network.local_peer_id();
         self.network
             .network_state()
@@ -369,7 +369,7 @@ impl Node {
             .map_err(|()| anyhow::anyhow!("Network worker exited"))
     }
 
-    pub async fn sync(&mut self) -> anyhow::Result<()> {
+    pub async fn sync(&self) -> anyhow::Result<()> {
         const CHECK_SYNCED_EVERY: std::time::Duration = std::time::Duration::from_millis(100);
 
         while self.network.is_offline() {
@@ -407,7 +407,7 @@ impl Node {
             .ok_or_else(|| anyhow::anyhow!("The node was already closed"))
     }
 
-    pub async fn get_info(&mut self) -> anyhow::Result<Info> {
+    pub async fn get_info(&self) -> anyhow::Result<Info> {
         self.client()
             .map(|client| client.chain_info())
             .map(
@@ -430,7 +430,7 @@ impl Node {
     }
 
     pub async fn subscribe_new_blocks(
-        &mut self,
+        &self,
     ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
         use sc_client_api::client::BlockchainEvents;
 
@@ -622,7 +622,7 @@ mod tests {
     async fn test_sync_block() {
         let dir = TempDir::new("test").unwrap();
         let chain = chain_spec::dev_config().unwrap();
-        let mut node = Node::builder()
+        let node = Node::builder()
             .force_authoring(true)
             .role(sc_service::Role::Authority)
             .listen_on(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
@@ -651,7 +651,7 @@ mod tests {
         farmer.close().await;
 
         let dir = TempDir::new("test").unwrap();
-        let mut other_node = Node::builder()
+        let other_node = Node::builder()
             .force_authoring(true)
             .role(sc_service::Role::Authority)
             .boot_nodes(node.listen_addresses().await.unwrap())

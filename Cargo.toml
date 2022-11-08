@@ -21,6 +21,7 @@ ss58-registry = "1.33"
 thiserror = "1"
 tokio = { version = "1.21", features = ["fs", "rt"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
+pin-project = "1"
 
 frame-support = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
 sc-chain-spec = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
