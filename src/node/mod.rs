@@ -9,7 +9,7 @@ use libp2p_core::Multiaddr;
 use sc_client_api::client::BlockImportNotification;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{MultiaddrWithPeerId, NodeKeyConfig, Secret};
-use sc_network::{NetworkService, NetworkStateInfo};
+use sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider};
 use sc_service::config::{KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig};
 use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use sc_subspace_chain_specs::ConsensusChainSpec;
@@ -376,7 +376,6 @@ impl Node {
             tokio::time::sleep(CHECK_SYNCED_EVERY).await;
         }
 
-        todo!("This doesn't work though substrate node shows info from this status")
         // while self
         //     .network
         //     .status()
@@ -387,6 +386,11 @@ impl Node {
         // {
         //     tokio::time::sleep(CHECK_SYNCED_EVERY).await;
         // }
+        while self.network.is_major_syncing() {
+            tokio::time::sleep(CHECK_SYNCED_EVERY).await;
+        }
+
+        Ok(())
     }
 
     // Leaves the network and gracefully shuts down

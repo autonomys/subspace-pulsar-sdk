@@ -53,6 +53,8 @@ subspace-service = { git = "https://github.com/subspace/subspace", rev = "77b03b
 system-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "77b03beeaf517558d6b1ad1c3c6f4a3f440b7769" }
 
 [dev-dependencies]
+clap = { version = "4", features = ["derive"] }
+serde_json = "1"
 tempdir = "0.3"
 tokio = { version = "1.21", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1"
