@@ -8,8 +8,9 @@ use anyhow::Context;
 use libp2p_core::Multiaddr;
 use sc_client_api::client::BlockImportNotification;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
-use sc_network::config::{MultiaddrWithPeerId, NodeKeyConfig, Secret};
+use sc_network::config::{NodeKeyConfig, Secret};
 use sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider};
+use sc_network_common::config::MultiaddrWithPeerId;
 use sc_service::config::{KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig};
 use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use sc_subspace_chain_specs::ConsensusChainSpec;
@@ -40,7 +41,7 @@ struct BlocksPruningInner(BlocksPruning);
 
 impl Default for BlocksPruningInner {
     fn default() -> Self {
-        Self(BlocksPruning::All)
+        Self(BlocksPruning::KeepAll)
     }
 }
 
@@ -125,7 +126,7 @@ impl Builder {
             execution_strategies,
         } = self;
 
-        let base_path = BasePath::new(directory);
+        let base_path = BasePath::new(directory.as_ref());
         let impl_name = env!("CARGO_PKG_NAME").to_owned();
         let impl_version = env!("CARGO_PKG_VERSION").to_string(); // TODO: include git revision here
         let config_dir = base_path.config_dir(chain_spec.id());
@@ -167,8 +168,9 @@ impl Builder {
                 database: DatabaseSource::ParityDb {
                     path: config_dir.join("paritydb").join("full"),
                 },
-                state_cache_size: 67_108_864,
-                state_cache_child_ratio: None,
+                trie_cache_maximum_size: Some(67_108_864),
+                // state_cache_size: ,
+                // state_cache_child_ratio: None,
                 // TODO: Change to constrained eventually (need DSN for this)
                 state_pruning,
                 blocks_pruning,
@@ -370,25 +372,32 @@ impl Node {
     }
 
     pub async fn sync(&self) -> anyhow::Result<()> {
-        const CHECK_SYNCED_EVERY: std::time::Duration = std::time::Duration::from_millis(100);
+        const CHECK_SYNCED_EVERY: std::time::Duration = std::time::Duration::from_millis(10);
 
-        while self.network.is_offline() {
+        while self
+            .network
+            .status()
+            .await
+            .map_err(|()| anyhow::anyhow!("Network worker exited"))?
+            .sync_state
+            == sc_network::SyncState::Idle
+        {
             tokio::time::sleep(CHECK_SYNCED_EVERY).await;
         }
 
-        // while self
-        //     .network
-        //     .status()
-        //     .await
-        //     .map_err(|()| anyhow::anyhow!("Network worker exited"))?
-        //     .sync_state
-        //     == sc_network::SyncState::Downloading
-        // {
+        while self
+            .network
+            .status()
+            .await
+            .map_err(|()| anyhow::anyhow!("Network worker exited"))?
+            .sync_state
+            != sc_network::SyncState::Idle
+        {
+            tokio::time::sleep(CHECK_SYNCED_EVERY).await;
+        }
+        // while self.network.is_major_syncing() {
         //     tokio::time::sleep(CHECK_SYNCED_EVERY).await;
         // }
-        while self.network.is_major_syncing() {
-            tokio::time::sleep(CHECK_SYNCED_EVERY).await;
-        }
 
         Ok(())
     }

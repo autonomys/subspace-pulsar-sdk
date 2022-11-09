@@ -4,7 +4,7 @@ use tempdir::TempDir;
 
 use bytesize::ByteSize;
 use clap::Parser;
-use sc_network::config::MultiaddrWithPeerId;
+use sc_network_common::config::MultiaddrWithPeerId;
 use subspace_sdk::{chain_spec, Farmer, Node, PlotDescription, PublicKey};
 
 #[derive(clap::Args, Debug)]
@@ -78,7 +78,7 @@ async fn main() -> anyhow::Result<()> {
             spec,
         } => {
             let chain_spec = serde_json::from_str(&tokio::fs::read_to_string(spec).await?)?;
-            let mut node = Node::builder()
+            let node = Node::builder()
                 .listen_on(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
                 .force_authoring(true)
                 .role(sc_service::Role::Authority)
@@ -102,7 +102,7 @@ async fn main() -> anyhow::Result<()> {
         Args::Sync { boot_nodes, spec } => {
             let node = TempDir::new("node")?;
             let chain_spec = serde_json::from_str(&tokio::fs::read_to_string(spec).await?)?;
-            let mut node = Node::builder()
+            let node = Node::builder()
                 .force_authoring(true)
                 .role(sc_service::Role::Authority)
                 .boot_nodes(boot_nodes)

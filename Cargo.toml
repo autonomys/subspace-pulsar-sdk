@@ -15,7 +15,7 @@ derive_more = "0.99"
 event-listener-primitives = "2.0.1"
 futures = "0.3"
 jsonrpsee-core = "0.15.1"
-libp2p-core = "0.34"
+libp2p-core = "0.37"
 serde = "1"
 ss58-registry = "1.33"
 thiserror = "1"
@@ -23,34 +23,35 @@ tokio = { version = "1.21", features = ["fs", "rt"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 pin-project = "1"
 
-frame-support = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
-sc-chain-spec = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
-sc-client-api = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
-sc-consensus-slots = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
-sc-executor = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598", features = ["wasmtime"] }
-sc-network = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
-sc-service = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598", default-features = false, features = ["wasmtime"] }
-sc-state-db = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
-sc-telemetry = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
-sp-blockchain = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
-sp-consensus = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
-sp-core = { version = "6.0.0", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
-sp-runtime = { version = "6.0.0", git = "https://github.com/subspace/substrate", rev = "1a7c28721fa77ecce9632ad9ce473f2d3cf1a598" }
+frame-support = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "4fa79c18d6a29fdd1adeba6b7946b70d18263523" }
+sc-chain-spec = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "4fa79c18d6a29fdd1adeba6b7946b70d18263523" }
+sc-client-api = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "4fa79c18d6a29fdd1adeba6b7946b70d18263523" }
+sc-consensus-slots = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "4fa79c18d6a29fdd1adeba6b7946b70d18263523" }
+sc-executor = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "4fa79c18d6a29fdd1adeba6b7946b70d18263523", features = ["wasmtime"] }
+sc-network = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "4fa79c18d6a29fdd1adeba6b7946b70d18263523" }
+sc-network-common = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "4fa79c18d6a29fdd1adeba6b7946b70d18263523" }
+sc-service = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "4fa79c18d6a29fdd1adeba6b7946b70d18263523", default-features = false, features = ["wasmtime"] }
+sc-state-db = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "4fa79c18d6a29fdd1adeba6b7946b70d18263523" }
+sc-telemetry = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "4fa79c18d6a29fdd1adeba6b7946b70d18263523" }
+sp-blockchain = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "4fa79c18d6a29fdd1adeba6b7946b70d18263523" }
+sp-consensus = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "4fa79c18d6a29fdd1adeba6b7946b70d18263523" }
+sp-core = { version = "6.0.0", git = "https://github.com/subspace/substrate", rev = "4fa79c18d6a29fdd1adeba6b7946b70d18263523" }
+sp-runtime = { version = "6.0.0", git = "https://github.com/subspace/substrate", rev = "4fa79c18d6a29fdd1adeba6b7946b70d18263523" }
 
-sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "77b03beeaf517558d6b1ad1c3c6f4a3f440b7769" }
-sc-subspace-chain-specs = { git = "https://github.com/subspace/subspace", rev = "77b03beeaf517558d6b1ad1c3c6f4a3f440b7769" }
-sp-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "77b03beeaf517558d6b1ad1c3c6f4a3f440b7769" }
-sp-domains = { git = "https://github.com/subspace/subspace", rev = "77b03beeaf517558d6b1ad1c3c6f4a3f440b7769" }
-subspace-archiving = { git = "https://github.com/subspace/subspace", rev = "77b03beeaf517558d6b1ad1c3c6f4a3f440b7769" }
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "77b03beeaf517558d6b1ad1c3c6f4a3f440b7769" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "77b03beeaf517558d6b1ad1c3c6f4a3f440b7769" }
-subspace-fraud-proof = { git = "https://github.com/subspace/subspace", rev = "77b03beeaf517558d6b1ad1c3c6f4a3f440b7769" }
-subspace-networking = { git = "https://github.com/subspace/subspace", rev = "77b03beeaf517558d6b1ad1c3c6f4a3f440b7769" }
-subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "77b03beeaf517558d6b1ad1c3c6f4a3f440b7769" }
-subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "77b03beeaf517558d6b1ad1c3c6f4a3f440b7769" }
-subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "77b03beeaf517558d6b1ad1c3c6f4a3f440b7769" }
-subspace-service = { git = "https://github.com/subspace/subspace", rev = "77b03beeaf517558d6b1ad1c3c6f4a3f440b7769" }
-system-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "77b03beeaf517558d6b1ad1c3c6f4a3f440b7769" }
+sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "e1a797c179adea85dc031e2751ea6ca70859ec68" }
+sc-subspace-chain-specs = { git = "https://github.com/subspace/subspace", rev = "e1a797c179adea85dc031e2751ea6ca70859ec68" }
+sp-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "e1a797c179adea85dc031e2751ea6ca70859ec68" }
+sp-domains = { git = "https://github.com/subspace/subspace", rev = "e1a797c179adea85dc031e2751ea6ca70859ec68" }
+subspace-archiving = { git = "https://github.com/subspace/subspace", rev = "e1a797c179adea85dc031e2751ea6ca70859ec68" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "e1a797c179adea85dc031e2751ea6ca70859ec68" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "e1a797c179adea85dc031e2751ea6ca70859ec68" }
+subspace-fraud-proof = { git = "https://github.com/subspace/subspace", rev = "e1a797c179adea85dc031e2751ea6ca70859ec68" }
+subspace-networking = { git = "https://github.com/subspace/subspace", rev = "e1a797c179adea85dc031e2751ea6ca70859ec68" }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "e1a797c179adea85dc031e2751ea6ca70859ec68" }
+subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "e1a797c179adea85dc031e2751ea6ca70859ec68" }
+subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "e1a797c179adea85dc031e2751ea6ca70859ec68" }
+subspace-service = { git = "https://github.com/subspace/subspace", rev = "e1a797c179adea85dc031e2751ea6ca70859ec68" }
+system-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "e1a797c179adea85dc031e2751ea6ca70859ec68" }
 
 [dev-dependencies]
 clap = { version = "4", features = ["derive"] }
@@ -63,7 +64,6 @@ tracing-subscriber = "0.3"
 [patch.crates-io]
 # TODO: Remove once chacha20poly1305 0.10 appears in libp2p's dependencies
 chacha20poly1305 = { git = "https://github.com/RustCrypto/AEADs", rev = "06dbfb5571687fd1bbe9d3c9b2193a1ba17f8e99" }
-libp2p = { git = "https://github.com/subspace/rust-libp2p", branch = "subspace-v3" }
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
 # that are suspected to be CPU-intensive, and that are unlikely to require debugging (as some of
