@@ -686,7 +686,7 @@ mod tests {
         other_node
             .subscribe_syncing_progress()
             .await
-            .for_each(|p| async {})
+            .for_each(|_| async {})
             .await;
         assert_eq!(
             other_node.get_info().await.unwrap().best_block.1,

@@ -12,7 +12,7 @@ async fn main() {
         .await
         .expect("Failed to init a node");
 
-    node.sync().await.expect("Failed to sync node");
+    node.sync().await;
 
     let reward_address = PublicKey::from([0; 32]);
     let plots = [PlotDescription::new("plot", ByteSize::gb(10))];
@@ -59,7 +59,7 @@ async fn main() {
         .build("node", chain_spec::gemini_2a().unwrap())
         .await
         .expect("Failed to init a node");
-    node.sync().await.expect("Failed to sync node");
+    node.sync().await;
 
     let farmer = Farmer::builder()
         .build(
