@@ -9,11 +9,12 @@ use libp2p_core::Multiaddr;
 use sc_client_api::client::BlockImportNotification;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
-use sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider};
+use sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider, SyncState};
 use sc_network_common::config::MultiaddrWithPeerId;
 use sc_service::config::{KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig};
 use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use sc_subspace_chain_specs::ConsensusChainSpec;
+use sp_consensus::SyncOracle;
 use sp_core::H256;
 use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
@@ -378,35 +379,35 @@ impl Node {
             .map_err(|()| anyhow::anyhow!("Network worker exited"))
     }
 
-    pub async fn sync(&self) -> anyhow::Result<()> {
-        const CHECK_SYNCED_EVERY: std::time::Duration = std::time::Duration::from_millis(10);
+    pub async fn subscribe_syncing_progress(
+        &self,
+    ) -> impl Stream<Item = SyncState<BlockNumber>> + Send + Unpin + 'static {
+        const CHECK_SYNCED_EVERY: std::time::Duration = std::time::Duration::from_millis(100);
 
-        while self
-            .network
-            .status()
-            .await
-            .map_err(|()| anyhow::anyhow!("Network worker exited"))?
-            .sync_state
-            == sc_network::SyncState::Idle
-        {
+        while self.network.is_offline() {
             tokio::time::sleep(CHECK_SYNCED_EVERY).await;
         }
 
-        while self
-            .network
-            .status()
-            .await
-            .map_err(|()| anyhow::anyhow!("Network worker exited"))?
-            .sync_state
-            != sc_network::SyncState::Idle
-        {
-            tokio::time::sleep(CHECK_SYNCED_EVERY).await;
-        }
-        // while self.network.is_major_syncing() {
-        //     tokio::time::sleep(CHECK_SYNCED_EVERY).await;
-        // }
+        let network = Arc::clone(&self.network);
+        let stream =
+            tokio_stream::wrappers::IntervalStream::new(tokio::time::interval(CHECK_SYNCED_EVERY))
+                .then(move |_| {
+                    let network = Arc::clone(&network);
+                    async move { network.status().await.map(|s| s.sync_state) }
+                })
+                .take_while(|status| {
+                    futures::future::ready(!matches!(status, Ok(SyncState::Idle) | Err(())))
+                })
+                .map(|result_status| result_status.unwrap_or(SyncState::Idle));
 
-        Ok(())
+        Box::pin(stream)
+    }
+
+    pub async fn sync(&self) {
+        self.subscribe_syncing_progress()
+            .await
+            .for_each(|_| async move {})
+            .await
     }
 
     // Leaves the network and gracefully shuts down
@@ -638,12 +639,13 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    #[ignore = "No way to be sure that we are synced for now"]
+    #[ignore = "Works most of times though"]
     async fn test_sync_block() {
         let dir = TempDir::new("test").unwrap();
         let chain = chain_spec::dev_config().unwrap();
         let node = Node::builder()
             .force_authoring(true)
+            .force_synced(true)
             .role(sc_service::Role::Authority)
             .listen_on(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
             .build(dir.path(), chain.clone())
@@ -656,15 +658,17 @@ mod tests {
                 node.clone(),
                 &[PlotDescription::new(
                     plot_dir.as_ref(),
-                    bytesize::ByteSize::gb(2),
+                    bytesize::ByteSize::gb(1),
                 )],
             )
             .await
             .unwrap();
 
+        let farm_blocks = 8;
+
         let mut sub = node.subscribe_new_blocks().await.unwrap();
         while let Some(BlockNotification { number, .. }) = sub.next().await {
-            if number == 128 {
+            if number == farm_blocks {
                 break;
             }
         }
@@ -679,11 +683,15 @@ mod tests {
             .await
             .unwrap();
 
-        tokio::time::timeout(std::time::Duration::from_secs(10), other_node.sync())
+        other_node
+            .subscribe_syncing_progress()
             .await
-            .unwrap()
-            .unwrap();
-        assert!(other_node.get_info().await.unwrap().best_block.1 >= 4);
+            .for_each(|p| async {})
+            .await;
+        assert_eq!(
+            other_node.get_info().await.unwrap().best_block.1,
+            farm_blocks
+        );
 
         node.close().await;
         other_node.close().await;

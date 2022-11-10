@@ -20,7 +20,7 @@ serde = "1"
 ss58-registry = "1.33"
 thiserror = "1"
 tokio = { version = "1.21", features = ["fs", "rt"] }
-tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-stream = { version = "0.1", features = ["sync", "time"] }
 pin-project = "1"
 
 frame-support = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "4fa79c18d6a29fdd1adeba6b7946b70d18263523" }
