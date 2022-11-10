@@ -14,7 +14,6 @@ use sc_network_common::config::MultiaddrWithPeerId;
 use sc_service::config::{KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig};
 use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use sc_subspace_chain_specs::ConsensusChainSpec;
-use sp_consensus::SyncOracle;
 use sp_core::H256;
 use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
@@ -49,6 +48,7 @@ impl Default for BlocksPruningInner {
 pub struct Builder {
     name: Option<String>,
     force_authoring: bool,
+    force_synced: bool,
     role: RoleInner,
     blocks_pruning: BlocksPruningInner,
     state_pruning: Option<PruningMode>,
@@ -72,6 +72,11 @@ impl Builder {
 
     pub fn force_authoring(mut self, force_authoring: bool) -> Self {
         self.force_authoring = force_authoring;
+        self
+    }
+
+    pub fn force_synced(mut self, force_synced: bool) -> Self {
+        self.force_synced = force_synced;
         self
     }
 
@@ -117,6 +122,7 @@ impl Builder {
         let Self {
             name,
             force_authoring,
+            force_synced,
             role: RoleInner(role),
             blocks_pruning: BlocksPruningInner(blocks_pruning),
             state_pruning,
@@ -140,6 +146,7 @@ impl Builder {
                 .cloned()
                 .chain(boot_nodes)
                 .collect(),
+            force_synced,
             ..NetworkConfiguration::new(
                 name.unwrap_or_default(),
                 client_id,

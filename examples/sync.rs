@@ -81,6 +81,7 @@ async fn main() -> anyhow::Result<()> {
             let node = Node::builder()
                 .listen_on(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
                 .force_authoring(true)
+                .force_synced(true)
                 .role(sc_service::Role::Authority)
                 .build(node, chain_spec)
                 .await?;
