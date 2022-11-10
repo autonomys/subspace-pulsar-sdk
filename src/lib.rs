@@ -1,4 +1,10 @@
+//! Subspace SDK for easy running of both Subspace node and farmer
+
+#![deny(missing_docs)]
+
+/// Module related to the farmer
 pub mod farmer;
+/// Module related to the node
 pub mod node;
 
 pub use farmer::{Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotDescription};
@@ -9,6 +15,7 @@ use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::PUBLIC_KEY_LENGTH;
 
+/// Public key type
 #[derive(
     Debug,
     Default,
@@ -27,9 +34,16 @@ use subspace_core_primitives::PUBLIC_KEY_LENGTH;
 #[serde(transparent)]
 pub struct PublicKey(pub subspace_core_primitives::PublicKey);
 
+impl PublicKey {
+    /// Construct public key from raw bytes
+    pub fn new(raw: [u8; PUBLIC_KEY_LENGTH]) -> Self {
+        Self(subspace_core_primitives::PublicKey::from(raw))
+    }
+}
+
 impl From<[u8; PUBLIC_KEY_LENGTH]> for PublicKey {
     fn from(key: [u8; PUBLIC_KEY_LENGTH]) -> Self {
-        Self(subspace_core_primitives::PublicKey::from(key))
+        Self::new(key)
     }
 }
 

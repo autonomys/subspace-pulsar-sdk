@@ -17,7 +17,6 @@ use system_domain_runtime::GenesisConfig as SystemDomainGenesisConfig;
 
 const POLKADOT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 const SUBSPACE_TELEMETRY_URL: &str = "wss://telemetry.subspace.network/submit/";
-const GEMINI_2A_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-gemini-2a.json");
 const X_NET_2_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-x-net-2.json");
 
 /// List of accounts which should receive token grants, amounts are specified in SSC.
@@ -55,106 +54,13 @@ pub struct GenesisParams {
     enable_executor: bool,
 }
 
-pub fn gemini_2a() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String> {
-    ConsensusChainSpec::from_json_bytes(GEMINI_2A_CHAIN_SPEC)
-}
-
-pub fn gemini_2a_compiled(
-) -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String> {
-    Ok(ConsensusChainSpec::from_genesis(
-        // Name
-        "Subspace Gemini 2a",
-        // ID
-        "subspace_gemini_2a",
-        ChainType::Custom("Subspace Gemini 2a".to_string()),
-        || {
-            let sudo_account =
-                AccountId::from_ss58check("5CXTmJEusve5ixyJufqHThmy4qUrrm6FyLCR7QfE4bbyMTNC")
-                    .expect("Wrong root account address");
-
-            let mut balances = vec![(sudo_account.clone(), 1_000 * SSC)];
-            let vesting_schedules = TOKEN_GRANTS
-                .iter()
-                .flat_map(|&(account_address, amount)| {
-                    let account_id = AccountId::from_ss58check(account_address)
-                        .expect("Wrong vesting account address");
-                    let amount: Balance = amount * SSC;
-
-                    // TODO: Adjust start block to real value before mainnet launch
-                    let start_block = 100_000_000;
-                    let one_month_in_blocks =
-                        u32::try_from(3600 * 24 * 30 * MILLISECS_PER_BLOCK / 1000)
-                            .expect("One month of blocks always fits in u32; qed");
-
-                    // Add balance so it can be locked
-                    balances.push((account_id.clone(), amount));
-
-                    [
-                        // 1/4 of tokens are released after 1 year.
-                        (
-                            account_id.clone(),
-                            start_block,
-                            one_month_in_blocks * 12,
-                            1,
-                            amount / 4,
-                        ),
-                        // 1/48 of tokens are released every month after that for 3 more years.
-                        (
-                            account_id,
-                            start_block + one_month_in_blocks * 12,
-                            one_month_in_blocks,
-                            36,
-                            amount / 48,
-                        ),
-                    ]
-                })
-                .collect::<Vec<_>>();
-            subspace_genesis_config(
-                WASM_BINARY.expect("Wasm binary must be built for Gemini"),
-                sudo_account,
-                balances,
-                vesting_schedules,
-                GenesisParams {
-                    enable_rewards: false,
-                    enable_storage_access: false,
-                    allow_authoring_by: AllowAuthoringBy::RootFarmer(
-                        FarmerPublicKey::unchecked_from([
-                            0x50, 0x69, 0x60, 0xf3, 0x50, 0x33, 0xee, 0xc1, 0x12, 0xb5, 0xbc, 0xb4,
-                            0xe5, 0x91, 0xfb, 0xbb, 0xf5, 0x88, 0xac, 0x45, 0x26, 0x90, 0xd4, 0x70,
-                            0x32, 0x6c, 0x3f, 0x7b, 0x4e, 0xd9, 0x41, 0x17,
-                        ]),
-                    ),
-                    enable_executor: false,
-                },
-            )
-        },
-        // Bootnodes
-        vec![],
-        // Telemetry
-        Some(
-            TelemetryEndpoints::new(vec![
-                (POLKADOT_TELEMETRY_URL.into(), 1),
-                (SUBSPACE_TELEMETRY_URL.into(), 1),
-            ])
-            .map_err(|error| error.to_string())?,
-        ),
-        // Protocol ID
-        Some("subspace-gemini-2a"),
-        None,
-        // Properties
-        Some(utils::chain_spec_properties()),
-        // Extensions
-        ChainSpecExtensions {
-            execution_chain_spec: secondary_chain::development_config(),
-        },
-    ))
-}
-
+/// Executor net 2 chain spec
 pub fn x_net_2_config(
 ) -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String> {
     ConsensusChainSpec::from_json_bytes(X_NET_2_CHAIN_SPEC)
 }
 
+/// Executor net 2 chain spec
 pub fn x_net_2_config_compiled(
 ) -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String> {
     Ok(ConsensusChainSpec::from_genesis(
@@ -240,6 +146,7 @@ pub fn x_net_2_config_compiled(
     ))
 }
 
+/// New dev chain spec
 pub fn dev_config() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String>
 {
     let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
@@ -287,6 +194,7 @@ pub fn dev_config() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGene
     ))
 }
 
+/// New local chain spec
 pub fn local_config() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String>
 {
     let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
