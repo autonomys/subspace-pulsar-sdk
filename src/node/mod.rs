@@ -8,8 +8,9 @@ use anyhow::Context;
 use libp2p_core::Multiaddr;
 use sc_client_api::client::BlockImportNotification;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
-use sc_network::config::{MultiaddrWithPeerId, NodeKeyConfig, Secret};
-use sc_network::{NetworkService, NetworkStateInfo};
+use sc_network::config::{NodeKeyConfig, Secret};
+use sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider, SyncState};
+use sc_network_common::config::MultiaddrWithPeerId;
 use sc_service::config::{KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig};
 use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use sc_subspace_chain_specs::ConsensusChainSpec;
@@ -40,7 +41,7 @@ struct BlocksPruningInner(BlocksPruning);
 
 impl Default for BlocksPruningInner {
     fn default() -> Self {
-        Self(BlocksPruning::All)
+        Self(BlocksPruning::KeepAll)
     }
 }
 
@@ -48,6 +49,7 @@ impl Default for BlocksPruningInner {
 pub struct Builder {
     name: Option<String>,
     force_authoring: bool,
+    force_synced: bool,
     role: RoleInner,
     blocks_pruning: BlocksPruningInner,
     state_pruning: Option<PruningMode>,
@@ -71,6 +73,11 @@ impl Builder {
 
     pub fn force_authoring(mut self, force_authoring: bool) -> Self {
         self.force_authoring = force_authoring;
+        self
+    }
+
+    pub fn force_synced(mut self, force_synced: bool) -> Self {
+        self.force_synced = force_synced;
         self
     }
 
@@ -116,6 +123,7 @@ impl Builder {
         let Self {
             name,
             force_authoring,
+            force_synced,
             role: RoleInner(role),
             blocks_pruning: BlocksPruningInner(blocks_pruning),
             state_pruning,
@@ -125,7 +133,7 @@ impl Builder {
             execution_strategies,
         } = self;
 
-        let base_path = BasePath::new(directory);
+        let base_path = BasePath::new(directory.as_ref());
         let impl_name = env!("CARGO_PKG_NAME").to_owned();
         let impl_version = env!("CARGO_PKG_VERSION").to_string(); // TODO: include git revision here
         let config_dir = base_path.config_dir(chain_spec.id());
@@ -139,6 +147,7 @@ impl Builder {
                 .cloned()
                 .chain(boot_nodes)
                 .collect(),
+            force_synced,
             ..NetworkConfiguration::new(
                 name.unwrap_or_default(),
                 client_id,
@@ -167,8 +176,9 @@ impl Builder {
                 database: DatabaseSource::ParityDb {
                     path: config_dir.join("paritydb").join("full"),
                 },
-                state_cache_size: 67_108_864,
-                state_cache_child_ratio: None,
+                trie_cache_maximum_size: Some(67_108_864),
+                // state_cache_size: ,
+                // state_cache_child_ratio: None,
                 // TODO: Change to constrained eventually (need DSN for this)
                 state_pruning,
                 blocks_pruning,
@@ -369,24 +379,35 @@ impl Node {
             .map_err(|()| anyhow::anyhow!("Network worker exited"))
     }
 
-    pub async fn sync(&self) -> anyhow::Result<()> {
+    pub async fn subscribe_syncing_progress(
+        &self,
+    ) -> impl Stream<Item = SyncState<BlockNumber>> + Send + Unpin + 'static {
         const CHECK_SYNCED_EVERY: std::time::Duration = std::time::Duration::from_millis(100);
 
         while self.network.is_offline() {
             tokio::time::sleep(CHECK_SYNCED_EVERY).await;
         }
 
-        todo!("This doesn't work though substrate node shows info from this status")
-        // while self
-        //     .network
-        //     .status()
-        //     .await
-        //     .map_err(|()| anyhow::anyhow!("Network worker exited"))?
-        //     .sync_state
-        //     == sc_network::SyncState::Downloading
-        // {
-        //     tokio::time::sleep(CHECK_SYNCED_EVERY).await;
-        // }
+        let network = Arc::clone(&self.network);
+        let stream =
+            tokio_stream::wrappers::IntervalStream::new(tokio::time::interval(CHECK_SYNCED_EVERY))
+                .then(move |_| {
+                    let network = Arc::clone(&network);
+                    async move { network.status().await.map(|s| s.sync_state) }
+                })
+                .take_while(|status| {
+                    futures::future::ready(!matches!(status, Ok(SyncState::Idle) | Err(())))
+                })
+                .map(|result_status| result_status.unwrap_or(SyncState::Idle));
+
+        Box::pin(stream)
+    }
+
+    pub async fn sync(&self) {
+        self.subscribe_syncing_progress()
+            .await
+            .for_each(|_| async move {})
+            .await
     }
 
     // Leaves the network and gracefully shuts down
@@ -618,12 +639,13 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    #[ignore = "No way to be sure that we are synced for now"]
+    #[ignore = "Works most of times though"]
     async fn test_sync_block() {
         let dir = TempDir::new("test").unwrap();
         let chain = chain_spec::dev_config().unwrap();
         let node = Node::builder()
             .force_authoring(true)
+            .force_synced(true)
             .role(sc_service::Role::Authority)
             .listen_on(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
             .build(dir.path(), chain.clone())
@@ -636,15 +658,17 @@ mod tests {
                 node.clone(),
                 &[PlotDescription::new(
                     plot_dir.as_ref(),
-                    bytesize::ByteSize::gb(2),
+                    bytesize::ByteSize::gb(1),
                 )],
             )
             .await
             .unwrap();
 
+        let farm_blocks = 8;
+
         let mut sub = node.subscribe_new_blocks().await.unwrap();
         while let Some(BlockNotification { number, .. }) = sub.next().await {
-            if number == 128 {
+            if number == farm_blocks {
                 break;
             }
         }
@@ -659,11 +683,15 @@ mod tests {
             .await
             .unwrap();
 
-        tokio::time::timeout(std::time::Duration::from_secs(10), other_node.sync())
+        other_node
+            .subscribe_syncing_progress()
             .await
-            .unwrap()
-            .unwrap();
-        assert!(other_node.get_info().await.unwrap().best_block.1 >= 4);
+            .for_each(|_| async {})
+            .await;
+        assert_eq!(
+            other_node.get_info().await.unwrap().best_block.1,
+            farm_blocks
+        );
 
         node.close().await;
         other_node.close().await;

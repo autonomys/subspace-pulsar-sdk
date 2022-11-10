@@ -12,7 +12,7 @@ jobs:
 
       - uses: actions-rs/toolchain@v1
         with:
-            toolchain: nightly-2022-08-12
+            toolchain: nightly-2022-11-08
             components: rustfmt
             override: true
 
@@ -33,7 +33,7 @@ jobs:
 
       - uses: actions-rs/toolchain@v1
         with:
-            toolchain: nightly-2022-08-12
+            toolchain: nightly-2022-11-08
             components: clippy
             override: true
 
@@ -60,7 +60,7 @@ jobs:
 
       - uses: actions-rs/toolchain@v1
         with:
-            toolchain: nightly-2022-08-12
+            toolchain: nightly-2022-11-08
             components: clippy
             override: true
 
