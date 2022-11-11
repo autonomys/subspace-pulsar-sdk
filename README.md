@@ -2,7 +2,7 @@
 
 [TODO]: <> (Add docs-rs label (should we generate and host our own one?))
 
-A library for easily running a local Subspace blockchain.
+A library for easily running a local Subspace node and/or farmer.
 
 ## Dependencies
 
