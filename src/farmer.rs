@@ -459,9 +459,8 @@ impl Farmer {
     /// Stops farming, closes plots, and sends signal to the node
     pub async fn close(self) {
         let mut maybe_cmd_sender = self.cmd_sender.lock().await;
-        let cmd_sender = match maybe_cmd_sender.take() {
-            Some(x) => x,
-            None => return,
+        let Some(cmd_sender) = maybe_cmd_sender.take() else {
+            return;
         };
         let (stop_sender, stop_receiver) = oneshot::channel();
         if cmd_sender.send(stop_sender).is_err() {
