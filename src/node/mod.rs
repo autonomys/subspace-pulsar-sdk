@@ -45,6 +45,7 @@ impl Default for BlocksPruningInner {
     }
 }
 
+/// Node builder
 #[derive(Default)]
 pub struct Builder {
     name: Option<String>,
@@ -60,10 +61,12 @@ pub struct Builder {
 }
 
 impl Builder {
+    /// New builder
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Name of the node in the telemetry
     pub fn name(mut self, name: impl AsRef<str>) -> Self {
         if !name.as_ref().is_empty() {
             self.name = Some(name.as_ref().to_owned());
@@ -71,41 +74,49 @@ impl Builder {
         self
     }
 
+    /// Force authoring of the blocks
     pub fn force_authoring(mut self, force_authoring: bool) -> Self {
         self.force_authoring = force_authoring;
         self
     }
 
+    /// Force node to think it is synced
     pub fn force_synced(mut self, force_synced: bool) -> Self {
         self.force_synced = force_synced;
         self
     }
 
+    /// Role of the node in the consensus
     pub fn role(mut self, role: Role) -> Self {
         self.role = RoleInner(role);
         self
     }
 
+    /// Set blocks pruning settings
     pub fn blocks_pruning(mut self, pruning: BlocksPruning) -> Self {
         self.blocks_pruning = BlocksPruningInner(pruning);
         self
     }
 
+    /// Set state pruning settings
     pub fn state_pruning(mut self, pruning: Option<PruningMode>) -> Self {
         self.state_pruning = pruning;
         self
     }
 
+    /// RPC methods settings
     pub fn rpc_methods(mut self, rpc_methods: RpcMethods) -> Self {
         self.rpc_methods = rpc_methods;
         self
     }
 
+    /// Listen on some address
     pub fn listen_on(mut self, listen_on: Vec<Multiaddr>) -> Self {
         self.listen_on = listen_on;
         self
     }
 
+    /// Add boot nodes apart from ones from chainspec
     pub fn boot_nodes(mut self, boot_nodes: Vec<MultiaddrWithPeerId>) -> Self {
         self.boot_nodes = boot_nodes;
         self
@@ -305,6 +316,7 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     }
 }
 
+/// Node structure
 #[derive(Clone)]
 pub struct Node {
     client: Weak<FullClient<RuntimeApi, ExecutorDispatch>>,
@@ -322,21 +334,30 @@ impl std::fmt::Debug for Node {
     }
 }
 
+/// Hash type
 pub type Hash = H256;
+/// Block number
 pub type BlockNumber = u32;
 
+/// Chain info
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct ChainInfo {
+    /// Genesis hash of chain
     pub genesis_hash: Hash,
 }
 
+/// Node state info
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct Info {
+    /// Chain info
     pub chain: ChainInfo,
+    /// Best block hash and number
     pub best_block: (Hash, BlockNumber),
+    /// Finalized block hash and number
     pub finalized_block: (Hash, BlockNumber),
+    /// Block gap which we need to sync
     pub block_gap: Option<std::ops::Range<BlockNumber>>,
     // TODO: fetch this info
     // pub version: String,
@@ -348,22 +369,31 @@ pub struct Info {
     // pub space_pledged: u64,
 }
 
+/// New block notification
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct BlockNotification {
+    /// Block hash
     pub hash: Hash,
+    /// Block number
     pub number: BlockNumber,
+    /// Parent block hash
     pub parent_hash: Hash,
+    /// Block state root
     pub state_root: Hash,
+    /// Extrinsics root
     pub extrinsics_root: Hash,
+    /// Is it new best block?
     pub is_new_best: bool,
 }
 
 impl Node {
+    /// New node builder
     pub fn builder() -> Builder {
         Builder::new()
     }
 
+    /// Get listening addresses of the node
     pub async fn listen_addresses(&self) -> anyhow::Result<Vec<MultiaddrWithPeerId>> {
         let peer_id = self.network.local_peer_id();
         self.network
@@ -379,6 +409,7 @@ impl Node {
             .map_err(|()| anyhow::anyhow!("Network worker exited"))
     }
 
+    /// Subscribe for node syncing progress
     pub async fn subscribe_syncing_progress(
         &self,
     ) -> impl Stream<Item = SyncState<BlockNumber>> + Send + Unpin + 'static {
@@ -403,6 +434,7 @@ impl Node {
         Box::pin(stream)
     }
 
+    /// Wait till the end of node syncing
     pub async fn sync(&self) {
         self.subscribe_syncing_progress()
             .await
@@ -410,14 +442,14 @@ impl Node {
             .await
     }
 
-    // Leaves the network and gracefully shuts down
+    /// Leaves the network and gracefully shuts down
     pub async fn close(mut self) {
         let (stop_sender, stop_receiver) = oneshot::channel();
         drop(self.stop_sender.send(stop_sender).await);
         let _ = stop_receiver.await;
     }
 
-    // Runs `.close()` and also wipes node's state
+    /// Runs `.close()` and also wipes node's state
     pub async fn wipe(path: impl AsRef<Path>) -> io::Result<()> {
         tokio::fs::remove_dir_all(path).await
     }
@@ -428,6 +460,7 @@ impl Node {
             .ok_or_else(|| anyhow::anyhow!("The node was already closed"))
     }
 
+    /// Get node info
     pub async fn get_info(&self) -> anyhow::Result<Info> {
         self.client()
             .map(|client| client.chain_info())
@@ -450,6 +483,7 @@ impl Node {
             .context("Failed to fetch node info")
     }
 
+    /// Subscribe to new blocks imported
     pub async fn subscribe_new_blocks(
         &self,
     ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {

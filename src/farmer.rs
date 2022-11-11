@@ -19,16 +19,20 @@ use subspace_farmer::{
     RpcClient,
 };
 
+/// Description of the plot
 // TODO: Should it be non-exhaustive?
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlotDescription {
+    /// Path of the plot
     pub directory: PathBuf,
+    /// Space which you want to pledge
     pub space_pledged: ByteSize,
 }
 
 impl PlotDescription {
     // TODO: should we check that plot is valid at this stage?
     // Or it can be literally a description of a plot
+    /// Construct Plot description
     pub fn new(directory: impl Into<PathBuf>, space_pledged: ByteSize) -> Self {
         Self {
             directory: directory.into(),
@@ -36,25 +40,32 @@ impl PlotDescription {
         }
     }
 
+    /// Wipe all the data from the plot
     pub async fn wipe(self) -> io::Result<()> {
         tokio::fs::remove_dir_all(self.directory).await
     }
 }
 
+/// Farmer builder
 #[derive(Default)]
 pub struct Builder {
     listen_on: Vec<Multiaddr>,
     bootstrap_nodes: Vec<Multiaddr>,
 }
 
+/// Build Error
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
+    /// Failed to create single disk plot
     #[error("Single disk plot creation error: {0}")]
     SingleDiskPlotCreate(#[from] SingleDiskPlotError),
-    #[error("No plots error")]
+    /// No plots were supplied during building
+    #[error("Supply at least one plot")]
     NoPlotsSupplied,
-    #[error("Failed to connect to dsn: {0}")]
+    /// Failed to connect to DSN
+    #[error("Failed to connect to DSN: {0}")]
     DSNCreate(#[from] subspace_networking::CreationError),
+    /// Failed to fetch data from the node
     #[error("Failed to fetch data from node: {0}")]
     RPCError(#[source] subspace_farmer::RpcClientError),
 }
@@ -89,15 +100,18 @@ async fn configure_dsn(
 }
 
 impl Builder {
+    /// Construct new builder
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// DSN would listen on the addresses supplied
     pub fn listen_on(mut self, multiaddrs: impl IntoIterator<Item = Multiaddr>) -> Self {
         self.listen_on = multiaddrs.into_iter().collect();
         self
     }
 
+    /// Connect to those nodes apart from ones from chain spec
     pub fn bootstrap_nodes(mut self, multiaddrs: impl IntoIterator<Item = Multiaddr>) -> Self {
         self.bootstrap_nodes = multiaddrs.into_iter().collect();
         self
@@ -108,7 +122,7 @@ impl Builder {
     //     self
     // }
 
-    /// It supposed to open node at the supplied location
+    /// Open and start farmer
     pub async fn build(
         self,
         reward_address: PublicKey,
@@ -150,16 +164,15 @@ impl Builder {
             let mut handlers = Vec::new();
             let progress = {
                 let (sender, receiver) = watch::channel::<Option<_>>(None);
-                let handler =
-                    single_disk_plot.on_sector_plotted(std::sync::Arc::new(move |sector| {
-                        let _ = sender.send(Some(sector.clone()));
-                    }));
+                let handler = single_disk_plot.on_sector_plotted(Arc::new(move |sector| {
+                    let _ = sender.send(Some(sector.clone()));
+                }));
                 handlers.push(handler);
                 receiver
             };
             let solutions = {
                 let (sender, receiver) = watch::channel::<Option<_>>(None);
-                let handler = single_disk_plot.on_solution(std::sync::Arc::new(move |solution| {
+                let handler = single_disk_plot.on_solution(Arc::new(move |solution| {
                     let _ = sender.send(Some(solution.clone()));
                 }));
                 handlers.push(handler);
@@ -221,6 +234,7 @@ enum FarmerCommand {
     Stop(oneshot::Sender<()>),
 }
 
+/// Farmer structure
 #[derive(Clone, Debug)]
 pub struct Farmer {
     cmd_sender: mpsc::Sender<FarmerCommand>,
@@ -229,6 +243,7 @@ pub struct Farmer {
     node: Node,
 }
 
+/// Info about some plot
 #[derive(Debug)]
 #[non_exhaustive]
 // TODO: Should it be versioned?
@@ -268,18 +283,23 @@ impl From<SingleDiskPlotInfo> for PlotInfo {
     }
 }
 
+/// Farmer info
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct Info {
+    /// Version of the farmer
     pub version: String,
+    /// Reward address of our farmer
     pub reward_address: PublicKey,
     // TODO: add dsn peers info
     // pub dsn_peers: u64,
+    /// Info about each plot
     pub plots_info: HashMap<PathBuf, PlotInfo>,
-    // In bits
+    /// Sector size in bits
     pub sector_size: u64,
 }
 
+/// Initial plotting progress
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InitialPlottingProgress {
     /// Number of sectors from which we started plotting
@@ -290,6 +310,7 @@ pub struct InitialPlottingProgress {
     pub total_sectors: u64,
 }
 
+/// Plot structure
 #[derive(Debug)]
 pub struct Plot {
     directory: PathBuf,
@@ -334,14 +355,17 @@ where
 }
 
 impl Plot {
+    /// Plot location
     pub fn directory(&self) -> &PathBuf {
         &self.directory
     }
 
+    /// Plot size
     pub fn allocated_space(&self) -> ByteSize {
         ByteSize::b(self.allocated_space)
     }
 
+    /// Will return a stream of initial plotting progress which will end once we finish plotting
     pub async fn subscribe_initial_plotting_progress(
         &self,
     ) -> impl Stream<Item = InitialPlottingProgress> + Send + Sync + Unpin + 'static {
@@ -376,6 +400,7 @@ impl Plot {
         })
     }
 
+    /// New solution subscription
     pub async fn subscribe_new_solutions(
         &self,
     ) -> impl Stream<Item = SolutionResponse> + Send + Sync + Unpin {
@@ -385,10 +410,12 @@ impl Plot {
 }
 
 impl Farmer {
+    /// Farmer builder
     pub fn builder() -> Builder {
         Builder::new()
     }
 
+    /// Gets plot info
     pub async fn get_info(&self) -> anyhow::Result<Info> {
         let plots_info = tokio::task::spawn_blocking({
             let dirs = self.plot_info.keys().cloned().collect::<Vec<_>>();
@@ -424,11 +451,12 @@ impl Farmer {
         })
     }
 
+    /// Iterate over plots
     pub async fn iter_plots(&'_ self) -> impl Iterator<Item = &'_ Plot> + '_ {
         self.plot_info.values()
     }
 
-    // Stops farming, closes plots, and sends signal to the node
+    /// Stops farming, closes plots, and sends signal to the node
     pub async fn close(self) {
         let (stop_sender, stop_receiver) = oneshot::channel();
         if self

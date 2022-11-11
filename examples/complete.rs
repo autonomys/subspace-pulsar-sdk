@@ -8,7 +8,7 @@ async fn main() {
         .blocks_pruning(sc_service::BlocksPruning::Some(1000))
         .state_pruning(Some(sc_service::PruningMode::ArchiveCanonical))
         .name("i1i1")
-        .build("node", chain_spec::gemini_2a().unwrap())
+        .build("node", chain_spec::dev_config().unwrap())
         .await
         .expect("Failed to init a node");
 
@@ -56,7 +56,7 @@ async fn main() {
     let node = Node::builder()
         .blocks_pruning(sc_service::BlocksPruning::Some(1000))
         .state_pruning(Some(sc_service::PruningMode::ArchiveCanonical))
-        .build("node", chain_spec::gemini_2a().unwrap())
+        .build("node", chain_spec::dev_config().unwrap())
         .await
         .expect("Failed to init a node");
     node.sync().await;
