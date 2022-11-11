@@ -1,8 +1,5 @@
 //! Subspace chain configurations.
 
-// TODO: use other chain specs in future
-#![allow(unused)]
-
 use sc_service::ChainType;
 use sc_subspace_chain_specs::{ChainSpecExtensions, ConsensusChainSpec};
 use sc_telemetry::TelemetryEndpoints;

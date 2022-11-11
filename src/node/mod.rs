@@ -654,6 +654,8 @@ mod tests {
     async fn test_closing() {
         let dir = TempDir::new("test").unwrap();
         let node = Node::builder()
+            .force_authoring(true)
+            .role(sc_service::Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
