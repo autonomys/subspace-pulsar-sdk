@@ -1,14 +1,15 @@
 # Subspace-SDK
 
-[TODO]: <> (Add docs-rs label (should we generate and host our own one?))
+<!--- TODO: Add docs-rs label (should we generate and host our own one?) --->
 
 A library for easily running a local Subspace node and/or farmer.
 
 ## Dependencies
 
-- rust (check out [`rust-toolchain.toml`](rust-toolchain.toml))
-- protobuf compiler
-- llvm
+You'll have to have [Rust toolchain](https://rustup.rs/) installed as well as some packages in addition (Ubuntu example):
+```bash
+sudo apt-get install build-essential llvm protobuf-compiler
+```
 
 ## Simplest example
 
