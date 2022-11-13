@@ -1,10 +1,16 @@
-use std::{collections::HashMap, io, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    io,
+    num::NonZeroUsize,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use anyhow::Context;
 use bytesize::ByteSize;
 use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p_core::Multiaddr;
-use subspace_core_primitives::SectorIndex;
+use subspace_core_primitives::{PieceIndexHash, SectorIndex};
 use subspace_networking::{Node as DSNNode, NodeRunner as DSNNodeRunner};
 use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
@@ -13,14 +19,13 @@ use crate::{Node, PublicKey};
 
 use subspace_farmer::{
     single_disk_plot::{
-        plotting::PlottedSector, SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId,
-        SingleDiskPlotInfo, SingleDiskPlotOptions, SingleDiskPlotSummary,
+        piece_reader::PieceReader, plotting::PlottedSector, SingleDiskPlot, SingleDiskPlotError,
+        SingleDiskPlotId, SingleDiskPlotInfo, SingleDiskPlotOptions, SingleDiskPlotSummary,
     },
     RpcClient,
 };
 
 /// Description of the plot
-// TODO: Should it be non-exhaustive?
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlotDescription {
     /// Path of the plot
@@ -30,8 +35,6 @@ pub struct PlotDescription {
 }
 
 impl PlotDescription {
-    // TODO: should we check that plot is valid at this stage?
-    // Or it can be literally a description of a plot
     /// Construct Plot description
     pub fn new(directory: impl Into<PathBuf>, space_pledged: ByteSize) -> Self {
         Self {
@@ -46,11 +49,21 @@ impl PlotDescription {
     }
 }
 
+struct DSNRecordsCacheSize(NonZeroUsize);
+
+impl Default for DSNRecordsCacheSize {
+    fn default() -> Self {
+        Self(NonZeroUsize::new(32678).unwrap())
+    }
+}
+
 /// Farmer builder
 #[derive(Default)]
 pub struct Builder {
     listen_on: Vec<Multiaddr>,
     bootstrap_nodes: Vec<Multiaddr>,
+    dsn_records_cache_db: Option<PathBuf>,
+    dsn_records_cache_size: DSNRecordsCacheSize,
 }
 
 /// Build Error
@@ -68,30 +81,95 @@ pub enum BuildError {
     /// Failed to fetch data from the node
     #[error("Failed to fetch data from node: {0}")]
     RPCError(#[source] subspace_farmer::RpcClientError),
+    /// Failed to create parity db record storage
+    #[error("Failed to create parity db record storage: {0}")]
+    ParityDbError(#[from] parity_db::Error),
+}
+
+// Type alias for currently configured Kademlia's custom record store.
+type ConfiguredRecordStore = subspace_networking::CustomRecordStore<
+    subspace_networking::LimitedSizeRecordStorageWrapper<
+        subspace_networking::ParityDbRecordStorage,
+    >,
+    subspace_networking::MemoryProviderStorage,
+>;
+
+#[derive(Debug, Copy, Clone)]
+struct PieceDetails {
+    plot_offset: usize,
+    sector_index: SectorIndex,
+    piece_offset: u64,
+}
+
+#[derive(Debug)]
+struct ReadersAndPieces {
+    readers: Vec<PieceReader>,
+    pieces: HashMap<PieceIndexHash, PieceDetails>,
 }
 
 async fn configure_dsn(
+    records_cache_db: PathBuf,
     listen_on: Vec<Multiaddr>,
     bootstrap_nodes: Vec<Multiaddr>,
-) -> Result<(Option<DSNNode>, Option<DSNNodeRunner>), BuildError> {
-    if bootstrap_nodes.is_empty() {
+    record_cache_size: NonZeroUsize,
+    readers_and_pieces: &Arc<std::sync::Mutex<Option<ReadersAndPieces>>>,
+) -> Result<
+    (
+        Option<DSNNode>,
+        Option<DSNNodeRunner<ConfiguredRecordStore>>,
+    ),
+    BuildError,
+> {
+    use subspace_networking::{
+        BootstrappedNetworkingParameters, Config, CustomRecordStore,
+        LimitedSizeRecordStorageWrapper, MemoryProviderStorage, ParityDbRecordStorage,
+        PieceByHashRequestHandler, PieceByHashResponse, PieceKey,
+    };
+
+    if !listen_on.is_empty() {
         return Ok((None, None));
     }
 
-    let config =
-        subspace_networking::Config {
-            listen_on,
-            allow_non_globals_in_dht: true,
-            networking_parameters_registry:
-                subspace_networking::BootstrappedNetworkingParameters::new(bootstrap_nodes).boxed(),
-            request_response_protocols: vec![
-                subspace_networking::PieceByHashRequestHandler::create(move |_req| {
-                    // TODO: Implement actual handler
-                    Some(subspace_networking::PieceByHashResponse { piece: None })
-                }),
-            ],
-            ..subspace_networking::Config::with_generated_keypair()
-        };
+    let weak_readers_and_pieces = Arc::downgrade(readers_and_pieces);
+
+    let handle = tokio::runtime::Handle::current();
+    let default_config = Config::with_generated_keypair();
+
+    let config = Config::<ConfiguredRecordStore> {
+        listen_on,
+        allow_non_globals_in_dht: true,
+        networking_parameters_registry: BootstrappedNetworkingParameters::new(bootstrap_nodes)
+            .boxed(),
+        request_response_protocols: vec![PieceByHashRequestHandler::create(move |req| {
+            let PieceKey::Sector(piece_index_hash) = req.key else { return None };
+            let Some(readers_and_pieces) = weak_readers_and_pieces.upgrade() else { return None };
+            let readers_and_pieces = readers_and_pieces.lock().unwrap();
+            let Some(readers_and_pieces) = readers_and_pieces.as_ref() else { return None };
+            let Some(piece_details) = readers_and_pieces.pieces.get(&piece_index_hash).copied() else { return None };
+            let mut reader = readers_and_pieces
+                .readers
+                .get(piece_details.plot_offset)
+                .cloned()
+                .expect("Offsets strictly correspond to existing plots; qed");
+
+            let handle = handle.clone();
+            let result = tokio::task::block_in_place(move || {
+                handle.block_on(
+                    reader.read_piece(piece_details.sector_index, piece_details.piece_offset),
+                )
+            });
+
+            Some(PieceByHashResponse { piece: result })
+        })],
+        record_store: CustomRecordStore::new(
+            LimitedSizeRecordStorageWrapper::new(
+                ParityDbRecordStorage::new(&records_cache_db)?,
+                record_cache_size,
+            ),
+            MemoryProviderStorage::default(),
+        ),
+        ..default_config
+    };
 
     subspace_networking::create(config)
         .await
@@ -117,6 +195,18 @@ impl Builder {
         self
     }
 
+    /// Path to dsn records cache. BEWARE: DSN is disabled if you don't supply this
+    pub fn dsn_records_cache_db(mut self, path: impl AsRef<Path>) -> Self {
+        self.dsn_records_cache_db = Some(path.as_ref().to_owned());
+        self
+    }
+
+    /// Set dsn records cache size
+    pub fn dsn_records_cache_size(mut self, size: NonZeroUsize) -> Self {
+        self.dsn_records_cache_size = DSNRecordsCacheSize(size);
+        self
+    }
+
     /// Open and start farmer
     pub async fn build(
         self,
@@ -130,11 +220,25 @@ impl Builder {
         let Self {
             listen_on,
             bootstrap_nodes,
+            dsn_records_cache_db,
+            dsn_records_cache_size: DSNRecordsCacheSize(dsn_records_cache_size),
         } = self;
 
         let mut single_disk_plots = Vec::with_capacity(plots.len());
         let mut plot_info = HashMap::with_capacity(plots.len());
-        let (dsn_node, dsn_node_runner) = configure_dsn(listen_on, bootstrap_nodes).await?;
+        let (dsn_node, dsn_node_runner) = if let Some(dsn_records_cache_db) = dsn_records_cache_db {
+            configure_dsn(
+                dsn_records_cache_db,
+                listen_on,
+                bootstrap_nodes,
+                dsn_records_cache_size,
+                &Arc::new(std::sync::Mutex::new(None)),
+            )
+            .await?
+        } else {
+            (None, None)
+        };
+
         let space_l = node
             .farmer_protocol_info()
             .await
