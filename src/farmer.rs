@@ -544,7 +544,7 @@ impl Farmer {
 
         Ok(Info {
             plots_info,
-            version: env!("CARGO_PKG_VERSION").to_string(), // TODO: include git revision here
+            version: format!("{}-{}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH")),
             reward_address: self.reward_address,
             sector_size: self
                 .node

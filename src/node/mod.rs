@@ -146,7 +146,7 @@ impl Builder {
 
         let base_path = BasePath::new(directory.as_ref());
         let impl_name = env!("CARGO_PKG_NAME").to_owned();
-        let impl_version = env!("CARGO_PKG_VERSION").to_string(); // TODO: include git revision here
+        let impl_version = format!("{}-{}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH"));
         let config_dir = base_path.config_dir(chain_spec.id());
         let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
         let client_id = format!("{}/v{}", impl_name, impl_version);
