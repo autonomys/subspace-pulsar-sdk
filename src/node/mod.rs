@@ -1,8 +1,13 @@
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
+use sc_network::network_state::NetworkState;
 use std::io;
+use std::num::NonZeroU64;
 use std::path::Path;
 use std::sync::{Arc, Weak};
+use subspace_core_primitives::SolutionRange;
+use subspace_farmer::RpcClient;
+use subspace_rpc_primitives::{FarmerProtocolInfo, SlotInfo};
 
 use anyhow::Context;
 use libp2p_core::Multiaddr;
@@ -160,7 +165,7 @@ impl Builder {
                 .collect(),
             force_synced,
             ..NetworkConfiguration::new(
-                name.unwrap_or_default(),
+                name.clone().unwrap_or_default(),
                 client_id,
                 NodeKeyConfig::Ed25519(Secret::File(net_config_dir.join(NODE_KEY_ED25519_FILE))),
                 Some(net_config_dir),
@@ -188,9 +193,6 @@ impl Builder {
                     path: config_dir.join("paritydb").join("full"),
                 },
                 trie_cache_maximum_size: Some(67_108_864),
-                // state_cache_size: ,
-                // state_cache_child_ratio: None,
-                // TODO: Change to constrained eventually (need DSN for this)
                 state_pruning,
                 blocks_pruning,
                 wasm_method: WasmExecutionMethod::Compiled {
@@ -290,6 +292,7 @@ impl Builder {
         Ok(Node {
             client,
             network,
+            name,
             rpc_handle,
             stop_sender,
         })
@@ -323,6 +326,7 @@ pub struct Node {
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     rpc_handle: Arc<jsonrpsee_core::server::rpc_module::RpcModule<()>>,
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
+    name: Option<String>,
 }
 
 impl std::fmt::Debug for Node {
@@ -330,6 +334,7 @@ impl std::fmt::Debug for Node {
         f.debug_struct("Node")
             .field("rpc_handle", &self.rpc_handle)
             .field("stop_sender", &self.stop_sender)
+            .field("name", &self.name)
             .finish_non_exhaustive()
     }
 }
@@ -359,14 +364,20 @@ pub struct Info {
     pub finalized_block: (Hash, BlockNumber),
     /// Block gap which we need to sync
     pub block_gap: Option<std::ops::Range<BlockNumber>>,
-    // TODO: fetch this info
-    // pub version: String,
-    // pub name: Option<String>,
-    // pub connected_peers: u64,
-    // pub best_block: u64,
-    // pub total_space_pledged: u64,
-    // pub total_history_size: u64,
-    // pub space_pledged: u64,
+    /// Runtime version
+    pub version: sp_version::RuntimeVersion,
+    /// Node telemetry name
+    pub name: Option<String>,
+    /// Number of peers connected to our node
+    pub connected_peers: u64,
+    /// Number of nodes that we know of but that we're not connected to
+    pub not_connected_peers: u64,
+    /// Total number of pieces stored on chain
+    pub total_pieces: NonZeroU64,
+    /// Range for solution
+    pub solution_range: SolutionRange,
+    /// Range for voting solutions
+    pub voting_solution_range: SolutionRange,
 }
 
 /// New block notification
@@ -462,25 +473,53 @@ impl Node {
 
     /// Get node info
     pub async fn get_info(&self) -> anyhow::Result<Info> {
-        self.client()
-            .map(|client| client.chain_info())
-            .map(
-                |sp_blockchain::Info {
-                     best_hash,
-                     best_number,
-                     genesis_hash,
-                     finalized_hash,
-                     finalized_number,
-                     block_gap,
-                     ..
-                 }| Info {
-                    chain: ChainInfo { genesis_hash },
-                    best_block: (best_hash, best_number),
-                    finalized_block: (finalized_hash, finalized_number),
-                    block_gap: block_gap.map(|(from, to)| from..to),
-                },
-            )
-            .context("Failed to fetch node info")
+        let SlotInfo {
+            solution_range,
+            voting_solution_range,
+            ..
+        } = self
+            .subscribe_slot_info()
+            .await
+            .map_err(anyhow::Error::msg)?
+            .next()
+            .await
+            .expect("This stream never ends");
+        let version = self
+            .rpc_handle
+            .call("state_getRuntimeVersion", &[] as &[()])
+            .await?;
+        let client = self.client().context("Failed to fetch node info")?;
+        let NetworkState {
+            connected_peers,
+            not_connected_peers,
+            ..
+        } = self.network.network_state().await.unwrap();
+        let sp_blockchain::Info {
+            best_hash,
+            best_number,
+            genesis_hash,
+            finalized_hash,
+            finalized_number,
+            block_gap,
+            ..
+        } = client.chain_info();
+        let FarmerProtocolInfo { total_pieces, .. } = self
+            .farmer_protocol_info()
+            .await
+            .map_err(anyhow::Error::msg)?;
+        Ok(Info {
+            chain: ChainInfo { genesis_hash },
+            best_block: (best_hash, best_number),
+            finalized_block: (finalized_hash, finalized_number),
+            block_gap: block_gap.map(|(from, to)| from..to),
+            version,
+            name: self.name.clone(),
+            connected_peers: connected_peers.len() as u64,
+            not_connected_peers: not_connected_peers.len() as u64,
+            total_pieces,
+            solution_range,
+            voting_solution_range,
+        })
     }
 
     /// Subscribe to new blocks imported
