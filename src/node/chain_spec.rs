@@ -1,13 +1,9 @@
 //! Subspace chain configurations.
 
-// TODO: use other chain specs in future
-#![allow(unused)]
-
 use sc_service::ChainType;
 use sc_subspace_chain_specs::{ChainSpecExtensions, ConsensusChainSpec};
 use sc_telemetry::TelemetryEndpoints;
-use sp_consensus_subspace::FarmerPublicKey;
-use sp_core::crypto::{Ss58Codec, UncheckedFrom};
+use sp_core::crypto::Ss58Codec;
 use subspace_runtime::{
     AllowAuthoringBy, BalancesConfig, GenesisConfig, RuntimeConfigsConfig, SubspaceConfig,
     SudoConfig, SystemConfig, VestingConfig, MILLISECS_PER_BLOCK, WASM_BINARY,

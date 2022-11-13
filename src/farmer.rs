@@ -7,7 +7,7 @@ use libp2p_core::Multiaddr;
 use subspace_core_primitives::SectorIndex;
 use subspace_networking::{Node as DSNNode, NodeRunner as DSNNodeRunner};
 use subspace_rpc_primitives::SolutionResponse;
-use tokio::sync::{mpsc, oneshot, watch, Mutex};
+use tokio::sync::{oneshot, watch, Mutex};
 
 use crate::{Node, PublicKey};
 
@@ -117,11 +117,6 @@ impl Builder {
         self
     }
 
-    // pub fn ws_rpc(mut self, ws_rpc: SocketAddr) -> Self {
-    //     self.ws_rpc = Some(ws_rpc);
-    //     self
-    // }
-
     /// Open and start farmer
     pub async fn build(
         self,
@@ -206,22 +201,32 @@ impl Builder {
             });
         }
 
-        let handle =
-            tokio::spawn(async move { single_disk_plots_stream.next().await.unwrap().unwrap() });
+        let (cmd_sender, cmd_receiver) = oneshot::channel::<oneshot::Sender<()>>();
 
-        let (cmd_sender, mut cmd_receiver) = mpsc::channel(1);
-
-        tokio::spawn(async move {
-            let maybe_stop_sender = cmd_receiver.recv().await;
-            // TODO: remove once there won't be joining on drop in monorepo
-            handle.abort();
-            if let Some(FarmerCommand::Stop(stop_sender)) = maybe_stop_sender {
-                let _ = stop_sender.send(());
+        tokio::task::spawn_blocking({
+            let handle = tokio::runtime::Handle::current();
+            move || {
+                let result_maybe_sender = handle.block_on(futures::future::select(
+                    single_disk_plots_stream.next(),
+                    cmd_receiver,
+                ));
+                match result_maybe_sender {
+                    future::Either::Left((maybe_result, _receiver)) => {
+                        maybe_result.unwrap().unwrap()
+                    }
+                    future::Either::Right((maybe_sender, future)) => {
+                        drop(future);
+                        drop(single_disk_plots_stream);
+                        if let Ok(sender) = maybe_sender {
+                            let _ = sender.send(());
+                        }
+                    }
+                }
             }
         });
 
         Ok(Farmer {
-            cmd_sender,
+            cmd_sender: Arc::new(Mutex::new(Some(cmd_sender))),
             reward_address,
             plot_info: Arc::new(plot_info),
             node,
@@ -229,15 +234,10 @@ impl Builder {
     }
 }
 
-#[derive(Debug)]
-enum FarmerCommand {
-    Stop(oneshot::Sender<()>),
-}
-
 /// Farmer structure
 #[derive(Clone, Debug)]
 pub struct Farmer {
-    cmd_sender: mpsc::Sender<FarmerCommand>,
+    cmd_sender: Arc<Mutex<Option<oneshot::Sender<oneshot::Sender<()>>>>>,
     reward_address: PublicKey,
     plot_info: Arc<HashMap<PathBuf, Plot>>,
     node: Node,
@@ -458,13 +458,12 @@ impl Farmer {
 
     /// Stops farming, closes plots, and sends signal to the node
     pub async fn close(self) {
+        let mut maybe_cmd_sender = self.cmd_sender.lock().await;
+        let Some(cmd_sender) = maybe_cmd_sender.take() else {
+            return;
+        };
         let (stop_sender, stop_receiver) = oneshot::channel();
-        if self
-            .cmd_sender
-            .send(FarmerCommand::Stop(stop_sender))
-            .await
-            .is_err()
-        {
+        if cmd_sender.send(stop_sender).is_err() {
             return;
         }
 
@@ -484,6 +483,8 @@ mod tests {
     async fn test_get_info() {
         let dir = TempDir::new("test").unwrap();
         let node = Node::builder()
+            .force_authoring(true)
+            .role(sc_service::Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
