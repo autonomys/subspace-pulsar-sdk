@@ -426,13 +426,13 @@ pub struct Plot {
 }
 
 #[pin_project::pin_project]
-struct InitialPlottingProgressStream<S> {
+struct InitialPlottingProgressStreamInner<S> {
     last_initial_plotting_progress: InitialPlottingProgress,
     #[pin]
     stream: S,
 }
 
-impl<S: Stream> Stream for InitialPlottingProgressStream<S>
+impl<S: Stream> Stream for InitialPlottingProgressStreamInner<S>
 where
     S: Stream<Item = InitialPlottingProgress>,
 {
@@ -458,6 +458,27 @@ where
     }
 }
 
+/// Initial plotting progress stream
+#[pin_project::pin_project]
+pub struct InitialPlottingProgressStream {
+    #[pin]
+    boxed_stream:
+        std::pin::Pin<Box<dyn Stream<Item = InitialPlottingProgress> + Send + Sync + Unpin>>,
+}
+
+impl Stream for InitialPlottingProgressStream {
+    type Item = InitialPlottingProgress;
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        self.project().boxed_stream.poll_next(cx)
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.boxed_stream.size_hint()
+    }
+}
+
 impl Plot {
     /// Plot location
     pub fn directory(&self) -> &PathBuf {
@@ -470,9 +491,14 @@ impl Plot {
     }
 
     /// Will return a stream of initial plotting progress which will end once we finish plotting
-    pub async fn subscribe_initial_plotting_progress(
-        &self,
-    ) -> impl Stream<Item = InitialPlottingProgress> + Send + Sync + Unpin + 'static {
+    pub async fn subscribe_initial_plotting_progress(&self) -> InitialPlottingProgressStream {
+        let initial = *self.initial_plotting_progress.lock().await;
+        if initial.current_sector == initial.total_sectors {
+            return InitialPlottingProgressStream {
+                boxed_stream: Box::pin(futures::stream::iter(None)),
+            };
+        }
+
         let stream = tokio_stream::wrappers::WatchStream::new(self.progress.clone())
             .filter_map({
                 let initial_plotting_progress = Arc::clone(&self.initial_plotting_progress);
@@ -498,10 +524,13 @@ impl Plot {
                 futures::future::ready(initial_progress)
             }));
         let last_initial_plotting_progress = *self.initial_plotting_progress.lock().await;
-        Box::pin(InitialPlottingProgressStream {
-            stream,
-            last_initial_plotting_progress,
-        })
+
+        InitialPlottingProgressStream {
+            boxed_stream: Box::pin(Box::pin(InitialPlottingProgressStreamInner {
+                stream,
+                last_initial_plotting_progress,
+            })),
+        }
     }
 
     /// New solution subscription
@@ -690,6 +719,48 @@ mod tests {
             .next()
             .await
             .expect("Farmer should send new solutions");
+
+        farmer.close().await;
+        node.close().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_progress_restart() {
+        let dir = TempDir::new("test").unwrap();
+        let node = Node::builder()
+            .force_authoring(true)
+            .role(sc_service::Role::Authority)
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
+        let plot_dir = TempDir::new("test").unwrap();
+        let farmer = Farmer::builder()
+            .build(
+                Default::default(),
+                node.clone(),
+                &[PlotDescription::new(
+                    plot_dir.as_ref(),
+                    bytesize::ByteSize::mib(4),
+                )],
+            )
+            .await
+            .unwrap();
+
+        let plot = farmer.iter_plots().await.next().unwrap();
+
+        plot.subscribe_initial_plotting_progress()
+            .await
+            .for_each(|_| async {})
+            .await;
+
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            plot.subscribe_initial_plotting_progress()
+                .await
+                .for_each(|_| async {}),
+        )
+        .await
+        .unwrap();
 
         farmer.close().await;
         node.close().await;
