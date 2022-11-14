@@ -16,6 +16,7 @@ event-listener-primitives = "2.0.1"
 futures = "0.3"
 jsonrpsee-core = "0.15.1"
 libp2p-core = "0.37"
+parity-db = "0.3"
 pin-project = "1"
 serde = "1"
 ss58-registry = "1.33"
@@ -37,6 +38,7 @@ sp-blockchain = { version = "4.0.0-dev", git = "https://github.com/subspace/subs
 sp-consensus = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "2ae536ab00f023fe311cb3eda6a942cc88eb362d" }
 sp-core = { version = "6.0.0", git = "https://github.com/subspace/substrate", rev = "2ae536ab00f023fe311cb3eda6a942cc88eb362d" }
 sp-runtime = { version = "6.0.0", git = "https://github.com/subspace/substrate", rev = "2ae536ab00f023fe311cb3eda6a942cc88eb362d" }
+sp-version = { version = "5.0.0", git = "https://github.com/subspace/substrate", rev = "2ae536ab00f023fe311cb3eda6a942cc88eb362d" }
 
 sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "d5c31f757862895aa7f58840b44b7df8c7f4ee7e" }
 sc-subspace-chain-specs = { git = "https://github.com/subspace/subspace", rev = "d5c31f757862895aa7f58840b44b7df8c7f4ee7e" }
