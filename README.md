@@ -1,5 +1,10 @@
 # Subspace-SDK
 
+[![Latest Release](https://img.shields.io/github/v/release/subspace/subspace-sdk?display_name=tag&style=flat-square)](https://github.com/subspace/subspace-sdk/releases)
+[![Downloads Latest](https://img.shields.io/github/downloads/subspace/subspace-sdk/latest/total?style=flat-square)](https://github.com/subspace/subspace-sdk/releases/latest)
+[![Rust](https://img.shields.io/github/workflow/status/subspace/subspace-sdk/Rust?style=flat-square)](https://github.com/subspace/subspace-sdk/actions/workflows/rust.yaml)
+[![Rust Docs](https://img.shields.io/docsrs/subspace-sdk?label=rust%20docs&style=flat-square)](https://subspace-sdk.github.io/subspace-sdk)
+
 <!--- TODO: Add docs-rs label (should we generate and host our own one?) --->
 
 A library for easily running a local Subspace node and/or farmer.
