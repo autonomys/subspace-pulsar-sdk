@@ -609,7 +609,7 @@ impl Farmer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node::{chain_spec, Node};
+    use crate::node::{chain_spec, Node, Role};
     use tempdir::TempDir;
 
     #[tokio::test(flavor = "multi_thread")]
@@ -617,7 +617,7 @@ mod tests {
         let dir = TempDir::new("test").unwrap();
         let node = Node::builder()
             .force_authoring(true)
-            .role(sc_service::Role::Authority)
+            .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
@@ -653,7 +653,7 @@ mod tests {
         let dir = TempDir::new("test").unwrap();
         let node = Node::builder()
             .force_authoring(true)
-            .role(sc_service::Role::Authority)
+            .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
@@ -692,7 +692,7 @@ mod tests {
         let dir = TempDir::new("test").unwrap();
         let node = Node::builder()
             .force_authoring(true)
-            .role(sc_service::Role::Authority)
+            .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
@@ -729,7 +729,7 @@ mod tests {
         let dir = TempDir::new("test").unwrap();
         let node = Node::builder()
             .force_authoring(true)
-            .role(sc_service::Role::Authority)
+            .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();

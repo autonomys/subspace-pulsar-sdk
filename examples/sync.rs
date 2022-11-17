@@ -82,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
                 .listen_on(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
                 .force_authoring(true)
                 .force_synced(true)
-                .role(sc_service::Role::Authority)
+                .role(subspace_sdk::node::Role::Authority)
                 .build(node, chain_spec)
                 .await?;
 
@@ -105,7 +105,7 @@ async fn main() -> anyhow::Result<()> {
             let chain_spec = serde_json::from_str(&tokio::fs::read_to_string(spec).await?)?;
             let node = Node::builder()
                 .force_authoring(true)
-                .role(sc_service::Role::Authority)
+                .role(subspace_sdk::node::Role::Authority)
                 .boot_nodes(boot_nodes)
                 .build(node.as_ref(), chain_spec)
                 .await?;

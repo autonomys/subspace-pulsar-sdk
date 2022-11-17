@@ -7,7 +7,7 @@ async fn main() {
 
     let node = Node::builder()
         .force_authoring(true)
-        .role(sc_service::Role::Authority)
+        .role(subspace_sdk::node::Role::Authority)
         .build("node", chain_spec::dev_config().unwrap())
         .await
         .unwrap();

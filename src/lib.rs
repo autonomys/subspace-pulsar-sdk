@@ -167,7 +167,7 @@ mod tests {
         let dir = TempDir::new("test").unwrap();
         let node = Node::builder()
             .force_authoring(true)
-            .role(sc_service::Role::Authority)
+            .role(node::Role::Authority)
             .build(dir, node::chain_spec::dev_config().unwrap())
             .await
             .unwrap();

@@ -1,6 +1,19 @@
+use anyhow::Context;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
+use libp2p_core::Multiaddr;
+use sc_client_api::client::BlockImportNotification;
+use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
+use sc_network::config::{NodeKeyConfig, Secret};
 use sc_network::network_state::NetworkState;
+use sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider, SyncState};
+use sc_network_common::config::MultiaddrWithPeerId;
+use sc_service::config::{KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig};
+use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
+use sc_subspace_chain_specs::ConsensusChainSpec;
+use serde::{Deserialize, Serialize};
+use sp_consensus::SyncOracle;
+use sp_core::H256;
 use std::io;
 use std::num::NonZeroU64;
 use std::path::Path;
@@ -8,19 +21,6 @@ use std::sync::{Arc, Weak};
 use subspace_core_primitives::SolutionRange;
 use subspace_farmer::RpcClient;
 use subspace_rpc_primitives::{FarmerProtocolInfo, SlotInfo};
-
-use anyhow::Context;
-use libp2p_core::Multiaddr;
-use sc_client_api::client::BlockImportNotification;
-use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
-use sc_network::config::{NodeKeyConfig, Secret};
-use sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider, SyncState};
-use sc_network_common::config::MultiaddrWithPeerId;
-use sc_service::config::{KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig};
-use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
-use sc_subspace_chain_specs::ConsensusChainSpec;
-use sp_consensus::SyncOracle;
-use sp_core::H256;
 use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::{FullClient, SubspaceConfiguration};
@@ -28,17 +28,28 @@ use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
 pub use sc_service::{
     config::{ExecutionStrategies, ExecutionStrategy},
-    BlocksPruning, PruningMode, Role, RpcMethods,
+    BlocksPruning, PruningMode,
 };
 pub use sc_state_db::Constraints;
 
 pub mod chain_spec;
 
-struct RoleInner(Role);
+/// Role of the local node.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub enum Role {
+    #[default]
+    /// Regular full node.
+    Full,
+    /// Actual authority.
+    Authority,
+}
 
-impl Default for RoleInner {
-    fn default() -> Self {
-        Self(Role::Full)
+impl From<Role> for sc_service::Role {
+    fn from(value: Role) -> Self {
+        match value {
+            Role::Full => sc_service::Role::Full,
+            Role::Authority => sc_service::Role::Authority,
+        }
     }
 }
 
@@ -50,13 +61,36 @@ impl Default for BlocksPruningInner {
     }
 }
 
+/// Available RPC methods.
+#[derive(Debug, Copy, Clone, Default, Serialize, Deserialize)]
+pub enum RpcMethods {
+    /// Expose every RPC method only when RPC is listening on `localhost`,
+    /// otherwise serve only safe RPC methods.
+    #[default]
+    Auto,
+    /// Allow only a safe subset of RPC methods.
+    Safe,
+    /// Expose every RPC method (even potentially unsafe ones).
+    Unsafe,
+}
+
+impl From<RpcMethods> for sc_service::RpcMethods {
+    fn from(value: RpcMethods) -> Self {
+        match value {
+            RpcMethods::Auto => Self::Auto,
+            RpcMethods::Safe => Self::Safe,
+            RpcMethods::Unsafe => Self::Unsafe,
+        }
+    }
+}
+
 /// Node builder
 #[derive(Default)]
 pub struct Builder {
     name: Option<String>,
     force_authoring: bool,
     force_synced: bool,
-    role: RoleInner,
+    role: Role,
     blocks_pruning: BlocksPruningInner,
     state_pruning: Option<PruningMode>,
     listen_on: Vec<Multiaddr>,
@@ -93,7 +127,7 @@ impl Builder {
 
     /// Role of the node in the consensus
     pub fn role(mut self, role: Role) -> Self {
-        self.role = RoleInner(role);
+        self.role = role;
         self
     }
 
@@ -127,6 +161,12 @@ impl Builder {
         self
     }
 
+    /// Set block execution strategies for the node
+    pub fn execution_strategies(mut self, execution_strategies: ExecutionStrategies) -> Self {
+        self.execution_strategies = execution_strategies;
+        self
+    }
+
     /// Start a node with supplied parameters
     pub async fn build(
         self,
@@ -140,7 +180,7 @@ impl Builder {
             name,
             force_authoring,
             force_synced,
-            role: RoleInner(role),
+            role,
             blocks_pruning: BlocksPruningInner(blocks_pruning),
             state_pruning,
             listen_on,
@@ -204,7 +244,7 @@ impl Builder {
                 rpc_ws: Some("127.0.0.1:9947".parse().expect("IP and port are valid")),
                 rpc_ipc: None,
                 // necessary in order to use `peers` method to show number of node peers during sync
-                rpc_methods,
+                rpc_methods: rpc_methods.into(),
                 rpc_ws_max_connections: Default::default(),
                 // Below CORS are default from Substrate
                 rpc_cors: Some(vec![
@@ -232,7 +272,7 @@ impl Builder {
                 chain_spec: Box::new(chain_spec),
                 max_runtime_instances: 8,
                 announce_block: true,
-                role,
+                role: role.into(),
                 base_path: Some(base_path),
                 informant_output_format: Default::default(),
                 runtime_cache_size: 2,
@@ -694,7 +734,7 @@ mod tests {
         let dir = TempDir::new("test").unwrap();
         let node = Node::builder()
             .force_authoring(true)
-            .role(sc_service::Role::Authority)
+            .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
@@ -721,7 +761,7 @@ mod tests {
         let node = Node::builder()
             .force_authoring(true)
             .force_synced(true)
-            .role(sc_service::Role::Authority)
+            .role(Role::Authority)
             .listen_on(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
             .build(dir.path(), chain.clone())
             .await
@@ -752,7 +792,7 @@ mod tests {
         let dir = TempDir::new("test").unwrap();
         let other_node = Node::builder()
             .force_authoring(true)
-            .role(sc_service::Role::Authority)
+            .role(Role::Authority)
             .boot_nodes(node.listen_addresses().await.unwrap())
             .build(dir.path(), chain)
             .await
