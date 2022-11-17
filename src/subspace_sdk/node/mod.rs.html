@@ -772,9 +772,62 @@
 <span id="772">772</span>
 <span id="773">773</span>
 <span id="774">774</span>
-</pre><pre class="rust"><code><span class="kw">use </span>futures::channel::{mpsc, oneshot};
+<span id="775">775</span>
+<span id="776">776</span>
+<span id="777">777</span>
+<span id="778">778</span>
+<span id="779">779</span>
+<span id="780">780</span>
+<span id="781">781</span>
+<span id="782">782</span>
+<span id="783">783</span>
+<span id="784">784</span>
+<span id="785">785</span>
+<span id="786">786</span>
+<span id="787">787</span>
+<span id="788">788</span>
+<span id="789">789</span>
+<span id="790">790</span>
+<span id="791">791</span>
+<span id="792">792</span>
+<span id="793">793</span>
+<span id="794">794</span>
+<span id="795">795</span>
+<span id="796">796</span>
+<span id="797">797</span>
+<span id="798">798</span>
+<span id="799">799</span>
+<span id="800">800</span>
+<span id="801">801</span>
+<span id="802">802</span>
+<span id="803">803</span>
+<span id="804">804</span>
+<span id="805">805</span>
+<span id="806">806</span>
+<span id="807">807</span>
+<span id="808">808</span>
+<span id="809">809</span>
+<span id="810">810</span>
+<span id="811">811</span>
+<span id="812">812</span>
+<span id="813">813</span>
+<span id="814">814</span>
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Context;
+<span class="kw">use </span>futures::channel::{mpsc, oneshot};
 <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
+<span class="kw">use </span>libp2p_core::Multiaddr;
+<span class="kw">use </span>sc_client_api::client::BlockImportNotification;
+<span class="kw">use </span>sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
+<span class="kw">use </span>sc_network::config::{NodeKeyConfig, Secret};
 <span class="kw">use </span>sc_network::network_state::NetworkState;
+<span class="kw">use </span>sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider, SyncState};
+<span class="kw">use </span>sc_network_common::config::MultiaddrWithPeerId;
+<span class="kw">use </span>sc_service::config::{KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig};
+<span class="kw">use </span>sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
+<span class="kw">use </span>sc_subspace_chain_specs::ConsensusChainSpec;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>sp_consensus::SyncOracle;
+<span class="kw">use </span>sp_core::H256;
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
@@ -782,19 +835,6 @@
 <span class="kw">use </span>subspace_core_primitives::SolutionRange;
 <span class="kw">use </span>subspace_farmer::RpcClient;
 <span class="kw">use </span>subspace_rpc_primitives::{FarmerProtocolInfo, SlotInfo};
-
-<span class="kw">use </span>anyhow::Context;
-<span class="kw">use </span>libp2p_core::Multiaddr;
-<span class="kw">use </span>sc_client_api::client::BlockImportNotification;
-<span class="kw">use </span>sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
-<span class="kw">use </span>sc_network::config::{NodeKeyConfig, Secret};
-<span class="kw">use </span>sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider, SyncState};
-<span class="kw">use </span>sc_network_common::config::MultiaddrWithPeerId;
-<span class="kw">use </span>sc_service::config::{KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig};
-<span class="kw">use </span>sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
-<span class="kw">use </span>sc_subspace_chain_specs::ConsensusChainSpec;
-<span class="kw">use </span>sp_consensus::SyncOracle;
-<span class="kw">use </span>sp_core::H256;
 <span class="kw">use </span>subspace_runtime::{GenesisConfig <span class="kw">as </span>ConsensusGenesisConfig, RuntimeApi};
 <span class="kw">use </span>subspace_runtime_primitives::opaque::{Block <span class="kw">as </span>RuntimeBlock, Header};
 <span class="kw">use </span>subspace_service::{FullClient, SubspaceConfiguration};
@@ -802,17 +842,28 @@
 
 <span class="kw">pub use </span>sc_service::{
     config::{ExecutionStrategies, ExecutionStrategy},
-    BlocksPruning, PruningMode, Role, RpcMethods,
+    BlocksPruning, PruningMode,
 };
 <span class="kw">pub use </span>sc_state_db::Constraints;
 
 <span class="kw">pub mod </span>chain_spec;
 
-<span class="kw">struct </span>RoleInner(Role);
+<span class="doccomment">/// Role of the local node.
+</span><span class="attr">#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+</span><span class="kw">pub enum </span>Role {
+    <span class="attr">#[default]
+    </span><span class="doccomment">/// Regular full node.
+    </span>Full,
+    <span class="doccomment">/// Actual authority.
+    </span>Authority,
+}
 
-<span class="kw">impl </span>Default <span class="kw">for </span>RoleInner {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(Role::Full)
+<span class="kw">impl </span>From&lt;Role&gt; <span class="kw">for </span>sc_service::Role {
+    <span class="kw">fn </span>from(value: Role) -&gt; <span class="self">Self </span>{
+        <span class="kw">match </span>value {
+            Role::Full =&gt; sc_service::Role::Full,
+            Role::Authority =&gt; sc_service::Role::Authority,
+        }
     }
 }
 
@@ -824,13 +875,36 @@
     }
 }
 
+<span class="doccomment">/// Available RPC methods.
+</span><span class="attr">#[derive(Debug, Copy, Clone, Default, Serialize, Deserialize)]
+</span><span class="kw">pub enum </span>RpcMethods {
+    <span class="doccomment">/// Expose every RPC method only when RPC is listening on `localhost`,
+    /// otherwise serve only safe RPC methods.
+    </span><span class="attr">#[default]
+    </span>Auto,
+    <span class="doccomment">/// Allow only a safe subset of RPC methods.
+    </span>Safe,
+    <span class="doccomment">/// Expose every RPC method (even potentially unsafe ones).
+    </span>Unsafe,
+}
+
+<span class="kw">impl </span>From&lt;RpcMethods&gt; <span class="kw">for </span>sc_service::RpcMethods {
+    <span class="kw">fn </span>from(value: RpcMethods) -&gt; <span class="self">Self </span>{
+        <span class="kw">match </span>value {
+            RpcMethods::Auto =&gt; <span class="self">Self</span>::Auto,
+            RpcMethods::Safe =&gt; <span class="self">Self</span>::Safe,
+            RpcMethods::Unsafe =&gt; <span class="self">Self</span>::Unsafe,
+        }
+    }
+}
+
 <span class="doccomment">/// Node builder
 </span><span class="attr">#[derive(Default)]
 </span><span class="kw">pub struct </span>Builder {
     name: <span class="prelude-ty">Option</span>&lt;String&gt;,
     force_authoring: bool,
     force_synced: bool,
-    role: RoleInner,
+    role: Role,
     blocks_pruning: BlocksPruningInner,
     state_pruning: <span class="prelude-ty">Option</span>&lt;PruningMode&gt;,
     listen_on: Vec&lt;Multiaddr&gt;,
@@ -867,7 +941,7 @@
 
     <span class="doccomment">/// Role of the node in the consensus
     </span><span class="kw">pub fn </span>role(<span class="kw-2">mut </span><span class="self">self</span>, role: Role) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.role = RoleInner(role);
+        <span class="self">self</span>.role = role;
         <span class="self">self
     </span>}
 
@@ -901,6 +975,12 @@
         <span class="self">self
     </span>}
 
+    <span class="doccomment">/// Set block execution strategies for the node
+    </span><span class="kw">pub fn </span>execution_strategies(<span class="kw-2">mut </span><span class="self">self</span>, execution_strategies: ExecutionStrategies) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.execution_strategies = execution_strategies;
+        <span class="self">self
+    </span>}
+
     <span class="doccomment">/// Start a node with supplied parameters
     </span><span class="kw">pub async fn </span>build(
         <span class="self">self</span>,
@@ -914,7 +994,7 @@
             name,
             force_authoring,
             force_synced,
-            role: RoleInner(role),
+            role,
             blocks_pruning: BlocksPruningInner(blocks_pruning),
             state_pruning,
             listen_on,
@@ -978,7 +1058,7 @@
                 rpc_ws: <span class="prelude-val">Some</span>(<span class="string">&quot;127.0.0.1:9947&quot;</span>.parse().expect(<span class="string">&quot;IP and port are valid&quot;</span>)),
                 rpc_ipc: <span class="prelude-val">None</span>,
                 <span class="comment">// necessary in order to use `peers` method to show number of node peers during sync
-                </span>rpc_methods,
+                </span>rpc_methods: rpc_methods.into(),
                 rpc_ws_max_connections: Default::default(),
                 <span class="comment">// Below CORS are default from Substrate
                 </span>rpc_cors: <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[
@@ -1006,7 +1086,7 @@
                 chain_spec: Box::new(chain_spec),
                 max_runtime_instances: <span class="number">8</span>,
                 announce_block: <span class="bool-val">true</span>,
-                role,
+                role: role.into(),
                 base_path: <span class="prelude-val">Some</span>(base_path),
                 informant_output_format: Default::default(),
                 runtime_cache_size: <span class="number">2</span>,
@@ -1468,7 +1548,7 @@
         <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
         <span class="kw">let </span>node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
-            .role(sc_service::Role::Authority)
+            .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
             </span>.unwrap();
@@ -1495,7 +1575,7 @@
         <span class="kw">let </span>node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
             .force_synced(<span class="bool-val">true</span>)
-            .role(sc_service::Role::Authority)
+            .role(Role::Authority)
             .listen_on(<span class="macro">vec!</span>[<span class="string">&quot;/ip4/127.0.0.1/tcp/0&quot;</span>.parse().unwrap()])
             .build(dir.path(), chain.clone())
             .<span class="kw">await
@@ -1526,7 +1606,7 @@
         <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
         <span class="kw">let </span>other_node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
-            .role(sc_service::Role::Authority)
+            .role(Role::Authority)
             .boot_nodes(node.listen_addresses().<span class="kw">await</span>.unwrap())
             .build(dir.path(), chain)
             .<span class="kw">await

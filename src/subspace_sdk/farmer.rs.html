@@ -1377,7 +1377,7 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
-    <span class="kw">use </span><span class="kw">crate</span>::node::{chain_spec, Node};
+    <span class="kw">use </span><span class="kw">crate</span>::node::{chain_spec, Node, Role};
     <span class="kw">use </span>tempdir::TempDir;
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
@@ -1385,7 +1385,7 @@
         <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
         <span class="kw">let </span>node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
-            .role(sc_service::Role::Authority)
+            .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
             </span>.unwrap();
@@ -1421,7 +1421,7 @@
         <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
         <span class="kw">let </span>node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
-            .role(sc_service::Role::Authority)
+            .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
             </span>.unwrap();
@@ -1460,7 +1460,7 @@
         <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
         <span class="kw">let </span>node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
-            .role(sc_service::Role::Authority)
+            .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
             </span>.unwrap();
@@ -1497,7 +1497,7 @@
         <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
         <span class="kw">let </span>node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
-            .role(sc_service::Role::Authority)
+            .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
             </span>.unwrap();
