@@ -2,19 +2,20 @@ on: push
 name: Rust checks and tests
 
 env:
+  # Not needed in CI, should make things a bit faster
+  CARGO_INCREMENTAL: 0
   CARGO_TERM_COLOR: always
+  # Build smaller artifacts to avoid running out of space in CI
+  # TODO: Try to remove once https://github.com/paritytech/substrate/issues/11538 is resolved
+  RUSTFLAGS: -C strip=symbols -C opt-level=s
+  # Remove unnecessary WASM build artefacts
+  WASM_BUILD_CLEAN_TARGET: 1
 
 jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
-
-      - uses: actions-rs/toolchain@v1
-        with:
-            toolchain: nightly-2022-11-08
-            components: rustfmt
-            override: true
 
       - run: cargo fmt --all -- --check
 
@@ -30,12 +31,6 @@ jobs:
         uses: KyleMayes/install-llvm-action@v1
         with:
           version: "14.0"
-
-      - uses: actions-rs/toolchain@v1
-        with:
-            toolchain: nightly-2022-11-08
-            components: clippy
-            override: true
 
       - name: Configure cache
         uses: Swatinem/rust-cache@v2
@@ -57,12 +52,6 @@ jobs:
         uses: KyleMayes/install-llvm-action@v1
         with:
           version: "14.0"
-
-      - uses: actions-rs/toolchain@v1
-        with:
-            toolchain: nightly-2022-11-08
-            components: clippy
-            override: true
 
       - name: Configure cache
         uses: Swatinem/rust-cache@v2

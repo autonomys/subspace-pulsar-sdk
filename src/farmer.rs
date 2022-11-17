@@ -11,19 +11,16 @@ use bytesize::ByteSize;
 use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p_core::Multiaddr;
 use subspace_core_primitives::{PieceIndexHash, SectorIndex};
+use subspace_farmer::single_disk_plot::{
+    piece_reader::PieceReader, SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId,
+    SingleDiskPlotInfo, SingleDiskPlotOptions, SingleDiskPlotSummary,
+};
+use subspace_farmer_components::plotting::PlottedSector;
 use subspace_networking::{Node as DSNNode, NodeRunner as DSNNodeRunner};
 use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 
 use crate::{Node, PublicKey};
-
-use subspace_farmer::{
-    single_disk_plot::{
-        piece_reader::PieceReader, plotting::PlottedSector, SingleDiskPlot, SingleDiskPlotError,
-        SingleDiskPlotId, SingleDiskPlotInfo, SingleDiskPlotOptions, SingleDiskPlotSummary,
-    },
-    RpcClient,
-};
 
 /// Description of the plot
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -165,6 +162,7 @@ async fn configure_dsn(
             LimitedSizeRecordStorageWrapper::new(
                 ParityDbRecordStorage::new(&records_cache_db)?,
                 record_cache_size,
+                subspace_networking::peer_id(&default_config.keypair),
             ),
             MemoryProviderStorage::default(),
         ),
@@ -239,12 +237,6 @@ impl Builder {
             (None, None)
         };
 
-        let space_l = node
-            .farmer_protocol_info()
-            .await
-            .map_err(BuildError::RPCError)?
-            .space_l;
-
         for description in plots {
             let directory = description.directory.clone();
             let allocated_space = description.space_pledged.as_u64();
@@ -285,8 +277,7 @@ impl Builder {
                 initial_plotting_progress: Arc::new(Mutex::new(InitialPlottingProgress {
                     starting_sector: single_disk_plot.plotted_sectors_count(),
                     current_sector: single_disk_plot.plotted_sectors_count(),
-                    total_sectors: allocated_space
-                        / subspace_core_primitives::plot_sector_size(space_l),
+                    total_sectors: allocated_space / subspace_core_primitives::PLOT_SECTOR_SIZE,
                 })),
                 _handlers: handlers,
             };
@@ -333,7 +324,7 @@ impl Builder {
             cmd_sender: Arc::new(Mutex::new(Some(cmd_sender))),
             reward_address,
             plot_info: Arc::new(plot_info),
-            node,
+            _node: node,
         })
     }
 }
@@ -344,7 +335,7 @@ pub struct Farmer {
     cmd_sender: Arc<Mutex<Option<oneshot::Sender<oneshot::Sender<()>>>>>,
     reward_address: PublicKey,
     plot_info: Arc<HashMap<PathBuf, Plot>>,
-    node: Node,
+    _node: Node,
 }
 
 /// Info about some plot
@@ -575,12 +566,7 @@ impl Farmer {
             plots_info,
             version: format!("{}-{}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH")),
             reward_address: self.reward_address,
-            sector_size: self
-                .node
-                .farmer_protocol_info()
-                .await
-                .map(|info| subspace_core_primitives::plot_sector_size(info.space_l))
-                .map_err(|err| anyhow::anyhow!("Failed to get farmer protocol info: {err}"))?,
+            sector_size: subspace_core_primitives::PLOT_SECTOR_SIZE,
         })
     }
 

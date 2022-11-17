@@ -48,6 +48,12 @@ impl From<[u8; PUBLIC_KEY_LENGTH]> for PublicKey {
     }
 }
 
+impl std::fmt::Display for PublicKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 mod parse_ss58 {
     // Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
     // Copyright (C) 2022 Subspace Labs, Inc.

@@ -20,7 +20,8 @@ use std::path::Path;
 use std::sync::{Arc, Weak};
 use subspace_core_primitives::SolutionRange;
 use subspace_farmer::RpcClient;
-use subspace_rpc_primitives::{FarmerProtocolInfo, SlotInfo};
+use subspace_farmer_components::FarmerProtocolInfo;
+use subspace_rpc_primitives::SlotInfo;
 use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::{FullClient, SubspaceConfiguration};
@@ -618,9 +619,11 @@ mod farmer_rpc_client {
     use subspace_archiving::archiver::ArchivedSegment;
     use subspace_core_primitives::{Piece, PieceIndex, RecordsRoot, SegmentIndex};
     use subspace_farmer::rpc_client::{Error, RpcClient};
+    use subspace_farmer_components::FarmerProtocolInfo;
     use subspace_rpc_primitives::{
-        FarmerProtocolInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
+        RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
     };
+
     #[async_trait::async_trait]
     impl RpcClient for Node {
         async fn farmer_protocol_info(&self) -> Result<FarmerProtocolInfo, Error> {
