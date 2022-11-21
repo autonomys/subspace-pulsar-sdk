@@ -744,7 +744,7 @@ mod tests {
         let plot_dir = TempDir::new("test").unwrap();
         let plots = [PlotDescription::new(
             plot_dir.as_ref(),
-            bytesize::ByteSize::mb(10),
+            bytesize::ByteSize::mib(32),
         )];
         let farmer = Farmer::builder()
             .build(Default::default(), node.clone(), &plots)
@@ -782,14 +782,16 @@ mod tests {
             .await
             .unwrap();
 
-        let farm_blocks = 8;
+        let farm_blocks = 4;
 
-        let mut sub = node.subscribe_new_blocks().await.unwrap();
-        while let Some(BlockNotification { number, .. }) = sub.next().await {
-            if number == farm_blocks {
-                break;
-            }
-        }
+        node.subscribe_new_blocks()
+            .await
+            .unwrap()
+            .skip_while(|notification| futures::future::ready(notification.number < farm_blocks))
+            .next()
+            .await
+            .unwrap();
+
         farmer.close().await;
 
         let dir = TempDir::new("test").unwrap();

@@ -10,7 +10,7 @@ use anyhow::Context;
 use bytesize::ByteSize;
 use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p_core::Multiaddr;
-use subspace_core_primitives::{PieceIndexHash, SectorIndex};
+use subspace_core_primitives::{PieceIndexHash, SectorIndex, PLOT_SECTOR_SIZE};
 use subspace_farmer::single_disk_plot::{
     piece_reader::PieceReader, SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId,
     SingleDiskPlotInfo, SingleDiskPlotOptions, SingleDiskPlotSummary,
@@ -43,6 +43,16 @@ impl PlotDescription {
     /// Wipe all the data from the plot
     pub async fn wipe(self) -> io::Result<()> {
         tokio::fs::remove_dir_all(self.directory).await
+    }
+
+    fn check_too_small(&self) -> Result<(), BuildError> {
+        const SECTOR_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE);
+
+        if self.space_pledged >= SECTOR_SIZE {
+            Ok(())
+        } else {
+            Err(BuildError::PlotTooSmall(self.space_pledged, SECTOR_SIZE))
+        }
     }
 }
 
@@ -81,6 +91,9 @@ pub enum BuildError {
     /// Failed to create parity db record storage
     #[error("Failed to create parity db record storage: {0}")]
     ParityDbError(#[from] parity_db::Error),
+    /// Plot was too small
+    #[error("Plot size was too small {0} (should be at least {1})")]
+    PlotTooSmall(ByteSize, ByteSize),
 }
 
 // Type alias for currently configured Kademlia's custom record store.
@@ -238,6 +251,8 @@ impl Builder {
         };
 
         for description in plots {
+            description.check_too_small()?;
+
             let directory = description.directory.clone();
             let allocated_space = description.space_pledged.as_u64();
             let description = SingleDiskPlotOptions {
@@ -247,10 +262,7 @@ impl Builder {
                 rpc_client: node.clone(),
                 dsn_node: dsn_node.clone(),
             };
-            let single_disk_plot =
-                tokio::task::spawn_blocking(move || SingleDiskPlot::new(description))
-                    .await
-                    .expect("Single disk plot never panics")?;
+            let single_disk_plot = SingleDiskPlot::new(description)?;
 
             let mut handlers = Vec::new();
             let progress = {
@@ -610,7 +622,7 @@ mod tests {
         let plot_dir = TempDir::new("test").unwrap();
         let plots = [PlotDescription::new(
             plot_dir.as_ref(),
-            bytesize::ByteSize::mb(10),
+            bytesize::ByteSize::mib(32),
         )];
         let farmer = Farmer::builder()
             .build(Default::default(), node.clone(), &plots)
@@ -627,7 +639,7 @@ mod tests {
         assert_eq!(plots_info.len(), 1);
         assert_eq!(
             plots_info[plot_dir.as_ref()].allocated_space,
-            bytesize::ByteSize::mb(10)
+            bytesize::ByteSize::mib(32)
         );
 
         farmer.close().await;
@@ -651,7 +663,7 @@ mod tests {
                 node.clone(),
                 &[PlotDescription::new(
                     plot_dir.as_ref(),
-                    bytesize::ByteSize::mib(4 * n_sectors),
+                    bytesize::ByteSize::mib(32 * n_sectors),
                 )],
             )
             .await
@@ -689,7 +701,7 @@ mod tests {
                 node.clone(),
                 &[PlotDescription::new(
                     plot_dir.as_ref(),
-                    bytesize::ByteSize::mib(4),
+                    bytesize::ByteSize::mib(32),
                 )],
             )
             .await
@@ -726,7 +738,7 @@ mod tests {
                 node.clone(),
                 &[PlotDescription::new(
                     plot_dir.as_ref(),
-                    bytesize::ByteSize::mib(4),
+                    bytesize::ByteSize::mib(32),
                 )],
             )
             .await
