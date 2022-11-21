@@ -126,4 +126,9 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - run: cargo install cargo-udeps
+
+      # This is a hack to make `cargo udeps` work with substrate
+      - run: cargo check
       - run: cargo udeps
+        env:
+          SKIP_WASM_BUILD: 1
