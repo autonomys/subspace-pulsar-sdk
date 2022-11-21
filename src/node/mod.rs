@@ -706,7 +706,7 @@ mod farmer_rpc_client {
 #[cfg(test)]
 mod tests {
     use subspace_farmer::RpcClient;
-    use tempdir::TempDir;
+    use tempfile::TempDir;
 
     use crate::{Farmer, PlotDescription};
 
@@ -714,7 +714,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_start_node() {
-        let dir = TempDir::new("test").unwrap();
+        let dir = TempDir::new().unwrap();
         Node::builder()
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
@@ -723,7 +723,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_rpc() {
-        let dir = TempDir::new("test").unwrap();
+        let dir = TempDir::new().unwrap();
         let node = Node::builder()
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
@@ -734,14 +734,14 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_closing() {
-        let dir = TempDir::new("test").unwrap();
+        let dir = TempDir::new().unwrap();
         let node = Node::builder()
             .force_authoring(true)
             .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
-        let plot_dir = TempDir::new("test").unwrap();
+        let plot_dir = TempDir::new().unwrap();
         let plots = [PlotDescription::new(
             plot_dir.as_ref(),
             bytesize::ByteSize::mib(32),
@@ -759,7 +759,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[ignore = "Works most of times though"]
     async fn test_sync_block() {
-        let dir = TempDir::new("test").unwrap();
+        let dir = TempDir::new().unwrap();
         let chain = chain_spec::dev_config().unwrap();
         let node = Node::builder()
             .force_authoring(true)
@@ -769,7 +769,7 @@ mod tests {
             .build(dir.path(), chain.clone())
             .await
             .unwrap();
-        let plot_dir = TempDir::new("test").unwrap();
+        let plot_dir = TempDir::new().unwrap();
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
@@ -794,7 +794,7 @@ mod tests {
 
         farmer.close().await;
 
-        let dir = TempDir::new("test").unwrap();
+        let dir = TempDir::new().unwrap();
         let other_node = Node::builder()
             .force_authoring(true)
             .role(Role::Authority)

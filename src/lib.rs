@@ -164,13 +164,13 @@ mod parse_ss58 {
 mod tests {
     use futures::StreamExt;
     use subspace_farmer::RpcClient;
-    use tempdir::TempDir;
+    use tempfile::TempDir;
 
     use super::*;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_integration() {
-        let dir = TempDir::new("test").unwrap();
+        let dir = TempDir::new().unwrap();
         let node = Node::builder()
             .force_authoring(true)
             .role(node::Role::Authority)
@@ -180,7 +180,7 @@ mod tests {
 
         let mut slot_info_sub = node.subscribe_slot_info().await.unwrap();
 
-        let dir = TempDir::new("test").unwrap();
+        let dir = TempDir::new().unwrap();
         let plot_descriptions = [PlotDescription::new(
             dir.path(),
             bytesize::ByteSize::mib(32),
