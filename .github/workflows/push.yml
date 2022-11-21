@@ -91,8 +91,7 @@ jobs:
   docs:
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v1
+      - uses: actions/checkout@v1
 
       - name: Install Protoc
         uses: arduino/setup-protoc@v1
@@ -106,3 +105,25 @@ jobs:
         run: cargo doc --locked --no-deps --lib
         env:
           RUSTDOCFLAGS: "-D rustdoc::broken-intra-doc-links -D rustdoc::private_intra_doc_links"
+
+  udeps:
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v1
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: "14.0"
+
+      - name: Configure cache
+        uses: Swatinem/rust-cache@v2
+
+      - run: cargo install cargo-udeps
+      - run: cargo udeps
