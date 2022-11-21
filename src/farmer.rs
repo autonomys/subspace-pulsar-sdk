@@ -10,20 +10,17 @@ use anyhow::Context;
 use bytesize::ByteSize;
 use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p_core::Multiaddr;
-use subspace_core_primitives::{PieceIndexHash, SectorIndex};
+use subspace_core_primitives::{PieceIndexHash, SectorIndex, PLOT_SECTOR_SIZE};
+use subspace_farmer::single_disk_plot::{
+    piece_reader::PieceReader, SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId,
+    SingleDiskPlotInfo, SingleDiskPlotOptions, SingleDiskPlotSummary,
+};
+use subspace_farmer_components::plotting::PlottedSector;
 use subspace_networking::{Node as DSNNode, NodeRunner as DSNNodeRunner};
 use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 
 use crate::{Node, PublicKey};
-
-use subspace_farmer::{
-    single_disk_plot::{
-        piece_reader::PieceReader, plotting::PlottedSector, SingleDiskPlot, SingleDiskPlotError,
-        SingleDiskPlotId, SingleDiskPlotInfo, SingleDiskPlotOptions, SingleDiskPlotSummary,
-    },
-    RpcClient,
-};
 
 /// Description of the plot
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,6 +43,16 @@ impl PlotDescription {
     /// Wipe all the data from the plot
     pub async fn wipe(self) -> io::Result<()> {
         tokio::fs::remove_dir_all(self.directory).await
+    }
+
+    fn check_too_small(&self) -> Result<(), BuildError> {
+        const SECTOR_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE);
+
+        if self.space_pledged >= SECTOR_SIZE {
+            Ok(())
+        } else {
+            Err(BuildError::PlotTooSmall(self.space_pledged, SECTOR_SIZE))
+        }
     }
 }
 
@@ -84,6 +91,9 @@ pub enum BuildError {
     /// Failed to create parity db record storage
     #[error("Failed to create parity db record storage: {0}")]
     ParityDbError(#[from] parity_db::Error),
+    /// Plot was too small
+    #[error("Plot size was too small {0} (should be at least {1})")]
+    PlotTooSmall(ByteSize, ByteSize),
 }
 
 // Type alias for currently configured Kademlia's custom record store.
@@ -165,6 +175,7 @@ async fn configure_dsn(
             LimitedSizeRecordStorageWrapper::new(
                 ParityDbRecordStorage::new(&records_cache_db)?,
                 record_cache_size,
+                subspace_networking::peer_id(&default_config.keypair),
             ),
             MemoryProviderStorage::default(),
         ),
@@ -239,13 +250,9 @@ impl Builder {
             (None, None)
         };
 
-        let space_l = node
-            .farmer_protocol_info()
-            .await
-            .map_err(BuildError::RPCError)?
-            .space_l;
-
         for description in plots {
+            description.check_too_small()?;
+
             let directory = description.directory.clone();
             let allocated_space = description.space_pledged.as_u64();
             let description = SingleDiskPlotOptions {
@@ -255,10 +262,7 @@ impl Builder {
                 rpc_client: node.clone(),
                 dsn_node: dsn_node.clone(),
             };
-            let single_disk_plot =
-                tokio::task::spawn_blocking(move || SingleDiskPlot::new(description))
-                    .await
-                    .expect("Single disk plot never panics")?;
+            let single_disk_plot = SingleDiskPlot::new(description)?;
 
             let mut handlers = Vec::new();
             let progress = {
@@ -285,8 +289,7 @@ impl Builder {
                 initial_plotting_progress: Arc::new(Mutex::new(InitialPlottingProgress {
                     starting_sector: single_disk_plot.plotted_sectors_count(),
                     current_sector: single_disk_plot.plotted_sectors_count(),
-                    total_sectors: allocated_space
-                        / subspace_core_primitives::plot_sector_size(space_l),
+                    total_sectors: allocated_space / subspace_core_primitives::PLOT_SECTOR_SIZE,
                 })),
                 _handlers: handlers,
             };
@@ -333,7 +336,7 @@ impl Builder {
             cmd_sender: Arc::new(Mutex::new(Some(cmd_sender))),
             reward_address,
             plot_info: Arc::new(plot_info),
-            node,
+            _node: node,
         })
     }
 }
@@ -344,7 +347,7 @@ pub struct Farmer {
     cmd_sender: Arc<Mutex<Option<oneshot::Sender<oneshot::Sender<()>>>>>,
     reward_address: PublicKey,
     plot_info: Arc<HashMap<PathBuf, Plot>>,
-    node: Node,
+    _node: Node,
 }
 
 /// Info about some plot
@@ -575,12 +578,7 @@ impl Farmer {
             plots_info,
             version: format!("{}-{}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH")),
             reward_address: self.reward_address,
-            sector_size: self
-                .node
-                .farmer_protocol_info()
-                .await
-                .map(|info| subspace_core_primitives::plot_sector_size(info.space_l))
-                .map_err(|err| anyhow::anyhow!("Failed to get farmer protocol info: {err}"))?,
+            sector_size: subspace_core_primitives::PLOT_SECTOR_SIZE,
         })
     }
 
@@ -624,7 +622,7 @@ mod tests {
         let plot_dir = TempDir::new("test").unwrap();
         let plots = [PlotDescription::new(
             plot_dir.as_ref(),
-            bytesize::ByteSize::mb(10),
+            bytesize::ByteSize::mib(32),
         )];
         let farmer = Farmer::builder()
             .build(Default::default(), node.clone(), &plots)
@@ -641,7 +639,7 @@ mod tests {
         assert_eq!(plots_info.len(), 1);
         assert_eq!(
             plots_info[plot_dir.as_ref()].allocated_space,
-            bytesize::ByteSize::mb(10)
+            bytesize::ByteSize::mib(32)
         );
 
         farmer.close().await;
@@ -665,7 +663,7 @@ mod tests {
                 node.clone(),
                 &[PlotDescription::new(
                     plot_dir.as_ref(),
-                    bytesize::ByteSize::mib(4 * n_sectors),
+                    bytesize::ByteSize::mib(32 * n_sectors),
                 )],
             )
             .await
@@ -703,7 +701,7 @@ mod tests {
                 node.clone(),
                 &[PlotDescription::new(
                     plot_dir.as_ref(),
-                    bytesize::ByteSize::mib(4),
+                    bytesize::ByteSize::mib(32),
                 )],
             )
             .await
@@ -740,7 +738,7 @@ mod tests {
                 node.clone(),
                 &[PlotDescription::new(
                     plot_dir.as_ref(),
-                    bytesize::ByteSize::mib(4),
+                    bytesize::ByteSize::mib(32),
                 )],
             )
             .await

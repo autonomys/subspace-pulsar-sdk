@@ -334,7 +334,7 @@ mod secondary_chain {
                         DomainConfig {
                             wasm_runtime_hash: Hash::random(),
                             max_bundle_size: 1024 * 1024,
-                            bundle_frequency: 100,
+                            bundle_slot_probability: (1, 1),
                             max_bundle_weight: Weight::MAX,
                             min_operator_stake: 100 * SSC,
                         },
@@ -388,7 +388,7 @@ mod secondary_chain {
                         DomainConfig {
                             wasm_runtime_hash: Hash::random(),
                             max_bundle_size: 1024 * 1024,
-                            bundle_frequency: 100,
+                            bundle_slot_probability: (1, 1),
                             max_bundle_weight: Weight::MAX,
                             min_operator_stake: 100 * SSC,
                         },
@@ -449,7 +449,7 @@ mod secondary_chain {
                         DomainConfig {
                             wasm_runtime_hash: Hash::random(),
                             max_bundle_size: 1024 * 1024,
-                            bundle_frequency: 100,
+                            bundle_slot_probability: (1, 1),
                             max_bundle_weight: Weight::MAX,
                             min_operator_stake: 100 * SSC,
                         },

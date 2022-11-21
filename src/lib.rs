@@ -48,6 +48,12 @@ impl From<[u8; PUBLIC_KEY_LENGTH]> for PublicKey {
     }
 }
 
+impl std::fmt::Display for PublicKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 mod parse_ss58 {
     // Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
     // Copyright (C) 2022 Subspace Labs, Inc.
@@ -175,7 +181,10 @@ mod tests {
         let mut slot_info_sub = node.subscribe_slot_info().await.unwrap();
 
         let dir = TempDir::new("test").unwrap();
-        let plot_descriptions = [PlotDescription::new(dir.path(), bytesize::ByteSize::mb(10))];
+        let plot_descriptions = [PlotDescription::new(
+            dir.path(),
+            bytesize::ByteSize::mib(32),
+        )];
         let _farmer = Farmer::builder()
             .build(Default::default(), node.clone(), &plot_descriptions)
             .await
