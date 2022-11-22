@@ -1525,7 +1525,7 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>subspace_farmer::RpcClient;
-    <span class="kw">use </span>tempdir::TempDir;
+    <span class="kw">use </span>tempfile::TempDir;
 
     <span class="kw">use crate</span>::{Farmer, PlotDescription};
 
@@ -1533,7 +1533,7 @@
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_start_node() {
-        <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>dir = TempDir::new().unwrap();
         Node::builder()
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
@@ -1542,7 +1542,7 @@
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_rpc() {
-        <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>node = Node::builder()
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
@@ -1553,14 +1553,14 @@
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_closing() {
-        <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
             .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
             </span>.unwrap();
-        <span class="kw">let </span>plot_dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>plot_dir = TempDir::new().unwrap();
         <span class="kw">let </span>plots = [PlotDescription::new(
             plot_dir.as_ref(),
             bytesize::ByteSize::mib(<span class="number">32</span>),
@@ -1578,7 +1578,7 @@
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     #[ignore = <span class="string">&quot;Works most of times though&quot;</span>]
     </span><span class="kw">async fn </span>test_sync_block() {
-        <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>chain = chain_spec::dev_config().unwrap();
         <span class="kw">let </span>node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
@@ -1588,7 +1588,7 @@
             .build(dir.path(), chain.clone())
             .<span class="kw">await
             </span>.unwrap();
-        <span class="kw">let </span>plot_dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>plot_dir = TempDir::new().unwrap();
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
                 Default::default(),
@@ -1613,7 +1613,7 @@
 
         farmer.close().<span class="kw">await</span>;
 
-        <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>other_node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
             .role(Role::Authority)

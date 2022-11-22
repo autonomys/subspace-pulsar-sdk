@@ -1374,18 +1374,18 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
     <span class="kw">use </span><span class="kw">crate</span>::node::{chain_spec, Node, Role};
-    <span class="kw">use </span>tempdir::TempDir;
+    <span class="kw">use </span>tempfile::TempDir;
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_get_info() {
-        <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
             .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
             </span>.unwrap();
-        <span class="kw">let </span>plot_dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>plot_dir = TempDir::new().unwrap();
         <span class="kw">let </span>plots = [PlotDescription::new(
             plot_dir.as_ref(),
             bytesize::ByteSize::mib(<span class="number">32</span>),
@@ -1414,14 +1414,14 @@
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_track_progress() {
-        <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
             .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
             </span>.unwrap();
-        <span class="kw">let </span>plot_dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>plot_dir = TempDir::new().unwrap();
         <span class="kw">let </span>n_sectors = <span class="number">1</span>;
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
@@ -1453,14 +1453,14 @@
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_new_solution() {
-        <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
             .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
             </span>.unwrap();
-        <span class="kw">let </span>plot_dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>plot_dir = TempDir::new().unwrap();
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
                 Default::default(),
@@ -1490,14 +1490,14 @@
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_progress_restart() {
-        <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
             .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
             </span>.unwrap();
-        <span class="kw">let </span>plot_dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>plot_dir = TempDir::new().unwrap();
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
                 Default::default(),

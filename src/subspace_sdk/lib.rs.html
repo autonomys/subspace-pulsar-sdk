@@ -362,13 +362,13 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>subspace_farmer::RpcClient;
-    <span class="kw">use </span>tempdir::TempDir;
+    <span class="kw">use </span>tempfile::TempDir;
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_integration() {
-        <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
             .role(node::Role::Authority)
@@ -378,7 +378,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>slot_info_sub = node.subscribe_slot_info().<span class="kw">await</span>.unwrap();
 
-        <span class="kw">let </span>dir = TempDir::new(<span class="string">&quot;test&quot;</span>).unwrap();
+        <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>plot_descriptions = [PlotDescription::new(
             dir.path(),
             bytesize::ByteSize::mib(<span class="number">32</span>),
