@@ -8,27 +8,34 @@ jobs:
   security-audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/audit-check@v1
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+      - uses: actions-rs/audit-check@35b7b53b1e25b55642157ac01b4adceb5b9ebef3 # v1.2.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   code-coverage:
     runs-on: ubuntu-latest
-
-    container:
-      image: xd009642/tarpaulin:develop-nightly
-      options: --security-opt seccomp=unconfined
-
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@64c0c85d18e984422218383b81c52f8b077404d3 # v1.1.2
+
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@665aaf9d6fba342a852f55fecc5688e7f00e6663 # v1.6.0
+        with:
+          version: "14.0"
+
+      - name: Configure cache
+        uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
+
+      - run: cargo install cargo-tarpaulin
 
       - name: Generate code coverage
-        run: |
-          cargo tarpaulin --verbose --timeout 180 --out Xml
+        run: cargo tarpaulin --verbose --timeout 180 --out Xml
 
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@d9f34f8cd5cb3b3eb79b3e4b5dae3a16df499a70 # v3.1.1
         with:
           # token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
           fail_ci_if_error: true
