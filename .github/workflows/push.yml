@@ -20,7 +20,7 @@ jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
 
       - run: cargo fmt -- --check
 
@@ -35,15 +35,15 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v1
+        uses: arduino/setup-protoc@64c0c85d18e984422218383b81c52f8b077404d3 # v1.1.2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v1
+        uses: KyleMayes/install-llvm-action@665aaf9d6fba342a852f55fecc5688e7f00e6663 # v1.6.0
         with:
           version: "14.0"
 
@@ -53,7 +53,7 @@ jobs:
         if: runner.os == 'Windows'
 
       - name: Configure cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
 
       - uses: actions-rs/clippy-check@v1
         with:
@@ -71,15 +71,15 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v1
+        uses: arduino/setup-protoc@64c0c85d18e984422218383b81c52f8b077404d3 # v1.1.2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v1
+        uses: KyleMayes/install-llvm-action@665aaf9d6fba342a852f55fecc5688e7f00e6663 # v1.6.0
         with:
           version: "14.0"
 
@@ -89,14 +89,14 @@ jobs:
         if: runner.os == 'Windows'
 
       - name: Configure cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
 
       - run: cargo test --locked
 
   docs:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
 
       - name: Install Protoc
         uses: arduino/setup-protoc@v1
@@ -104,7 +104,7 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
 
       - name: Check Documentation
         run: cargo doc --locked --no-deps --lib
@@ -115,20 +115,21 @@ jobs:
     runs-on: ubuntu-22.04
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v1
+        uses: arduino/setup-protoc@64c0c85d18e984422218383b81c52f8b077404d3 # v1.1.2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v1
+        uses: KyleMayes/install-llvm-action@665aaf9d6fba342a852f55fecc5688e7f00e6663 # v1.6.0
         with:
           version: "14.0"
 
+
       - name: Configure cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
 
       - run: cargo install cargo-udeps
 
