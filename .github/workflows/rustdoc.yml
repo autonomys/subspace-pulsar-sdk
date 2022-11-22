@@ -2,8 +2,12 @@ name: rustdoc
 
 on:
   push:
-   branches:
-   - master
+    branches:
+      - master
+    paths-ignore:
+      - '.github/**'
+      - '**.md'
+      - '.gitignore'
 
 env:
   CARGO_INCREMENTAL: 0

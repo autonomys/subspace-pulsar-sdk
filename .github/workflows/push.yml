@@ -1,5 +1,10 @@
-on: push
 name: Rust checks and tests
+on:
+  push:
+    paths-ignore:
+      - '.github/**'
+      - '**.md'
+      - '.gitignore'
 
 env:
   # Not needed in CI, should make things a bit faster
