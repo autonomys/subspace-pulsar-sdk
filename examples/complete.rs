@@ -49,7 +49,7 @@ async fn main() {
     dbg!(node.get_info().await.unwrap());
     dbg!(farmer.get_info().await.unwrap());
 
-    farmer.close().await;
+    farmer.close().await.unwrap();
     node.close().await;
 
     // Restarting
@@ -70,7 +70,7 @@ async fn main() {
         .await
         .expect("Failed to init a farmer");
 
-    farmer.close().await;
+    farmer.close().await.unwrap();
     node.close().await;
 
     // Delete everything

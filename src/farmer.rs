@@ -308,26 +308,23 @@ impl Builder {
             });
         }
 
-        let (cmd_sender, cmd_receiver) = oneshot::channel::<oneshot::Sender<()>>();
+        let (cmd_sender, cmd_receiver) = oneshot::channel::<()>();
 
-        tokio::task::spawn_blocking({
+        let handle = tokio::task::spawn_blocking({
             let handle = tokio::runtime::Handle::current();
+            let node = node.clone();
             move || {
                 let result_maybe_sender = handle.block_on(futures::future::select(
                     single_disk_plots_stream.next(),
                     cmd_receiver,
                 ));
                 match result_maybe_sender {
-                    future::Either::Left((maybe_result, _receiver)) => {
-                        maybe_result.unwrap().unwrap()
+                    // If node is closed when we might get some random error, so just ignore it
+                    future::Either::Left((_, _)) if handle.block_on(node.is_closed()) => Ok(()),
+                    future::Either::Left((maybe_result, _)) => {
+                        maybe_result.expect("There is at least one plot")
                     }
-                    future::Either::Right((maybe_sender, future)) => {
-                        drop(future);
-                        drop(single_disk_plots_stream);
-                        if let Ok(sender) = maybe_sender {
-                            let _ = sender.send(());
-                        }
-                    }
+                    future::Either::Right((_, _)) => Ok(()),
                 }
             }
         });
@@ -337,6 +334,7 @@ impl Builder {
             reward_address,
             plot_info: Arc::new(plot_info),
             _node: node,
+            handle: Arc::new(Mutex::new(handle)),
         })
     }
 }
@@ -344,10 +342,11 @@ impl Builder {
 /// Farmer structure
 #[derive(Clone, Debug)]
 pub struct Farmer {
-    cmd_sender: Arc<Mutex<Option<oneshot::Sender<oneshot::Sender<()>>>>>,
+    cmd_sender: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     reward_address: PublicKey,
     plot_info: Arc<HashMap<PathBuf, Plot>>,
     _node: Node,
+    handle: Arc<Mutex<tokio::task::JoinHandle<anyhow::Result<()>>>>,
 }
 
 /// Info about some plot
@@ -588,19 +587,13 @@ impl Farmer {
     }
 
     /// Stops farming, closes plots, and sends signal to the node
-    pub async fn close(self) {
+    pub async fn close(self) -> anyhow::Result<()> {
         let mut maybe_cmd_sender = self.cmd_sender.lock().await;
         let Some(cmd_sender) = maybe_cmd_sender.take() else {
-            return;
+            return Ok(());
         };
-        let (stop_sender, stop_receiver) = oneshot::channel();
-        if cmd_sender.send(stop_sender).is_err() {
-            return;
-        }
-
-        stop_receiver
-            .await
-            .expect("We should always receive here, as task is alive");
+        let _ = cmd_sender.send(());
+        (&mut *self.handle.lock().await).await?
     }
 }
 
@@ -642,7 +635,7 @@ mod tests {
             bytesize::ByteSize::mib(32)
         );
 
-        farmer.close().await;
+        farmer.close().await.unwrap();
         node.close().await;
     }
 
@@ -681,7 +674,7 @@ mod tests {
             .await;
         assert_eq!(progress.len(), n_sectors as usize);
 
-        farmer.close().await;
+        farmer.close().await.unwrap();
         node.close().await;
     }
 
@@ -718,7 +711,7 @@ mod tests {
             .await
             .expect("Farmer should send new solutions");
 
-        farmer.close().await;
+        farmer.close().await.unwrap();
         node.close().await;
     }
 
@@ -760,7 +753,7 @@ mod tests {
         .await
         .unwrap();
 
-        farmer.close().await;
+        farmer.close().await.unwrap();
         node.close().await;
     }
 }

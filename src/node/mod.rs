@@ -501,6 +501,11 @@ impl Node {
         let _ = stop_receiver.await;
     }
 
+    /// Tells if the node was closed
+    pub async fn is_closed(&self) -> bool {
+        self.stop_sender.is_closed()
+    }
+
     /// Runs `.close()` and also wipes node's state
     pub async fn wipe(path: impl AsRef<Path>) -> io::Result<()> {
         tokio::fs::remove_dir_all(path).await
@@ -752,7 +757,7 @@ mod tests {
             .unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-        farmer.close().await;
+        farmer.close().await.unwrap();
         node.close().await;
     }
 
@@ -792,7 +797,7 @@ mod tests {
             .await
             .unwrap();
 
-        farmer.close().await;
+        farmer.close().await.unwrap();
 
         let dir = TempDir::new().unwrap();
         let other_node = Node::builder()

@@ -32,7 +32,7 @@ async fn main() {
         }
     }
 
-    farmer.close().await;
+    farmer.close().await.unwrap();
     node.close().await;
 
     for plot in plots {
