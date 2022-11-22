@@ -4,6 +4,7 @@
 [![Downloads Latest](https://img.shields.io/github/downloads/subspace/subspace-sdk/latest/total?style=flat-square)](https://github.com/subspace/subspace-sdk/releases/latest)
 [![Rust](https://img.shields.io/github/workflow/status/subspace/subspace-sdk/Rust%20checks%20and%20tests)](https://github.com/subspace/subspace-sdk/actions/workflows/push.yaml)
 [![Rust Docs](https://img.shields.io/github/workflow/status/subspace/subspace-sdk/rustdoc?label=docs.rs)](https://subspace.github.io/subspace-sdk)
+[![Code coverage](https://img.shields.io/codecov/c/gh/subspace/subspace-sdk)](https://app.codecov.io/gh/subspace/subspace-sdk)
 
 <!--- TODO: Add docs-rs label (should we generate and host our own one?) --->
 

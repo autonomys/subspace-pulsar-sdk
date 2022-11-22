@@ -608,18 +608,18 @@ impl Farmer {
 mod tests {
     use super::*;
     use crate::node::{chain_spec, Node, Role};
-    use tempdir::TempDir;
+    use tempfile::TempDir;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_get_info() {
-        let dir = TempDir::new("test").unwrap();
+        let dir = TempDir::new().unwrap();
         let node = Node::builder()
             .force_authoring(true)
             .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
-        let plot_dir = TempDir::new("test").unwrap();
+        let plot_dir = TempDir::new().unwrap();
         let plots = [PlotDescription::new(
             plot_dir.as_ref(),
             bytesize::ByteSize::mib(32),
@@ -648,14 +648,14 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_track_progress() {
-        let dir = TempDir::new("test").unwrap();
+        let dir = TempDir::new().unwrap();
         let node = Node::builder()
             .force_authoring(true)
             .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
-        let plot_dir = TempDir::new("test").unwrap();
+        let plot_dir = TempDir::new().unwrap();
         let n_sectors = 1;
         let farmer = Farmer::builder()
             .build(
@@ -687,14 +687,14 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_new_solution() {
-        let dir = TempDir::new("test").unwrap();
+        let dir = TempDir::new().unwrap();
         let node = Node::builder()
             .force_authoring(true)
             .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
-        let plot_dir = TempDir::new("test").unwrap();
+        let plot_dir = TempDir::new().unwrap();
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
@@ -724,14 +724,14 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_progress_restart() {
-        let dir = TempDir::new("test").unwrap();
+        let dir = TempDir::new().unwrap();
         let node = Node::builder()
             .force_authoring(true)
             .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
-        let plot_dir = TempDir::new("test").unwrap();
+        let plot_dir = TempDir::new().unwrap();
         let farmer = Farmer::builder()
             .build(
                 Default::default(),

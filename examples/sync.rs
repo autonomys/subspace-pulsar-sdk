@@ -1,11 +1,11 @@
 use futures::stream::StreamExt;
 use std::path::PathBuf;
-use tempdir::TempDir;
 
 use bytesize::ByteSize;
 use clap::Parser;
 use sc_network_common::config::MultiaddrWithPeerId;
 use subspace_sdk::{chain_spec, Farmer, Node, PlotDescription, PublicKey};
+use tempfile::TempDir;
 
 #[derive(clap::Args, Debug)]
 struct NodeArgs {
@@ -101,7 +101,7 @@ async fn main() -> anyhow::Result<()> {
                 .await;
         }
         Args::Sync { boot_nodes, spec } => {
-            let node = TempDir::new("node")?;
+            let node = TempDir::new()?;
             let chain_spec = serde_json::from_str(&tokio::fs::read_to_string(spec).await?)?;
             let node = Node::builder()
                 .force_authoring(true)
