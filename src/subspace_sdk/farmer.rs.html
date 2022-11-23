@@ -757,13 +757,6 @@
 <a href="#757" id="757">757</a>
 <a href="#758" id="758">758</a>
 <a href="#759" id="759">759</a>
-<a href="#760" id="760">760</a>
-<a href="#761" id="761">761</a>
-<a href="#762" id="762">762</a>
-<a href="#763" id="763">763</a>
-<a href="#764" id="764">764</a>
-<a href="#765" id="765">765</a>
-<a href="#766" id="766">766</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     io,
@@ -1074,26 +1067,23 @@
             });
         }
 
-        <span class="kw">let </span>(cmd_sender, cmd_receiver) = oneshot::channel::&lt;oneshot::Sender&lt;()&gt;&gt;();
+        <span class="kw">let </span>(cmd_sender, cmd_receiver) = oneshot::channel::&lt;()&gt;();
 
-        tokio::task::spawn_blocking({
+        <span class="kw">let </span>handle = tokio::task::spawn_blocking({
             <span class="kw">let </span>handle = tokio::runtime::Handle::current();
+            <span class="kw">let </span>node = node.clone();
             <span class="kw">move </span>|| {
                 <span class="kw">let </span>result_maybe_sender = handle.block_on(futures::future::select(
                     single_disk_plots_stream.next(),
                     cmd_receiver,
                 ));
                 <span class="kw">match </span>result_maybe_sender {
-                    future::Either::Left((maybe_result, _receiver)) =&gt; {
-                        maybe_result.unwrap().unwrap()
+                    <span class="comment">// If node is closed when we might get some random error, so just ignore it
+                    </span>future::Either::Left((<span class="kw">_</span>, <span class="kw">_</span>)) <span class="kw">if </span>handle.block_on(node.is_closed()) =&gt; <span class="prelude-val">Ok</span>(()),
+                    future::Either::Left((maybe_result, <span class="kw">_</span>)) =&gt; {
+                        maybe_result.expect(<span class="string">&quot;There is at least one plot&quot;</span>)
                     }
-                    future::Either::Right((maybe_sender, future)) =&gt; {
-                        drop(future);
-                        drop(single_disk_plots_stream);
-                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(sender) = maybe_sender {
-                            <span class="kw">let _ </span>= sender.send(());
-                        }
-                    }
+                    future::Either::Right((<span class="kw">_</span>, <span class="kw">_</span>)) =&gt; <span class="prelude-val">Ok</span>(()),
                 }
             }
         });
@@ -1103,6 +1093,7 @@
             reward_address,
             plot_info: Arc::new(plot_info),
             _node: node,
+            handle: Arc::new(Mutex::new(handle)),
         })
     }
 }
@@ -1110,10 +1101,11 @@
 <span class="doccomment">/// Farmer structure
 </span><span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>Farmer {
-    cmd_sender: Arc&lt;Mutex&lt;<span class="prelude-ty">Option</span>&lt;oneshot::Sender&lt;oneshot::Sender&lt;()&gt;&gt;&gt;&gt;&gt;,
+    cmd_sender: Arc&lt;Mutex&lt;<span class="prelude-ty">Option</span>&lt;oneshot::Sender&lt;()&gt;&gt;&gt;&gt;,
     reward_address: PublicKey,
     plot_info: Arc&lt;HashMap&lt;PathBuf, Plot&gt;&gt;,
     _node: Node,
+    handle: Arc&lt;Mutex&lt;tokio::task::JoinHandle&lt;anyhow::Result&lt;()&gt;&gt;&gt;&gt;,
 }
 
 <span class="doccomment">/// Info about some plot
@@ -1354,20 +1346,14 @@
     }
 
     <span class="doccomment">/// Stops farming, closes plots, and sends signal to the node
-    </span><span class="kw">pub async fn </span>close(<span class="self">self</span>) {
+    </span><span class="kw">pub async fn </span>close(<span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>maybe_cmd_sender = <span class="self">self</span>.cmd_sender.lock().<span class="kw">await</span>;
         <span class="kw">let </span><span class="prelude-val">Some</span>(cmd_sender) = maybe_cmd_sender.take() <span class="kw">else </span>{
-            <span class="kw">return</span>;
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         };
-        <span class="kw">let </span>(stop_sender, stop_receiver) = oneshot::channel();
-        <span class="kw">if </span>cmd_sender.send(stop_sender).is_err() {
-            <span class="kw">return</span>;
-        }
-
-        stop_receiver
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;We should always receive here, as task is alive&quot;</span>);
-    }
+        <span class="kw">let _ </span>= cmd_sender.send(());
+        (<span class="kw-2">&amp;mut *</span><span class="self">self</span>.handle.lock().<span class="kw">await</span>).<span class="kw">await</span><span class="question-mark">?
+    </span>}
 }
 
 <span class="attr">#[cfg(test)]
@@ -1408,7 +1394,7 @@
             bytesize::ByteSize::mib(<span class="number">32</span>)
         );
 
-        farmer.close().<span class="kw">await</span>;
+        farmer.close().<span class="kw">await</span>.unwrap();
         node.close().<span class="kw">await</span>;
     }
 
@@ -1447,7 +1433,7 @@
             .<span class="kw">await</span>;
         <span class="macro">assert_eq!</span>(progress.len(), n_sectors <span class="kw">as </span>usize);
 
-        farmer.close().<span class="kw">await</span>;
+        farmer.close().<span class="kw">await</span>.unwrap();
         node.close().<span class="kw">await</span>;
     }
 
@@ -1484,7 +1470,7 @@
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Farmer should send new solutions&quot;</span>);
 
-        farmer.close().<span class="kw">await</span>;
+        farmer.close().<span class="kw">await</span>.unwrap();
         node.close().<span class="kw">await</span>;
     }
 
@@ -1526,7 +1512,7 @@
         .<span class="kw">await
         </span>.unwrap();
 
-        farmer.close().<span class="kw">await</span>;
+        farmer.close().<span class="kw">await</span>.unwrap();
         node.close().<span class="kw">await</span>;
     }
 }

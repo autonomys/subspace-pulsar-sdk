@@ -817,6 +817,11 @@
 <a href="#817" id="817">817</a>
 <a href="#818" id="818">818</a>
 <a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>futures::channel::{mpsc, oneshot};
 <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
@@ -1320,6 +1325,11 @@
         <span class="kw">let _ </span>= stop_receiver.<span class="kw">await</span>;
     }
 
+    <span class="doccomment">/// Tells if the node was closed
+    </span><span class="kw">pub async fn </span>is_closed(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.stop_sender.is_closed()
+    }
+
     <span class="doccomment">/// Runs `.close()` and also wipes node&#39;s state
     </span><span class="kw">pub async fn </span>wipe(path: <span class="kw">impl </span>AsRef&lt;Path&gt;) -&gt; io::Result&lt;()&gt; {
         tokio::fs::remove_dir_all(path).<span class="kw">await
@@ -1571,7 +1581,7 @@
             </span>.unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
 
-        farmer.close().<span class="kw">await</span>;
+        farmer.close().<span class="kw">await</span>.unwrap();
         node.close().<span class="kw">await</span>;
     }
 
@@ -1611,7 +1621,7 @@
             .<span class="kw">await
             </span>.unwrap();
 
-        farmer.close().<span class="kw">await</span>;
+        farmer.close().<span class="kw">await</span>.unwrap();
 
         <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>other_node = Node::builder()
