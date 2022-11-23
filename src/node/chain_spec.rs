@@ -3,7 +3,7 @@
 use sc_service::ChainType;
 use sc_subspace_chain_specs::{ChainSpecExtensions, ConsensusChainSpec};
 use sc_telemetry::TelemetryEndpoints;
-use sp_core::crypto::Ss58Codec;
+use sp_core::crypto::{Ss58Codec, UncheckedFrom};
 use subspace_runtime::{
     AllowAuthoringBy, BalancesConfig, GenesisConfig, RuntimeConfigsConfig, SubspaceConfig,
     SudoConfig, SystemConfig, VestingConfig, MILLISECS_PER_BLOCK, WASM_BINARY,
@@ -11,7 +11,6 @@ use subspace_runtime::{
 use subspace_runtime_primitives::{AccountId, Balance, BlockNumber, SSC};
 use system_domain_runtime::GenesisConfig as SystemDomainGenesisConfig;
 
-const POLKADOT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 const SUBSPACE_TELEMETRY_URL: &str = "wss://telemetry.subspace.network/submit/";
 const X_NET_2_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-x-net-2.json");
 
@@ -48,6 +47,95 @@ pub struct GenesisParams {
     enable_storage_access: bool,
     allow_authoring_by: AllowAuthoringBy,
     enable_executor: bool,
+}
+
+/// Gemini 3a compiled chain spec
+pub fn gemini_3a_compiled(
+) -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String> {
+    Ok(ConsensusChainSpec::from_genesis(
+        // Name
+        "Subspace Gemini 3a",
+        // ID
+        "subspace_gemini_3a",
+        ChainType::Custom("Subspace Gemini 3a".to_string()),
+        || {
+            let sudo_account =
+                AccountId::from_ss58check("5CXTmJEusve5ixyJufqHThmy4qUrrm6FyLCR7QfE4bbyMTNC")
+                    .expect("Wrong root account address");
+
+            let mut balances = vec![(sudo_account.clone(), 1_000 * SSC)];
+            let vesting_schedules = TOKEN_GRANTS
+                .iter()
+                .flat_map(|&(account_address, amount)| {
+                    let account_id = AccountId::from_ss58check(account_address)
+                        .expect("Wrong vesting account address");
+                    let amount: Balance = amount * SSC;
+
+                    // TODO: Adjust start block to real value before mainnet launch
+                    let start_block = 100_000_000;
+                    let one_month_in_blocks =
+                        u32::try_from(3600 * 24 * 30 * MILLISECS_PER_BLOCK / 1000)
+                            .expect("One month of blocks always fits in u32; qed");
+
+                    // Add balance so it can be locked
+                    balances.push((account_id.clone(), amount));
+
+                    [
+                        // 1/4 of tokens are released after 1 year.
+                        (
+                            account_id.clone(),
+                            start_block,
+                            one_month_in_blocks * 12,
+                            1,
+                            amount / 4,
+                        ),
+                        // 1/48 of tokens are released every month after that for 3 more years.
+                        (
+                            account_id,
+                            start_block + one_month_in_blocks * 12,
+                            one_month_in_blocks,
+                            36,
+                            amount / 48,
+                        ),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            subspace_genesis_config(
+                WASM_BINARY.expect("Wasm binary must be built for Gemini"),
+                sudo_account,
+                balances,
+                vesting_schedules,
+                GenesisParams {
+                    enable_rewards: false,
+                    enable_storage_access: false,
+                    allow_authoring_by: AllowAuthoringBy::RootFarmer(
+                        sp_consensus_subspace::FarmerPublicKey::unchecked_from([
+                            0x50, 0x69, 0x60, 0xf3, 0x50, 0x33, 0xee, 0xc1, 0x12, 0xb5, 0xbc, 0xb4,
+                            0xe5, 0x91, 0xfb, 0xbb, 0xf5, 0x88, 0xac, 0x45, 0x26, 0x90, 0xd4, 0x70,
+                            0x32, 0x6c, 0x3f, 0x7b, 0x4e, 0xd9, 0x41, 0x17,
+                        ]),
+                    ),
+                    enable_executor: true,
+                },
+            )
+        },
+        // Bootnodes
+        vec![],
+        // Telemetry
+        Some(
+            TelemetryEndpoints::new(vec![(SUBSPACE_TELEMETRY_URL.into(), 1)])
+                .map_err(|error| error.to_string())?,
+        ),
+        // Protocol ID
+        Some("subspace-gemini-3a"),
+        None,
+        // Properties
+        Some(utils::chain_spec_properties()),
+        // Extensions
+        ChainSpecExtensions {
+            execution_chain_spec: secondary_chain::gemini_3a_config(),
+        },
+    ))
 }
 
 /// Executor net 2 chain spec
@@ -124,11 +212,8 @@ pub fn x_net_2_config_compiled(
         vec![],
         // Telemetry
         Some(
-            TelemetryEndpoints::new(vec![
-                (POLKADOT_TELEMETRY_URL.into(), 1),
-                (SUBSPACE_TELEMETRY_URL.into(), 1),
-            ])
-            .map_err(|error| error.to_string())?,
+            TelemetryEndpoints::new(vec![(SUBSPACE_TELEMETRY_URL.into(), 1)])
+                .map_err(|error| error.to_string())?,
         ),
         // Protocol ID
         Some("subspace-x-net-2a"),
@@ -290,14 +375,16 @@ pub fn subspace_genesis_config(
 }
 
 mod secondary_chain {
-    use super::*;
+    //! Secondary chain configurations.
 
+    use super::utils::{chain_spec_properties, get_account_id_from_seed, get_public_key_from_seed};
     use frame_support::weights::Weight;
     use sc_service::ChainType;
     use sc_subspace_chain_specs::ExecutionChainSpec;
     use sp_core::crypto::Ss58Codec;
     use sp_domains::ExecutorPublicKey;
     use sp_runtime::Percent;
+    use subspace_core_primitives::crypto::blake2b_256_hash;
     use subspace_runtime_primitives::SSC;
     use system_domain_runtime::{
         AccountId, Balance, BalancesConfig, DomainRegistryConfig, ExecutorRegistryConfig,
@@ -316,19 +403,19 @@ mod secondary_chain {
             move || {
                 testnet_genesis(
                     vec![
-                        utils::get_account_id_from_seed("Alice"),
-                        utils::get_account_id_from_seed("Bob"),
-                        utils::get_account_id_from_seed("Alice//stash"),
-                        utils::get_account_id_from_seed("Bob//stash"),
+                        get_account_id_from_seed("Alice"),
+                        get_account_id_from_seed("Bob"),
+                        get_account_id_from_seed("Alice//stash"),
+                        get_account_id_from_seed("Bob//stash"),
                     ],
                     vec![(
-                        utils::get_account_id_from_seed("Alice"),
+                        get_account_id_from_seed("Alice"),
                         1_000 * SSC,
-                        utils::get_account_id_from_seed("Alice"),
-                        utils::get_public_key_from_seed::<ExecutorPublicKey>("Alice"),
+                        get_account_id_from_seed("Alice"),
+                        get_public_key_from_seed::<ExecutorPublicKey>("Alice"),
                     )],
                     vec![(
-                        utils::get_account_id_from_seed("Alice"),
+                        get_account_id_from_seed("Alice"),
                         1_000 * SSC,
                         // TODO: proper genesis domain config
                         DomainConfig {
@@ -338,7 +425,7 @@ mod secondary_chain {
                             max_bundle_weight: Weight::MAX,
                             min_operator_stake: 100 * SSC,
                         },
-                        utils::get_account_id_from_seed("Alice"),
+                        get_account_id_from_seed("Alice"),
                         Percent::one(),
                     )],
                 )
@@ -347,7 +434,7 @@ mod secondary_chain {
             None,
             None,
             None,
-            Some(utils::chain_spec_properties()),
+            Some(chain_spec_properties()),
             None,
         )
     }
@@ -362,37 +449,37 @@ mod secondary_chain {
             move || {
                 testnet_genesis(
                     vec![
-                        utils::get_account_id_from_seed("Alice"),
-                        utils::get_account_id_from_seed("Bob"),
-                        utils::get_account_id_from_seed("Charlie"),
-                        utils::get_account_id_from_seed("Dave"),
-                        utils::get_account_id_from_seed("Eve"),
-                        utils::get_account_id_from_seed("Ferdie"),
-                        utils::get_account_id_from_seed("Alice//stash"),
-                        utils::get_account_id_from_seed("Bob//stash"),
-                        utils::get_account_id_from_seed("Charlie//stash"),
-                        utils::get_account_id_from_seed("Dave//stash"),
-                        utils::get_account_id_from_seed("Eve//stash"),
-                        utils::get_account_id_from_seed("Ferdie//stash"),
+                        get_account_id_from_seed("Alice"),
+                        get_account_id_from_seed("Bob"),
+                        get_account_id_from_seed("Charlie"),
+                        get_account_id_from_seed("Dave"),
+                        get_account_id_from_seed("Eve"),
+                        get_account_id_from_seed("Ferdie"),
+                        get_account_id_from_seed("Alice//stash"),
+                        get_account_id_from_seed("Bob//stash"),
+                        get_account_id_from_seed("Charlie//stash"),
+                        get_account_id_from_seed("Dave//stash"),
+                        get_account_id_from_seed("Eve//stash"),
+                        get_account_id_from_seed("Ferdie//stash"),
                     ],
                     vec![(
-                        utils::get_account_id_from_seed("Alice"),
+                        get_account_id_from_seed("Alice"),
                         1_000 * SSC,
-                        utils::get_account_id_from_seed("Alice"),
-                        utils::get_public_key_from_seed::<ExecutorPublicKey>("Alice"),
+                        get_account_id_from_seed("Alice"),
+                        get_public_key_from_seed::<ExecutorPublicKey>("Alice"),
                     )],
                     vec![(
-                        utils::get_account_id_from_seed("Alice"),
+                        get_account_id_from_seed("Alice"),
                         1_000 * SSC,
                         // TODO: proper genesis domain config
                         DomainConfig {
-                            wasm_runtime_hash: Hash::random(),
+                            wasm_runtime_hash: Hash::zero(),
                             max_bundle_size: 1024 * 1024,
                             bundle_slot_probability: (1, 1),
                             max_bundle_weight: Weight::MAX,
                             min_operator_stake: 100 * SSC,
                         },
-                        utils::get_account_id_from_seed("Alice"),
+                        get_account_id_from_seed("Alice"),
                         Percent::one(),
                     )],
                 )
@@ -405,7 +492,76 @@ mod secondary_chain {
             Some("template-local"),
             None,
             // Properties
-            Some(utils::chain_spec_properties()),
+            Some(chain_spec_properties()),
+            // Extensions
+            None,
+        )
+    }
+
+    pub fn gemini_3a_config() -> ExecutionChainSpec<GenesisConfig> {
+        ExecutionChainSpec::from_genesis(
+            // Name
+            "Subspace Gemini 3a System Domain",
+            // ID
+            "subspace_gemini_3a_system_domain",
+            ChainType::Local,
+            move || {
+                testnet_genesis(
+                    vec![
+                        // Genesis executor
+                        AccountId::from_ss58check(
+                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
+                        )
+                        .expect("Wrong executor account address"),
+                    ],
+                    vec![(
+                        AccountId::from_ss58check(
+                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
+                        )
+                        .expect("Wrong executor account address"),
+                        1_000 * SSC,
+                        AccountId::from_ss58check(
+                            "5FsxcczkSUnpqhcSgugPZsSghxrcKx5UEsRKL5WyPTL6SAxB",
+                        )
+                        .expect("Wrong executor reward address"),
+                        ExecutorPublicKey::from_ss58check(
+                            "5FuuXk1TL8DKQMvg7mcqmP8t9FhxUdzTcYC9aFmebiTLmASx",
+                        )
+                        .expect("Wrong executor public key"),
+                    )],
+                    vec![(
+                        AccountId::from_ss58check(
+                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
+                        )
+                        .expect("Wrong executor account address"),
+                        1_000 * SSC,
+                        DomainConfig {
+                            wasm_runtime_hash: blake2b_256_hash(
+                                system_domain_runtime::CORE_PAYMENTS_WASM_BUNDLE,
+                            )
+                            .into(),
+                            max_bundle_size: 4 * 1024 * 1024,
+                            bundle_slot_probability: (1, 1),
+                            max_bundle_weight: Weight::MAX,
+                            min_operator_stake: 100 * SSC,
+                        },
+                        AccountId::from_ss58check(
+                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
+                        )
+                        .expect("Wrong executor account address"),
+                        Percent::one(),
+                    )],
+                )
+            },
+            // Bootnodes
+            vec![],
+            // Telemetry
+            None,
+            // Protocol ID
+            Some("subspace-gemini-3a-system-domain"),
+            None,
+            // Properties
+            Some(chain_spec_properties()),
             // Extensions
             None,
         )
@@ -443,17 +599,20 @@ mod secondary_chain {
                         .expect("Wrong executor public key"),
                     )],
                     vec![(
-                        utils::get_account_id_from_seed("Alice"),
+                        get_account_id_from_seed("Alice"),
                         1_000 * SSC,
                         // TODO: proper genesis domain config
                         DomainConfig {
-                            wasm_runtime_hash: Hash::random(),
+                            wasm_runtime_hash: blake2b_256_hash(
+                                system_domain_runtime::CORE_PAYMENTS_WASM_BUNDLE,
+                            )
+                            .into(),
                             max_bundle_size: 1024 * 1024,
                             bundle_slot_probability: (1, 1),
                             max_bundle_weight: Weight::MAX,
                             min_operator_stake: 100 * SSC,
                         },
-                        utils::get_account_id_from_seed("Alice"),
+                        get_account_id_from_seed("Alice"),
                         Percent::one(),
                     )],
                 )
@@ -466,7 +625,7 @@ mod secondary_chain {
             Some("subspace-x-net-2a-execution"),
             None,
             // Properties
-            Some(utils::chain_spec_properties()),
+            Some(chain_spec_properties()),
             // Extensions
             None,
         )
@@ -533,5 +692,129 @@ mod utils {
     /// Generate an account ID from seed.
     pub(crate) fn get_account_id_from_seed(seed: &'static str) -> AccountId32 {
         MultiSigner::from(get_public_key_from_seed::<sr25519::Public>(seed)).into_account()
+    }
+}
+
+// TODO: Add secondary chain support for node
+#[allow(unused)]
+mod core_payments {
+    //! Secondary chain configurations.
+
+    use super::utils::{chain_spec_properties, get_account_id_from_seed};
+    use core_payments_domain_runtime::{
+        AccountId, BalancesConfig, GenesisConfig, SystemConfig, WASM_BINARY,
+    };
+    use sc_service::ChainType;
+    use sc_subspace_chain_specs::ExecutionChainSpec;
+    use sp_core::crypto::Ss58Codec;
+    use subspace_runtime_primitives::SSC;
+
+    pub type ChainSpec = ExecutionChainSpec<GenesisConfig>;
+
+    pub fn development_config() -> ExecutionChainSpec<GenesisConfig> {
+        ExecutionChainSpec::from_genesis(
+            // Name
+            "Development",
+            // ID
+            "core_payments_domain_dev",
+            ChainType::Development,
+            move || {
+                testnet_genesis(vec![
+                    get_account_id_from_seed("Alice"),
+                    get_account_id_from_seed("Bob"),
+                    get_account_id_from_seed("Alice//stash"),
+                    get_account_id_from_seed("Bob//stash"),
+                ])
+            },
+            vec![],
+            None,
+            None,
+            None,
+            Some(chain_spec_properties()),
+            None,
+        )
+    }
+
+    pub fn local_testnet_config() -> ExecutionChainSpec<GenesisConfig> {
+        ExecutionChainSpec::from_genesis(
+            // Name
+            "Local Testnet",
+            // ID
+            "core_payments_domain_local_testnet",
+            ChainType::Local,
+            move || {
+                testnet_genesis(vec![
+                    get_account_id_from_seed("Alice"),
+                    get_account_id_from_seed("Bob"),
+                    get_account_id_from_seed("Charlie"),
+                    get_account_id_from_seed("Dave"),
+                    get_account_id_from_seed("Eve"),
+                    get_account_id_from_seed("Ferdie"),
+                    get_account_id_from_seed("Alice//stash"),
+                    get_account_id_from_seed("Bob//stash"),
+                    get_account_id_from_seed("Charlie//stash"),
+                    get_account_id_from_seed("Dave//stash"),
+                    get_account_id_from_seed("Eve//stash"),
+                    get_account_id_from_seed("Ferdie//stash"),
+                ])
+            },
+            // Bootnodes
+            vec![],
+            // Telemetry
+            None,
+            // Protocol ID
+            Some("template-local"),
+            None,
+            // Properties
+            Some(chain_spec_properties()),
+            // Extensions
+            None,
+        )
+    }
+
+    pub fn gemini_3a_config() -> ExecutionChainSpec<GenesisConfig> {
+        ExecutionChainSpec::from_genesis(
+            // Name
+            "Subspace Gemini 3a Core Payments Domain",
+            // ID
+            "subspace_gemini_3a_core_payments_domain",
+            ChainType::Local,
+            move || {
+                testnet_genesis(vec![
+                    // Genesis executor
+                    AccountId::from_ss58check("5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ")
+                        .expect("Wrong executor account address"),
+                ])
+            },
+            // Bootnodes
+            vec![],
+            // Telemetry
+            None,
+            // Protocol ID
+            Some("subspace-gemini-3a-core-payments-domain"),
+            None,
+            // Properties
+            Some(chain_spec_properties()),
+            // Extensions
+            None,
+        )
+    }
+
+    fn testnet_genesis(endowed_accounts: Vec<AccountId>) -> GenesisConfig {
+        GenesisConfig {
+            system: SystemConfig {
+                code: WASM_BINARY
+                    .expect("WASM binary was not build, please build it!")
+                    .to_vec(),
+            },
+            transaction_payment: Default::default(),
+            balances: BalancesConfig {
+                balances: endowed_accounts
+                    .iter()
+                    .cloned()
+                    .map(|k| (k, 1_000_000 * SSC))
+                    .collect(),
+            },
+        }
     }
 }

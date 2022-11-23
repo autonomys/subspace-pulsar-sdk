@@ -8140,6 +8140,7 @@ dependencies = [
  "blake2-rfc",
  "bytesize",
  "clap",
+ "core-payments-domain-runtime",
  "derive_more",
  "event-listener-primitives",
  "frame-support",
