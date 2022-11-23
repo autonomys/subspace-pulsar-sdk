@@ -1,10 +1,4 @@
-use std::{
-    collections::HashMap,
-    io,
-    num::NonZeroUsize,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{collections::HashMap, io, num::NonZeroUsize, path::PathBuf, sync::Arc};
 
 use anyhow::Context;
 use bytesize::ByteSize;
@@ -21,6 +15,44 @@ use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 
 use crate::{Node, PublicKey};
+
+/// Description of the cache
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct CacheDescription {
+    /// Path of the plot
+    pub directory: PathBuf,
+    /// Space which you want to pledge
+    pub space_pledged: ByteSize,
+}
+
+const MIN_CACHE_SIZE: ByteSize = ByteSize::mib(1);
+
+/// Error type for cache description constructor
+#[derive(Debug, Clone, Copy, thiserror::Error)]
+#[error("Cache should be larger than {MIN_CACHE_SIZE}")]
+pub struct CacheTooSmall;
+
+impl CacheDescription {
+    /// Construct Plot description
+    pub fn new(
+        directory: impl Into<PathBuf>,
+        space_pledged: ByteSize,
+    ) -> Result<Self, CacheTooSmall> {
+        if space_pledged < MIN_CACHE_SIZE {
+            return Err(CacheTooSmall);
+        }
+        Ok(Self {
+            directory: directory.into(),
+            space_pledged,
+        })
+    }
+
+    /// Wipe all the data from the plot
+    pub async fn wipe(self) -> io::Result<()> {
+        tokio::fs::remove_dir_all(self.directory).await
+    }
+}
 
 /// Description of the plot
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,8 +101,6 @@ impl Default for DSNRecordsCacheSize {
 pub struct Builder {
     listen_on: Vec<Multiaddr>,
     bootstrap_nodes: Vec<Multiaddr>,
-    dsn_records_cache_db: Option<PathBuf>,
-    dsn_records_cache_size: DSNRecordsCacheSize,
 }
 
 /// Build Error
@@ -123,22 +153,12 @@ async fn configure_dsn(
     bootstrap_nodes: Vec<Multiaddr>,
     record_cache_size: NonZeroUsize,
     readers_and_pieces: &Arc<std::sync::Mutex<Option<ReadersAndPieces>>>,
-) -> Result<
-    (
-        Option<DSNNode>,
-        Option<DSNNodeRunner<ConfiguredRecordStore>>,
-    ),
-    BuildError,
-> {
+) -> Result<(DSNNode, DSNNodeRunner<ConfiguredRecordStore>), BuildError> {
     use subspace_networking::{
         BootstrappedNetworkingParameters, Config, CustomRecordStore,
         LimitedSizeRecordStorageWrapper, MemoryProviderStorage, ParityDbRecordStorage,
         PieceByHashRequestHandler, PieceByHashResponse, PieceKey,
     };
-
-    if !listen_on.is_empty() {
-        return Ok((None, None));
-    }
 
     let weak_readers_and_pieces = Arc::downgrade(readers_and_pieces);
 
@@ -184,7 +204,6 @@ async fn configure_dsn(
 
     subspace_networking::create(config)
         .await
-        .map(|(node, node_runner)| (Some(node), Some(node_runner)))
         .map_err(Into::into)
 }
 
@@ -206,24 +225,13 @@ impl Builder {
         self
     }
 
-    /// Path to dsn records cache. BEWARE: DSN is disabled if you don't supply this
-    pub fn dsn_records_cache_db(mut self, path: impl AsRef<Path>) -> Self {
-        self.dsn_records_cache_db = Some(path.as_ref().to_owned());
-        self
-    }
-
-    /// Set dsn records cache size
-    pub fn dsn_records_cache_size(mut self, size: NonZeroUsize) -> Self {
-        self.dsn_records_cache_size = DSNRecordsCacheSize(size);
-        self
-    }
-
     /// Open and start farmer
     pub async fn build(
         self,
         reward_address: PublicKey,
         node: Node,
         plots: &[PlotDescription],
+        cache: CacheDescription,
     ) -> Result<Farmer, BuildError> {
         if plots.is_empty() {
             return Err(BuildError::NoPlotsSupplied);
@@ -231,24 +239,29 @@ impl Builder {
         let Self {
             listen_on,
             bootstrap_nodes,
-            dsn_records_cache_db,
-            dsn_records_cache_size: DSNRecordsCacheSize(dsn_records_cache_size),
         } = self;
+        let bootstrap_nodes = if bootstrap_nodes.is_empty() {
+            use subspace_farmer::RpcClient;
+
+            node.farmer_app_info()
+                .await
+                .map_err(BuildError::RPCError)?
+                .dsn_bootstrap_nodes
+        } else {
+            bootstrap_nodes
+        };
 
         let mut single_disk_plots = Vec::with_capacity(plots.len());
         let mut plot_info = HashMap::with_capacity(plots.len());
-        let (dsn_node, dsn_node_runner) = if let Some(dsn_records_cache_db) = dsn_records_cache_db {
-            configure_dsn(
-                dsn_records_cache_db,
-                listen_on,
-                bootstrap_nodes,
-                dsn_records_cache_size,
-                &Arc::new(std::sync::Mutex::new(None)),
-            )
-            .await?
-        } else {
-            (None, None)
-        };
+        let (dsn_node, mut dsn_node_runner) = configure_dsn(
+            cache.directory,
+            listen_on,
+            bootstrap_nodes,
+            NonZeroUsize::new(cache.space_pledged.as_u64() as usize)
+                .expect("Always more than 1Mib"),
+            &Arc::new(std::sync::Mutex::new(None)),
+        )
+        .await?;
 
         for description in plots {
             description.check_too_small()?;
@@ -302,11 +315,9 @@ impl Builder {
             .map(SingleDiskPlot::run)
             .collect::<FuturesUnordered<_>>();
 
-        if let Some(mut node_runner) = dsn_node_runner {
-            tokio::spawn(async move {
-                node_runner.run().await;
-            });
-        }
+        tokio::spawn(async move {
+            dsn_node_runner.run().await;
+        });
 
         let (cmd_sender, cmd_receiver) = oneshot::channel::<()>();
 
@@ -617,8 +628,14 @@ mod tests {
             plot_dir.as_ref(),
             bytesize::ByteSize::mib(32),
         )];
+        let cache_dir = TempDir::new().unwrap();
         let farmer = Farmer::builder()
-            .build(Default::default(), node.clone(), &plots)
+            .build(
+                Default::default(),
+                node.clone(),
+                &plots,
+                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
+            )
             .await
             .unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -648,7 +665,7 @@ mod tests {
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
-        let plot_dir = TempDir::new().unwrap();
+        let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let n_sectors = 1;
         let farmer = Farmer::builder()
             .build(
@@ -658,6 +675,7 @@ mod tests {
                     plot_dir.as_ref(),
                     bytesize::ByteSize::mib(32 * n_sectors),
                 )],
+                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
             )
             .await
             .unwrap();
@@ -687,7 +705,7 @@ mod tests {
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
-        let plot_dir = TempDir::new().unwrap();
+        let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
@@ -696,6 +714,7 @@ mod tests {
                     plot_dir.as_ref(),
                     bytesize::ByteSize::mib(32),
                 )],
+                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
             )
             .await
             .unwrap();
@@ -724,7 +743,7 @@ mod tests {
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
-        let plot_dir = TempDir::new().unwrap();
+        let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
@@ -733,6 +752,7 @@ mod tests {
                     plot_dir.as_ref(),
                     bytesize::ByteSize::mib(32),
                 )],
+                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
             )
             .await
             .unwrap();

@@ -95,9 +95,11 @@ pub struct Builder {
     blocks_pruning: BlocksPruningInner,
     state_pruning: Option<PruningMode>,
     listen_on: Vec<Multiaddr>,
+    dsn_listen_on: Vec<Multiaddr>,
     boot_nodes: Vec<MultiaddrWithPeerId>,
     rpc_methods: RpcMethods,
     execution_strategies: ExecutionStrategies,
+    piece_cache_size: Option<bytesize::ByteSize>,
 }
 
 impl Builder {
@@ -156,6 +158,18 @@ impl Builder {
         self
     }
 
+    /// Listen on some address for the DSN
+    pub fn dsn_listen_on(mut self, listen_on: Vec<Multiaddr>) -> Self {
+        self.dsn_listen_on = listen_on;
+        self
+    }
+
+    /// Set cache for pieces
+    pub fn piece_cache_size(mut self, piece_cache_size: bytesize::ByteSize) -> Self {
+        self.piece_cache_size = Some(piece_cache_size);
+        self
+    }
+
     /// Add boot nodes apart from ones from chainspec
     pub fn boot_nodes(mut self, boot_nodes: Vec<MultiaddrWithPeerId>) -> Self {
         self.boot_nodes = boot_nodes;
@@ -188,6 +202,8 @@ impl Builder {
             boot_nodes,
             rpc_methods,
             execution_strategies,
+            dsn_listen_on,
+            piece_cache_size,
         } = self;
 
         let base_path = BasePath::new(directory.as_ref());
@@ -219,6 +235,28 @@ impl Builder {
         network.default_peers_set.in_peers = 25 + 100;
         let (keystore_remote, keystore) = (None, KeystoreConfig::InMemory);
         let telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
+
+        let dsn_config = {
+            let keypair = network
+                .node_key
+                .clone()
+                .into_keypair()
+                .context("Failed to convert network keypair")?;
+            let bootstrap_nodes = chain_spec
+                .properties()
+                .get("dsnBootstrapNodes")
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .context("Failed to decode DSN bootsrap nodes")?
+                .unwrap_or_default();
+
+            subspace_service::DsnConfig {
+                bootstrap_nodes,
+                listen_on: dsn_listen_on,
+                keypair,
+            }
+        };
 
         // Default value are used for many of parameters
         let configuration = SubspaceConfiguration {
@@ -280,7 +318,10 @@ impl Builder {
                 rpc_max_subs_per_conn: None,
             },
             force_new_slot_notifications: false,
-            dsn_config: None,
+            dsn_config,
+            piece_cache_size: piece_cache_size
+                .unwrap_or(bytesize::ByteSize::gib(1))
+                .as_u64(),
         };
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);
@@ -550,9 +591,10 @@ impl Node {
             ..
         } = client.chain_info();
         let FarmerProtocolInfo { total_pieces, .. } = self
-            .farmer_protocol_info()
+            .farmer_app_info()
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(anyhow::Error::msg)?
+            .protocol_info;
         Ok(Info {
             chain: ChainInfo { genesis_hash },
             best_block: (best_hash, best_number),
@@ -622,19 +664,19 @@ mod farmer_rpc_client {
     use std::pin::Pin;
 
     use subspace_archiving::archiver::ArchivedSegment;
-    use subspace_core_primitives::{Piece, PieceIndex, RecordsRoot, SegmentIndex};
+    use subspace_core_primitives::{RecordsRoot, SegmentIndex};
     use subspace_farmer::rpc_client::{Error, RpcClient};
-    use subspace_farmer_components::FarmerProtocolInfo;
+    use subspace_rpc_primitives::FarmerAppInfo;
     use subspace_rpc_primitives::{
         RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
     };
 
     #[async_trait::async_trait]
     impl RpcClient for Node {
-        async fn farmer_protocol_info(&self) -> Result<FarmerProtocolInfo, Error> {
+        async fn farmer_app_info(&self) -> Result<FarmerAppInfo, Error> {
             Ok(self
                 .rpc_handle
-                .call("subspace_getFarmerProtocolInfo", &[] as &[()])
+                .call("subspace_getFarmerAppInfo", &[] as &[()])
                 .await?)
         }
 
@@ -698,13 +740,6 @@ mod farmer_rpc_client {
                 .call("subspace_recordsRoots", [segment_indexes])
                 .await?)
         }
-
-        async fn get_piece(&self, piece_index: PieceIndex) -> Result<Option<Piece>, Error> {
-            Ok(self
-                .rpc_handle
-                .call("subspace_getPiece", [piece_index])
-                .await?)
-        }
     }
 }
 
@@ -713,7 +748,7 @@ mod tests {
     use subspace_farmer::RpcClient;
     use tempfile::TempDir;
 
-    use crate::{Farmer, PlotDescription};
+    use crate::{farmer::CacheDescription, Farmer, PlotDescription};
 
     use super::*;
 
@@ -734,7 +769,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(node.farmer_protocol_info().await.is_ok());
+        assert!(node.farmer_app_info().await.is_ok());
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -746,13 +781,18 @@ mod tests {
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
-        let plot_dir = TempDir::new().unwrap();
+        let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let plots = [PlotDescription::new(
             plot_dir.as_ref(),
             bytesize::ByteSize::mib(32),
         )];
         let farmer = Farmer::builder()
-            .build(Default::default(), node.clone(), &plots)
+            .build(
+                Default::default(),
+                node.clone(),
+                &plots,
+                CacheDescription::new(cache_dir.as_ref(), bytesize::ByteSize::mib(32)).unwrap(),
+            )
             .await
             .unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -774,7 +814,7 @@ mod tests {
             .build(dir.path(), chain.clone())
             .await
             .unwrap();
-        let plot_dir = TempDir::new().unwrap();
+        let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
@@ -783,6 +823,7 @@ mod tests {
                     plot_dir.as_ref(),
                     bytesize::ByteSize::gb(1),
                 )],
+                CacheDescription::new(cache_dir.as_ref(), bytesize::ByteSize::mib(32)).unwrap(),
             )
             .await
             .unwrap();
