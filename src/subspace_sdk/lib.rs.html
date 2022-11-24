@@ -196,6 +196,12 @@
 <a href="#196" id="196">196</a>
 <a href="#197" id="197">197</a>
 <a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Subspace SDK for easy running of both Subspace node and farmer
 
 </span><span class="attr">#![deny(missing_docs)]
@@ -364,6 +370,7 @@
     <span class="kw">use </span>subspace_farmer::RpcClient;
     <span class="kw">use </span>tempfile::TempDir;
 
+    <span class="kw">use </span><span class="kw">super</span>::farmer::CacheDescription;
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
@@ -378,13 +385,18 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>slot_info_sub = node.subscribe_slot_info().<span class="kw">await</span>.unwrap();
 
-        <span class="kw">let </span>dir = TempDir::new().unwrap();
+        <span class="kw">let </span>(dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         <span class="kw">let </span>plot_descriptions = [PlotDescription::new(
             dir.path(),
             bytesize::ByteSize::mib(<span class="number">32</span>),
         )];
         <span class="kw">let </span>_farmer = Farmer::builder()
-            .build(Default::default(), node.clone(), <span class="kw-2">&amp;</span>plot_descriptions)
+            .build(
+                Default::default(),
+                node.clone(),
+                <span class="kw-2">&amp;</span>plot_descriptions,
+                CacheDescription::new(cache_dir.as_ref(), bytesize::ByteSize::mib(<span class="number">32</span>)).unwrap(),
+            )
             .<span class="kw">await
             </span>.unwrap();
 

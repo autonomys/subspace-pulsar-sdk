@@ -757,18 +757,35 @@
 <a href="#757" id="757">757</a>
 <a href="#758" id="758">758</a>
 <a href="#759" id="759">759</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{
-    collections::HashMap,
-    io,
-    num::NonZeroUsize,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, io, num::NonZeroUsize, path::PathBuf, sync::Arc};
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>bytesize::ByteSize;
 <span class="kw">use </span>futures::{prelude::<span class="kw-2">*</span>, stream::FuturesUnordered};
 <span class="kw">use </span>libp2p_core::Multiaddr;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>subspace_core_primitives::{PieceIndexHash, SectorIndex, PLOT_SECTOR_SIZE};
 <span class="kw">use </span>subspace_farmer::single_disk_plot::{
     piece_reader::PieceReader, SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId,
@@ -780,6 +797,45 @@
 <span class="kw">use </span>tokio::sync::{oneshot, watch, Mutex};
 
 <span class="kw">use crate</span>::{Node, PublicKey};
+
+<span class="doccomment">/// Description of the cache
+</span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[non_exhaustive]
+</span><span class="kw">pub struct </span>CacheDescription {
+    <span class="doccomment">/// Path to the cache description
+    </span><span class="kw">pub </span>directory: PathBuf,
+    <span class="doccomment">/// Space which you want to dedicate
+    </span><span class="attr">#[serde(with = <span class="string">&quot;bytesize_serde&quot;</span>)]
+    </span><span class="kw">pub </span>space_dedicated: ByteSize,
+}
+
+<span class="kw">const </span>MIN_CACHE_SIZE: ByteSize = ByteSize::mib(<span class="number">1</span>);
+
+<span class="doccomment">/// Error type for cache description constructor
+</span><span class="attr">#[derive(Debug, Clone, Copy, thiserror::Error)]
+#[error(<span class="string">&quot;Cache should be larger than {MIN_CACHE_SIZE}&quot;</span>)]
+</span><span class="kw">pub struct </span>CacheTooSmall;
+
+<span class="kw">impl </span>CacheDescription {
+    <span class="doccomment">/// Construct Plot description
+    </span><span class="kw">pub fn </span>new(
+        directory: <span class="kw">impl </span>Into&lt;PathBuf&gt;,
+        space_dedicated: ByteSize,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CacheTooSmall&gt; {
+        <span class="kw">if </span>space_dedicated &lt; MIN_CACHE_SIZE {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(CacheTooSmall);
+        }
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            directory: directory.into(),
+            space_dedicated,
+        })
+    }
+
+    <span class="doccomment">/// Wipe all the data from the plot
+    </span><span class="kw">pub async fn </span>wipe(<span class="self">self</span>) -&gt; io::Result&lt;()&gt; {
+        tokio::fs::remove_dir_all(<span class="self">self</span>.directory).<span class="kw">await
+    </span>}
+}
 
 <span class="doccomment">/// Description of the plot
 </span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq)]
@@ -828,8 +884,6 @@
 </span><span class="kw">pub struct </span>Builder {
     listen_on: Vec&lt;Multiaddr&gt;,
     bootstrap_nodes: Vec&lt;Multiaddr&gt;,
-    dsn_records_cache_db: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
-    dsn_records_cache_size: DSNRecordsCacheSize,
 }
 
 <span class="doccomment">/// Build Error
@@ -882,22 +936,12 @@
     bootstrap_nodes: Vec&lt;Multiaddr&gt;,
     record_cache_size: NonZeroUsize,
     readers_and_pieces: <span class="kw-2">&amp;</span>Arc&lt;std::sync::Mutex&lt;<span class="prelude-ty">Option</span>&lt;ReadersAndPieces&gt;&gt;&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;
-    (
-        <span class="prelude-ty">Option</span>&lt;DSNNode&gt;,
-        <span class="prelude-ty">Option</span>&lt;DSNNodeRunner&lt;ConfiguredRecordStore&gt;&gt;,
-    ),
-    BuildError,
-&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;(DSNNode, DSNNodeRunner&lt;ConfiguredRecordStore&gt;), BuildError&gt; {
     <span class="kw">use </span>subspace_networking::{
         BootstrappedNetworkingParameters, Config, CustomRecordStore,
         LimitedSizeRecordStorageWrapper, MemoryProviderStorage, ParityDbRecordStorage,
         PieceByHashRequestHandler, PieceByHashResponse, PieceKey,
     };
-
-    <span class="kw">if </span>!listen_on.is_empty() {
-        <span class="kw">return </span><span class="prelude-val">Ok</span>((<span class="prelude-val">None</span>, <span class="prelude-val">None</span>));
-    }
 
     <span class="kw">let </span>weak_readers_and_pieces = Arc::downgrade(readers_and_pieces);
 
@@ -943,8 +987,7 @@
 
     subspace_networking::create(config)
         .<span class="kw">await
-        </span>.map(|(node, node_runner)| (<span class="prelude-val">Some</span>(node), <span class="prelude-val">Some</span>(node_runner)))
-        .map_err(Into::into)
+        </span>.map_err(Into::into)
 }
 
 <span class="kw">impl </span>Builder {
@@ -965,24 +1008,13 @@
         <span class="self">self
     </span>}
 
-    <span class="doccomment">/// Path to dsn records cache. BEWARE: DSN is disabled if you don&#39;t supply this
-    </span><span class="kw">pub fn </span>dsn_records_cache_db(<span class="kw-2">mut </span><span class="self">self</span>, path: <span class="kw">impl </span>AsRef&lt;Path&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.dsn_records_cache_db = <span class="prelude-val">Some</span>(path.as_ref().to_owned());
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Set dsn records cache size
-    </span><span class="kw">pub fn </span>dsn_records_cache_size(<span class="kw-2">mut </span><span class="self">self</span>, size: NonZeroUsize) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.dsn_records_cache_size = DSNRecordsCacheSize(size);
-        <span class="self">self
-    </span>}
-
     <span class="doccomment">/// Open and start farmer
     </span><span class="kw">pub async fn </span>build(
         <span class="self">self</span>,
         reward_address: PublicKey,
         node: Node,
         plots: <span class="kw-2">&amp;</span>[PlotDescription],
+        cache: CacheDescription,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Farmer, BuildError&gt; {
         <span class="kw">if </span>plots.is_empty() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(BuildError::NoPlotsSupplied);
@@ -990,24 +1022,29 @@
         <span class="kw">let </span><span class="self">Self </span>{
             listen_on,
             bootstrap_nodes,
-            dsn_records_cache_db,
-            dsn_records_cache_size: DSNRecordsCacheSize(dsn_records_cache_size),
         } = <span class="self">self</span>;
+        <span class="kw">let </span>bootstrap_nodes = <span class="kw">if </span>bootstrap_nodes.is_empty() {
+            <span class="kw">use </span>subspace_farmer::RpcClient;
+
+            node.farmer_app_info()
+                .<span class="kw">await
+                </span>.map_err(BuildError::RPCError)<span class="question-mark">?
+                </span>.dsn_bootstrap_nodes
+        } <span class="kw">else </span>{
+            bootstrap_nodes
+        };
 
         <span class="kw">let </span><span class="kw-2">mut </span>single_disk_plots = Vec::with_capacity(plots.len());
         <span class="kw">let </span><span class="kw-2">mut </span>plot_info = HashMap::with_capacity(plots.len());
-        <span class="kw">let </span>(dsn_node, dsn_node_runner) = <span class="kw">if let </span><span class="prelude-val">Some</span>(dsn_records_cache_db) = dsn_records_cache_db {
-            configure_dsn(
-                dsn_records_cache_db,
-                listen_on,
-                bootstrap_nodes,
-                dsn_records_cache_size,
-                <span class="kw-2">&amp;</span>Arc::new(std::sync::Mutex::new(<span class="prelude-val">None</span>)),
-            )
-            .<span class="kw">await</span><span class="question-mark">?
-        </span>} <span class="kw">else </span>{
-            (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)
-        };
+        <span class="kw">let </span>(dsn_node, <span class="kw-2">mut </span>dsn_node_runner) = configure_dsn(
+            cache.directory,
+            listen_on,
+            bootstrap_nodes,
+            NonZeroUsize::new(cache.space_dedicated.as_u64() <span class="kw">as </span>usize)
+                .expect(<span class="string">&quot;Always more than 1Mib&quot;</span>),
+            <span class="kw-2">&amp;</span>Arc::new(std::sync::Mutex::new(<span class="prelude-val">None</span>)),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">for </span>description <span class="kw">in </span>plots {
             description.check_too_small()<span class="question-mark">?</span>;
@@ -1061,11 +1098,9 @@
             .map(SingleDiskPlot::run)
             .collect::&lt;FuturesUnordered&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>node_runner) = dsn_node_runner {
-            tokio::spawn(<span class="kw">async move </span>{
-                node_runner.run().<span class="kw">await</span>;
-            });
-        }
+        tokio::spawn(<span class="kw">async move </span>{
+            dsn_node_runner.run().<span class="kw">await</span>;
+        });
 
         <span class="kw">let </span>(cmd_sender, cmd_receiver) = oneshot::channel::&lt;()&gt;();
 
@@ -1376,8 +1411,14 @@
             plot_dir.as_ref(),
             bytesize::ByteSize::mib(<span class="number">32</span>),
         )];
+        <span class="kw">let </span>cache_dir = TempDir::new().unwrap();
         <span class="kw">let </span>farmer = Farmer::builder()
-            .build(Default::default(), node.clone(), <span class="kw-2">&amp;</span>plots)
+            .build(
+                Default::default(),
+                node.clone(),
+                <span class="kw-2">&amp;</span>plots,
+                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(<span class="number">32</span>)).unwrap(),
+            )
             .<span class="kw">await
             </span>.unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
@@ -1407,7 +1448,7 @@
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
             </span>.unwrap();
-        <span class="kw">let </span>plot_dir = TempDir::new().unwrap();
+        <span class="kw">let </span>(plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         <span class="kw">let </span>n_sectors = <span class="number">1</span>;
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
@@ -1417,6 +1458,7 @@
                     plot_dir.as_ref(),
                     bytesize::ByteSize::mib(<span class="number">32 </span>* n_sectors),
                 )],
+                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(<span class="number">32</span>)).unwrap(),
             )
             .<span class="kw">await
             </span>.unwrap();
@@ -1446,7 +1488,7 @@
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
             </span>.unwrap();
-        <span class="kw">let </span>plot_dir = TempDir::new().unwrap();
+        <span class="kw">let </span>(plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
                 Default::default(),
@@ -1455,6 +1497,7 @@
                     plot_dir.as_ref(),
                     bytesize::ByteSize::mib(<span class="number">32</span>),
                 )],
+                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(<span class="number">32</span>)).unwrap(),
             )
             .<span class="kw">await
             </span>.unwrap();
@@ -1483,7 +1526,7 @@
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
             </span>.unwrap();
-        <span class="kw">let </span>plot_dir = TempDir::new().unwrap();
+        <span class="kw">let </span>(plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
                 Default::default(),
@@ -1492,6 +1535,7 @@
                     plot_dir.as_ref(),
                     bytesize::ByteSize::mib(<span class="number">32</span>),
                 )],
+                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(<span class="number">32</span>)).unwrap(),
             )
             .<span class="kw">await
             </span>.unwrap();
