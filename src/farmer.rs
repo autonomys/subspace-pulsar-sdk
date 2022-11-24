@@ -4,6 +4,7 @@ use anyhow::Context;
 use bytesize::ByteSize;
 use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p_core::Multiaddr;
+use serde::{Deserialize, Serialize};
 use subspace_core_primitives::{PieceIndexHash, SectorIndex, PLOT_SECTOR_SIZE};
 use subspace_farmer::single_disk_plot::{
     piece_reader::PieceReader, SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId,
@@ -17,12 +18,13 @@ use tokio::sync::{oneshot, watch, Mutex};
 use crate::{Node, PublicKey};
 
 /// Description of the cache
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[non_exhaustive]
 pub struct CacheDescription {
-    /// Path of the plot
+    /// Path to the cache description
     pub directory: PathBuf,
     /// Space which you want to pledge
+    #[serde(with = "bytesize_serde")]
     pub space_pledged: ByteSize,
 }
 
