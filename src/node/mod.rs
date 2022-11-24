@@ -250,10 +250,15 @@ impl Builder {
                 .transpose()
                 .context("Failed to decode DSN bootsrap nodes")?
                 .unwrap_or_default();
+            let listen_on = if dsn_listen_on.is_empty() {
+                vec!["/ip4/0.0.0.0/tcp/0".parse().expect("Always valid")]
+            } else {
+                dsn_listen_on
+            };
 
             subspace_service::DsnConfig {
                 bootstrap_nodes,
-                listen_on: dsn_listen_on,
+                listen_on,
                 keypair,
             }
         };
