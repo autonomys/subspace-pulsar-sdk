@@ -35,6 +35,54 @@ pub use sc_state_db::Constraints;
 
 pub mod chain_spec;
 
+pub use builder::Builder;
+
+mod builder {
+    use super::*;
+
+    /// Node builder
+    #[derive(Debug, Clone, derive_builder::Builder)]
+    #[builder(pattern = "owned", build_fn(name = "_build"), name = "Builder")]
+    pub struct Config {
+        /// Node name
+        #[builder(setter(into, strip_option), default)]
+        pub name: Option<String>,
+        /// Force block authoring
+        #[builder(default)]
+        pub force_authoring: bool,
+        /// Force node to think it is synced
+        #[builder(default)]
+        pub force_synced: bool,
+        /// Set node role
+        #[builder(default)]
+        pub role: Role,
+        /// Blocks pruning options
+        #[builder(default = "BlocksPruning::KeepAll")]
+        pub blocks_pruning: BlocksPruning,
+        /// State pruning options
+        #[builder(setter(strip_option), default)]
+        pub state_pruning: Option<PruningMode>,
+        /// Listen on some address for other nodes
+        #[builder(default)]
+        pub listen_on: Vec<Multiaddr>,
+        /// Listen on some address for DSN
+        #[builder(default)]
+        pub dsn_listen_on: Vec<Multiaddr>,
+        /// RPC methods settings
+        #[builder(default)]
+        pub rpc_methods: RpcMethods,
+        /// Boot nodes
+        #[builder(default)]
+        pub boot_nodes: Vec<MultiaddrWithPeerId>,
+        /// Set execution strategies
+        #[builder(default)]
+        pub execution_strategies: ExecutionStrategies,
+        /// Set piece cache size
+        #[builder(default = "bytesize::ByteSize::gib(1)")]
+        pub piece_cache_size: bytesize::ByteSize,
+    }
+}
+
 /// Role of the local node.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub enum Role {
@@ -51,14 +99,6 @@ impl From<Role> for sc_service::Role {
             Role::Full => sc_service::Role::Full,
             Role::Authority => sc_service::Role::Authority,
         }
-    }
-}
-
-struct BlocksPruningInner(BlocksPruning);
-
-impl Default for BlocksPruningInner {
-    fn default() -> Self {
-        Self(BlocksPruning::KeepAll)
     }
 }
 
@@ -85,101 +125,10 @@ impl From<RpcMethods> for sc_service::RpcMethods {
     }
 }
 
-/// Node builder
-#[derive(Default)]
-pub struct Builder {
-    name: Option<String>,
-    force_authoring: bool,
-    force_synced: bool,
-    role: Role,
-    blocks_pruning: BlocksPruningInner,
-    state_pruning: Option<PruningMode>,
-    listen_on: Vec<Multiaddr>,
-    dsn_listen_on: Vec<Multiaddr>,
-    boot_nodes: Vec<MultiaddrWithPeerId>,
-    rpc_methods: RpcMethods,
-    execution_strategies: ExecutionStrategies,
-    piece_cache_size: Option<bytesize::ByteSize>,
-}
-
 impl Builder {
     /// New builder
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Name of the node in the telemetry
-    pub fn name(mut self, name: impl AsRef<str>) -> Self {
-        if !name.as_ref().is_empty() {
-            self.name = Some(name.as_ref().to_owned());
-        }
-        self
-    }
-
-    /// Force authoring of the blocks
-    pub fn force_authoring(mut self, force_authoring: bool) -> Self {
-        self.force_authoring = force_authoring;
-        self
-    }
-
-    /// Force node to think it is synced
-    pub fn force_synced(mut self, force_synced: bool) -> Self {
-        self.force_synced = force_synced;
-        self
-    }
-
-    /// Role of the node in the consensus
-    pub fn role(mut self, role: Role) -> Self {
-        self.role = role;
-        self
-    }
-
-    /// Set blocks pruning settings
-    pub fn blocks_pruning(mut self, pruning: BlocksPruning) -> Self {
-        self.blocks_pruning = BlocksPruningInner(pruning);
-        self
-    }
-
-    /// Set state pruning settings
-    pub fn state_pruning(mut self, pruning: Option<PruningMode>) -> Self {
-        self.state_pruning = pruning;
-        self
-    }
-
-    /// RPC methods settings
-    pub fn rpc_methods(mut self, rpc_methods: RpcMethods) -> Self {
-        self.rpc_methods = rpc_methods;
-        self
-    }
-
-    /// Listen on some address
-    pub fn listen_on(mut self, listen_on: Vec<Multiaddr>) -> Self {
-        self.listen_on = listen_on;
-        self
-    }
-
-    /// Listen on some address for the DSN
-    pub fn dsn_listen_on(mut self, listen_on: Vec<Multiaddr>) -> Self {
-        self.dsn_listen_on = listen_on;
-        self
-    }
-
-    /// Set cache for pieces
-    pub fn piece_cache_size(mut self, piece_cache_size: bytesize::ByteSize) -> Self {
-        self.piece_cache_size = Some(piece_cache_size);
-        self
-    }
-
-    /// Add boot nodes apart from ones from chainspec
-    pub fn boot_nodes(mut self, boot_nodes: Vec<MultiaddrWithPeerId>) -> Self {
-        self.boot_nodes = boot_nodes;
-        self
-    }
-
-    /// Set block execution strategies for the node
-    pub fn execution_strategies(mut self, execution_strategies: ExecutionStrategies) -> Self {
-        self.execution_strategies = execution_strategies;
-        self
     }
 
     /// Start a node with supplied parameters
@@ -191,12 +140,12 @@ impl Builder {
         const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
         const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
 
-        let Self {
+        let builder::Config {
             name,
             force_authoring,
             force_synced,
             role,
-            blocks_pruning: BlocksPruningInner(blocks_pruning),
+            blocks_pruning,
             state_pruning,
             listen_on,
             boot_nodes,
@@ -204,7 +153,7 @@ impl Builder {
             execution_strategies,
             dsn_listen_on,
             piece_cache_size,
-        } = self;
+        } = self._build().expect("Infallible");
 
         let base_path = BasePath::new(directory.as_ref());
         let impl_name = env!("CARGO_PKG_NAME").to_owned();
@@ -324,9 +273,7 @@ impl Builder {
             },
             force_new_slot_notifications: false,
             dsn_config,
-            piece_cache_size: piece_cache_size
-                .unwrap_or(bytesize::ByteSize::gib(1))
-                .as_u64(),
+            piece_cache_size: piece_cache_size.as_u64(),
         };
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);

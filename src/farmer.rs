@@ -17,6 +17,8 @@ use tokio::sync::{oneshot, watch, Mutex};
 
 use crate::{Node, PublicKey};
 
+pub use builder::Builder;
+
 /// Description of the cache
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[non_exhaustive]
@@ -90,19 +92,22 @@ impl PlotDescription {
     }
 }
 
-struct DSNRecordsCacheSize(NonZeroUsize);
+mod builder {
+    use libp2p_core::Multiaddr;
 
-impl Default for DSNRecordsCacheSize {
-    fn default() -> Self {
-        Self(NonZeroUsize::new(32678).unwrap())
+    /// Technical type which stores all
+    #[derive(Debug, derive_builder::Builder)]
+    #[builder(pattern = "owned", build_fn(name = "_build"), name = "Builder")]
+    pub struct Configuration {
+        /// Listen on
+        #[builder(default = "vec![]")]
+        #[builder(setter(strip_option))]
+        pub listen_on: Vec<Multiaddr>,
+        /// Bootstrap nodes
+        #[builder(setter(strip_option))]
+        #[builder(default = "vec![]")]
+        pub bootstrap_nodes: Vec<Multiaddr>,
     }
-}
-
-/// Farmer builder
-#[derive(Default)]
-pub struct Builder {
-    listen_on: Vec<Multiaddr>,
-    bootstrap_nodes: Vec<Multiaddr>,
 }
 
 /// Build Error
@@ -210,23 +215,6 @@ async fn configure_dsn(
 }
 
 impl Builder {
-    /// Construct new builder
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// DSN would listen on the addresses supplied
-    pub fn listen_on(mut self, multiaddrs: impl IntoIterator<Item = Multiaddr>) -> Self {
-        self.listen_on = multiaddrs.into_iter().collect();
-        self
-    }
-
-    /// Connect to those nodes apart from ones from chain spec
-    pub fn bootstrap_nodes(mut self, multiaddrs: impl IntoIterator<Item = Multiaddr>) -> Self {
-        self.bootstrap_nodes = multiaddrs.into_iter().collect();
-        self
-    }
-
     /// Open and start farmer
     pub async fn build(
         self,
@@ -235,13 +223,14 @@ impl Builder {
         plots: &[PlotDescription],
         cache: CacheDescription,
     ) -> Result<Farmer, BuildError> {
+        let builder::Configuration {
+            listen_on,
+            bootstrap_nodes,
+        } = self._build().expect("Build is infallible");
+
         if plots.is_empty() {
             return Err(BuildError::NoPlotsSupplied);
         }
-        let Self {
-            listen_on,
-            bootstrap_nodes,
-        } = self;
         let bootstrap_nodes = if bootstrap_nodes.is_empty() {
             use subspace_farmer::RpcClient;
 
@@ -560,7 +549,7 @@ impl Plot {
 impl Farmer {
     /// Farmer builder
     pub fn builder() -> Builder {
-        Builder::new()
+        Builder::default()
     }
 
     /// Gets plot info
