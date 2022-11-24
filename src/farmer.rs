@@ -23,9 +23,9 @@ use crate::{Node, PublicKey};
 pub struct CacheDescription {
     /// Path to the cache description
     pub directory: PathBuf,
-    /// Space which you want to pledge
+    /// Space which you want to dedicate
     #[serde(with = "bytesize_serde")]
-    pub space_pledged: ByteSize,
+    pub space_dedicated: ByteSize,
 }
 
 const MIN_CACHE_SIZE: ByteSize = ByteSize::mib(1);
@@ -39,14 +39,14 @@ impl CacheDescription {
     /// Construct Plot description
     pub fn new(
         directory: impl Into<PathBuf>,
-        space_pledged: ByteSize,
+        space_dedicated: ByteSize,
     ) -> Result<Self, CacheTooSmall> {
-        if space_pledged < MIN_CACHE_SIZE {
+        if space_dedicated < MIN_CACHE_SIZE {
             return Err(CacheTooSmall);
         }
         Ok(Self {
             directory: directory.into(),
-            space_pledged,
+            space_dedicated,
         })
     }
 
@@ -259,7 +259,7 @@ impl Builder {
             cache.directory,
             listen_on,
             bootstrap_nodes,
-            NonZeroUsize::new(cache.space_pledged.as_u64() as usize)
+            NonZeroUsize::new(cache.space_dedicated.as_u64() as usize)
                 .expect("Always more than 1Mib"),
             &Arc::new(std::sync::Mutex::new(None)),
         )
