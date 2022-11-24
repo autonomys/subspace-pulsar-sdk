@@ -1,6 +1,8 @@
 use bytesize::ByteSize;
 use futures::StreamExt;
-use subspace_sdk::{chain_spec, Farmer, Node, PlotDescription, PublicKey};
+use subspace_sdk::{
+    chain_spec, farmer::CacheDescription, Farmer, Node, PlotDescription, PublicKey,
+};
 
 #[tokio::main]
 async fn main() {
@@ -19,7 +21,12 @@ async fn main() {
     let farmer: Farmer = Farmer::builder()
         // .ws_rpc("127.0.0.1:9955".parse().unwrap())
         // .listen_on("/ip4/0.0.0.0/tcp/40333".parse().unwrap())
-        .build(reward_address, node.clone(), &plots)
+        .build(
+            reward_address,
+            node.clone(),
+            &plots,
+            CacheDescription::new("cache", ByteSize::mib(100)).unwrap(),
+        )
         .await
         .expect("Failed to init a farmer");
 
@@ -66,6 +73,7 @@ async fn main() {
             reward_address,
             node.clone(),
             &[PlotDescription::new("plot", ByteSize::gb(10))],
+            CacheDescription::new("cache", ByteSize::mib(100)).unwrap(),
         )
         .await
         .expect("Failed to init a farmer");

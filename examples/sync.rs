@@ -4,23 +4,10 @@ use std::path::PathBuf;
 use bytesize::ByteSize;
 use clap::Parser;
 use sc_network_common::config::MultiaddrWithPeerId;
-use subspace_sdk::{chain_spec, Farmer, Node, PlotDescription, PublicKey};
+use subspace_sdk::{
+    chain_spec, farmer::CacheDescription, Farmer, Node, PlotDescription, PublicKey,
+};
 use tempfile::TempDir;
-
-#[derive(clap::Args, Debug)]
-struct NodeArgs {
-    /// Path to the plot
-    #[arg(short, long)]
-    plot: Option<PathBuf>,
-
-    /// Path to the node directory
-    #[arg(short, long)]
-    node: Option<PathBuf>,
-
-    /// Path to the chain spec
-    #[arg(short, long)]
-    spec: PathBuf,
-}
 
 #[derive(clap::Parser, Debug)]
 enum Args {
@@ -78,6 +65,10 @@ async fn main() -> anyhow::Result<()> {
             spec,
         } => {
             let chain_spec = serde_json::from_str(&tokio::fs::read_to_string(spec).await?)?;
+            let (plot_size, cache_size) = (
+                ByteSize::b(plot_size.as_u64() * 9 / 10),
+                ByteSize::b(plot_size.as_u64() / 10),
+            );
             let node = Node::builder()
                 .listen_on(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
                 .force_authoring(true)
@@ -86,11 +77,15 @@ async fn main() -> anyhow::Result<()> {
                 .build(node, chain_spec)
                 .await?;
 
-            let plots = [PlotDescription::new(plot, plot_size)];
+            let plots = [PlotDescription::new(plot.join("plot"), plot_size)];
             let _farmer: Farmer = Farmer::builder()
-                .build(PublicKey::from([13; 32]), node.clone(), &plots)
-                .await
-                .expect("Failed to init a farmer");
+                .build(
+                    PublicKey::from([13; 32]),
+                    node.clone(),
+                    &plots,
+                    CacheDescription::new(plot.join("cache"), cache_size)?,
+                )
+                .await?;
 
             let addr = node.listen_addresses().await?.into_iter().next().unwrap();
             tracing::info!(%addr, "Node listening at");

@@ -1,5 +1,7 @@
 use bytesize::ByteSize;
-use subspace_sdk::{chain_spec, Farmer, Node, PlotDescription, PublicKey};
+use subspace_sdk::{
+    chain_spec, farmer::CacheDescription, Farmer, Node, PlotDescription, PublicKey,
+};
 
 #[tokio::main]
 async fn main() {
@@ -15,7 +17,12 @@ async fn main() {
     let plots = [PlotDescription::new("plot", ByteSize::mb(100))];
     let farmer: Farmer = Farmer::builder()
         .listen_on(vec!["/ip4/0.0.0.0/tcp/40333".parse().unwrap()])
-        .build(PublicKey::from([13; 32]), node.clone(), &plots)
+        .build(
+            PublicKey::from([13; 32]),
+            node.clone(),
+            &plots,
+            CacheDescription::new("cache", ByteSize::mib(100)).unwrap(),
+        )
         .await
         .expect("Failed to init a farmer");
 
