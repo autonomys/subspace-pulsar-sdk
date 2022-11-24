@@ -35,24 +35,20 @@ pub use sc_state_db::Constraints;
 
 pub mod chain_spec;
 
-pub use builder::Builder;
+pub use builder::{Builder, DsnBuilder, NetworkBuilder, RpcBuilder};
 
 mod builder {
     use super::*;
+
+    use std::net::SocketAddr;
 
     /// Node builder
     #[derive(Debug, Clone, derive_builder::Builder)]
     #[builder(pattern = "owned", build_fn(name = "_build"), name = "Builder")]
     pub struct Config {
-        /// Node name
-        #[builder(setter(into, strip_option), default)]
-        pub name: Option<String>,
         /// Force block authoring
         #[builder(default)]
         pub force_authoring: bool,
-        /// Force node to think it is synced
-        #[builder(default)]
-        pub force_synced: bool,
         /// Set node role
         #[builder(default)]
         pub role: Role,
@@ -60,26 +56,122 @@ mod builder {
         #[builder(default = "BlocksPruning::KeepAll")]
         pub blocks_pruning: BlocksPruning,
         /// State pruning options
-        #[builder(setter(strip_option), default)]
+        #[builder(default)]
         pub state_pruning: Option<PruningMode>,
-        /// Listen on some address for other nodes
-        #[builder(default)]
-        pub listen_on: Vec<Multiaddr>,
-        /// Listen on some address for DSN
-        #[builder(default)]
-        pub dsn_listen_on: Vec<Multiaddr>,
-        /// RPC methods settings
-        #[builder(default)]
-        pub rpc_methods: RpcMethods,
-        /// Boot nodes
-        #[builder(default)]
-        pub boot_nodes: Vec<MultiaddrWithPeerId>,
         /// Set execution strategies
         #[builder(default)]
         pub execution_strategies: ExecutionStrategies,
         /// Set piece cache size
         #[builder(default = "bytesize::ByteSize::gib(1)")]
         pub piece_cache_size: bytesize::ByteSize,
+        /// Implementation name
+        #[builder(default = "env!(\"CARGO_PKG_NAME\").to_owned()")]
+        pub impl_name: String,
+        /// Implementation version
+        #[builder(default = "format!(\"{}-{}\", env!(\"CARGO_PKG_VERSION\"), env!(\"GIT_HASH\"))")]
+        pub impl_version: String,
+        /// Rpc settings
+        #[builder(default)]
+        pub rpc: Rpc,
+        /// Network settings
+        #[builder(default)]
+        pub network: Network,
+        /// DSN settings
+        #[builder(default)]
+        pub dsn: Dsn,
+    }
+
+    /// Node RPC builder
+    #[derive(Debug, Default, Clone, derive_builder::Builder)]
+    #[builder(pattern = "owned", build_fn(name = "_build"), name = "RpcBuilder")]
+    pub struct Rpc {
+        /// RPC over HTTP binding address. `None` if disabled.
+        #[builder(setter(strip_option), default)]
+        pub http: Option<SocketAddr>,
+        /// RPC over Websockets binding address. `None` if disabled.
+        #[builder(setter(strip_option), default)]
+        pub ws: Option<SocketAddr>,
+        /// RPC over IPC binding path. `None` if disabled.
+        #[builder(setter(strip_option), default)]
+        pub ipc: Option<String>,
+        /// Maximum number of connections for WebSockets RPC server. `None` if default.
+        #[builder(setter(strip_option), default)]
+        pub ws_max_connections: Option<usize>,
+        /// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
+        #[builder(setter(strip_option), default)]
+        pub cors: Option<Vec<String>>,
+        /// RPC methods to expose (by default only a safe subset or all of them).
+        #[builder(default)]
+        pub methods: RpcMethods,
+        /// Maximum payload of rpc request/responses.
+        #[builder(setter(strip_option), default)]
+        pub max_payload: Option<usize>,
+        /// Maximum payload of a rpc request
+        #[builder(setter(strip_option), default)]
+        pub max_request_size: Option<usize>,
+        /// Maximum payload of a rpc request
+        #[builder(setter(strip_option), default)]
+        pub max_response_size: Option<usize>,
+        /// Maximum allowed subscriptions per rpc connection
+        #[builder(default = "1024")]
+        pub max_subs_per_conn: usize,
+        /// Maximum size of the output buffer capacity for websocket connections.
+        #[builder(setter(strip_option), default)]
+        pub ws_max_out_buffer_capacity: Option<usize>,
+    }
+
+    impl RpcBuilder {
+        /// Build RPC
+        pub fn build(self) -> Rpc {
+            self._build().expect("Infallible")
+        }
+    }
+
+    /// Node network builder
+    #[derive(Debug, Default, Clone, derive_builder::Builder)]
+    #[builder(pattern = "owned", build_fn(name = "_build"), name = "NetworkBuilder")]
+    pub struct Network {
+        /// Listen on some address for other nodes
+        #[builder(default)]
+        pub listen_addresses: Vec<Multiaddr>,
+        /// Boot nodes
+        #[builder(default)]
+        pub boot_nodes: Vec<MultiaddrWithPeerId>,
+        /// Force node to think it is synced
+        #[builder(default)]
+        pub force_synced: bool,
+        /// Node name
+        #[builder(setter(into, strip_option), default)]
+        pub name: Option<String>,
+        /// Client id for telemetry (default is `{IMPL_NAME}/v{IMPL_VERSION}`)
+        #[builder(setter(into, strip_option), default)]
+        pub client_id: Option<String>,
+    }
+
+    impl NetworkBuilder {
+        /// Build network configuration
+        pub fn build(self) -> Network {
+            self._build().expect("Infallible")
+        }
+    }
+
+    /// Node DSN builder
+    #[derive(Debug, Default, Clone, derive_builder::Builder)]
+    #[builder(pattern = "owned", build_fn(name = "_build"), name = "DsnBuilder")]
+    pub struct Dsn {
+        /// Listen on some address for other nodes
+        #[builder(default = "vec![\"/ip4/0.0.0.0/tcp/0\".parse().expect(\"Always valid\")]")]
+        pub listen_addresses: Vec<Multiaddr>,
+        /// Boot nodes
+        #[builder(default)]
+        pub boot_nodes: Vec<Multiaddr>,
+    }
+
+    impl DsnBuilder {
+        /// Build DSN configuration
+        pub fn build(self) -> Dsn {
+            self._build().expect("Infallible")
+        }
     }
 }
 
@@ -141,40 +233,66 @@ impl Builder {
         const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
 
         let builder::Config {
-            name,
             force_authoring,
-            force_synced,
             role,
             blocks_pruning,
             state_pruning,
-            listen_on,
-            boot_nodes,
-            rpc_methods,
             execution_strategies,
-            dsn_listen_on,
             piece_cache_size,
+            impl_name,
+            impl_version,
+            rpc:
+                builder::Rpc {
+                    http: rpc_http,
+                    ws: rpc_ws,
+                    ws_max_connections: rpc_ws_max_connections,
+                    ipc: rpc_ipc,
+                    cors: rpc_cors,
+                    methods: rpc_methods,
+                    max_payload: rpc_max_payload,
+                    max_request_size: rpc_max_request_size,
+                    max_response_size: rpc_max_response_size,
+                    max_subs_per_conn: rpc_max_subs_per_conn,
+                    ws_max_out_buffer_capacity,
+                },
+            network,
+            dsn,
         } = self._build().expect("Infallible");
 
         let base_path = BasePath::new(directory.as_ref());
-        let impl_name = env!("CARGO_PKG_NAME").to_owned();
-        let impl_version = format!("{}-{}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH"));
         let config_dir = base_path.config_dir(chain_spec.id());
-        let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
-        let client_id = format!("{}/v{}", impl_name, impl_version);
-        let mut network = NetworkConfiguration {
-            listen_addresses: listen_on,
-            boot_nodes: chain_spec
-                .boot_nodes()
-                .iter()
-                .cloned()
-                .chain(boot_nodes)
-                .collect(),
-            force_synced,
-            ..NetworkConfiguration::new(
-                name.clone().unwrap_or_default(),
+
+        let (mut network, name) = {
+            let builder::Network {
+                listen_addresses,
+                boot_nodes,
+                force_synced,
+                name,
                 client_id,
-                NodeKeyConfig::Ed25519(Secret::File(net_config_dir.join(NODE_KEY_ED25519_FILE))),
-                Some(net_config_dir),
+            } = network;
+            let client_id = client_id.unwrap_or_else(|| format!("{}/v{}", impl_name, impl_version));
+            let config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
+
+            (
+                NetworkConfiguration {
+                    listen_addresses,
+                    boot_nodes: chain_spec
+                        .boot_nodes()
+                        .iter()
+                        .cloned()
+                        .chain(boot_nodes)
+                        .collect(),
+                    force_synced,
+                    ..NetworkConfiguration::new(
+                        name.clone().unwrap_or_default(),
+                        client_id,
+                        NodeKeyConfig::Ed25519(Secret::File(
+                            config_dir.join(NODE_KEY_ED25519_FILE),
+                        )),
+                        Some(config_dir),
+                    )
+                },
+                name,
             )
         };
 
@@ -186,6 +304,10 @@ impl Builder {
         let telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
 
         let dsn_config = {
+            let builder::Dsn {
+                listen_addresses,
+                boot_nodes,
+            } = dsn;
             let keypair = network
                 .node_key
                 .clone()
@@ -195,19 +317,17 @@ impl Builder {
                 .properties()
                 .get("dsnBootstrapNodes")
                 .cloned()
-                .map(serde_json::from_value)
+                .map(serde_json::from_value::<Vec<_>>)
                 .transpose()
                 .context("Failed to decode DSN bootsrap nodes")?
-                .unwrap_or_default();
-            let listen_on = if dsn_listen_on.is_empty() {
-                vec!["/ip4/0.0.0.0/tcp/0".parse().expect("Always valid")]
-            } else {
-                dsn_listen_on
-            };
+                .unwrap_or_default()
+                .into_iter()
+                .chain(boot_nodes)
+                .collect();
 
             subspace_service::DsnConfig {
                 bootstrap_nodes,
-                listen_on,
+                listen_on: listen_addresses,
                 keypair,
             }
         };
@@ -233,26 +353,18 @@ impl Builder {
                 },
                 wasm_runtime_overrides: None,
                 execution_strategies,
-                rpc_http: None,
-                rpc_ws: Some("127.0.0.1:9947".parse().expect("IP and port are valid")),
-                rpc_ipc: None,
-                // necessary in order to use `peers` method to show number of node peers during sync
+                rpc_http,
+                rpc_ws,
+                rpc_ipc,
                 rpc_methods: rpc_methods.into(),
-                rpc_ws_max_connections: Default::default(),
-                // Below CORS are default from Substrate
-                rpc_cors: Some(vec![
-                    "http://localhost:*".to_string(),
-                    "http://127.0.0.1:*".to_string(),
-                    "https://localhost:*".to_string(),
-                    "https://127.0.0.1:*".to_string(),
-                    "https://polkadot.js.org".to_string(),
-                    "http://localhost:3009".to_string(),
-                ]),
-                rpc_max_payload: None,
-                rpc_max_request_size: None,
-                rpc_max_response_size: None,
+                rpc_ws_max_connections,
+                rpc_cors,
+                rpc_max_payload,
+                rpc_max_request_size,
+                rpc_max_response_size,
                 rpc_id_provider: None,
-                ws_max_out_buffer_capacity: None,
+                rpc_max_subs_per_conn: Some(rpc_max_subs_per_conn),
+                ws_max_out_buffer_capacity,
                 prometheus_config: None,
                 telemetry_endpoints,
                 default_heap_pages: None,
@@ -269,7 +381,6 @@ impl Builder {
                 base_path: Some(base_path),
                 informant_output_format: Default::default(),
                 runtime_cache_size: 2,
-                rpc_max_subs_per_conn: None,
             },
             force_new_slot_notifications: false,
             dsn_config,
@@ -760,9 +871,13 @@ mod tests {
         let chain = chain_spec::dev_config().unwrap();
         let node = Node::builder()
             .force_authoring(true)
-            .force_synced(true)
+            .network(
+                NetworkBuilder::default()
+                    .force_synced(true)
+                    .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
+                    .build(),
+            )
             .role(Role::Authority)
-            .listen_on(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
             .build(dir.path(), chain.clone())
             .await
             .unwrap();
@@ -796,7 +911,11 @@ mod tests {
         let other_node = Node::builder()
             .force_authoring(true)
             .role(Role::Authority)
-            .boot_nodes(node.listen_addresses().await.unwrap())
+            .network(
+                NetworkBuilder::default()
+                    .boot_nodes(node.listen_addresses().await.unwrap())
+                    .build(),
+            )
             .build(dir.path(), chain)
             .await
             .unwrap();
