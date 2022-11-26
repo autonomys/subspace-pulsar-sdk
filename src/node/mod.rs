@@ -82,7 +82,8 @@ mod builder {
     }
 
     /// Node RPC builder
-    #[derive(Debug, Default, Clone, derive_builder::Builder)]
+    #[derive(Debug, derivative::Derivative, Clone, derive_builder::Builder)]
+    #[derivative(Default)]
     #[builder(pattern = "owned", build_fn(name = "_build"), name = "RpcBuilder")]
     pub struct Rpc {
         /// RPC over HTTP binding address. `None` if disabled.
@@ -114,6 +115,7 @@ mod builder {
         pub max_response_size: Option<usize>,
         /// Maximum allowed subscriptions per rpc connection
         #[builder(default = "1024")]
+        #[derivative(Default(value = "1024"))]
         pub max_subs_per_conn: usize,
         /// Maximum size of the output buffer capacity for websocket connections.
         #[builder(setter(strip_option), default)]
@@ -121,6 +123,11 @@ mod builder {
     }
 
     impl RpcBuilder {
+        /// Constructor
+        pub fn new() -> Self {
+            Self::default()
+        }
+
         /// Build RPC
         pub fn build(self) -> Rpc {
             self._build().expect("Infallible")
@@ -149,6 +156,11 @@ mod builder {
     }
 
     impl NetworkBuilder {
+        /// Constructor
+        pub fn new() -> Self {
+            Self::default()
+        }
+
         /// Build network configuration
         pub fn build(self) -> Network {
             self._build().expect("Infallible")
@@ -156,11 +168,15 @@ mod builder {
     }
 
     /// Node DSN builder
-    #[derive(Debug, Default, Clone, derive_builder::Builder)]
+    #[derive(Debug, Clone, derivative::Derivative, derive_builder::Builder)]
+    #[derivative(Default)]
     #[builder(pattern = "owned", build_fn(name = "_build"), name = "DsnBuilder")]
     pub struct Dsn {
         /// Listen on some address for other nodes
-        #[builder(default = "vec![\"/ip4/0.0.0.0/tcp/0\".parse().expect(\"Always valid\")]")]
+        #[builder(default = "Dsn::default().listen_addresses")]
+        #[derivative(Default(
+            value = "vec![\"/ip4/0.0.0.0/tcp/0\".parse().expect(\"Always valid\")]"
+        ))]
         pub listen_addresses: Vec<Multiaddr>,
         /// Boot nodes
         #[builder(default)]
@@ -168,6 +184,11 @@ mod builder {
     }
 
     impl DsnBuilder {
+        /// Constructor
+        pub fn new() -> Self {
+            Self::default()
+        }
+
         /// Build DSN configuration
         pub fn build(self) -> Dsn {
             self._build().expect("Infallible")
@@ -872,7 +893,7 @@ mod tests {
         let node = Node::builder()
             .force_authoring(true)
             .network(
-                NetworkBuilder::default()
+                NetworkBuilder::new()
                     .force_synced(true)
                     .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
                     .build(),
@@ -912,7 +933,7 @@ mod tests {
             .force_authoring(true)
             .role(Role::Authority)
             .network(
-                NetworkBuilder::default()
+                NetworkBuilder::new()
                     .boot_nodes(node.listen_addresses().await.unwrap())
                     .build(),
             )

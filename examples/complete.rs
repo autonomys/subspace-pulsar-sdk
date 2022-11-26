@@ -10,7 +10,7 @@ async fn main() {
     let node: Node = Node::builder()
         .blocks_pruning(sc_service::BlocksPruning::Some(1000))
         .state_pruning(Some(sc_service::PruningMode::ArchiveCanonical))
-        .network(NetworkBuilder::default().name("i1i1").build())
+        .network(NetworkBuilder::new().name("i1i1").build())
         .build("node", chain_spec::dev_config().unwrap())
         .await
         .expect("Failed to init a node");

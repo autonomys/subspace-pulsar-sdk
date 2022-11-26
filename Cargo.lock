@@ -8224,6 +8224,7 @@ dependencies = [
  "bytesize-serde",
  "clap",
  "core-payments-domain-runtime",
+ "derivative",
  "derive_builder",
  "derive_more",
  "event-listener-primitives",
