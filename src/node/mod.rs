@@ -71,14 +71,40 @@ mod builder {
         #[builder(default = "format!(\"{}-{}\", env!(\"CARGO_PKG_VERSION\"), env!(\"GIT_HASH\"))")]
         pub impl_version: String,
         /// Rpc settings
-        #[builder(default)]
+        #[builder(setter(into), default)]
         pub rpc: Rpc,
         /// Network settings
-        #[builder(default)]
+        #[builder(setter(into), default)]
         pub network: Network,
         /// DSN settings
-        #[builder(default)]
+        #[builder(setter(into), default)]
         pub dsn: Dsn,
+    }
+
+    macro_rules! generate_builder {
+        ( $name:ident ) => {
+            impl concat_idents!($name, Builder) {
+                /// Constructor
+                pub fn new() -> Self {
+                    Self::default()
+                }
+
+                #[doc = concat!("Build ", stringify!($name))]
+                pub fn build(self) -> $name {
+                    self._build().expect("Infallible")
+                }
+            }
+
+            impl From<concat_idents!($name, Builder)> for $name {
+                fn from(value: concat_idents!($name, Builder)) -> Self {
+                    value.build()
+                }
+            }
+        };
+        ( $name:ident, $($rest:ident),+ ) => {
+            generate_builder!($name);
+            generate_builder!($($rest),+);
+        };
     }
 
     /// Node RPC builder
@@ -122,18 +148,6 @@ mod builder {
         pub ws_max_out_buffer_capacity: Option<usize>,
     }
 
-    impl RpcBuilder {
-        /// Constructor
-        pub fn new() -> Self {
-            Self::default()
-        }
-
-        /// Build RPC
-        pub fn build(self) -> Rpc {
-            self._build().expect("Infallible")
-        }
-    }
-
     /// Node network builder
     #[derive(Debug, Default, Clone, derive_builder::Builder)]
     #[builder(pattern = "owned", build_fn(name = "_build"), name = "NetworkBuilder")]
@@ -155,18 +169,6 @@ mod builder {
         pub client_id: Option<String>,
     }
 
-    impl NetworkBuilder {
-        /// Constructor
-        pub fn new() -> Self {
-            Self::default()
-        }
-
-        /// Build network configuration
-        pub fn build(self) -> Network {
-            self._build().expect("Infallible")
-        }
-    }
-
     /// Node DSN builder
     #[derive(Debug, Clone, derivative::Derivative, derive_builder::Builder)]
     #[derivative(Default)]
@@ -183,17 +185,7 @@ mod builder {
         pub boot_nodes: Vec<Multiaddr>,
     }
 
-    impl DsnBuilder {
-        /// Constructor
-        pub fn new() -> Self {
-            Self::default()
-        }
-
-        /// Build DSN configuration
-        pub fn build(self) -> Dsn {
-            self._build().expect("Infallible")
-        }
-    }
+    generate_builder!(Rpc, Network, Dsn);
 }
 
 /// Role of the local node.
@@ -895,8 +887,7 @@ mod tests {
             .network(
                 NetworkBuilder::new()
                     .force_synced(true)
-                    .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
-                    .build(),
+                    .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()]),
             )
             .role(Role::Authority)
             .build(dir.path(), chain.clone())
@@ -932,11 +923,7 @@ mod tests {
         let other_node = Node::builder()
             .force_authoring(true)
             .role(Role::Authority)
-            .network(
-                NetworkBuilder::new()
-                    .boot_nodes(node.listen_addresses().await.unwrap())
-                    .build(),
-            )
+            .network(NetworkBuilder::new().boot_nodes(node.listen_addresses().await.unwrap()))
             .build(dir.path(), chain)
             .await
             .unwrap();
