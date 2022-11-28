@@ -868,6 +868,93 @@
 <a href="#868" id="868">868</a>
 <a href="#869" id="869">869</a>
 <a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
+<a href="#907" id="907">907</a>
+<a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
+<a href="#911" id="911">911</a>
+<a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
+<a href="#924" id="924">924</a>
+<a href="#925" id="925">925</a>
+<a href="#926" id="926">926</a>
+<a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a>
+<a href="#930" id="930">930</a>
+<a href="#931" id="931">931</a>
+<a href="#932" id="932">932</a>
+<a href="#933" id="933">933</a>
+<a href="#934" id="934">934</a>
+<a href="#935" id="935">935</a>
+<a href="#936" id="936">936</a>
+<a href="#937" id="937">937</a>
+<a href="#938" id="938">938</a>
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a>
+<a href="#947" id="947">947</a>
+<a href="#948" id="948">948</a>
+<a href="#949" id="949">949</a>
+<a href="#950" id="950">950</a>
+<a href="#951" id="951">951</a>
+<a href="#952" id="952">952</a>
+<a href="#953" id="953">953</a>
+<a href="#954" id="954">954</a>
+<a href="#955" id="955">955</a>
+<a href="#956" id="956">956</a>
+<a href="#957" id="957">957</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>futures::channel::{mpsc, oneshot};
 <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
@@ -905,6 +992,167 @@
 
 <span class="kw">pub mod </span>chain_spec;
 
+<span class="kw">pub use </span>builder::{Builder, DsnBuilder, NetworkBuilder, RpcBuilder};
+
+<span class="kw">mod </span>builder {
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+
+    <span class="kw">use </span>std::net::SocketAddr;
+
+    <span class="doccomment">/// Node builder
+    </span><span class="attr">#[derive(Debug, Clone, derive_builder::Builder)]
+    #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;Builder&quot;</span>)]
+    </span><span class="kw">pub struct </span>Config {
+        <span class="doccomment">/// Force block authoring
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>force_authoring: bool,
+        <span class="doccomment">/// Set node role
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>role: Role,
+        <span class="doccomment">/// Blocks pruning options
+        </span><span class="attr">#[builder(default = <span class="string">&quot;BlocksPruning::KeepAll&quot;</span>)]
+        </span><span class="kw">pub </span>blocks_pruning: BlocksPruning,
+        <span class="doccomment">/// State pruning options
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>state_pruning: <span class="prelude-ty">Option</span>&lt;PruningMode&gt;,
+        <span class="doccomment">/// Set execution strategies
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>execution_strategies: ExecutionStrategies,
+        <span class="doccomment">/// Set piece cache size
+        </span><span class="attr">#[builder(default = <span class="string">&quot;bytesize::ByteSize::gib(1)&quot;</span>)]
+        </span><span class="kw">pub </span>piece_cache_size: bytesize::ByteSize,
+        <span class="doccomment">/// Implementation name
+        </span><span class="attr">#[builder(default = <span class="string">&quot;env!(\&quot;CARGO_PKG_NAME\&quot;).to_owned()&quot;</span>)]
+        </span><span class="kw">pub </span>impl_name: String,
+        <span class="doccomment">/// Implementation version
+        </span><span class="attr">#[builder(default = <span class="string">&quot;format!(\&quot;{}-{}\&quot;, env!(\&quot;CARGO_PKG_VERSION\&quot;), env!(\&quot;GIT_HASH\&quot;))&quot;</span>)]
+        </span><span class="kw">pub </span>impl_version: String,
+        <span class="doccomment">/// Rpc settings
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>rpc: Rpc,
+        <span class="doccomment">/// Network settings
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>network: Network,
+        <span class="doccomment">/// DSN settings
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>dsn: Dsn,
+    }
+
+    <span class="doccomment">/// Node RPC builder
+    </span><span class="attr">#[derive(Debug, derivative::Derivative, Clone, derive_builder::Builder)]
+    #[derivative(Default)]
+    #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;RpcBuilder&quot;</span>)]
+    </span><span class="kw">pub struct </span>Rpc {
+        <span class="doccomment">/// RPC over HTTP binding address. `None` if disabled.
+        </span><span class="attr">#[builder(setter(strip_option), default)]
+        </span><span class="kw">pub </span>http: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
+        <span class="doccomment">/// RPC over Websockets binding address. `None` if disabled.
+        </span><span class="attr">#[builder(setter(strip_option), default)]
+        </span><span class="kw">pub </span>ws: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
+        <span class="doccomment">/// RPC over IPC binding path. `None` if disabled.
+        </span><span class="attr">#[builder(setter(strip_option), default)]
+        </span><span class="kw">pub </span>ipc: <span class="prelude-ty">Option</span>&lt;String&gt;,
+        <span class="doccomment">/// Maximum number of connections for WebSockets RPC server. `None` if default.
+        </span><span class="attr">#[builder(setter(strip_option), default)]
+        </span><span class="kw">pub </span>ws_max_connections: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+        <span class="doccomment">/// CORS settings for HTTP &amp; WS servers. `None` if all origins are allowed.
+        </span><span class="attr">#[builder(setter(strip_option), default)]
+        </span><span class="kw">pub </span>cors: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
+        <span class="doccomment">/// RPC methods to expose (by default only a safe subset or all of them).
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>methods: RpcMethods,
+        <span class="doccomment">/// Maximum payload of rpc request/responses.
+        </span><span class="attr">#[builder(setter(strip_option), default)]
+        </span><span class="kw">pub </span>max_payload: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+        <span class="doccomment">/// Maximum payload of a rpc request
+        </span><span class="attr">#[builder(setter(strip_option), default)]
+        </span><span class="kw">pub </span>max_request_size: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+        <span class="doccomment">/// Maximum payload of a rpc request
+        </span><span class="attr">#[builder(setter(strip_option), default)]
+        </span><span class="kw">pub </span>max_response_size: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+        <span class="doccomment">/// Maximum allowed subscriptions per rpc connection
+        </span><span class="attr">#[builder(default = <span class="string">&quot;1024&quot;</span>)]
+        #[derivative(Default(value = <span class="string">&quot;1024&quot;</span>))]
+        </span><span class="kw">pub </span>max_subs_per_conn: usize,
+        <span class="doccomment">/// Maximum size of the output buffer capacity for websocket connections.
+        </span><span class="attr">#[builder(setter(strip_option), default)]
+        </span><span class="kw">pub </span>ws_max_out_buffer_capacity: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+    }
+
+    <span class="kw">impl </span>RpcBuilder {
+        <span class="doccomment">/// Constructor
+        </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+            <span class="self">Self</span>::default()
+        }
+
+        <span class="doccomment">/// Build RPC
+        </span><span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; Rpc {
+            <span class="self">self</span>._build().expect(<span class="string">&quot;Infallible&quot;</span>)
+        }
+    }
+
+    <span class="doccomment">/// Node network builder
+    </span><span class="attr">#[derive(Debug, Default, Clone, derive_builder::Builder)]
+    #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;NetworkBuilder&quot;</span>)]
+    </span><span class="kw">pub struct </span>Network {
+        <span class="doccomment">/// Listen on some address for other nodes
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>listen_addresses: Vec&lt;Multiaddr&gt;,
+        <span class="doccomment">/// Boot nodes
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>boot_nodes: Vec&lt;MultiaddrWithPeerId&gt;,
+        <span class="doccomment">/// Force node to think it is synced
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>force_synced: bool,
+        <span class="doccomment">/// Node name
+        </span><span class="attr">#[builder(setter(into, strip_option), default)]
+        </span><span class="kw">pub </span>name: <span class="prelude-ty">Option</span>&lt;String&gt;,
+        <span class="doccomment">/// Client id for telemetry (default is `{IMPL_NAME}/v{IMPL_VERSION}`)
+        </span><span class="attr">#[builder(setter(into, strip_option), default)]
+        </span><span class="kw">pub </span>client_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    }
+
+    <span class="kw">impl </span>NetworkBuilder {
+        <span class="doccomment">/// Constructor
+        </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+            <span class="self">Self</span>::default()
+        }
+
+        <span class="doccomment">/// Build network configuration
+        </span><span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; Network {
+            <span class="self">self</span>._build().expect(<span class="string">&quot;Infallible&quot;</span>)
+        }
+    }
+
+    <span class="doccomment">/// Node DSN builder
+    </span><span class="attr">#[derive(Debug, Clone, derivative::Derivative, derive_builder::Builder)]
+    #[derivative(Default)]
+    #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;DsnBuilder&quot;</span>)]
+    </span><span class="kw">pub struct </span>Dsn {
+        <span class="doccomment">/// Listen on some address for other nodes
+        </span><span class="attr">#[builder(default = <span class="string">&quot;Dsn::default().listen_addresses&quot;</span>)]
+        #[derivative(Default(
+            value = <span class="string">&quot;vec![\&quot;/ip4/0.0.0.0/tcp/0\&quot;.parse().expect(\&quot;Always valid\&quot;)]&quot;
+        </span>))]
+        </span><span class="kw">pub </span>listen_addresses: Vec&lt;Multiaddr&gt;,
+        <span class="doccomment">/// Boot nodes
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>boot_nodes: Vec&lt;Multiaddr&gt;,
+    }
+
+    <span class="kw">impl </span>DsnBuilder {
+        <span class="doccomment">/// Constructor
+        </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+            <span class="self">Self</span>::default()
+        }
+
+        <span class="doccomment">/// Build DSN configuration
+        </span><span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; Dsn {
+            <span class="self">self</span>._build().expect(<span class="string">&quot;Infallible&quot;</span>)
+        }
+    }
+}
+
 <span class="doccomment">/// Role of the local node.
 </span><span class="attr">#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>Role {
@@ -921,14 +1169,6 @@
             Role::Full =&gt; sc_service::Role::Full,
             Role::Authority =&gt; sc_service::Role::Authority,
         }
-    }
-}
-
-<span class="kw">struct </span>BlocksPruningInner(BlocksPruning);
-
-<span class="kw">impl </span>Default <span class="kw">for </span>BlocksPruningInner {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(BlocksPruning::KeepAll)
     }
 }
 
@@ -955,102 +1195,11 @@
     }
 }
 
-<span class="doccomment">/// Node builder
-</span><span class="attr">#[derive(Default)]
-</span><span class="kw">pub struct </span>Builder {
-    name: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    force_authoring: bool,
-    force_synced: bool,
-    role: Role,
-    blocks_pruning: BlocksPruningInner,
-    state_pruning: <span class="prelude-ty">Option</span>&lt;PruningMode&gt;,
-    listen_on: Vec&lt;Multiaddr&gt;,
-    dsn_listen_on: Vec&lt;Multiaddr&gt;,
-    boot_nodes: Vec&lt;MultiaddrWithPeerId&gt;,
-    rpc_methods: RpcMethods,
-    execution_strategies: ExecutionStrategies,
-    piece_cache_size: <span class="prelude-ty">Option</span>&lt;bytesize::ByteSize&gt;,
-}
-
 <span class="kw">impl </span>Builder {
     <span class="doccomment">/// New builder
     </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::default()
     }
-
-    <span class="doccomment">/// Name of the node in the telemetry
-    </span><span class="kw">pub fn </span>name(<span class="kw-2">mut </span><span class="self">self</span>, name: <span class="kw">impl </span>AsRef&lt;str&gt;) -&gt; <span class="self">Self </span>{
-        <span class="kw">if </span>!name.as_ref().is_empty() {
-            <span class="self">self</span>.name = <span class="prelude-val">Some</span>(name.as_ref().to_owned());
-        }
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Force authoring of the blocks
-    </span><span class="kw">pub fn </span>force_authoring(<span class="kw-2">mut </span><span class="self">self</span>, force_authoring: bool) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.force_authoring = force_authoring;
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Force node to think it is synced
-    </span><span class="kw">pub fn </span>force_synced(<span class="kw-2">mut </span><span class="self">self</span>, force_synced: bool) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.force_synced = force_synced;
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Role of the node in the consensus
-    </span><span class="kw">pub fn </span>role(<span class="kw-2">mut </span><span class="self">self</span>, role: Role) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.role = role;
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Set blocks pruning settings
-    </span><span class="kw">pub fn </span>blocks_pruning(<span class="kw-2">mut </span><span class="self">self</span>, pruning: BlocksPruning) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.blocks_pruning = BlocksPruningInner(pruning);
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Set state pruning settings
-    </span><span class="kw">pub fn </span>state_pruning(<span class="kw-2">mut </span><span class="self">self</span>, pruning: <span class="prelude-ty">Option</span>&lt;PruningMode&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.state_pruning = pruning;
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// RPC methods settings
-    </span><span class="kw">pub fn </span>rpc_methods(<span class="kw-2">mut </span><span class="self">self</span>, rpc_methods: RpcMethods) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.rpc_methods = rpc_methods;
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Listen on some address
-    </span><span class="kw">pub fn </span>listen_on(<span class="kw-2">mut </span><span class="self">self</span>, listen_on: Vec&lt;Multiaddr&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.listen_on = listen_on;
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Listen on some address for the DSN
-    </span><span class="kw">pub fn </span>dsn_listen_on(<span class="kw-2">mut </span><span class="self">self</span>, listen_on: Vec&lt;Multiaddr&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.dsn_listen_on = listen_on;
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Set cache for pieces
-    </span><span class="kw">pub fn </span>piece_cache_size(<span class="kw-2">mut </span><span class="self">self</span>, piece_cache_size: bytesize::ByteSize) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.piece_cache_size = <span class="prelude-val">Some</span>(piece_cache_size);
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Add boot nodes apart from ones from chainspec
-    </span><span class="kw">pub fn </span>boot_nodes(<span class="kw-2">mut </span><span class="self">self</span>, boot_nodes: Vec&lt;MultiaddrWithPeerId&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.boot_nodes = boot_nodes;
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Set block execution strategies for the node
-    </span><span class="kw">pub fn </span>execution_strategies(<span class="kw-2">mut </span><span class="self">self</span>, execution_strategies: ExecutionStrategies) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.execution_strategies = execution_strategies;
-        <span class="self">self
-    </span>}
 
     <span class="doccomment">/// Start a node with supplied parameters
     </span><span class="kw">pub async fn </span>build(
@@ -1061,41 +1210,67 @@
         <span class="kw">const </span>NODE_KEY_ED25519_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;secret_ed25519&quot;</span>;
         <span class="kw">const </span>DEFAULT_NETWORK_CONFIG_PATH: <span class="kw-2">&amp;</span>str = <span class="string">&quot;network&quot;</span>;
 
-        <span class="kw">let </span><span class="self">Self </span>{
-            name,
+        <span class="kw">let </span>builder::Config {
             force_authoring,
-            force_synced,
             role,
-            blocks_pruning: BlocksPruningInner(blocks_pruning),
+            blocks_pruning,
             state_pruning,
-            listen_on,
-            boot_nodes,
-            rpc_methods,
             execution_strategies,
-            dsn_listen_on,
             piece_cache_size,
-        } = <span class="self">self</span>;
+            impl_name,
+            impl_version,
+            rpc:
+                builder::Rpc {
+                    http: rpc_http,
+                    ws: rpc_ws,
+                    ws_max_connections: rpc_ws_max_connections,
+                    ipc: rpc_ipc,
+                    cors: rpc_cors,
+                    methods: rpc_methods,
+                    max_payload: rpc_max_payload,
+                    max_request_size: rpc_max_request_size,
+                    max_response_size: rpc_max_response_size,
+                    max_subs_per_conn: rpc_max_subs_per_conn,
+                    ws_max_out_buffer_capacity,
+                },
+            network,
+            dsn,
+        } = <span class="self">self</span>._build().expect(<span class="string">&quot;Infallible&quot;</span>);
 
         <span class="kw">let </span>base_path = BasePath::new(directory.as_ref());
-        <span class="kw">let </span>impl_name = <span class="macro">env!</span>(<span class="string">&quot;CARGO_PKG_NAME&quot;</span>).to_owned();
-        <span class="kw">let </span>impl_version = <span class="macro">format!</span>(<span class="string">&quot;{}-{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;CARGO_PKG_VERSION&quot;</span>), <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>));
         <span class="kw">let </span>config_dir = base_path.config_dir(chain_spec.id());
-        <span class="kw">let </span>net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
-        <span class="kw">let </span>client_id = <span class="macro">format!</span>(<span class="string">&quot;{}/v{}&quot;</span>, impl_name, impl_version);
-        <span class="kw">let </span><span class="kw-2">mut </span>network = NetworkConfiguration {
-            listen_addresses: listen_on,
-            boot_nodes: chain_spec
-                .boot_nodes()
-                .iter()
-                .cloned()
-                .chain(boot_nodes)
-                .collect(),
-            force_synced,
-            ..NetworkConfiguration::new(
-                name.clone().unwrap_or_default(),
+
+        <span class="kw">let </span>(<span class="kw-2">mut </span>network, name) = {
+            <span class="kw">let </span>builder::Network {
+                listen_addresses,
+                boot_nodes,
+                force_synced,
+                name,
                 client_id,
-                NodeKeyConfig::Ed25519(Secret::File(net_config_dir.join(NODE_KEY_ED25519_FILE))),
-                <span class="prelude-val">Some</span>(net_config_dir),
+            } = network;
+            <span class="kw">let </span>client_id = client_id.unwrap_or_else(|| <span class="macro">format!</span>(<span class="string">&quot;{}/v{}&quot;</span>, impl_name, impl_version));
+            <span class="kw">let </span>config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
+
+            (
+                NetworkConfiguration {
+                    listen_addresses,
+                    boot_nodes: chain_spec
+                        .boot_nodes()
+                        .iter()
+                        .cloned()
+                        .chain(boot_nodes)
+                        .collect(),
+                    force_synced,
+                    ..NetworkConfiguration::new(
+                        name.clone().unwrap_or_default(),
+                        client_id,
+                        NodeKeyConfig::Ed25519(Secret::File(
+                            config_dir.join(NODE_KEY_ED25519_FILE),
+                        )),
+                        <span class="prelude-val">Some</span>(config_dir),
+                    )
+                },
+                name,
             )
         };
 
@@ -1107,6 +1282,10 @@
         <span class="kw">let </span>telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
 
         <span class="kw">let </span>dsn_config = {
+            <span class="kw">let </span>builder::Dsn {
+                listen_addresses,
+                boot_nodes,
+            } = dsn;
             <span class="kw">let </span>keypair = network
                 .node_key
                 .clone()
@@ -1116,19 +1295,17 @@
                 .properties()
                 .get(<span class="string">&quot;dsnBootstrapNodes&quot;</span>)
                 .cloned()
-                .map(serde_json::from_value)
+                .map(serde_json::from_value::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;)
                 .transpose()
                 .context(<span class="string">&quot;Failed to decode DSN bootsrap nodes&quot;</span>)<span class="question-mark">?
-                </span>.unwrap_or_default();
-            <span class="kw">let </span>listen_on = <span class="kw">if </span>dsn_listen_on.is_empty() {
-                <span class="macro">vec!</span>[<span class="string">&quot;/ip4/0.0.0.0/tcp/0&quot;</span>.parse().expect(<span class="string">&quot;Always valid&quot;</span>)]
-            } <span class="kw">else </span>{
-                dsn_listen_on
-            };
+                </span>.unwrap_or_default()
+                .into_iter()
+                .chain(boot_nodes)
+                .collect();
 
             subspace_service::DsnConfig {
                 bootstrap_nodes,
-                listen_on,
+                listen_on: listen_addresses,
                 keypair,
             }
         };
@@ -1154,26 +1331,18 @@
                 },
                 wasm_runtime_overrides: <span class="prelude-val">None</span>,
                 execution_strategies,
-                rpc_http: <span class="prelude-val">None</span>,
-                rpc_ws: <span class="prelude-val">Some</span>(<span class="string">&quot;127.0.0.1:9947&quot;</span>.parse().expect(<span class="string">&quot;IP and port are valid&quot;</span>)),
-                rpc_ipc: <span class="prelude-val">None</span>,
-                <span class="comment">// necessary in order to use `peers` method to show number of node peers during sync
-                </span>rpc_methods: rpc_methods.into(),
-                rpc_ws_max_connections: Default::default(),
-                <span class="comment">// Below CORS are default from Substrate
-                </span>rpc_cors: <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[
-                    <span class="string">&quot;http://localhost:*&quot;</span>.to_string(),
-                    <span class="string">&quot;http://127.0.0.1:*&quot;</span>.to_string(),
-                    <span class="string">&quot;https://localhost:*&quot;</span>.to_string(),
-                    <span class="string">&quot;https://127.0.0.1:*&quot;</span>.to_string(),
-                    <span class="string">&quot;https://polkadot.js.org&quot;</span>.to_string(),
-                    <span class="string">&quot;http://localhost:3009&quot;</span>.to_string(),
-                ]),
-                rpc_max_payload: <span class="prelude-val">None</span>,
-                rpc_max_request_size: <span class="prelude-val">None</span>,
-                rpc_max_response_size: <span class="prelude-val">None</span>,
+                rpc_http,
+                rpc_ws,
+                rpc_ipc,
+                rpc_methods: rpc_methods.into(),
+                rpc_ws_max_connections,
+                rpc_cors,
+                rpc_max_payload,
+                rpc_max_request_size,
+                rpc_max_response_size,
                 rpc_id_provider: <span class="prelude-val">None</span>,
-                ws_max_out_buffer_capacity: <span class="prelude-val">None</span>,
+                rpc_max_subs_per_conn: <span class="prelude-val">Some</span>(rpc_max_subs_per_conn),
+                ws_max_out_buffer_capacity,
                 prometheus_config: <span class="prelude-val">None</span>,
                 telemetry_endpoints,
                 default_heap_pages: <span class="prelude-val">None</span>,
@@ -1190,13 +1359,10 @@
                 base_path: <span class="prelude-val">Some</span>(base_path),
                 informant_output_format: Default::default(),
                 runtime_cache_size: <span class="number">2</span>,
-                rpc_max_subs_per_conn: <span class="prelude-val">None</span>,
             },
             force_new_slot_notifications: <span class="bool-val">false</span>,
             dsn_config,
-            piece_cache_size: piece_cache_size
-                .unwrap_or(bytesize::ByteSize::gib(<span class="number">1</span>))
-                .as_u64(),
+            piece_cache_size: piece_cache_size.as_u64(),
         };
 
         <span class="kw">let </span>slot_proportion = sc_consensus_slots::SlotProportion::new(<span class="number">2f32 </span>/ <span class="number">3f32</span>);
@@ -1683,9 +1849,13 @@
         <span class="kw">let </span>chain = chain_spec::dev_config().unwrap();
         <span class="kw">let </span>node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
-            .force_synced(<span class="bool-val">true</span>)
+            .network(
+                NetworkBuilder::new()
+                    .force_synced(<span class="bool-val">true</span>)
+                    .listen_addresses(<span class="macro">vec!</span>[<span class="string">&quot;/ip4/127.0.0.1/tcp/0&quot;</span>.parse().unwrap()])
+                    .build(),
+            )
             .role(Role::Authority)
-            .listen_on(<span class="macro">vec!</span>[<span class="string">&quot;/ip4/127.0.0.1/tcp/0&quot;</span>.parse().unwrap()])
             .build(dir.path(), chain.clone())
             .<span class="kw">await
             </span>.unwrap();
@@ -1719,7 +1889,11 @@
         <span class="kw">let </span>other_node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
             .role(Role::Authority)
-            .boot_nodes(node.listen_addresses().<span class="kw">await</span>.unwrap())
+            .network(
+                NetworkBuilder::new()
+                    .boot_nodes(node.listen_addresses().<span class="kw">await</span>.unwrap())
+                    .build(),
+            )
             .build(dir.path(), chain)
             .<span class="kw">await
             </span>.unwrap();

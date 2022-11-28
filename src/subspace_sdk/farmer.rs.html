@@ -768,17 +768,6 @@
 <a href="#768" id="768">768</a>
 <a href="#769" id="769">769</a>
 <a href="#770" id="770">770</a>
-<a href="#771" id="771">771</a>
-<a href="#772" id="772">772</a>
-<a href="#773" id="773">773</a>
-<a href="#774" id="774">774</a>
-<a href="#775" id="775">775</a>
-<a href="#776" id="776">776</a>
-<a href="#777" id="777">777</a>
-<a href="#778" id="778">778</a>
-<a href="#779" id="779">779</a>
-<a href="#780" id="780">780</a>
-<a href="#781" id="781">781</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, io, num::NonZeroUsize, path::PathBuf, sync::Arc};
 
 <span class="kw">use </span>anyhow::Context;
@@ -797,6 +786,8 @@
 <span class="kw">use </span>tokio::sync::{oneshot, watch, Mutex};
 
 <span class="kw">use crate</span>::{Node, PublicKey};
+
+<span class="kw">pub use </span>builder::Builder;
 
 <span class="doccomment">/// Description of the cache
 </span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -871,19 +862,22 @@
     }
 }
 
-<span class="kw">struct </span>DSNRecordsCacheSize(NonZeroUsize);
+<span class="kw">mod </span>builder {
+    <span class="kw">use </span>libp2p_core::Multiaddr;
 
-<span class="kw">impl </span>Default <span class="kw">for </span>DSNRecordsCacheSize {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(NonZeroUsize::new(<span class="number">32678</span>).unwrap())
+    <span class="doccomment">/// Technical type which stores all
+    </span><span class="attr">#[derive(Debug, derive_builder::Builder)]
+    #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;Builder&quot;</span>)]
+    </span><span class="kw">pub struct </span>Configuration {
+        <span class="doccomment">/// Listen on
+        </span><span class="attr">#[builder(default = <span class="string">&quot;vec![]&quot;</span>)]
+        #[builder(setter(strip_option))]
+        </span><span class="kw">pub </span>listen_on: Vec&lt;Multiaddr&gt;,
+        <span class="doccomment">/// Bootstrap nodes
+        </span><span class="attr">#[builder(setter(strip_option))]
+        #[builder(default = <span class="string">&quot;vec![]&quot;</span>)]
+        </span><span class="kw">pub </span>bootstrap_nodes: Vec&lt;Multiaddr&gt;,
     }
-}
-
-<span class="doccomment">/// Farmer builder
-</span><span class="attr">#[derive(Default)]
-</span><span class="kw">pub struct </span>Builder {
-    listen_on: Vec&lt;Multiaddr&gt;,
-    bootstrap_nodes: Vec&lt;Multiaddr&gt;,
 }
 
 <span class="doccomment">/// Build Error
@@ -991,23 +985,6 @@
 }
 
 <span class="kw">impl </span>Builder {
-    <span class="doccomment">/// Construct new builder
-    </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::default()
-    }
-
-    <span class="doccomment">/// DSN would listen on the addresses supplied
-    </span><span class="kw">pub fn </span>listen_on(<span class="kw-2">mut </span><span class="self">self</span>, multiaddrs: <span class="kw">impl </span>IntoIterator&lt;Item = Multiaddr&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.listen_on = multiaddrs.into_iter().collect();
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Connect to those nodes apart from ones from chain spec
-    </span><span class="kw">pub fn </span>bootstrap_nodes(<span class="kw-2">mut </span><span class="self">self</span>, multiaddrs: <span class="kw">impl </span>IntoIterator&lt;Item = Multiaddr&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.bootstrap_nodes = multiaddrs.into_iter().collect();
-        <span class="self">self
-    </span>}
-
     <span class="doccomment">/// Open and start farmer
     </span><span class="kw">pub async fn </span>build(
         <span class="self">self</span>,
@@ -1016,13 +993,14 @@
         plots: <span class="kw-2">&amp;</span>[PlotDescription],
         cache: CacheDescription,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Farmer, BuildError&gt; {
+        <span class="kw">let </span>builder::Configuration {
+            listen_on,
+            bootstrap_nodes,
+        } = <span class="self">self</span>._build().expect(<span class="string">&quot;Build is infallible&quot;</span>);
+
         <span class="kw">if </span>plots.is_empty() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(BuildError::NoPlotsSupplied);
         }
-        <span class="kw">let </span><span class="self">Self </span>{
-            listen_on,
-            bootstrap_nodes,
-        } = <span class="self">self</span>;
         <span class="kw">let </span>bootstrap_nodes = <span class="kw">if </span>bootstrap_nodes.is_empty() {
             <span class="kw">use </span>subspace_farmer::RpcClient;
 
@@ -1341,7 +1319,7 @@
 <span class="kw">impl </span>Farmer {
     <span class="doccomment">/// Farmer builder
     </span><span class="kw">pub fn </span>builder() -&gt; Builder {
-        Builder::new()
+        Builder::default()
     }
 
     <span class="doccomment">/// Gets plot info
