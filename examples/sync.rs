@@ -5,7 +5,8 @@ use bytesize::ByteSize;
 use clap::Parser;
 use sc_network_common::config::MultiaddrWithPeerId;
 use subspace_sdk::{
-    chain_spec, farmer::CacheDescription, Farmer, Node, PlotDescription, PublicKey,
+    chain_spec, farmer::CacheDescription, node::NetworkBuilder, Farmer, Node, PlotDescription,
+    PublicKey,
 };
 use tempfile::TempDir;
 
@@ -70,9 +71,13 @@ async fn main() -> anyhow::Result<()> {
                 ByteSize::b(plot_size.as_u64() / 10),
             );
             let node = Node::builder()
-                .listen_on(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
+                .network(
+                    NetworkBuilder::new()
+                        .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
+                        .force_synced(true)
+                        .build(),
+                )
                 .force_authoring(true)
-                .force_synced(true)
                 .role(subspace_sdk::node::Role::Authority)
                 .build(node, chain_spec)
                 .await?;
@@ -101,7 +106,7 @@ async fn main() -> anyhow::Result<()> {
             let node = Node::builder()
                 .force_authoring(true)
                 .role(subspace_sdk::node::Role::Authority)
-                .boot_nodes(boot_nodes)
+                .network(NetworkBuilder::new().boot_nodes(boot_nodes).build())
                 .build(node.as_ref(), chain_spec)
                 .await?;
 
