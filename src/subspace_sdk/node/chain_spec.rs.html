@@ -818,6 +818,12 @@
 <a href="#818" id="818">818</a>
 <a href="#819" id="819">819</a>
 <a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Subspace chain configurations.
 
 </span><span class="kw">use </span>sc_service::ChainType;
@@ -833,6 +839,7 @@
 
 <span class="kw">const </span>SUBSPACE_TELEMETRY_URL: <span class="kw-2">&amp;</span>str = <span class="string">&quot;wss://telemetry.subspace.network/submit/&quot;</span>;
 <span class="kw">const </span>X_NET_2_CHAIN_SPEC: <span class="kw-2">&amp;</span>[u8] = <span class="macro">include_bytes!</span>(<span class="string">&quot;../../res/chain-spec-raw-x-net-2.json&quot;</span>);
+<span class="kw">const </span>GEMINI_3A_CHAIN_SPEC: <span class="kw-2">&amp;</span>[u8] = <span class="macro">include_bytes!</span>(<span class="string">&quot;../../res/chain-spec-raw-gemini-3a.json&quot;</span>);
 
 <span class="doccomment">/// List of accounts which should receive token grants, amounts are specified in SSC.
 </span><span class="kw">const </span>TOKEN_GRANTS: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>str, u128)] = <span class="kw-2">&amp;</span>[
@@ -867,6 +874,11 @@
     enable_storage_access: bool,
     allow_authoring_by: AllowAuthoringBy,
     enable_executor: bool,
+}
+
+<span class="doccomment">/// Gemini 3a chain spec
+</span><span class="kw">pub fn </span>gemini_3a() -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusChainSpec&lt;GenesisConfig, SystemDomainGenesisConfig&gt;, String&gt; {
+    ConsensusChainSpec::from_json_bytes(GEMINI_3A_CHAIN_SPEC)
 }
 
 <span class="doccomment">/// Gemini 3a compiled chain spec
