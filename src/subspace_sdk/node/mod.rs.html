@@ -942,19 +942,6 @@
 <a href="#942" id="942">942</a>
 <a href="#943" id="943">943</a>
 <a href="#944" id="944">944</a>
-<a href="#945" id="945">945</a>
-<a href="#946" id="946">946</a>
-<a href="#947" id="947">947</a>
-<a href="#948" id="948">948</a>
-<a href="#949" id="949">949</a>
-<a href="#950" id="950">950</a>
-<a href="#951" id="951">951</a>
-<a href="#952" id="952">952</a>
-<a href="#953" id="953">953</a>
-<a href="#954" id="954">954</a>
-<a href="#955" id="955">955</a>
-<a href="#956" id="956">956</a>
-<a href="#957" id="957">957</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>futures::channel::{mpsc, oneshot};
 <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
@@ -1028,14 +1015,40 @@
         </span><span class="attr">#[builder(default = <span class="string">&quot;format!(\&quot;{}-{}\&quot;, env!(\&quot;CARGO_PKG_VERSION\&quot;), env!(\&quot;GIT_HASH\&quot;))&quot;</span>)]
         </span><span class="kw">pub </span>impl_version: String,
         <span class="doccomment">/// Rpc settings
-        </span><span class="attr">#[builder(default)]
+        </span><span class="attr">#[builder(setter(into), default)]
         </span><span class="kw">pub </span>rpc: Rpc,
         <span class="doccomment">/// Network settings
-        </span><span class="attr">#[builder(default)]
+        </span><span class="attr">#[builder(setter(into), default)]
         </span><span class="kw">pub </span>network: Network,
         <span class="doccomment">/// DSN settings
-        </span><span class="attr">#[builder(default)]
+        </span><span class="attr">#[builder(setter(into), default)]
         </span><span class="kw">pub </span>dsn: Dsn,
+    }
+
+    <span class="macro">macro_rules! </span>generate_builder {
+        ( <span class="macro-nonterminal">$name</span>:ident ) =&gt; {
+            <span class="kw">impl </span><span class="macro">concat_idents!</span>(<span class="macro-nonterminal">$name</span>, Builder) {
+                <span class="doccomment">/// Constructor
+                </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+                    <span class="self">Self</span>::default()
+                }
+
+                <span class="attr">#[doc = <span class="macro">concat!</span>(<span class="string">&quot;Build &quot;</span>, <span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>))]
+                </span><span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; <span class="macro-nonterminal">$name </span>{
+                    <span class="self">self</span>._build().expect(<span class="string">&quot;Infallible&quot;</span>)
+                }
+            }
+
+            <span class="kw">impl </span>From&lt;<span class="macro">concat_idents!</span>(<span class="macro-nonterminal">$name</span>, Builder)&gt; <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
+                <span class="kw">fn </span>from(value: <span class="macro">concat_idents!</span>(<span class="macro-nonterminal">$name</span>, Builder)) -&gt; <span class="self">Self </span>{
+                    value.build()
+                }
+            }
+        };
+        ( <span class="macro-nonterminal">$name</span>:ident, $(<span class="macro-nonterminal">$rest</span>:ident),+ ) =&gt; {
+            <span class="macro">generate_builder!</span>(<span class="macro-nonterminal">$name</span>);
+            <span class="macro">generate_builder!</span>($(<span class="macro-nonterminal">$rest</span>),+);
+        };
     }
 
     <span class="doccomment">/// Node RPC builder
@@ -1079,18 +1092,6 @@
         </span><span class="kw">pub </span>ws_max_out_buffer_capacity: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     }
 
-    <span class="kw">impl </span>RpcBuilder {
-        <span class="doccomment">/// Constructor
-        </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-            <span class="self">Self</span>::default()
-        }
-
-        <span class="doccomment">/// Build RPC
-        </span><span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; Rpc {
-            <span class="self">self</span>._build().expect(<span class="string">&quot;Infallible&quot;</span>)
-        }
-    }
-
     <span class="doccomment">/// Node network builder
     </span><span class="attr">#[derive(Debug, Default, Clone, derive_builder::Builder)]
     #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;NetworkBuilder&quot;</span>)]
@@ -1112,18 +1113,6 @@
         </span><span class="kw">pub </span>client_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
     }
 
-    <span class="kw">impl </span>NetworkBuilder {
-        <span class="doccomment">/// Constructor
-        </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-            <span class="self">Self</span>::default()
-        }
-
-        <span class="doccomment">/// Build network configuration
-        </span><span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; Network {
-            <span class="self">self</span>._build().expect(<span class="string">&quot;Infallible&quot;</span>)
-        }
-    }
-
     <span class="doccomment">/// Node DSN builder
     </span><span class="attr">#[derive(Debug, Clone, derivative::Derivative, derive_builder::Builder)]
     #[derivative(Default)]
@@ -1140,17 +1129,7 @@
         </span><span class="kw">pub </span>boot_nodes: Vec&lt;Multiaddr&gt;,
     }
 
-    <span class="kw">impl </span>DsnBuilder {
-        <span class="doccomment">/// Constructor
-        </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-            <span class="self">Self</span>::default()
-        }
-
-        <span class="doccomment">/// Build DSN configuration
-        </span><span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; Dsn {
-            <span class="self">self</span>._build().expect(<span class="string">&quot;Infallible&quot;</span>)
-        }
-    }
+    <span class="macro">generate_builder!</span>(Rpc, Network, Dsn);
 }
 
 <span class="doccomment">/// Role of the local node.
@@ -1852,8 +1831,7 @@
             .network(
                 NetworkBuilder::new()
                     .force_synced(<span class="bool-val">true</span>)
-                    .listen_addresses(<span class="macro">vec!</span>[<span class="string">&quot;/ip4/127.0.0.1/tcp/0&quot;</span>.parse().unwrap()])
-                    .build(),
+                    .listen_addresses(<span class="macro">vec!</span>[<span class="string">&quot;/ip4/127.0.0.1/tcp/0&quot;</span>.parse().unwrap()]),
             )
             .role(Role::Authority)
             .build(dir.path(), chain.clone())
@@ -1889,11 +1867,7 @@
         <span class="kw">let </span>other_node = Node::builder()
             .force_authoring(<span class="bool-val">true</span>)
             .role(Role::Authority)
-            .network(
-                NetworkBuilder::new()
-                    .boot_nodes(node.listen_addresses().<span class="kw">await</span>.unwrap())
-                    .build(),
-            )
+            .network(NetworkBuilder::new().boot_nodes(node.listen_addresses().<span class="kw">await</span>.unwrap()))
             .build(dir.path(), chain)
             .<span class="kw">await
             </span>.unwrap();
