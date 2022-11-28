@@ -74,8 +74,7 @@ async fn main() -> anyhow::Result<()> {
                 .network(
                     NetworkBuilder::new()
                         .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
-                        .force_synced(true)
-                        .build(),
+                        .force_synced(true),
                 )
                 .force_authoring(true)
                 .role(subspace_sdk::node::Role::Authority)
@@ -106,7 +105,7 @@ async fn main() -> anyhow::Result<()> {
             let node = Node::builder()
                 .force_authoring(true)
                 .role(subspace_sdk::node::Role::Authority)
-                .network(NetworkBuilder::new().boot_nodes(boot_nodes).build())
+                .network(NetworkBuilder::new().boot_nodes(boot_nodes))
                 .build(node.as_ref(), chain_spec)
                 .await?;
 
