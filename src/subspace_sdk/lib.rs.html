@@ -202,6 +202,13 @@
 <a href="#202" id="202">202</a>
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Subspace SDK for easy running of both Subspace node and farmer
 
 </span><span class="attr">#![deny(missing_docs)]
@@ -279,6 +286,9 @@
     //! `sp-core` into farmer application
 
     </span><span class="kw">use </span>base58::FromBase58;
+    <span class="kw">use </span>blake2::digest::typenum::U64;
+    <span class="kw">use </span>blake2::digest::FixedOutput;
+    <span class="kw">use </span>blake2::{Blake2b, Digest};
     <span class="kw">use </span>ss58_registry::Ss58AddressFormat;
     <span class="kw">use </span>subspace_core_primitives::{PublicKey, PUBLIC_KEY_LENGTH};
     <span class="kw">use </span>thiserror::Error;
@@ -335,7 +345,7 @@
         }
 
         <span class="kw">let </span>hash = ss58hash(<span class="kw-2">&amp;</span>data[<span class="number">0</span>..PUBLIC_KEY_LENGTH + prefix_len]);
-        <span class="kw">let </span>checksum = <span class="kw-2">&amp;</span>hash.as_bytes()[<span class="number">0</span>..CHECKSUM_LEN];
+        <span class="kw">let </span>checksum = <span class="kw-2">&amp;</span>hash[<span class="number">0</span>..CHECKSUM_LEN];
         <span class="kw">if </span>data[PUBLIC_KEY_LENGTH + prefix_len..PUBLIC_KEY_LENGTH + prefix_len + CHECKSUM_LEN]
             != <span class="kw-2">*</span>checksum
         {
@@ -349,14 +359,18 @@
 
         <span class="prelude-val">Ok</span>(PublicKey::from(bytes))
     }
-    <span class="kw">fn </span>ss58hash(data: <span class="kw-2">&amp;</span>[u8]) -&gt; blake2_rfc::blake2b::Blake2bResult {
-        <span class="kw">let </span><span class="kw-2">mut </span>context = blake2_rfc::blake2b::Blake2b::new(<span class="number">64</span>);
-        context.update(PREFIX);
-        context.update(data);
-        context.finalize()
+
+    <span class="kw">fn </span>ss58hash(data: <span class="kw-2">&amp;</span>[u8]) -&gt; [u8; <span class="number">64</span>] {
+        <span class="kw">let </span><span class="kw-2">mut </span>state = Blake2b::&lt;U64&gt;::new();
+        state.update(PREFIX);
+        state.update(data);
+        state.finalize_fixed().into()
     }
 
-    <span class="kw">impl </span>std::str::FromStr <span class="kw">for </span><span class="kw">super</span>::PublicKey {
+    <span class="doccomment">/// ```
+    /// &quot;5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY&quot;.parse::&lt;subspace_sdk::PublicKey&gt;().unwrap();
+    /// ```
+    </span><span class="kw">impl </span>std::str::FromStr <span class="kw">for </span><span class="kw">super</span>::PublicKey {
         <span class="kw">type </span><span class="prelude-val">Err </span>= Ss58ParsingError;
         <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
             parse_ss58_reward_address(s).map(<span class="self">Self</span>)

@@ -944,7 +944,6 @@
 
     <span class="kw">let </span>config = Config::&lt;ConfiguredRecordStore&gt; {
         listen_on,
-        allow_non_globals_in_dht: <span class="bool-val">true</span>,
         networking_parameters_registry: BootstrappedNetworkingParameters::new(bootstrap_nodes)
             .boxed(),
         request_response_protocols: <span class="macro">vec!</span>[PieceByHashRequestHandler::create(<span class="kw">move </span>|req| {
@@ -976,6 +975,7 @@
             ),
             MemoryProviderStorage::default(),
         ),
+        allow_non_global_addresses_in_dht: <span class="bool-val">true</span>,
         ..default_config
     };
 

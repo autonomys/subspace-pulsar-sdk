@@ -942,6 +942,12 @@
 <a href="#942" id="942">942</a>
 <a href="#943" id="943">943</a>
 <a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a>
+<a href="#947" id="947">947</a>
+<a href="#948" id="948">948</a>
+<a href="#949" id="949">949</a>
+<a href="#950" id="950">950</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>futures::channel::{mpsc, oneshot};
 <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
@@ -1127,6 +1133,10 @@
         <span class="doccomment">/// Boot nodes
         </span><span class="attr">#[builder(default)]
         </span><span class="kw">pub </span>boot_nodes: Vec&lt;Multiaddr&gt;,
+        <span class="doccomment">/// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
+        </span><span class="attr">#[builder(default = <span class="string">&quot;true&quot;</span>)]
+        #[derivative(Default(value = <span class="string">&quot;true&quot;</span>))]
+        </span><span class="kw">pub </span>allow_non_global_addresses_in_dht: bool,
     }
 
     <span class="macro">generate_builder!</span>(Rpc, Network, Dsn);
@@ -1264,6 +1274,7 @@
             <span class="kw">let </span>builder::Dsn {
                 listen_addresses,
                 boot_nodes,
+                allow_non_global_addresses_in_dht,
             } = dsn;
             <span class="kw">let </span>keypair = network
                 .node_key
@@ -1283,6 +1294,7 @@
                 .collect();
 
             subspace_service::DsnConfig {
+                allow_non_global_addresses_in_dht,
                 bootstrap_nodes,
                 listen_on: listen_addresses,
                 keypair,
