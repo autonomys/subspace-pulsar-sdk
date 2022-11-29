@@ -39,8 +39,8 @@ macro_rules! generate_builder {
         }
     };
     ( $name:ident, $($rest:ident),+ ) => {
-        crate::generate_builder!($name);
-        crate::generate_builder!($($rest),+);
+        $crate::generate_builder!($name);
+        $crate::generate_builder!($($rest),+);
     };
 }
 
