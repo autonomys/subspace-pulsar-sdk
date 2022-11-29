@@ -19,7 +19,7 @@ use tokio::sync::{oneshot, watch, Mutex};
 
 use crate::{Node, PublicKey};
 
-pub use builder::Builder;
+pub use builder::{Builder, Configuration, Dsn, DsnBuilder};
 
 /// Description of the cache
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]

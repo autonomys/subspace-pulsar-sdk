@@ -35,7 +35,7 @@ pub use sc_state_db::Constraints;
 
 pub mod chain_spec;
 
-pub use builder::{Builder, DsnBuilder, NetworkBuilder, RpcBuilder};
+pub use builder::{Builder, Config, Dsn, DsnBuilder, Network, NetworkBuilder, Rpc, RpcBuilder};
 
 mod builder {
     use super::*;
