@@ -81,32 +81,6 @@ mod builder {
         pub dsn: Dsn,
     }
 
-    macro_rules! generate_builder {
-        ( $name:ident ) => {
-            impl concat_idents!($name, Builder) {
-                /// Constructor
-                pub fn new() -> Self {
-                    Self::default()
-                }
-
-                #[doc = concat!("Build ", stringify!($name))]
-                pub fn build(self) -> $name {
-                    self._build().expect("Infallible")
-                }
-            }
-
-            impl From<concat_idents!($name, Builder)> for $name {
-                fn from(value: concat_idents!($name, Builder)) -> Self {
-                    value.build()
-                }
-            }
-        };
-        ( $name:ident, $($rest:ident),+ ) => {
-            generate_builder!($name);
-            generate_builder!($($rest),+);
-        };
-    }
-
     /// Node RPC builder
     #[derive(Debug, derivative::Derivative, Clone, derive_builder::Builder)]
     #[derivative(Default)]
@@ -189,7 +163,7 @@ mod builder {
         pub allow_non_global_addresses_in_dht: bool,
     }
 
-    generate_builder!(Rpc, Network, Dsn);
+    crate::generate_builder!(Rpc, Network, Dsn);
 }
 
 /// Role of the local node.
