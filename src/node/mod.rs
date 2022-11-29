@@ -158,8 +158,7 @@ mod builder {
         #[builder(default)]
         pub boot_nodes: Vec<Multiaddr>,
         /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
-        #[builder(default = "true")]
-        #[derivative(Default(value = "true"))]
+        #[builder(default)]
         pub allow_non_global_addresses_in_dht: bool,
     }
 

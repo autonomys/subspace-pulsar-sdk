@@ -132,9 +132,8 @@ mod builder {
     }
 
     /// Farmer DSN
-    #[derive(Debug, Clone, derivative::Derivative, derive_builder::Builder)]
+    #[derive(Debug, Clone, Default, derive_builder::Builder)]
     #[builder(pattern = "owned", build_fn(name = "_build"), name = "DsnBuilder")]
-    #[derivative(Default)]
     pub struct Dsn {
         /// Listen on
         #[builder(default)]
@@ -142,6 +141,9 @@ mod builder {
         /// Bootstrap nodes
         #[builder(default)]
         pub bootstrap_nodes: Vec<Multiaddr>,
+        /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
+        #[builder(default)]
+        pub allow_non_global_addresses_in_dht: bool,
     }
 
     generate_builder!(Dsn);
@@ -160,6 +162,7 @@ impl builder::Dsn {
         let Self {
             listen_on,
             bootstrap_nodes,
+            allow_non_global_addresses_in_dht,
         } = self;
 
         let readers_and_pieces = Arc::new(std::sync::Mutex::new(None::<ReadersAndPieces>));
@@ -194,7 +197,7 @@ impl builder::Dsn {
                 Some(PieceByHashResponse { piece: result })
             })],
             record_store: cache.record_store(&default_config.keypair)?,
-            allow_non_global_addresses_in_dht: true,
+            allow_non_global_addresses_in_dht,
             ..default_config
         };
 
