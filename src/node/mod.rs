@@ -183,6 +183,10 @@ mod builder {
         /// Boot nodes
         #[builder(default)]
         pub boot_nodes: Vec<Multiaddr>,
+        /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
+        #[builder(default = "true")]
+        #[derivative(Default(value = "true"))]
+        pub allow_non_global_addresses_in_dht: bool,
     }
 
     generate_builder!(Rpc, Network, Dsn);
@@ -320,6 +324,7 @@ impl Builder {
             let builder::Dsn {
                 listen_addresses,
                 boot_nodes,
+                allow_non_global_addresses_in_dht,
             } = dsn;
             let keypair = network
                 .node_key
@@ -339,6 +344,7 @@ impl Builder {
                 .collect();
 
             subspace_service::DsnConfig {
+                allow_non_global_addresses_in_dht,
                 bootstrap_nodes,
                 listen_on: listen_addresses,
                 keypair,

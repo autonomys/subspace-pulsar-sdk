@@ -174,7 +174,6 @@ async fn configure_dsn(
 
     let config = Config::<ConfiguredRecordStore> {
         listen_on,
-        allow_non_globals_in_dht: true,
         networking_parameters_registry: BootstrappedNetworkingParameters::new(bootstrap_nodes)
             .boxed(),
         request_response_protocols: vec![PieceByHashRequestHandler::create(move |req| {
@@ -206,6 +205,7 @@ async fn configure_dsn(
             ),
             MemoryProviderStorage::default(),
         ),
+        allow_non_global_addresses_in_dht: true,
         ..default_config
     };
 

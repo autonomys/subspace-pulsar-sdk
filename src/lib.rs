@@ -75,6 +75,9 @@ mod parse_ss58 {
     //! `sp-core` into farmer application
 
     use base58::FromBase58;
+    use blake2::digest::typenum::U64;
+    use blake2::digest::FixedOutput;
+    use blake2::{Blake2b, Digest};
     use ss58_registry::Ss58AddressFormat;
     use subspace_core_primitives::{PublicKey, PUBLIC_KEY_LENGTH};
     use thiserror::Error;
@@ -131,7 +134,7 @@ mod parse_ss58 {
         }
 
         let hash = ss58hash(&data[0..PUBLIC_KEY_LENGTH + prefix_len]);
-        let checksum = &hash.as_bytes()[0..CHECKSUM_LEN];
+        let checksum = &hash[0..CHECKSUM_LEN];
         if data[PUBLIC_KEY_LENGTH + prefix_len..PUBLIC_KEY_LENGTH + prefix_len + CHECKSUM_LEN]
             != *checksum
         {
@@ -145,13 +148,17 @@ mod parse_ss58 {
 
         Ok(PublicKey::from(bytes))
     }
-    fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
-        let mut context = blake2_rfc::blake2b::Blake2b::new(64);
-        context.update(PREFIX);
-        context.update(data);
-        context.finalize()
+
+    fn ss58hash(data: &[u8]) -> [u8; 64] {
+        let mut state = Blake2b::<U64>::new();
+        state.update(PREFIX);
+        state.update(data);
+        state.finalize_fixed().into()
     }
 
+    /// ```
+    /// "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY".parse::<subspace_sdk::PublicKey>().unwrap();
+    /// ```
     impl std::str::FromStr for super::PublicKey {
         type Err = Ss58ParsingError;
         fn from_str(s: &str) -> Result<Self, Self::Err> {
