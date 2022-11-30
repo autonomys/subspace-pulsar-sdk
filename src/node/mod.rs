@@ -416,6 +416,8 @@ impl From<RpcMethods> for sc_service::RpcMethods {
     }
 }
 
+const NODE_NAME_MAX_LENGTH: usize = 64;
+
 impl Builder {
     /// New builder
     pub fn new() -> Self {
@@ -457,7 +459,6 @@ impl Builder {
             network,
             dsn,
         } = self._build().expect("Infallible");
-
         let base_path = BasePath::new(directory.as_ref());
         let config_dir = base_path.config_dir(chain_spec.id());
 
@@ -469,6 +470,13 @@ impl Builder {
                 name,
                 client_id,
             } = network;
+            let name = name.unwrap_or_else(|| {
+                names::Generator::with_naming(names::Name::Numbered)
+                    .next()
+                    .filter(|name| name.chars().count() < NODE_NAME_MAX_LENGTH)
+                    .expect("RNG is available on all supported platforms; qed")
+            });
+
             let client_id = client_id.unwrap_or_else(|| format!("{}/v{}", impl_name, impl_version));
             let config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 
@@ -483,7 +491,7 @@ impl Builder {
                         .collect(),
                     force_synced,
                     ..NetworkConfiguration::new(
-                        name.clone().unwrap_or_default(),
+                        name.clone(),
                         client_id,
                         NodeKeyConfig::Ed25519(Secret::File(
                             config_dir.join(NODE_KEY_ED25519_FILE),
@@ -672,7 +680,7 @@ pub struct Node {
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     rpc_handle: Arc<jsonrpsee_core::server::rpc_module::RpcModule<()>>,
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
-    name: Option<String>,
+    name: String,
 }
 
 impl std::fmt::Debug for Node {
@@ -713,7 +721,7 @@ pub struct Info {
     /// Runtime version
     pub version: sp_version::RuntimeVersion,
     /// Node telemetry name
-    pub name: Option<String>,
+    pub name: String,
     /// Number of peers connected to our node
     pub connected_peers: u64,
     /// Number of nodes that we know of but that we're not connected to
