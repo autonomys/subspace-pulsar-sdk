@@ -120,11 +120,15 @@ impl PlotDescription {
 
 mod builder {
     use crate::generate_builder;
+    use derivative::Derivative;
+    use derive_builder::Builder;
     use libp2p_core::Multiaddr;
+    use serde::{Deserialize, Serialize};
 
     /// Technical type which stores all
-    #[derive(Debug, Clone, derivative::Derivative, derive_builder::Builder)]
+    #[derive(Debug, Clone, Derivative, Builder, Serialize, Deserialize)]
     #[builder(pattern = "owned", build_fn(name = "_build"), name = "Builder")]
+    #[non_exhaustive]
     pub struct Configuration {
         /// DSN options
         #[builder(default, setter(into))]
@@ -132,8 +136,9 @@ mod builder {
     }
 
     /// Farmer DSN
-    #[derive(Debug, Clone, Default, derive_builder::Builder)]
+    #[derive(Debug, Clone, Default, Derivative, Builder, Serialize, Deserialize)]
     #[builder(pattern = "owned", build_fn(name = "_build"), name = "DsnBuilder")]
+    #[non_exhaustive]
     pub struct Dsn {
         /// Listen on
         #[builder(default)]
