@@ -768,12 +768,37 @@
 <a href="#768" id="768">768</a>
 <a href="#769" id="769">769</a>
 <a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, io, num::NonZeroUsize, path::PathBuf, sync::Arc};
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>bytesize::ByteSize;
 <span class="kw">use </span>futures::{prelude::<span class="kw-2">*</span>, stream::FuturesUnordered};
-<span class="kw">use </span>libp2p_core::Multiaddr;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>subspace_core_primitives::{PieceIndexHash, SectorIndex, PLOT_SECTOR_SIZE};
 <span class="kw">use </span>subspace_farmer::single_disk_plot::{
@@ -781,13 +806,16 @@
     SingleDiskPlotInfo, SingleDiskPlotOptions, SingleDiskPlotSummary,
 };
 <span class="kw">use </span>subspace_farmer_components::plotting::PlottedSector;
-<span class="kw">use </span>subspace_networking::{Node <span class="kw">as </span>DSNNode, NodeRunner <span class="kw">as </span>DSNNodeRunner};
+<span class="kw">use </span>subspace_networking::{
+    CustomRecordStore, LimitedSizeRecordStorageWrapper, MemoryProviderStorage, Node <span class="kw">as </span>DSNNode,
+    NodeRunner <span class="kw">as </span>DSNNodeRunner, ParityDbRecordStorage,
+};
 <span class="kw">use </span>subspace_rpc_primitives::SolutionResponse;
 <span class="kw">use </span>tokio::sync::{oneshot, watch, Mutex};
 
 <span class="kw">use crate</span>::{Node, PublicKey};
 
-<span class="kw">pub use </span>builder::Builder;
+<span class="kw">pub use </span>builder::{Builder, Configuration, Dsn, DsnBuilder};
 
 <span class="doccomment">/// Description of the cache
 </span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -798,6 +826,30 @@
     <span class="doccomment">/// Space which you want to dedicate
     </span><span class="attr">#[serde(with = <span class="string">&quot;bytesize_serde&quot;</span>)]
     </span><span class="kw">pub </span>space_dedicated: ByteSize,
+}
+
+<span class="kw">impl </span>CacheDescription {
+    <span class="kw">fn </span>record_store(
+        <span class="self">self</span>,
+        keypair: <span class="kw-2">&amp;</span>libp2p_core::identity::Keypair,
+    ) -&gt; parity_db::Result&lt;
+        subspace_networking::CustomRecordStore&lt;
+            LimitedSizeRecordStorageWrapper&lt;ParityDbRecordStorage&gt;,
+            MemoryProviderStorage,
+        &gt;,
+    &gt; {
+        ParityDbRecordStorage::new(<span class="kw-2">&amp;</span><span class="self">self</span>.directory).map(|storage| {
+            CustomRecordStore::new(
+                LimitedSizeRecordStorageWrapper::new(
+                    storage,
+                    NonZeroUsize::new(<span class="self">self</span>.space_dedicated.as_u64() <span class="kw">as _</span>)
+                        .expect(<span class="string">&quot;Always more than 1Mib&quot;</span>),
+                    subspace_networking::peer_id(keypair),
+                ),
+                MemoryProviderStorage::default(),
+            )
+        })
+    }
 }
 
 <span class="kw">const </span>MIN_CACHE_SIZE: ByteSize = ByteSize::mib(<span class="number">1</span>);
@@ -863,20 +915,91 @@
 }
 
 <span class="kw">mod </span>builder {
+    <span class="kw">use </span><span class="kw">crate</span>::generate_builder;
     <span class="kw">use </span>libp2p_core::Multiaddr;
 
     <span class="doccomment">/// Technical type which stores all
-    </span><span class="attr">#[derive(Debug, derive_builder::Builder)]
+    </span><span class="attr">#[derive(Debug, Clone, derivative::Derivative, derive_builder::Builder)]
     #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;Builder&quot;</span>)]
     </span><span class="kw">pub struct </span>Configuration {
+        <span class="doccomment">/// DSN options
+        </span><span class="attr">#[builder(default, setter(into))]
+        </span><span class="kw">pub </span>dsn: Dsn,
+    }
+
+    <span class="doccomment">/// Farmer DSN
+    </span><span class="attr">#[derive(Debug, Clone, Default, derive_builder::Builder)]
+    #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;DsnBuilder&quot;</span>)]
+    </span><span class="kw">pub struct </span>Dsn {
         <span class="doccomment">/// Listen on
-        </span><span class="attr">#[builder(default = <span class="string">&quot;vec![]&quot;</span>)]
-        #[builder(setter(strip_option))]
+        </span><span class="attr">#[builder(default)]
         </span><span class="kw">pub </span>listen_on: Vec&lt;Multiaddr&gt;,
         <span class="doccomment">/// Bootstrap nodes
-        </span><span class="attr">#[builder(setter(strip_option))]
-        #[builder(default = <span class="string">&quot;vec![]&quot;</span>)]
+        </span><span class="attr">#[builder(default)]
         </span><span class="kw">pub </span>bootstrap_nodes: Vec&lt;Multiaddr&gt;,
+        <span class="doccomment">/// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>allow_non_global_addresses_in_dht: bool,
+    }
+
+    <span class="macro">generate_builder!</span>(Dsn);
+}
+
+<span class="kw">impl </span>builder::Dsn {
+    <span class="kw">async fn </span>configure_dsn(
+        <span class="self">self</span>,
+        cache: CacheDescription,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(DSNNode, DSNNodeRunner&lt;ConfiguredRecordStore&gt;), BuildError&gt; {
+        <span class="kw">use </span>subspace_networking::{
+            BootstrappedNetworkingParameters, Config, PieceByHashRequestHandler,
+            PieceByHashResponse, PieceKey,
+        };
+
+        <span class="kw">let </span><span class="self">Self </span>{
+            listen_on,
+            bootstrap_nodes,
+            allow_non_global_addresses_in_dht,
+        } = <span class="self">self</span>;
+
+        <span class="kw">let </span>readers_and_pieces = Arc::new(std::sync::Mutex::new(<span class="prelude-val">None</span>::&lt;ReadersAndPieces&gt;));
+        <span class="kw">let </span>weak_readers_and_pieces = Arc::downgrade(<span class="kw-2">&amp;</span>readers_and_pieces);
+
+        <span class="kw">let </span>handle = tokio::runtime::Handle::current();
+        <span class="kw">let </span>default_config = Config::with_generated_keypair();
+
+        <span class="kw">let </span>config = Config::&lt;ConfiguredRecordStore&gt; {
+            listen_on,
+            networking_parameters_registry: BootstrappedNetworkingParameters::new(bootstrap_nodes)
+                .boxed(),
+            request_response_protocols: <span class="macro">vec!</span>[PieceByHashRequestHandler::create(<span class="kw">move </span>|req| {
+                <span class="kw">let </span>PieceKey::Sector(piece_index_hash) = req.key <span class="kw">else </span>{ <span class="kw">return </span><span class="prelude-val">None </span>};
+                <span class="kw">let </span><span class="prelude-val">Some</span>(readers_and_pieces) = weak_readers_and_pieces.upgrade() <span class="kw">else </span>{ <span class="kw">return </span><span class="prelude-val">None </span>};
+                <span class="kw">let </span>readers_and_pieces = readers_and_pieces.lock().unwrap();
+                <span class="kw">let </span><span class="prelude-val">Some</span>(readers_and_pieces) = readers_and_pieces.as_ref() <span class="kw">else </span>{ <span class="kw">return </span><span class="prelude-val">None </span>};
+                <span class="kw">let </span><span class="prelude-val">Some</span>(piece_details) = readers_and_pieces.pieces.get(<span class="kw-2">&amp;</span>piece_index_hash).copied() <span class="kw">else </span>{ <span class="kw">return </span><span class="prelude-val">None </span>};
+                <span class="kw">let </span><span class="kw-2">mut </span>reader = readers_and_pieces
+                    .readers
+                    .get(piece_details.plot_offset)
+                    .cloned()
+                    .expect(<span class="string">&quot;Offsets strictly correspond to existing plots; qed&quot;</span>);
+
+                <span class="kw">let </span>handle = handle.clone();
+                <span class="kw">let </span>result = tokio::task::block_in_place(<span class="kw">move </span>|| {
+                    handle.block_on(
+                        reader.read_piece(piece_details.sector_index, piece_details.piece_offset),
+                    )
+                });
+
+                <span class="prelude-val">Some</span>(PieceByHashResponse { piece: result })
+            })],
+            record_store: cache.record_store(<span class="kw-2">&amp;</span>default_config.keypair)<span class="question-mark">?</span>,
+            allow_non_global_addresses_in_dht,
+            ..default_config
+        };
+
+        subspace_networking::create(config)
+            .<span class="kw">await
+            </span>.map_err(Into::into)
     }
 }
 
@@ -924,66 +1047,6 @@
     pieces: HashMap&lt;PieceIndexHash, PieceDetails&gt;,
 }
 
-<span class="kw">async fn </span>configure_dsn(
-    records_cache_db: PathBuf,
-    listen_on: Vec&lt;Multiaddr&gt;,
-    bootstrap_nodes: Vec&lt;Multiaddr&gt;,
-    record_cache_size: NonZeroUsize,
-    readers_and_pieces: <span class="kw-2">&amp;</span>Arc&lt;std::sync::Mutex&lt;<span class="prelude-ty">Option</span>&lt;ReadersAndPieces&gt;&gt;&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;(DSNNode, DSNNodeRunner&lt;ConfiguredRecordStore&gt;), BuildError&gt; {
-    <span class="kw">use </span>subspace_networking::{
-        BootstrappedNetworkingParameters, Config, CustomRecordStore,
-        LimitedSizeRecordStorageWrapper, MemoryProviderStorage, ParityDbRecordStorage,
-        PieceByHashRequestHandler, PieceByHashResponse, PieceKey,
-    };
-
-    <span class="kw">let </span>weak_readers_and_pieces = Arc::downgrade(readers_and_pieces);
-
-    <span class="kw">let </span>handle = tokio::runtime::Handle::current();
-    <span class="kw">let </span>default_config = Config::with_generated_keypair();
-
-    <span class="kw">let </span>config = Config::&lt;ConfiguredRecordStore&gt; {
-        listen_on,
-        networking_parameters_registry: BootstrappedNetworkingParameters::new(bootstrap_nodes)
-            .boxed(),
-        request_response_protocols: <span class="macro">vec!</span>[PieceByHashRequestHandler::create(<span class="kw">move </span>|req| {
-            <span class="kw">let </span>PieceKey::Sector(piece_index_hash) = req.key <span class="kw">else </span>{ <span class="kw">return </span><span class="prelude-val">None </span>};
-            <span class="kw">let </span><span class="prelude-val">Some</span>(readers_and_pieces) = weak_readers_and_pieces.upgrade() <span class="kw">else </span>{ <span class="kw">return </span><span class="prelude-val">None </span>};
-            <span class="kw">let </span>readers_and_pieces = readers_and_pieces.lock().unwrap();
-            <span class="kw">let </span><span class="prelude-val">Some</span>(readers_and_pieces) = readers_and_pieces.as_ref() <span class="kw">else </span>{ <span class="kw">return </span><span class="prelude-val">None </span>};
-            <span class="kw">let </span><span class="prelude-val">Some</span>(piece_details) = readers_and_pieces.pieces.get(<span class="kw-2">&amp;</span>piece_index_hash).copied() <span class="kw">else </span>{ <span class="kw">return </span><span class="prelude-val">None </span>};
-            <span class="kw">let </span><span class="kw-2">mut </span>reader = readers_and_pieces
-                .readers
-                .get(piece_details.plot_offset)
-                .cloned()
-                .expect(<span class="string">&quot;Offsets strictly correspond to existing plots; qed&quot;</span>);
-
-            <span class="kw">let </span>handle = handle.clone();
-            <span class="kw">let </span>result = tokio::task::block_in_place(<span class="kw">move </span>|| {
-                handle.block_on(
-                    reader.read_piece(piece_details.sector_index, piece_details.piece_offset),
-                )
-            });
-
-            <span class="prelude-val">Some</span>(PieceByHashResponse { piece: result })
-        })],
-        record_store: CustomRecordStore::new(
-            LimitedSizeRecordStorageWrapper::new(
-                ParityDbRecordStorage::new(<span class="kw-2">&amp;</span>records_cache_db)<span class="question-mark">?</span>,
-                record_cache_size,
-                subspace_networking::peer_id(<span class="kw-2">&amp;</span>default_config.keypair),
-            ),
-            MemoryProviderStorage::default(),
-        ),
-        allow_non_global_addresses_in_dht: <span class="bool-val">true</span>,
-        ..default_config
-    };
-
-    subspace_networking::create(config)
-        .<span class="kw">await
-        </span>.map_err(Into::into)
-}
-
 <span class="kw">impl </span>Builder {
     <span class="doccomment">/// Open and start farmer
     </span><span class="kw">pub async fn </span>build(
@@ -993,36 +1056,25 @@
         plots: <span class="kw-2">&amp;</span>[PlotDescription],
         cache: CacheDescription,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Farmer, BuildError&gt; {
-        <span class="kw">let </span>builder::Configuration {
-            listen_on,
-            bootstrap_nodes,
-        } = <span class="self">self</span>._build().expect(<span class="string">&quot;Build is infallible&quot;</span>);
+        <span class="kw">let </span>builder::Configuration { <span class="kw-2">mut </span>dsn } = <span class="self">self</span>._build().expect(<span class="string">&quot;Build is infallible&quot;</span>);
 
         <span class="kw">if </span>plots.is_empty() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(BuildError::NoPlotsSupplied);
         }
-        <span class="kw">let </span>bootstrap_nodes = <span class="kw">if </span>bootstrap_nodes.is_empty() {
+
+        <span class="kw">if </span>dsn.bootstrap_nodes.is_empty() {
             <span class="kw">use </span>subspace_farmer::RpcClient;
 
-            node.farmer_app_info()
+            dsn.bootstrap_nodes = node
+                .farmer_app_info()
                 .<span class="kw">await
                 </span>.map_err(BuildError::RPCError)<span class="question-mark">?
-                </span>.dsn_bootstrap_nodes
-        } <span class="kw">else </span>{
-            bootstrap_nodes
-        };
+                </span>.dsn_bootstrap_nodes;
+        }
 
         <span class="kw">let </span><span class="kw-2">mut </span>single_disk_plots = Vec::with_capacity(plots.len());
         <span class="kw">let </span><span class="kw-2">mut </span>plot_info = HashMap::with_capacity(plots.len());
-        <span class="kw">let </span>(dsn_node, <span class="kw-2">mut </span>dsn_node_runner) = configure_dsn(
-            cache.directory,
-            listen_on,
-            bootstrap_nodes,
-            NonZeroUsize::new(cache.space_dedicated.as_u64() <span class="kw">as </span>usize)
-                .expect(<span class="string">&quot;Always more than 1Mib&quot;</span>),
-            <span class="kw-2">&amp;</span>Arc::new(std::sync::Mutex::new(<span class="prelude-val">None</span>)),
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(dsn_node, <span class="kw-2">mut </span>dsn_node_runner) = dsn.configure_dsn(cache).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">for </span>description <span class="kw">in </span>plots {
             description.check_too_small()<span class="question-mark">?</span>;
