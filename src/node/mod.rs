@@ -35,7 +35,7 @@ pub use sc_state_db::Constraints;
 
 pub mod chain_spec;
 
-pub use builder::{Builder, DsnBuilder, NetworkBuilder, RpcBuilder};
+pub use builder::{Builder, Config, Dsn, DsnBuilder, Network, NetworkBuilder, Rpc, RpcBuilder};
 
 mod builder {
     use super::*;
@@ -79,32 +79,6 @@ mod builder {
         /// DSN settings
         #[builder(setter(into), default)]
         pub dsn: Dsn,
-    }
-
-    macro_rules! generate_builder {
-        ( $name:ident ) => {
-            impl concat_idents!($name, Builder) {
-                /// Constructor
-                pub fn new() -> Self {
-                    Self::default()
-                }
-
-                #[doc = concat!("Build ", stringify!($name))]
-                pub fn build(self) -> $name {
-                    self._build().expect("Infallible")
-                }
-            }
-
-            impl From<concat_idents!($name, Builder)> for $name {
-                fn from(value: concat_idents!($name, Builder)) -> Self {
-                    value.build()
-                }
-            }
-        };
-        ( $name:ident, $($rest:ident),+ ) => {
-            generate_builder!($name);
-            generate_builder!($($rest),+);
-        };
     }
 
     /// Node RPC builder
@@ -184,12 +158,11 @@ mod builder {
         #[builder(default)]
         pub boot_nodes: Vec<Multiaddr>,
         /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
-        #[builder(default = "true")]
-        #[derivative(Default(value = "true"))]
+        #[builder(default)]
         pub allow_non_global_addresses_in_dht: bool,
     }
 
-    generate_builder!(Rpc, Network, Dsn);
+    crate::generate_builder!(Rpc, Network, Dsn);
 }
 
 /// Role of the local node.

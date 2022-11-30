@@ -16,6 +16,34 @@ use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::PUBLIC_KEY_LENGTH;
 
+#[doc(hidden)]
+#[macro_export]
+macro_rules! generate_builder {
+    ( $name:ident ) => {
+        impl concat_idents!($name, Builder) {
+            /// Constructor
+            pub fn new() -> Self {
+                Self::default()
+            }
+
+            #[doc = concat!("Build ", stringify!($name))]
+            pub fn build(self) -> $name {
+                self._build().expect("Infallible")
+            }
+        }
+
+        impl From<concat_idents!($name, Builder)> for $name {
+            fn from(value: concat_idents!($name, Builder)) -> Self {
+                value.build()
+            }
+        }
+    };
+    ( $name:ident, $($rest:ident),+ ) => {
+        $crate::generate_builder!($name);
+        $crate::generate_builder!($($rest),+);
+    };
+}
+
 /// Public key type
 #[derive(
     Debug,
