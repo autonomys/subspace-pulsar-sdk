@@ -794,6 +794,16 @@
 <a href="#794" id="794">794</a>
 <a href="#795" id="795">795</a>
 <a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, io, num::NonZeroUsize, path::PathBuf, sync::Arc};
 
 <span class="kw">use </span>anyhow::Context;
@@ -815,7 +825,7 @@
 
 <span class="kw">use crate</span>::{Node, PublicKey};
 
-<span class="kw">pub use </span>builder::{Builder, Configuration, Dsn, DsnBuilder};
+<span class="kw">pub use </span>builder::{Builder, Config, Dsn, DsnBuilder};
 
 <span class="doccomment">/// Description of the cache
 </span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -916,20 +926,25 @@
 
 <span class="kw">mod </span>builder {
     <span class="kw">use </span><span class="kw">crate</span>::generate_builder;
+    <span class="kw">use </span>derivative::Derivative;
+    <span class="kw">use </span>derive_builder::Builder;
     <span class="kw">use </span>libp2p_core::Multiaddr;
+    <span class="kw">use </span>serde::{Deserialize, Serialize};
 
     <span class="doccomment">/// Technical type which stores all
-    </span><span class="attr">#[derive(Debug, Clone, derivative::Derivative, derive_builder::Builder)]
-    #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;Builder&quot;</span>)]
-    </span><span class="kw">pub struct </span>Configuration {
+    </span><span class="attr">#[derive(Debug, Clone, Derivative, Builder, Serialize, Deserialize)]
+    #[builder(pattern = <span class="string">&quot;immutable&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;Builder&quot;</span>)]
+    #[non_exhaustive]
+    </span><span class="kw">pub struct </span>Config {
         <span class="doccomment">/// DSN options
         </span><span class="attr">#[builder(default, setter(into))]
         </span><span class="kw">pub </span>dsn: Dsn,
     }
 
     <span class="doccomment">/// Farmer DSN
-    </span><span class="attr">#[derive(Debug, Clone, Default, derive_builder::Builder)]
+    </span><span class="attr">#[derive(Debug, Clone, Default, Derivative, Builder, Serialize, Deserialize)]
     #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;DsnBuilder&quot;</span>)]
+    #[non_exhaustive]
     </span><span class="kw">pub struct </span>Dsn {
         <span class="doccomment">/// Listen on
         </span><span class="attr">#[builder(default)]
@@ -1048,6 +1063,11 @@
 }
 
 <span class="kw">impl </span>Builder {
+    <span class="doccomment">/// Get configuration for saving on disk
+    </span><span class="kw">pub fn </span>configuration(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Config {
+        <span class="self">self</span>._build().expect(<span class="string">&quot;Build is infallible&quot;</span>)
+    }
+
     <span class="doccomment">/// Open and start farmer
     </span><span class="kw">pub async fn </span>build(
         <span class="self">self</span>,
@@ -1056,7 +1076,7 @@
         plots: <span class="kw-2">&amp;</span>[PlotDescription],
         cache: CacheDescription,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Farmer, BuildError&gt; {
-        <span class="kw">let </span>builder::Configuration { <span class="kw-2">mut </span>dsn } = <span class="self">self</span>._build().expect(<span class="string">&quot;Build is infallible&quot;</span>);
+        <span class="kw">let </span>Config { <span class="kw-2">mut </span>dsn } = <span class="self">self</span>._build().expect(<span class="string">&quot;Build is infallible&quot;</span>);
 
         <span class="kw">if </span>plots.is_empty() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(BuildError::NoPlotsSupplied);
