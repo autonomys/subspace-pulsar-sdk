@@ -1,15 +1,15 @@
 use bytesize::ByteSize;
 use futures::StreamExt;
 use subspace_sdk::{
-    chain_spec, farmer::CacheDescription, node::NetworkBuilder, Farmer, Node, PlotDescription,
-    PublicKey,
+    chain_spec, farmer::CacheDescription, node, node::NetworkBuilder, Farmer, Node,
+    PlotDescription, PublicKey,
 };
 
 #[tokio::main]
 async fn main() {
     let node: Node = Node::builder()
-        .blocks_pruning(sc_service::BlocksPruning::Some(1000))
-        .state_pruning(Some(sc_service::PruningMode::ArchiveCanonical))
+        .blocks_pruning(node::BlocksPruning::Some(1000))
+        .state_pruning(node::PruningMode::ArchiveCanonical)
         .network(NetworkBuilder::new().name("i1i1"))
         .build("node", chain_spec::dev_config().unwrap())
         .await
@@ -62,8 +62,8 @@ async fn main() {
 
     // Restarting
     let node = Node::builder()
-        .blocks_pruning(sc_service::BlocksPruning::Some(1000))
-        .state_pruning(Some(sc_service::PruningMode::ArchiveCanonical))
+        .blocks_pruning(node::BlocksPruning::Some(1000))
+        .state_pruning(node::PruningMode::ArchiveCanonical)
         .build("node", chain_spec::dev_config().unwrap())
         .await
         .expect("Failed to init a node");

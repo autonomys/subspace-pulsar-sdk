@@ -27,138 +27,351 @@ use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::{FullClient, SubspaceConfiguration};
 use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
-pub use sc_service::{
-    config::{ExecutionStrategies, ExecutionStrategy},
-    BlocksPruning, PruningMode,
-};
-pub use sc_state_db::Constraints;
-
 pub mod chain_spec;
 
-pub use builder::{Builder, Config, Dsn, DsnBuilder, Network, NetworkBuilder, Rpc, RpcBuilder};
+pub use builder::{
+    BlocksPruning, Builder, Config, Constraints, Dsn, DsnBuilder, ExecutionStrategy, Network,
+    NetworkBuilder, PruningMode, Rpc, RpcBuilder,
+};
 
 mod builder {
     use super::*;
-
+    use derivative::Derivative;
+    use derive_builder::Builder;
+    use serde::{Deserialize, Serialize};
     use std::net::SocketAddr;
 
+    /// Block pruning settings.
+    #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+    pub enum BlocksPruning {
+        #[default]
+        /// Keep full block history, of every block that was ever imported.
+        KeepAll,
+        /// Keep full finalized block history.
+        KeepFinalized,
+        /// Keep N recent finalized blocks.
+        Some(u32),
+    }
+
+    impl From<sc_service::BlocksPruning> for BlocksPruning {
+        fn from(value: sc_service::BlocksPruning) -> Self {
+            match value {
+                sc_service::BlocksPruning::KeepAll => Self::KeepAll,
+                sc_service::BlocksPruning::KeepFinalized => Self::KeepFinalized,
+                sc_service::BlocksPruning::Some(n) => Self::Some(n),
+            }
+        }
+    }
+
+    impl From<BlocksPruning> for sc_service::BlocksPruning {
+        fn from(value: BlocksPruning) -> Self {
+            match value {
+                BlocksPruning::KeepAll => Self::KeepAll,
+                BlocksPruning::KeepFinalized => Self::KeepFinalized,
+                BlocksPruning::Some(n) => Self::Some(n),
+            }
+        }
+    }
+
+    /// Pruning constraints. If none are specified pruning is
+    #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+    pub struct Constraints {
+        /// Maximum blocks. Defaults to 0 when unspecified, effectively keeping only non-canonical
+        /// states.
+        pub max_blocks: Option<u32>,
+        /// Maximum memory in the pruning overlay.
+        pub max_mem: Option<usize>,
+    }
+
+    impl From<Constraints> for sc_state_db::Constraints {
+        fn from(
+            Constraints {
+                max_blocks,
+                max_mem,
+            }: Constraints,
+        ) -> Self {
+            Self {
+                max_blocks,
+                max_mem,
+            }
+        }
+    }
+
+    impl From<sc_state_db::Constraints> for Constraints {
+        fn from(
+            sc_state_db::Constraints {
+                max_blocks,
+                max_mem,
+            }: sc_state_db::Constraints,
+        ) -> Self {
+            Self {
+                max_blocks,
+                max_mem,
+            }
+        }
+    }
+
+    /// Pruning mode.
+    #[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
+    pub enum PruningMode {
+        /// No pruning. Canonicalization is a no-op.
+        #[default]
+        ArchiveAll,
+        /// Canonicalization discards non-canonical nodes. All the canonical nodes are kept in the DB.
+        ArchiveCanonical,
+        /// Maintain a pruning window.
+        Constrained(Constraints),
+    }
+
+    impl From<PruningMode> for sc_service::PruningMode {
+        fn from(value: PruningMode) -> Self {
+            match value {
+                PruningMode::ArchiveAll => Self::ArchiveAll,
+                PruningMode::ArchiveCanonical => Self::ArchiveCanonical,
+                PruningMode::Constrained(c) => Self::Constrained(c.into()),
+            }
+        }
+    }
+
+    impl From<sc_service::PruningMode> for PruningMode {
+        fn from(value: sc_service::PruningMode) -> Self {
+            match value {
+                sc_service::PruningMode::ArchiveAll => Self::ArchiveAll,
+                sc_service::PruningMode::ArchiveCanonical => Self::ArchiveCanonical,
+                sc_service::PruningMode::Constrained(c) => Self::Constrained(c.into()),
+            }
+        }
+    }
+
+    /// Strategy for executing a call into the runtime.
+    #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Deserialize, Serialize)]
+    pub enum ExecutionStrategy {
+        /// Execute with the native equivalent if it is compatible with the given wasm module;
+        /// otherwise fall back to the wasm.
+        #[default]
+        NativeWhenPossible,
+        /// Use the given wasm module.
+        AlwaysWasm,
+        /// Run with both the wasm and the native variant (if compatible). Report any discrepancy
+        /// as an error.
+        Both,
+        /// First native, then if that fails or is not possible, wasm.
+        NativeElseWasm,
+    }
+
+    impl From<sc_service::config::ExecutionStrategy> for ExecutionStrategy {
+        fn from(value: sc_service::config::ExecutionStrategy) -> Self {
+            use sc_service::config::ExecutionStrategy as Other;
+            match value {
+                Other::Both => Self::Both,
+                Other::AlwaysWasm => Self::AlwaysWasm,
+                Other::NativeWhenPossible => Self::NativeWhenPossible,
+                Other::NativeElseWasm => Self::NativeElseWasm,
+            }
+        }
+    }
+
+    impl From<ExecutionStrategy> for sc_service::config::ExecutionStrategy {
+        fn from(value: ExecutionStrategy) -> Self {
+            match value {
+                ExecutionStrategy::Both => Self::Both,
+                ExecutionStrategy::AlwaysWasm => Self::AlwaysWasm,
+                ExecutionStrategy::NativeWhenPossible => Self::NativeWhenPossible,
+                ExecutionStrategy::NativeElseWasm => Self::NativeElseWasm,
+            }
+        }
+    }
+
+    impl From<ExecutionStrategy> for sc_service::config::ExecutionStrategies {
+        fn from(value: ExecutionStrategy) -> Self {
+            sc_service::config::ExecutionStrategies {
+                syncing: value.into(),
+                importing: value.into(),
+                block_construction: value.into(),
+                offchain_worker: value.into(),
+                other: value.into(),
+            }
+        }
+    }
+
+    fn default_piece_cache_size() -> bytesize::ByteSize {
+        bytesize::ByteSize::gib(1)
+    }
+
+    fn default_impl_name() -> String {
+        env!("CARGO_PKG_NAME").to_owned()
+    }
+
+    fn default_impl_version() -> String {
+        format!("{}-{}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH"))
+    }
+
     /// Node builder
-    #[derive(Debug, Clone, derive_builder::Builder)]
-    #[builder(pattern = "owned", build_fn(name = "_build"), name = "Builder")]
+    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
+    #[derivative(Default)]
+    #[builder(pattern = "immutable", build_fn(name = "_build"), name = "Builder")]
+    #[non_exhaustive]
     pub struct Config {
         /// Force block authoring
         #[builder(default)]
+        #[serde(default)]
         pub force_authoring: bool,
         /// Set node role
         #[builder(default)]
+        #[serde(default)]
         pub role: Role,
         /// Blocks pruning options
-        #[builder(default = "BlocksPruning::KeepAll")]
+        #[builder(default)]
+        #[serde(default)]
         pub blocks_pruning: BlocksPruning,
         /// State pruning options
         #[builder(default)]
-        pub state_pruning: Option<PruningMode>,
+        #[serde(default)]
+        pub state_pruning: PruningMode,
         /// Set execution strategies
         #[builder(default)]
-        pub execution_strategies: ExecutionStrategies,
+        #[serde(default)]
+        pub execution_strategy: ExecutionStrategy,
         /// Set piece cache size
-        #[builder(default = "bytesize::ByteSize::gib(1)")]
+        #[builder(default = "default_piece_cache_size()")]
+        #[derivative(Default(value = "default_piece_cache_size()"))]
+        #[serde(with = "bytesize_serde", default = "default_piece_cache_size")]
         pub piece_cache_size: bytesize::ByteSize,
         /// Implementation name
-        #[builder(default = "env!(\"CARGO_PKG_NAME\").to_owned()")]
+        #[builder(default = "default_impl_name()")]
+        #[derivative(Default(value = "default_impl_name()"))]
+        #[serde(default = "default_impl_name")]
         pub impl_name: String,
         /// Implementation version
-        #[builder(default = "format!(\"{}-{}\", env!(\"CARGO_PKG_VERSION\"), env!(\"GIT_HASH\"))")]
+        #[builder(default = "default_impl_version()")]
+        #[derivative(Default(value = "default_impl_version()"))]
+        #[serde(default = "default_impl_version")]
         pub impl_version: String,
         /// Rpc settings
         #[builder(setter(into), default)]
+        #[serde(default)]
         pub rpc: Rpc,
         /// Network settings
         #[builder(setter(into), default)]
+        #[serde(default)]
         pub network: Network,
         /// DSN settings
         #[builder(setter(into), default)]
+        #[serde(default)]
         pub dsn: Dsn,
     }
 
+    fn default_max_subs_per_conn() -> usize {
+        1024
+    }
+
     /// Node RPC builder
-    #[derive(Debug, derivative::Derivative, Clone, derive_builder::Builder)]
+    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
     #[builder(pattern = "owned", build_fn(name = "_build"), name = "RpcBuilder")]
+    #[non_exhaustive]
     pub struct Rpc {
         /// RPC over HTTP binding address. `None` if disabled.
         #[builder(setter(strip_option), default)]
+        #[serde(default)]
         pub http: Option<SocketAddr>,
         /// RPC over Websockets binding address. `None` if disabled.
         #[builder(setter(strip_option), default)]
+        #[serde(default)]
         pub ws: Option<SocketAddr>,
         /// RPC over IPC binding path. `None` if disabled.
         #[builder(setter(strip_option), default)]
+        #[serde(default)]
         pub ipc: Option<String>,
         /// Maximum number of connections for WebSockets RPC server. `None` if default.
         #[builder(setter(strip_option), default)]
+        #[serde(default)]
         pub ws_max_connections: Option<usize>,
         /// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
         #[builder(setter(strip_option), default)]
+        #[serde(default)]
         pub cors: Option<Vec<String>>,
         /// RPC methods to expose (by default only a safe subset or all of them).
         #[builder(default)]
+        #[serde(default)]
         pub methods: RpcMethods,
         /// Maximum payload of rpc request/responses.
         #[builder(setter(strip_option), default)]
+        #[serde(default)]
         pub max_payload: Option<usize>,
         /// Maximum payload of a rpc request
         #[builder(setter(strip_option), default)]
+        #[serde(default)]
         pub max_request_size: Option<usize>,
         /// Maximum payload of a rpc request
         #[builder(setter(strip_option), default)]
+        #[serde(default)]
         pub max_response_size: Option<usize>,
         /// Maximum allowed subscriptions per rpc connection
-        #[builder(default = "1024")]
-        #[derivative(Default(value = "1024"))]
+        #[builder(default = "default_max_subs_per_conn()")]
+        #[derivative(Default(value = "default_max_subs_per_conn()"))]
+        #[serde(default = "default_max_subs_per_conn")]
         pub max_subs_per_conn: usize,
         /// Maximum size of the output buffer capacity for websocket connections.
         #[builder(setter(strip_option), default)]
+        #[serde(default)]
         pub ws_max_out_buffer_capacity: Option<usize>,
     }
 
     /// Node network builder
-    #[derive(Debug, Default, Clone, derive_builder::Builder)]
+    #[derive(Debug, Default, Clone, Builder, Deserialize, Serialize)]
     #[builder(pattern = "owned", build_fn(name = "_build"), name = "NetworkBuilder")]
+    #[non_exhaustive]
     pub struct Network {
         /// Listen on some address for other nodes
         #[builder(default)]
+        #[serde(default)]
         pub listen_addresses: Vec<Multiaddr>,
         /// Boot nodes
         #[builder(default)]
+        #[serde(default)]
         pub boot_nodes: Vec<MultiaddrWithPeerId>,
         /// Force node to think it is synced
         #[builder(default)]
+        #[serde(default)]
         pub force_synced: bool,
         /// Node name
         #[builder(setter(into, strip_option), default)]
+        #[serde(default)]
         pub name: Option<String>,
         /// Client id for telemetry (default is `{IMPL_NAME}/v{IMPL_VERSION}`)
         #[builder(setter(into, strip_option), default)]
+        #[serde(default)]
         pub client_id: Option<String>,
     }
 
+    fn default_listen_addresses() -> Vec<Multiaddr> {
+        // TODO: get rid of it, once it won't be required by monorepo
+        vec!["/ip4/127.0.0.1/tcp/0".parse().expect("Always valid")]
+    }
+
     /// Node DSN builder
-    #[derive(Debug, Clone, derivative::Derivative, derive_builder::Builder)]
+    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
     #[builder(pattern = "owned", build_fn(name = "_build"), name = "DsnBuilder")]
+    #[non_exhaustive]
     pub struct Dsn {
         /// Listen on some address for other nodes
-        #[builder(default = "Dsn::default().listen_addresses")]
-        #[derivative(Default(
-            value = "vec![\"/ip4/0.0.0.0/tcp/0\".parse().expect(\"Always valid\")]"
-        ))]
+        #[builder(default = "default_listen_addresses()")]
+        #[derivative(Default(value = "default_listen_addresses()"))]
+        #[serde(default = "default_listen_addresses")]
         pub listen_addresses: Vec<Multiaddr>,
         /// Boot nodes
         #[builder(default)]
+        #[serde(default)]
         pub boot_nodes: Vec<Multiaddr>,
+        /// Reserved nodes
+        #[builder(default)]
+        #[serde(default)]
+        pub reserved_nodes: Vec<Multiaddr>,
         /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
         #[builder(default)]
+        #[serde(default)]
         pub allow_non_global_addresses_in_dht: bool,
     }
 
@@ -207,7 +420,14 @@ impl From<RpcMethods> for sc_service::RpcMethods {
     }
 }
 
+const NODE_NAME_MAX_LENGTH: usize = 64;
+
 impl Builder {
+    /// Get configuration for saving on disk
+    pub fn configuration(&self) -> Config {
+        self._build().expect("Build is infallible")
+    }
+
     /// New builder
     pub fn new() -> Self {
         Self::default()
@@ -227,7 +447,7 @@ impl Builder {
             role,
             blocks_pruning,
             state_pruning,
-            execution_strategies,
+            execution_strategy,
             piece_cache_size,
             impl_name,
             impl_version,
@@ -248,7 +468,6 @@ impl Builder {
             network,
             dsn,
         } = self._build().expect("Infallible");
-
         let base_path = BasePath::new(directory.as_ref());
         let config_dir = base_path.config_dir(chain_spec.id());
 
@@ -260,6 +479,13 @@ impl Builder {
                 name,
                 client_id,
             } = network;
+            let name = name.unwrap_or_else(|| {
+                names::Generator::with_naming(names::Name::Numbered)
+                    .next()
+                    .filter(|name| name.chars().count() < NODE_NAME_MAX_LENGTH)
+                    .expect("RNG is available on all supported platforms; qed")
+            });
+
             let client_id = client_id.unwrap_or_else(|| format!("{}/v{}", impl_name, impl_version));
             let config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 
@@ -274,7 +500,7 @@ impl Builder {
                         .collect(),
                     force_synced,
                     ..NetworkConfiguration::new(
-                        name.clone().unwrap_or_default(),
+                        name.clone(),
                         client_id,
                         NodeKeyConfig::Ed25519(Secret::File(
                             config_dir.join(NODE_KEY_ED25519_FILE),
@@ -297,6 +523,7 @@ impl Builder {
             let builder::Dsn {
                 listen_addresses,
                 boot_nodes,
+                reserved_nodes,
                 allow_non_global_addresses_in_dht,
             } = dsn;
             let keypair = network
@@ -319,6 +546,7 @@ impl Builder {
             subspace_service::DsnConfig {
                 allow_non_global_addresses_in_dht,
                 bootstrap_nodes,
+                reserved_peers: reserved_nodes,
                 listen_on: listen_addresses,
                 keypair,
             }
@@ -338,13 +566,13 @@ impl Builder {
                     path: config_dir.join("paritydb").join("full"),
                 },
                 trie_cache_maximum_size: Some(67_108_864),
-                state_pruning,
-                blocks_pruning,
+                state_pruning: Some(state_pruning.into()),
+                blocks_pruning: blocks_pruning.into(),
                 wasm_method: WasmExecutionMethod::Compiled {
                     instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
                 },
                 wasm_runtime_overrides: None,
-                execution_strategies,
+                execution_strategies: execution_strategy.into(),
                 rpc_http,
                 rpc_ws,
                 rpc_ipc,
@@ -463,7 +691,7 @@ pub struct Node {
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     rpc_handle: Arc<jsonrpsee_core::server::rpc_module::RpcModule<()>>,
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
-    name: Option<String>,
+    name: String,
 }
 
 impl std::fmt::Debug for Node {
@@ -504,7 +732,7 @@ pub struct Info {
     /// Runtime version
     pub version: sp_version::RuntimeVersion,
     /// Node telemetry name
-    pub name: Option<String>,
+    pub name: String,
     /// Number of peers connected to our node
     pub connected_peers: u64,
     /// Number of nodes that we know of but that we're not connected to

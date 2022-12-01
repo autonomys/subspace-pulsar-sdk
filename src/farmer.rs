@@ -19,7 +19,7 @@ use tokio::sync::{oneshot, watch, Mutex};
 
 use crate::{Node, PublicKey};
 
-pub use builder::{Builder, Configuration, Dsn, DsnBuilder};
+pub use builder::{Builder, Config, Dsn, DsnBuilder};
 
 /// Description of the cache
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -120,20 +120,25 @@ impl PlotDescription {
 
 mod builder {
     use crate::generate_builder;
+    use derivative::Derivative;
+    use derive_builder::Builder;
     use libp2p_core::Multiaddr;
+    use serde::{Deserialize, Serialize};
 
     /// Technical type which stores all
-    #[derive(Debug, Clone, derivative::Derivative, derive_builder::Builder)]
-    #[builder(pattern = "owned", build_fn(name = "_build"), name = "Builder")]
-    pub struct Configuration {
+    #[derive(Debug, Clone, Derivative, Builder, Serialize, Deserialize)]
+    #[builder(pattern = "immutable", build_fn(name = "_build"), name = "Builder")]
+    #[non_exhaustive]
+    pub struct Config {
         /// DSN options
         #[builder(default, setter(into))]
         pub dsn: Dsn,
     }
 
     /// Farmer DSN
-    #[derive(Debug, Clone, Default, derive_builder::Builder)]
+    #[derive(Debug, Clone, Default, Derivative, Builder, Serialize, Deserialize)]
     #[builder(pattern = "owned", build_fn(name = "_build"), name = "DsnBuilder")]
+    #[non_exhaustive]
     pub struct Dsn {
         /// Listen on
         #[builder(default)]
@@ -252,6 +257,11 @@ struct ReadersAndPieces {
 }
 
 impl Builder {
+    /// Get configuration for saving on disk
+    pub fn configuration(&self) -> Config {
+        self._build().expect("Build is infallible")
+    }
+
     /// Open and start farmer
     pub async fn build(
         self,
@@ -260,7 +270,7 @@ impl Builder {
         plots: &[PlotDescription],
         cache: CacheDescription,
     ) -> Result<Farmer, BuildError> {
-        let builder::Configuration { mut dsn } = self._build().expect("Build is infallible");
+        let Config { mut dsn } = self._build().expect("Build is infallible");
 
         if plots.is_empty() {
             return Err(BuildError::NoPlotsSupplied);
