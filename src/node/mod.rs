@@ -209,7 +209,7 @@ mod builder {
     /// Node builder
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
-    #[builder(pattern = "owned", build_fn(name = "_build"), name = "Builder")]
+    #[builder(pattern = "immutable", build_fn(name = "_build"), name = "Builder")]
     #[non_exhaustive]
     pub struct Config {
         /// Force block authoring
@@ -423,6 +423,11 @@ impl From<RpcMethods> for sc_service::RpcMethods {
 const NODE_NAME_MAX_LENGTH: usize = 64;
 
 impl Builder {
+    /// Get configuration for saving on disk
+    pub fn configuration(&self) -> Config {
+        self._build().expect("Build is infallible")
+    }
+
     /// New builder
     pub fn new() -> Self {
         Self::default()

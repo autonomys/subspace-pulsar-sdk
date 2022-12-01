@@ -19,7 +19,7 @@ use tokio::sync::{oneshot, watch, Mutex};
 
 use crate::{Node, PublicKey};
 
-pub use builder::{Builder, Configuration, Dsn, DsnBuilder};
+pub use builder::{Builder, Config, Dsn, DsnBuilder};
 
 /// Description of the cache
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -127,9 +127,9 @@ mod builder {
 
     /// Technical type which stores all
     #[derive(Debug, Clone, Derivative, Builder, Serialize, Deserialize)]
-    #[builder(pattern = "owned", build_fn(name = "_build"), name = "Builder")]
+    #[builder(pattern = "immutable", build_fn(name = "_build"), name = "Builder")]
     #[non_exhaustive]
-    pub struct Configuration {
+    pub struct Config {
         /// DSN options
         #[builder(default, setter(into))]
         pub dsn: Dsn,
@@ -257,6 +257,11 @@ struct ReadersAndPieces {
 }
 
 impl Builder {
+    /// Get configuration for saving on disk
+    pub fn configuration(&self) -> Config {
+        self._build().expect("Build is infallible")
+    }
+
     /// Open and start farmer
     pub async fn build(
         self,
@@ -265,7 +270,7 @@ impl Builder {
         plots: &[PlotDescription],
         cache: CacheDescription,
     ) -> Result<Farmer, BuildError> {
-        let builder::Configuration { mut dsn } = self._build().expect("Build is infallible");
+        let Config { mut dsn } = self._build().expect("Build is infallible");
 
         if plots.is_empty() {
             return Err(BuildError::NoPlotsSupplied);
