@@ -900,11 +900,11 @@ impl Node {
                             (Arc::clone(&best_number), &network, &client);
                         async move {
                             let new_best_number = client.chain_info().best_number;
-                            let imported_blocks = best_number
+                            let not_imported_blocks = best_number
                                 .swap(new_best_number, std::sync::atomic::Ordering::Relaxed)
                                 == new_best_number;
                             match network.status().await?.sync_state {
-                                SyncState::Idle if imported_blocks => {
+                                SyncState::Idle if not_imported_blocks => {
                                     Err(backoff::Error::transient(()))
                                 }
                                 SyncState::Idle => Ok(SyncStatus::Importing {
