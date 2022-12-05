@@ -270,7 +270,22 @@ impl Builder {
         plots: &[PlotDescription],
         cache: CacheDescription,
     ) -> Result<Farmer, BuildError> {
-        let Config { mut dsn } = self._build().expect("Build is infallible");
+        self.configuration()
+            .build(reward_address, node, plots, cache)
+            .await
+    }
+}
+
+impl Config {
+    /// Open and start farmer
+    pub async fn build(
+        self,
+        reward_address: PublicKey,
+        node: Node,
+        plots: &[PlotDescription],
+        cache: CacheDescription,
+    ) -> Result<Farmer, BuildError> {
+        let Self { mut dsn } = self;
 
         if plots.is_empty() {
             return Err(BuildError::NoPlotsSupplied);

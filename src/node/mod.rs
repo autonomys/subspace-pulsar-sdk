@@ -439,10 +439,21 @@ impl Builder {
         directory: impl AsRef<Path>,
         chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
     ) -> anyhow::Result<Node> {
+        self.configuration().build(directory, chain_spec).await
+    }
+}
+
+impl Config {
+    /// Start a node with supplied parameters
+    pub async fn build(
+        self,
+        directory: impl AsRef<Path>,
+        chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
+    ) -> anyhow::Result<Node> {
         const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
         const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
 
-        let builder::Config {
+        let Self {
             force_authoring,
             role,
             blocks_pruning,
@@ -467,7 +478,7 @@ impl Builder {
                 },
             network,
             dsn,
-        } = self._build().expect("Infallible");
+        } = self;
         let base_path = BasePath::new(directory.as_ref());
         let config_dir = base_path.config_dir(chain_spec.id());
 
