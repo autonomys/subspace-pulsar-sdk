@@ -1277,6 +1277,35 @@
 <a href="#1277" id="1277">1277</a>
 <a href="#1278" id="1278">1278</a>
 <a href="#1279" id="1279">1279</a>
+<a href="#1280" id="1280">1280</a>
+<a href="#1281" id="1281">1281</a>
+<a href="#1282" id="1282">1282</a>
+<a href="#1283" id="1283">1283</a>
+<a href="#1284" id="1284">1284</a>
+<a href="#1285" id="1285">1285</a>
+<a href="#1286" id="1286">1286</a>
+<a href="#1287" id="1287">1287</a>
+<a href="#1288" id="1288">1288</a>
+<a href="#1289" id="1289">1289</a>
+<a href="#1290" id="1290">1290</a>
+<a href="#1291" id="1291">1291</a>
+<a href="#1292" id="1292">1292</a>
+<a href="#1293" id="1293">1293</a>
+<a href="#1294" id="1294">1294</a>
+<a href="#1295" id="1295">1295</a>
+<a href="#1296" id="1296">1296</a>
+<a href="#1297" id="1297">1297</a>
+<a href="#1298" id="1298">1298</a>
+<a href="#1299" id="1299">1299</a>
+<a href="#1300" id="1300">1300</a>
+<a href="#1301" id="1301">1301</a>
+<a href="#1302" id="1302">1302</a>
+<a href="#1303" id="1303">1303</a>
+<a href="#1304" id="1304">1304</a>
+<a href="#1305" id="1305">1305</a>
+<a href="#1306" id="1306">1306</a>
+<a href="#1307" id="1307">1307</a>
+<a href="#1308" id="1308">1308</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>futures::channel::{mpsc, oneshot};
 <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
@@ -1638,7 +1667,7 @@
         </span><span class="kw">pub </span>client_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
     }
 
-    <span class="kw">fn </span>default_listen_addresses() -&gt; Vec&lt;Multiaddr&gt; {
+    <span class="kw">fn </span>default_listen_addresses() -&gt; Vec&lt;libp2p_core::Multiaddr&gt; {
         <span class="comment">// TODO: get rid of it, once it won&#39;t be required by monorepo
         </span><span class="macro">vec!</span>[<span class="string">&quot;/ip4/127.0.0.1/tcp/0&quot;</span>.parse().expect(<span class="string">&quot;Always valid&quot;</span>)]
     }
@@ -1653,15 +1682,15 @@
         </span><span class="attr">#[builder(default = <span class="string">&quot;default_listen_addresses()&quot;</span>)]
         #[derivative(Default(value = <span class="string">&quot;default_listen_addresses()&quot;</span>))]
         #[serde(default = <span class="string">&quot;default_listen_addresses&quot;</span>)]
-        </span><span class="kw">pub </span>listen_addresses: Vec&lt;Multiaddr&gt;,
+        </span><span class="kw">pub </span>listen_addresses: Vec&lt;libp2p_core::Multiaddr&gt;,
         <span class="doccomment">/// Boot nodes
         </span><span class="attr">#[builder(default)]
         #[serde(default)]
-        </span><span class="kw">pub </span>boot_nodes: Vec&lt;Multiaddr&gt;,
+        </span><span class="kw">pub </span>boot_nodes: Vec&lt;libp2p_core::Multiaddr&gt;,
         <span class="doccomment">/// Reserved nodes
         </span><span class="attr">#[builder(default)]
         #[serde(default)]
-        </span><span class="kw">pub </span>reserved_nodes: Vec&lt;Multiaddr&gt;,
+        </span><span class="kw">pub </span>reserved_nodes: Vec&lt;libp2p_core::Multiaddr&gt;,
         <span class="doccomment">/// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
         </span><span class="attr">#[builder(default)]
         #[serde(default)]
@@ -1871,11 +1900,18 @@
                 reserved_nodes,
                 allow_non_global_addresses_in_dht,
             } = dsn;
-            <span class="kw">let </span>keypair = network
-                .node_key
-                .clone()
-                .into_keypair()
-                .context(<span class="string">&quot;Failed to convert network keypair&quot;</span>)<span class="question-mark">?</span>;
+            <span class="kw">let </span>keypair = {
+                <span class="kw">let </span>keypair = network
+                    .node_key
+                    .clone()
+                    .into_keypair()
+                    .context(<span class="string">&quot;Failed to convert network keypair&quot;</span>)<span class="question-mark">?
+                    </span>.to_protobuf_encoding()
+                    .context(<span class="string">&quot;Failed to convert network keypair&quot;</span>)<span class="question-mark">?</span>;
+
+                subspace_networking::libp2p::identity::Keypair::from_protobuf_encoding(<span class="kw-2">&amp;</span>keypair)
+                    .expect(<span class="string">&quot;Address is correct&quot;</span>)
+            };
             <span class="kw">let </span>bootstrap_nodes = chain_spec
                 .properties()
                 .get(<span class="string">&quot;dsnBootstrapNodes&quot;</span>)
@@ -1886,13 +1922,35 @@
                 </span>.unwrap_or_default()
                 .into_iter()
                 .chain(boot_nodes)
+                .map(|a| {
+                    a.to_string()
+                        .parse()
+                        .expect(<span class="string">&quot;Convertion between 2 libp2p version. Never panics&quot;</span>)
+                })
+                .collect();
+            <span class="kw">let </span>reserved_nodes = reserved_nodes
+                .into_iter()
+                .map(|a| {
+                    a.to_string()
+                        .parse()
+                        .expect(<span class="string">&quot;Convertion between 2 libp2p version. Never panics&quot;</span>)
+                })
+                .collect();
+
+            <span class="kw">let </span>listen_on = listen_addresses
+                .into_iter()
+                .map(|a| {
+                    a.to_string()
+                        .parse()
+                        .expect(<span class="string">&quot;Convertion between 2 libp2p version. Never panics&quot;</span>)
+                })
                 .collect();
 
             subspace_service::DsnConfig {
                 allow_non_global_addresses_in_dht,
                 bootstrap_nodes,
                 reserved_peers: reserved_nodes,
-                listen_on: listen_addresses,
+                listen_on,
                 keypair,
             }
         };
