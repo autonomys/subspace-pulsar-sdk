@@ -109,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
                 .build(node.as_ref(), chain_spec)
                 .await?;
 
-            node.sync().await;
+            node.sync().await.unwrap();
             tracing::info!("Node was synced!");
 
             node.subscribe_new_blocks()

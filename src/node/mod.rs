@@ -7,7 +7,7 @@ use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
 use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider, SyncState};
-use sc_network_common::config::MultiaddrWithPeerId;
+use sc_network_common::config::{MultiaddrWithPeerId, TransportConfig};
 use sc_service::config::{KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig};
 use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use sc_subspace_chain_specs::ConsensusChainSpec;
@@ -17,7 +17,9 @@ use sp_core::H256;
 use std::io;
 use std::num::NonZeroU64;
 use std::path::Path;
+use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, Weak};
+use std::time::Duration;
 use subspace_core_primitives::SolutionRange;
 use subspace_farmer::RpcClient;
 use subspace_farmer_components::FarmerProtocolInfo;
@@ -31,7 +33,7 @@ pub mod chain_spec;
 
 pub use builder::{
     BlocksPruning, Builder, Config, Constraints, Dsn, DsnBuilder, ExecutionStrategy, Network,
-    NetworkBuilder, PruningMode, Rpc, RpcBuilder,
+    NetworkBuilder, OffchainWorker, OffchainWorkerBuilder, PruningMode, Rpc, RpcBuilder,
 };
 
 mod builder {
@@ -259,6 +261,10 @@ mod builder {
         #[builder(setter(into), default)]
         #[serde(default)]
         pub dsn: Dsn,
+        /// Offchain worker settings
+        #[builder(setter(into), default)]
+        #[serde(default)]
+        pub offchain_worker: OffchainWorker,
     }
 
     fn default_max_subs_per_conn() -> usize {
@@ -326,6 +332,14 @@ mod builder {
         /// Listen on some address for other nodes
         #[builder(default)]
         #[serde(default)]
+        pub enable_mdns: bool,
+        /// Listen on some address for other nodes
+        #[builder(default)]
+        #[serde(default)]
+        pub allow_private_ipv4: bool,
+        /// Listen on some address for other nodes
+        #[builder(default)]
+        #[serde(default)]
         pub listen_addresses: Vec<Multiaddr>,
         /// Boot nodes
         #[builder(default)]
@@ -375,7 +389,41 @@ mod builder {
         pub allow_non_global_addresses_in_dht: bool,
     }
 
-    crate::generate_builder!(Rpc, Network, Dsn);
+    /// Offchain worker config
+    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
+    #[derivative(Default)]
+    #[builder(
+        pattern = "owned",
+        build_fn(name = "_build"),
+        name = "OffchainWorkerBuilder"
+    )]
+    #[non_exhaustive]
+    pub struct OffchainWorker {
+        /// Is enabled
+        #[builder(default)]
+        #[serde(default)]
+        pub enabled: bool,
+        /// Is indexing enabled
+        #[builder(default)]
+        #[serde(default)]
+        pub indexing_enabled: bool,
+    }
+
+    impl From<OffchainWorker> for OffchainWorkerConfig {
+        fn from(
+            OffchainWorker {
+                enabled,
+                indexing_enabled,
+            }: OffchainWorker,
+        ) -> Self {
+            Self {
+                enabled,
+                indexing_enabled,
+            }
+        }
+    }
+
+    crate::generate_builder!(Rpc, Network, Dsn, OffchainWorker);
 }
 
 /// Role of the local node.
@@ -478,6 +526,7 @@ impl Config {
                 },
             network,
             dsn,
+            offchain_worker,
         } = self;
         let base_path = BasePath::new(directory.as_ref());
         let config_dir = base_path.config_dir(chain_spec.id());
@@ -489,6 +538,8 @@ impl Config {
                 force_synced,
                 name,
                 client_id,
+                enable_mdns,
+                allow_private_ipv4,
             } = network;
             let name = name.unwrap_or_else(|| {
                 names::Generator::with_naming(names::Name::Numbered)
@@ -510,6 +561,10 @@ impl Config {
                         .chain(boot_nodes)
                         .collect(),
                     force_synced,
+                    transport: TransportConfig::Normal {
+                        enable_mdns,
+                        allow_private_ipv4,
+                    },
                     ..NetworkConfiguration::new(
                         name.clone(),
                         client_id,
@@ -599,7 +654,7 @@ impl Config {
                 prometheus_config: None,
                 telemetry_endpoints,
                 default_heap_pages: None,
-                offchain_worker: OffchainWorkerConfig::default(),
+                offchain_worker: offchain_worker.into(),
                 force_authoring,
                 disable_grandpa: false,
                 dev_key_seed: None,
@@ -657,7 +712,7 @@ impl Config {
                     }
                 }
                 result = task_manager.future().fuse() => {
-                    let _ = result;
+                    result.expect("Task from manager paniced");
                     return;
                 }
             };
@@ -774,6 +829,21 @@ pub struct BlockNotification {
     pub is_new_best: bool,
 }
 
+/// Syncing status
+#[derive(Clone, Copy, Debug)]
+pub enum SyncStatus {
+    /// Importing some block
+    Importing {
+        /// Target block (tip of the chain)
+        target: BlockNumber,
+    },
+    /// Downloading some block
+    Downloading {
+        /// Target block (tip of the chain)
+        target: BlockNumber,
+    },
+}
+
 impl Node {
     /// New node builder
     pub fn builder() -> Builder {
@@ -799,34 +869,80 @@ impl Node {
     /// Subscribe for node syncing progress
     pub async fn subscribe_syncing_progress(
         &self,
-    ) -> impl Stream<Item = SyncState<BlockNumber>> + Send + Unpin + 'static {
-        const CHECK_SYNCED_EVERY: std::time::Duration = std::time::Duration::from_millis(100);
+    ) -> anyhow::Result<impl Stream<Item = SyncStatus> + Send + Unpin + 'static> {
+        const CHECK_SYNCED_EVERY: Duration = Duration::from_millis(100);
+        const SYNCING_TIMEOUT: Duration = Duration::from_secs(6);
 
-        while self.network.is_offline() {
-            tokio::time::sleep(CHECK_SYNCED_EVERY).await;
-        }
+        let backoff = backoff::ExponentialBackoff {
+            max_elapsed_time: Some(SYNCING_TIMEOUT),
+            ..backoff::ExponentialBackoff::default()
+        };
 
-        let network = Arc::clone(&self.network);
-        let stream =
-            tokio_stream::wrappers::IntervalStream::new(tokio::time::interval(CHECK_SYNCED_EVERY))
-                .then(move |_| {
-                    let network = Arc::clone(&network);
-                    async move { network.status().await.map(|s| s.sync_state) }
-                })
-                .take_while(|status| {
-                    futures::future::ready(!matches!(status, Ok(SyncState::Idle) | Err(())))
-                })
-                .map(|result_status| result_status.unwrap_or(SyncState::Idle));
+        backoff::retry(backoff.clone(), || {
+            if self.network.is_offline() {
+                Err(backoff::Error::transient(()))
+            } else {
+                Ok(())
+            }
+        })
+        .map_err(|_| anyhow::anyhow!("Failed to connect to the network"))?;
 
-        Box::pin(stream)
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        tokio::spawn({
+            let network = Arc::clone(&self.network);
+            let client = self.client().unwrap();
+            async move {
+                let best_number = Arc::new(AtomicU32::new(0));
+                loop {
+                    tokio::time::sleep(CHECK_SYNCED_EVERY).await;
+                    let status = backoff::future::retry(backoff.clone(), || {
+                        let (best_number, network, client) =
+                            (Arc::clone(&best_number), &network, &client);
+                        async move {
+                            let new_best_number = client.chain_info().best_number;
+                            let imported_blocks = best_number
+                                .swap(new_best_number, std::sync::atomic::Ordering::Relaxed)
+                                == new_best_number;
+                            match network.status().await?.sync_state {
+                                SyncState::Idle if imported_blocks => {
+                                    Err(backoff::Error::transient(()))
+                                }
+                                SyncState::Idle => Ok(SyncStatus::Importing {
+                                    target: new_best_number,
+                                }),
+                                SyncState::Importing { target } => {
+                                    Ok(SyncStatus::Importing { target })
+                                }
+                                SyncState::Downloading { target } => {
+                                    Ok(SyncStatus::Downloading { target })
+                                }
+                            }
+                        }
+                    })
+                    .await;
+
+                    match status {
+                        Ok(status) => {
+                            if sender.send(status).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(()) => break,
+                    }
+                }
+            }
+        });
+
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
     /// Wait till the end of node syncing
-    pub async fn sync(&self) {
+    pub async fn sync(&self) -> anyhow::Result<()> {
         self.subscribe_syncing_progress()
-            .await
+            .await?
             .for_each(|_| async move {})
-            .await
+            .await;
+        Ok(())
     }
 
     /// Leaves the network and gracefully shuts down
@@ -1149,6 +1265,7 @@ mod tests {
         other_node
             .subscribe_syncing_progress()
             .await
+            .unwrap()
             .for_each(|_| async {})
             .await;
         assert_eq!(
