@@ -1,5 +1,3 @@
-use futures::stream::StreamExt;
-
 use subspace_sdk::node::{self, Node};
 use tempfile::TempDir;
 

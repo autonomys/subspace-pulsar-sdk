@@ -10,6 +10,7 @@ use subspace_farmer::single_disk_plot::{
     SingleDiskPlotInfo, SingleDiskPlotOptions, SingleDiskPlotSummary,
 };
 use subspace_farmer_components::plotting::PlottedSector;
+use subspace_networking::libp2p::identity::Keypair;
 use subspace_networking::{
     CustomRecordStore, LimitedSizeRecordStorageWrapper, MemoryProviderStorage, Node as DSNNode,
     NodeRunner as DSNNodeRunner, ParityDbRecordStorage,
@@ -35,7 +36,7 @@ pub struct CacheDescription {
 impl CacheDescription {
     fn record_store(
         self,
-        keypair: &libp2p_core::identity::Keypair,
+        keypair: &Keypair,
     ) -> parity_db::Result<
         subspace_networking::CustomRecordStore<
             LimitedSizeRecordStorageWrapper<ParityDbRecordStorage>,
@@ -124,11 +125,27 @@ mod builder {
     use libp2p_core::Multiaddr;
     use serde::{Deserialize, Serialize};
 
+    fn default_piece_receiver_batch_size() -> usize {
+        12
+    }
+
+    fn default_piece_publisher_batch_size() -> usize {
+        12
+    }
+
     /// Technical type which stores all
     #[derive(Debug, Clone, Default, Builder, Serialize, Deserialize)]
     #[builder(pattern = "immutable", build_fn(name = "_build"), name = "Builder")]
     #[non_exhaustive]
     pub struct Config {
+        /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
+        #[builder(default = "default_piece_receiver_batch_size()")]
+        #[serde(default = "default_piece_receiver_batch_size")]
+        pub piece_receiver_batch_size: usize,
+        /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
+        #[builder(default = "default_piece_publisher_batch_size()")]
+        #[serde(default = "default_piece_publisher_batch_size")]
+        pub piece_publisher_batch_size: usize,
         /// DSN options
         #[builder(default, setter(into))]
         pub dsn: Dsn,
@@ -176,9 +193,25 @@ impl builder::Dsn {
         let default_config = Config::with_generated_keypair();
 
         let config = Config::<ConfiguredRecordStore> {
-            listen_on,
-            networking_parameters_registry: BootstrappedNetworkingParameters::new(bootstrap_nodes)
-                .boxed(),
+            listen_on: listen_on
+                .into_iter()
+                .map(|a| {
+                    a.to_string()
+                        .parse()
+                        .expect("Convertion between 2 libp2p version. Never panics")
+                })
+                .collect::<Vec<_>>(),
+            networking_parameters_registry: BootstrappedNetworkingParameters::new(
+                bootstrap_nodes
+                    .into_iter()
+                    .map(|a| {
+                        a.to_string()
+                            .parse()
+                            .expect("Convertion between 2 libp2p version. Never panics")
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .boxed(),
             request_response_protocols: vec![PieceByHashRequestHandler::create(move |req| {
                 let PieceKey::Sector(piece_index_hash) = req.key else { return None };
                 let Some(readers_and_pieces) = weak_readers_and_pieces.upgrade() else { return None };
@@ -284,7 +317,11 @@ impl Config {
         plots: &[PlotDescription],
         cache: CacheDescription,
     ) -> Result<Farmer, BuildError> {
-        let Self { mut dsn } = self;
+        let Self {
+            mut dsn,
+            piece_receiver_batch_size,
+            piece_publisher_batch_size,
+        } = self;
 
         if plots.is_empty() {
             return Err(BuildError::NoPlotsSupplied);
@@ -297,7 +334,14 @@ impl Config {
                 .farmer_app_info()
                 .await
                 .map_err(BuildError::RPCError)?
-                .dsn_bootstrap_nodes;
+                .dsn_bootstrap_nodes
+                .into_iter()
+                .map(|a| {
+                    a.to_string()
+                        .parse()
+                        .expect("Convertion between 2 libp2p version. Never panics")
+                })
+                .collect::<Vec<_>>();
         }
 
         let mut single_disk_plots = Vec::with_capacity(plots.len());
@@ -315,6 +359,8 @@ impl Config {
                 reward_address: *reward_address,
                 rpc_client: node.clone(),
                 dsn_node: dsn_node.clone(),
+                piece_receiver_batch_size,
+                piece_publisher_batch_size,
             };
             let single_disk_plot = SingleDiskPlot::new(description)?;
 

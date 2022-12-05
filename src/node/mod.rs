@@ -359,7 +359,7 @@ mod builder {
         pub client_id: Option<String>,
     }
 
-    fn default_listen_addresses() -> Vec<Multiaddr> {
+    fn default_listen_addresses() -> Vec<libp2p_core::Multiaddr> {
         // TODO: get rid of it, once it won't be required by monorepo
         vec!["/ip4/127.0.0.1/tcp/0".parse().expect("Always valid")]
     }
@@ -374,15 +374,15 @@ mod builder {
         #[builder(default = "default_listen_addresses()")]
         #[derivative(Default(value = "default_listen_addresses()"))]
         #[serde(default = "default_listen_addresses")]
-        pub listen_addresses: Vec<Multiaddr>,
+        pub listen_addresses: Vec<libp2p_core::Multiaddr>,
         /// Boot nodes
         #[builder(default)]
         #[serde(default)]
-        pub boot_nodes: Vec<Multiaddr>,
+        pub boot_nodes: Vec<libp2p_core::Multiaddr>,
         /// Reserved nodes
         #[builder(default)]
         #[serde(default)]
-        pub reserved_nodes: Vec<Multiaddr>,
+        pub reserved_nodes: Vec<libp2p_core::Multiaddr>,
         /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
         #[builder(default)]
         #[serde(default)]
@@ -592,11 +592,18 @@ impl Config {
                 reserved_nodes,
                 allow_non_global_addresses_in_dht,
             } = dsn;
-            let keypair = network
-                .node_key
-                .clone()
-                .into_keypair()
-                .context("Failed to convert network keypair")?;
+            let keypair = {
+                let keypair = network
+                    .node_key
+                    .clone()
+                    .into_keypair()
+                    .context("Failed to convert network keypair")?
+                    .to_protobuf_encoding()
+                    .context("Failed to convert network keypair")?;
+
+                subspace_networking::libp2p::identity::Keypair::from_protobuf_encoding(&keypair)
+                    .expect("Address is correct")
+            };
             let bootstrap_nodes = chain_spec
                 .properties()
                 .get("dsnBootstrapNodes")
@@ -607,13 +614,35 @@ impl Config {
                 .unwrap_or_default()
                 .into_iter()
                 .chain(boot_nodes)
+                .map(|a| {
+                    a.to_string()
+                        .parse()
+                        .expect("Convertion between 2 libp2p version. Never panics")
+                })
+                .collect();
+            let reserved_nodes = reserved_nodes
+                .into_iter()
+                .map(|a| {
+                    a.to_string()
+                        .parse()
+                        .expect("Convertion between 2 libp2p version. Never panics")
+                })
+                .collect();
+
+            let listen_on = listen_addresses
+                .into_iter()
+                .map(|a| {
+                    a.to_string()
+                        .parse()
+                        .expect("Convertion between 2 libp2p version. Never panics")
+                })
                 .collect();
 
             subspace_service::DsnConfig {
                 allow_non_global_addresses_in_dht,
                 bootstrap_nodes,
                 reserved_peers: reserved_nodes,
-                listen_on: listen_addresses,
+                listen_on,
                 keypair,
             }
         };
