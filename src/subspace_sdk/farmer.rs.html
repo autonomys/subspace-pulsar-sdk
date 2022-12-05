@@ -804,6 +804,21 @@
 <a href="#804" id="804">804</a>
 <a href="#805" id="805">805</a>
 <a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, io, num::NonZeroUsize, path::PathBuf, sync::Arc};
 
 <span class="kw">use </span>anyhow::Context;
@@ -1076,7 +1091,22 @@
         plots: <span class="kw-2">&amp;</span>[PlotDescription],
         cache: CacheDescription,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Farmer, BuildError&gt; {
-        <span class="kw">let </span>Config { <span class="kw-2">mut </span>dsn } = <span class="self">self</span>._build().expect(<span class="string">&quot;Build is infallible&quot;</span>);
+        <span class="self">self</span>.configuration()
+            .build(reward_address, node, plots, cache)
+            .<span class="kw">await
+    </span>}
+}
+
+<span class="kw">impl </span>Config {
+    <span class="doccomment">/// Open and start farmer
+    </span><span class="kw">pub async fn </span>build(
+        <span class="self">self</span>,
+        reward_address: PublicKey,
+        node: Node,
+        plots: <span class="kw-2">&amp;</span>[PlotDescription],
+        cache: CacheDescription,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Farmer, BuildError&gt; {
+        <span class="kw">let </span><span class="self">Self </span>{ <span class="kw-2">mut </span>dsn } = <span class="self">self</span>;
 
         <span class="kw">if </span>plots.is_empty() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(BuildError::NoPlotsSupplied);
