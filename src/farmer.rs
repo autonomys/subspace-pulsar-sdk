@@ -57,20 +57,21 @@ impl CacheDescription {
     }
 }
 
-const MIN_CACHE_SIZE: ByteSize = ByteSize::mib(1);
-
 /// Error type for cache description constructor
 #[derive(Debug, Clone, Copy, thiserror::Error)]
-#[error("Cache should be larger than {MIN_CACHE_SIZE}")]
+#[error("Cache should be larger than {}", CacheDescription::MIN_SIZE)]
 pub struct CacheTooSmall;
 
 impl CacheDescription {
+    /// Minimal cache size
+    pub const MIN_SIZE: ByteSize = ByteSize::mib(1);
+
     /// Construct Plot description
     pub fn new(
         directory: impl Into<PathBuf>,
         space_dedicated: ByteSize,
     ) -> Result<Self, CacheTooSmall> {
-        if space_dedicated < MIN_CACHE_SIZE {
+        if space_dedicated < Self::MIN_SIZE {
             return Err(CacheTooSmall);
         }
         Ok(Self {
@@ -96,18 +97,28 @@ pub struct PlotDescription {
     pub space_pledged: ByteSize,
 }
 
-impl PlotDescription {
-    /// Construct Plot description
-    pub fn new(directory: impl Into<PathBuf>, space_pledged: ByteSize) -> Result<Self, BuildError> {
-        const SECTOR_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE);
+/// Error type for cache description constructor
+#[derive(Debug, Clone, Copy, thiserror::Error)]
+#[error("Cache should be larger than {}", PlotDescription::MIN_SIZE)]
+pub struct PlotConstructionError;
 
-        if space_pledged <= SECTOR_SIZE {
+impl PlotDescription {
+    const SECTOR_OVERHEAD: ByteSize = ByteSize::mb(1);
+    /// Minimal plot size
+    pub const MIN_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE + Self::SECTOR_OVERHEAD.0);
+
+    /// Construct Plot description
+    pub fn new(
+        directory: impl Into<PathBuf>,
+        space_pledged: ByteSize,
+    ) -> Result<Self, PlotConstructionError> {
+        if space_pledged <= Self::MIN_SIZE {
             Ok(Self {
                 directory: directory.into(),
                 space_pledged,
             })
         } else {
-            Err(BuildError::PlotTooSmall(space_pledged, SECTOR_SIZE))
+            Err(PlotConstructionError)
         }
     }
 
@@ -260,9 +271,6 @@ pub enum BuildError {
     /// Failed to create parity db record storage
     #[error("Failed to create parity db record storage: {0}")]
     ParityDbError(#[from] parity_db::Error),
-    /// Plot was too small
-    #[error("Plot size was too small {0} (should be at least {1})")]
-    PlotTooSmall(ByteSize, ByteSize),
 }
 
 // Type alias for currently configured Kademlia's custom record store.
