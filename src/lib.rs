@@ -218,13 +218,13 @@ mod tests {
 
         let (dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let plot_descriptions =
-            [PlotDescription::new(dir.path(), bytesize::ByteSize::mib(32)).unwrap()];
+            [PlotDescription::new(dir.path(), PlotDescription::MIN_SIZE).unwrap()];
         let _farmer = Farmer::builder()
             .build(
                 Default::default(),
                 node.clone(),
                 &plot_descriptions,
-                CacheDescription::new(cache_dir.as_ref(), bytesize::ByteSize::mib(32)).unwrap(),
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .await
             .unwrap();

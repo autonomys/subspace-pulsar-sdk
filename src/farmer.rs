@@ -715,14 +715,14 @@ mod tests {
             .await
             .unwrap();
         let plot_dir = TempDir::new().unwrap();
-        let plots = [PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::mib(32)).unwrap()];
+        let plots = [PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()];
         let cache_dir = TempDir::new().unwrap();
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
                 node.clone(),
                 &plots,
-                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .await
             .unwrap();
@@ -737,7 +737,7 @@ mod tests {
         assert_eq!(plots_info.len(), 1);
         assert_eq!(
             plots_info[plot_dir.as_ref()].allocated_space,
-            bytesize::ByteSize::mib(32)
+            PlotDescription::MIN_SIZE
         );
 
         farmer.close().await.unwrap();
@@ -755,20 +755,19 @@ mod tests {
             .unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let n_sectors = 1;
-        let farmer =
-            Farmer::builder()
-                .build(
-                    Default::default(),
-                    node.clone(),
-                    &[PlotDescription::new(
-                        plot_dir.as_ref(),
-                        bytesize::ByteSize::mib(32 * n_sectors),
-                    )
-                    .unwrap()],
-                    CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
+        let farmer = Farmer::builder()
+            .build(
+                Default::default(),
+                node.clone(),
+                &[PlotDescription::new(
+                    plot_dir.as_ref(),
+                    ByteSize::b(PlotDescription::MIN_SIZE.as_u64() * n_sectors),
                 )
-                .await
-                .unwrap();
+                .unwrap()],
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+            )
+            .await
+            .unwrap();
 
         let progress = farmer
             .iter_plots()
@@ -800,8 +799,8 @@ mod tests {
             .build(
                 Default::default(),
                 node.clone(),
-                &[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::mib(32)).unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
+                &[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .await
             .unwrap();
@@ -835,8 +834,8 @@ mod tests {
             .build(
                 Default::default(),
                 node.clone(),
-                &[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::mib(32)).unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
+                &[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .await
             .unwrap();
