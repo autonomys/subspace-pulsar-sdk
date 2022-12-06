@@ -113,14 +113,13 @@ impl PlotDescription {
         directory: impl Into<PathBuf>,
         space_pledged: ByteSize,
     ) -> Result<Self, PlotConstructionError> {
-        if space_pledged <= Self::MIN_SIZE {
-            Ok(Self {
-                directory: directory.into(),
-                space_pledged,
-            })
-        } else {
-            Err(PlotConstructionError)
+        if space_pledged < Self::MIN_SIZE {
+            return Err(PlotConstructionError);
         }
+        Ok(Self {
+            directory: directory.into(),
+            space_pledged,
+        })
     }
 
     /// Wipe all the data from the plot
