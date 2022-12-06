@@ -103,7 +103,8 @@ pub struct PlotDescription {
 pub struct PlotConstructionError;
 
 impl PlotDescription {
-    const SECTOR_OVERHEAD: ByteSize = ByteSize::mb(1);
+    // TODO: Account for prefix and metadata sizes
+    const SECTOR_OVERHEAD: ByteSize = ByteSize::mb(2);
     /// Minimal plot size
     pub const MIN_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE + Self::SECTOR_OVERHEAD.0);
 
