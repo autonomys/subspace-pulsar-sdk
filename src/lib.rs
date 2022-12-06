@@ -217,10 +217,8 @@ mod tests {
         let mut slot_info_sub = node.subscribe_slot_info().await.unwrap();
 
         let (dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let plot_descriptions = [PlotDescription::new(
-            dir.path(),
-            bytesize::ByteSize::mib(32),
-        )];
+        let plot_descriptions =
+            [PlotDescription::new(dir.path(), bytesize::ByteSize::mib(32)).unwrap()];
         let _farmer = Farmer::builder()
             .build(
                 Default::default(),

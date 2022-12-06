@@ -14,7 +14,7 @@ async fn main() {
         .await
         .unwrap();
 
-    let plots = [PlotDescription::new("plot", ByteSize::mb(100))];
+    let plots = [PlotDescription::new("plot", ByteSize::mb(100)).unwrap()];
     let farmer: Farmer = Farmer::builder()
         .dsn(
             subspace_sdk::farmer::DsnBuilder::new()

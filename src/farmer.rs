@@ -86,36 +86,34 @@ impl CacheDescription {
 }
 
 /// Description of the plot
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[non_exhaustive]
 pub struct PlotDescription {
     /// Path of the plot
     pub directory: PathBuf,
     /// Space which you want to pledge
+    #[serde(with = "bytesize_serde")]
     pub space_pledged: ByteSize,
 }
 
 impl PlotDescription {
     /// Construct Plot description
-    pub fn new(directory: impl Into<PathBuf>, space_pledged: ByteSize) -> Self {
-        Self {
-            directory: directory.into(),
-            space_pledged,
+    pub fn new(directory: impl Into<PathBuf>, space_pledged: ByteSize) -> Result<Self, BuildError> {
+        const SECTOR_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE);
+
+        if space_pledged <= SECTOR_SIZE {
+            Ok(Self {
+                directory: directory.into(),
+                space_pledged,
+            })
+        } else {
+            Err(BuildError::PlotTooSmall(space_pledged, SECTOR_SIZE))
         }
     }
 
     /// Wipe all the data from the plot
     pub async fn wipe(self) -> io::Result<()> {
         tokio::fs::remove_dir_all(self.directory).await
-    }
-
-    fn check_too_small(&self) -> Result<(), BuildError> {
-        const SECTOR_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE);
-
-        if self.space_pledged >= SECTOR_SIZE {
-            Ok(())
-        } else {
-            Err(BuildError::PlotTooSmall(self.space_pledged, SECTOR_SIZE))
-        }
     }
 }
 
@@ -349,8 +347,6 @@ impl Config {
         let (dsn_node, mut dsn_node_runner) = dsn.configure_dsn(cache).await?;
 
         for description in plots {
-            description.check_too_small()?;
-
             let directory = description.directory.clone();
             let allocated_space = description.space_pledged.as_u64();
             let description = SingleDiskPlotOptions {
@@ -711,10 +707,7 @@ mod tests {
             .await
             .unwrap();
         let plot_dir = TempDir::new().unwrap();
-        let plots = [PlotDescription::new(
-            plot_dir.as_ref(),
-            bytesize::ByteSize::mib(32),
-        )];
+        let plots = [PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::mib(32)).unwrap()];
         let cache_dir = TempDir::new().unwrap();
         let farmer = Farmer::builder()
             .build(
@@ -754,18 +747,20 @@ mod tests {
             .unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let n_sectors = 1;
-        let farmer = Farmer::builder()
-            .build(
-                Default::default(),
-                node.clone(),
-                &[PlotDescription::new(
-                    plot_dir.as_ref(),
-                    bytesize::ByteSize::mib(32 * n_sectors),
-                )],
-                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
-            )
-            .await
-            .unwrap();
+        let farmer =
+            Farmer::builder()
+                .build(
+                    Default::default(),
+                    node.clone(),
+                    &[PlotDescription::new(
+                        plot_dir.as_ref(),
+                        bytesize::ByteSize::mib(32 * n_sectors),
+                    )
+                    .unwrap()],
+                    CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
+                )
+                .await
+                .unwrap();
 
         let progress = farmer
             .iter_plots()
@@ -797,10 +792,7 @@ mod tests {
             .build(
                 Default::default(),
                 node.clone(),
-                &[PlotDescription::new(
-                    plot_dir.as_ref(),
-                    bytesize::ByteSize::mib(32),
-                )],
+                &[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::mib(32)).unwrap()],
                 CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
             )
             .await
@@ -835,10 +827,7 @@ mod tests {
             .build(
                 Default::default(),
                 node.clone(),
-                &[PlotDescription::new(
-                    plot_dir.as_ref(),
-                    bytesize::ByteSize::mib(32),
-                )],
+                &[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::mib(32)).unwrap()],
                 CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
             )
             .await
