@@ -17,7 +17,6 @@ use sp_core::H256;
 use std::io;
 use std::num::NonZeroU64;
 use std::path::Path;
-use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 use subspace_core_primitives::SolutionRange;
@@ -900,7 +899,7 @@ impl Node {
         &self,
     ) -> anyhow::Result<impl Stream<Item = SyncStatus> + Send + Unpin + 'static> {
         const CHECK_SYNCED_EVERY: Duration = Duration::from_millis(100);
-        const SYNCING_TIMEOUT: Duration = Duration::from_secs(6);
+        const SYNCING_TIMEOUT: Duration = Duration::from_secs(60);
 
         let backoff = backoff::ExponentialBackoff {
             max_elapsed_time: Some(SYNCING_TIMEOUT),
@@ -919,34 +918,24 @@ impl Node {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
         tokio::spawn({
             let network = Arc::clone(&self.network);
-            let client = self.client().unwrap();
             async move {
-                let best_number = Arc::new(AtomicU32::new(0));
                 loop {
                     tokio::time::sleep(CHECK_SYNCED_EVERY).await;
                     let status = backoff::future::retry(backoff.clone(), || {
-                        let (best_number, network, client) =
-                            (Arc::clone(&best_number), &network, &client);
-                        async move {
-                            let new_best_number = client.chain_info().best_number;
-                            let not_imported_blocks = best_number
-                                .swap(new_best_number, std::sync::atomic::Ordering::Relaxed)
-                                == new_best_number;
-                            match network.status().await?.sync_state {
-                                SyncState::Idle if not_imported_blocks => {
+                        network
+                            .status()
+                            .map(|result_status| match result_status?.sync_state {
+                                SyncState::Idle => {
+                                    tracing::error!("Idle");
                                     Err(backoff::Error::transient(()))
                                 }
-                                SyncState::Idle => Ok(SyncStatus::Importing {
-                                    target: new_best_number,
-                                }),
                                 SyncState::Importing { target } => {
                                     Ok(SyncStatus::Importing { target })
                                 }
                                 SyncState::Downloading { target } => {
                                     Ok(SyncStatus::Downloading { target })
                                 }
-                            }
-                        }
+                            })
                     })
                     .await;
 
