@@ -1289,23 +1289,6 @@
 <a href="#1289" id="1289">1289</a>
 <a href="#1290" id="1290">1290</a>
 <a href="#1291" id="1291">1291</a>
-<a href="#1292" id="1292">1292</a>
-<a href="#1293" id="1293">1293</a>
-<a href="#1294" id="1294">1294</a>
-<a href="#1295" id="1295">1295</a>
-<a href="#1296" id="1296">1296</a>
-<a href="#1297" id="1297">1297</a>
-<a href="#1298" id="1298">1298</a>
-<a href="#1299" id="1299">1299</a>
-<a href="#1300" id="1300">1300</a>
-<a href="#1301" id="1301">1301</a>
-<a href="#1302" id="1302">1302</a>
-<a href="#1303" id="1303">1303</a>
-<a href="#1304" id="1304">1304</a>
-<a href="#1305" id="1305">1305</a>
-<a href="#1306" id="1306">1306</a>
-<a href="#1307" id="1307">1307</a>
-<a href="#1308" id="1308">1308</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>futures::channel::{mpsc, oneshot};
 <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
@@ -1325,7 +1308,6 @@
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
-<span class="kw">use </span>std::sync::atomic::AtomicU32;
 <span class="kw">use </span>std::sync::{Arc, Weak};
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>subspace_core_primitives::SolutionRange;
@@ -2208,7 +2190,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; anyhow::Result&lt;<span class="kw">impl </span>Stream&lt;Item = SyncStatus&gt; + Send + Unpin + <span class="lifetime">&#39;static</span>&gt; {
         <span class="kw">const </span>CHECK_SYNCED_EVERY: Duration = Duration::from_millis(<span class="number">100</span>);
-        <span class="kw">const </span>SYNCING_TIMEOUT: Duration = Duration::from_secs(<span class="number">6</span>);
+        <span class="kw">const </span>SYNCING_TIMEOUT: Duration = Duration::from_secs(<span class="number">60</span>);
 
         <span class="kw">let </span>backoff = backoff::ExponentialBackoff {
             max_elapsed_time: <span class="prelude-val">Some</span>(SYNCING_TIMEOUT),
@@ -2227,34 +2209,24 @@
         <span class="kw">let </span>(sender, receiver) = tokio::sync::mpsc::channel(<span class="number">10</span>);
         tokio::spawn({
             <span class="kw">let </span>network = Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.network);
-            <span class="kw">let </span>client = <span class="self">self</span>.client().unwrap();
             <span class="kw">async move </span>{
-                <span class="kw">let </span>best_number = Arc::new(AtomicU32::new(<span class="number">0</span>));
                 <span class="kw">loop </span>{
                     tokio::time::sleep(CHECK_SYNCED_EVERY).<span class="kw">await</span>;
                     <span class="kw">let </span>status = backoff::future::retry(backoff.clone(), || {
-                        <span class="kw">let </span>(best_number, network, client) =
-                            (Arc::clone(<span class="kw-2">&amp;</span>best_number), <span class="kw-2">&amp;</span>network, <span class="kw-2">&amp;</span>client);
-                        <span class="kw">async move </span>{
-                            <span class="kw">let </span>new_best_number = client.chain_info().best_number;
-                            <span class="kw">let </span>not_imported_blocks = best_number
-                                .swap(new_best_number, std::sync::atomic::Ordering::Relaxed)
-                                == new_best_number;
-                            <span class="kw">match </span>network.status().<span class="kw">await</span><span class="question-mark">?</span>.sync_state {
-                                SyncState::Idle <span class="kw">if </span>not_imported_blocks =&gt; {
+                        network
+                            .status()
+                            .map(|result_status| <span class="kw">match </span>result_status<span class="question-mark">?</span>.sync_state {
+                                SyncState::Idle =&gt; {
+                                    <span class="macro">tracing::error!</span>(<span class="string">&quot;Idle&quot;</span>);
                                     <span class="prelude-val">Err</span>(backoff::Error::transient(()))
                                 }
-                                SyncState::Idle =&gt; <span class="prelude-val">Ok</span>(SyncStatus::Importing {
-                                    target: new_best_number,
-                                }),
                                 SyncState::Importing { target } =&gt; {
                                     <span class="prelude-val">Ok</span>(SyncStatus::Importing { target })
                                 }
                                 SyncState::Downloading { target } =&gt; {
                                     <span class="prelude-val">Ok</span>(SyncStatus::Downloading { target })
                                 }
-                            }
-                        }
+                            })
                     })
                     .<span class="kw">await</span>;
 
@@ -2529,16 +2501,13 @@
             .<span class="kw">await
             </span>.unwrap();
         <span class="kw">let </span>(plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        <span class="kw">let </span>plots = [PlotDescription::new(
-            plot_dir.as_ref(),
-            bytesize::ByteSize::mib(<span class="number">32</span>),
-        )];
+        <span class="kw">let </span>plots = [PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()];
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
                 Default::default(),
                 node.clone(),
                 <span class="kw-2">&amp;</span>plots,
-                CacheDescription::new(cache_dir.as_ref(), bytesize::ByteSize::mib(<span class="number">32</span>)).unwrap(),
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .<span class="kw">await
             </span>.unwrap();
@@ -2569,11 +2538,8 @@
             .build(
                 Default::default(),
                 node.clone(),
-                <span class="kw-2">&amp;</span>[PlotDescription::new(
-                    plot_dir.as_ref(),
-                    bytesize::ByteSize::gb(<span class="number">1</span>),
-                )],
-                CacheDescription::new(cache_dir.as_ref(), bytesize::ByteSize::mib(<span class="number">32</span>)).unwrap(),
+                <span class="kw-2">&amp;</span>[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::gb(<span class="number">1</span>)).unwrap()],
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .<span class="kw">await
             </span>.unwrap();

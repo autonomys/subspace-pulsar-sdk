@@ -860,10 +860,6 @@
 <a href="#860" id="860">860</a>
 <a href="#861" id="861">861</a>
 <a href="#862" id="862">862</a>
-<a href="#863" id="863">863</a>
-<a href="#864" id="864">864</a>
-<a href="#865" id="865">865</a>
-<a href="#866" id="866">866</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, io, num::NonZeroUsize, path::PathBuf, sync::Arc};
 
 <span class="kw">use </span>anyhow::Context;
@@ -923,20 +919,21 @@
     }
 }
 
-<span class="kw">const </span>MIN_CACHE_SIZE: ByteSize = ByteSize::mib(<span class="number">1</span>);
-
 <span class="doccomment">/// Error type for cache description constructor
 </span><span class="attr">#[derive(Debug, Clone, Copy, thiserror::Error)]
-#[error(<span class="string">&quot;Cache should be larger than {MIN_CACHE_SIZE}&quot;</span>)]
+#[error(<span class="string">&quot;Cache should be larger than {}&quot;</span>, CacheDescription::MIN_SIZE)]
 </span><span class="kw">pub struct </span>CacheTooSmall;
 
 <span class="kw">impl </span>CacheDescription {
+    <span class="doccomment">/// Minimal cache size
+    </span><span class="kw">pub const </span>MIN_SIZE: ByteSize = ByteSize::mib(<span class="number">1</span>);
+
     <span class="doccomment">/// Construct Plot description
     </span><span class="kw">pub fn </span>new(
         directory: <span class="kw">impl </span>Into&lt;PathBuf&gt;,
         space_dedicated: ByteSize,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CacheTooSmall&gt; {
-        <span class="kw">if </span>space_dedicated &lt; MIN_CACHE_SIZE {
+        <span class="kw">if </span>space_dedicated &lt; <span class="self">Self</span>::MIN_SIZE {
             <span class="kw">return </span><span class="prelude-val">Err</span>(CacheTooSmall);
         }
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
@@ -952,37 +949,45 @@
 }
 
 <span class="doccomment">/// Description of the plot
-</span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq)]
+</span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[non_exhaustive]
 </span><span class="kw">pub struct </span>PlotDescription {
     <span class="doccomment">/// Path of the plot
     </span><span class="kw">pub </span>directory: PathBuf,
     <span class="doccomment">/// Space which you want to pledge
+    </span><span class="attr">#[serde(with = <span class="string">&quot;bytesize_serde&quot;</span>)]
     </span><span class="kw">pub </span>space_pledged: ByteSize,
 }
 
+<span class="doccomment">/// Error type for cache description constructor
+</span><span class="attr">#[derive(Debug, Clone, Copy, thiserror::Error)]
+#[error(<span class="string">&quot;Cache should be larger than {}&quot;</span>, PlotDescription::MIN_SIZE)]
+</span><span class="kw">pub struct </span>PlotConstructionError;
+
 <span class="kw">impl </span>PlotDescription {
+    <span class="comment">// TODO: Account for prefix and metadata sizes
+    </span><span class="kw">const </span>SECTOR_OVERHEAD: ByteSize = ByteSize::mb(<span class="number">2</span>);
+    <span class="doccomment">/// Minimal plot size
+    </span><span class="kw">pub const </span>MIN_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE + <span class="self">Self</span>::SECTOR_OVERHEAD.<span class="number">0</span>);
+
     <span class="doccomment">/// Construct Plot description
-    </span><span class="kw">pub fn </span>new(directory: <span class="kw">impl </span>Into&lt;PathBuf&gt;, space_pledged: ByteSize) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(
+        directory: <span class="kw">impl </span>Into&lt;PathBuf&gt;,
+        space_pledged: ByteSize,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, PlotConstructionError&gt; {
+        <span class="kw">if </span>space_pledged &lt; <span class="self">Self</span>::MIN_SIZE {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PlotConstructionError);
+        }
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             directory: directory.into(),
             space_pledged,
-        }
+        })
     }
 
     <span class="doccomment">/// Wipe all the data from the plot
     </span><span class="kw">pub async fn </span>wipe(<span class="self">self</span>) -&gt; io::Result&lt;()&gt; {
         tokio::fs::remove_dir_all(<span class="self">self</span>.directory).<span class="kw">await
     </span>}
-
-    <span class="kw">fn </span>check_too_small(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), BuildError&gt; {
-        <span class="kw">const </span>SECTOR_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE);
-
-        <span class="kw">if </span><span class="self">self</span>.space_pledged &gt;= SECTOR_SIZE {
-            <span class="prelude-val">Ok</span>(())
-        } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(BuildError::PlotTooSmall(<span class="self">self</span>.space_pledged, SECTOR_SIZE))
-        }
-    }
 }
 
 <span class="kw">mod </span>builder {
@@ -1128,9 +1133,6 @@
     <span class="doccomment">/// Failed to create parity db record storage
     </span><span class="attr">#[error(<span class="string">&quot;Failed to create parity db record storage: {0}&quot;</span>)]
     </span>ParityDbError(<span class="attr">#[from] </span>parity_db::Error),
-    <span class="doccomment">/// Plot was too small
-    </span><span class="attr">#[error(<span class="string">&quot;Plot size was too small {0} (should be at least {1})&quot;</span>)]
-    </span>PlotTooSmall(ByteSize, ByteSize),
 }
 
 <span class="comment">// Type alias for currently configured Kademlia&#39;s custom record store.
@@ -1215,8 +1217,6 @@
         <span class="kw">let </span>(dsn_node, <span class="kw-2">mut </span>dsn_node_runner) = dsn.configure_dsn(cache).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">for </span>description <span class="kw">in </span>plots {
-            description.check_too_small()<span class="question-mark">?</span>;
-
             <span class="kw">let </span>directory = description.directory.clone();
             <span class="kw">let </span>allocated_space = description.space_pledged.as_u64();
             <span class="kw">let </span>description = SingleDiskPlotOptions {
@@ -1577,17 +1577,14 @@
             .<span class="kw">await
             </span>.unwrap();
         <span class="kw">let </span>plot_dir = TempDir::new().unwrap();
-        <span class="kw">let </span>plots = [PlotDescription::new(
-            plot_dir.as_ref(),
-            bytesize::ByteSize::mib(<span class="number">32</span>),
-        )];
+        <span class="kw">let </span>plots = [PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()];
         <span class="kw">let </span>cache_dir = TempDir::new().unwrap();
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
                 Default::default(),
                 node.clone(),
                 <span class="kw-2">&amp;</span>plots,
-                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(<span class="number">32</span>)).unwrap(),
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .<span class="kw">await
             </span>.unwrap();
@@ -1602,7 +1599,7 @@
         <span class="macro">assert_eq!</span>(plots_info.len(), <span class="number">1</span>);
         <span class="macro">assert_eq!</span>(
             plots_info[plot_dir.as_ref()].allocated_space,
-            bytesize::ByteSize::mib(<span class="number">32</span>)
+            PlotDescription::MIN_SIZE
         );
 
         farmer.close().<span class="kw">await</span>.unwrap();
@@ -1626,9 +1623,10 @@
                 node.clone(),
                 <span class="kw-2">&amp;</span>[PlotDescription::new(
                     plot_dir.as_ref(),
-                    bytesize::ByteSize::mib(<span class="number">32 </span>* n_sectors),
-                )],
-                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(<span class="number">32</span>)).unwrap(),
+                    ByteSize::b(PlotDescription::MIN_SIZE.as_u64() * n_sectors),
+                )
+                .unwrap()],
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .<span class="kw">await
             </span>.unwrap();
@@ -1663,11 +1661,8 @@
             .build(
                 Default::default(),
                 node.clone(),
-                <span class="kw-2">&amp;</span>[PlotDescription::new(
-                    plot_dir.as_ref(),
-                    bytesize::ByteSize::mib(<span class="number">32</span>),
-                )],
-                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(<span class="number">32</span>)).unwrap(),
+                <span class="kw-2">&amp;</span>[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .<span class="kw">await
             </span>.unwrap();
@@ -1701,11 +1696,8 @@
             .build(
                 Default::default(),
                 node.clone(),
-                <span class="kw-2">&amp;</span>[PlotDescription::new(
-                    plot_dir.as_ref(),
-                    bytesize::ByteSize::mib(<span class="number">32</span>),
-                )],
-                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(<span class="number">32</span>)).unwrap(),
+                <span class="kw-2">&amp;</span>[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .<span class="kw">await
             </span>.unwrap();
