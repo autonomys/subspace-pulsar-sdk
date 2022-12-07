@@ -57,20 +57,21 @@ impl CacheDescription {
     }
 }
 
-const MIN_CACHE_SIZE: ByteSize = ByteSize::mib(1);
-
 /// Error type for cache description constructor
 #[derive(Debug, Clone, Copy, thiserror::Error)]
-#[error("Cache should be larger than {MIN_CACHE_SIZE}")]
+#[error("Cache should be larger than {}", CacheDescription::MIN_SIZE)]
 pub struct CacheTooSmall;
 
 impl CacheDescription {
+    /// Minimal cache size
+    pub const MIN_SIZE: ByteSize = ByteSize::mib(1);
+
     /// Construct Plot description
     pub fn new(
         directory: impl Into<PathBuf>,
         space_dedicated: ByteSize,
     ) -> Result<Self, CacheTooSmall> {
-        if space_dedicated < MIN_CACHE_SIZE {
+        if space_dedicated < Self::MIN_SIZE {
             return Err(CacheTooSmall);
         }
         Ok(Self {
@@ -86,36 +87,44 @@ impl CacheDescription {
 }
 
 /// Description of the plot
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[non_exhaustive]
 pub struct PlotDescription {
     /// Path of the plot
     pub directory: PathBuf,
     /// Space which you want to pledge
+    #[serde(with = "bytesize_serde")]
     pub space_pledged: ByteSize,
 }
 
+/// Error type for cache description constructor
+#[derive(Debug, Clone, Copy, thiserror::Error)]
+#[error("Cache should be larger than {}", PlotDescription::MIN_SIZE)]
+pub struct PlotConstructionError;
+
 impl PlotDescription {
+    // TODO: Account for prefix and metadata sizes
+    const SECTOR_OVERHEAD: ByteSize = ByteSize::mb(2);
+    /// Minimal plot size
+    pub const MIN_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE + Self::SECTOR_OVERHEAD.0);
+
     /// Construct Plot description
-    pub fn new(directory: impl Into<PathBuf>, space_pledged: ByteSize) -> Self {
-        Self {
+    pub fn new(
+        directory: impl Into<PathBuf>,
+        space_pledged: ByteSize,
+    ) -> Result<Self, PlotConstructionError> {
+        if space_pledged < Self::MIN_SIZE {
+            return Err(PlotConstructionError);
+        }
+        Ok(Self {
             directory: directory.into(),
             space_pledged,
-        }
+        })
     }
 
     /// Wipe all the data from the plot
     pub async fn wipe(self) -> io::Result<()> {
         tokio::fs::remove_dir_all(self.directory).await
-    }
-
-    fn check_too_small(&self) -> Result<(), BuildError> {
-        const SECTOR_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE);
-
-        if self.space_pledged >= SECTOR_SIZE {
-            Ok(())
-        } else {
-            Err(BuildError::PlotTooSmall(self.space_pledged, SECTOR_SIZE))
-        }
     }
 }
 
@@ -262,9 +271,6 @@ pub enum BuildError {
     /// Failed to create parity db record storage
     #[error("Failed to create parity db record storage: {0}")]
     ParityDbError(#[from] parity_db::Error),
-    /// Plot was too small
-    #[error("Plot size was too small {0} (should be at least {1})")]
-    PlotTooSmall(ByteSize, ByteSize),
 }
 
 // Type alias for currently configured Kademlia's custom record store.
@@ -349,8 +355,6 @@ impl Config {
         let (dsn_node, mut dsn_node_runner) = dsn.configure_dsn(cache).await?;
 
         for description in plots {
-            description.check_too_small()?;
-
             let directory = description.directory.clone();
             let allocated_space = description.space_pledged.as_u64();
             let description = SingleDiskPlotOptions {
@@ -711,17 +715,14 @@ mod tests {
             .await
             .unwrap();
         let plot_dir = TempDir::new().unwrap();
-        let plots = [PlotDescription::new(
-            plot_dir.as_ref(),
-            bytesize::ByteSize::mib(32),
-        )];
+        let plots = [PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()];
         let cache_dir = TempDir::new().unwrap();
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
                 node.clone(),
                 &plots,
-                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .await
             .unwrap();
@@ -736,7 +737,7 @@ mod tests {
         assert_eq!(plots_info.len(), 1);
         assert_eq!(
             plots_info[plot_dir.as_ref()].allocated_space,
-            bytesize::ByteSize::mib(32)
+            PlotDescription::MIN_SIZE
         );
 
         farmer.close().await.unwrap();
@@ -760,9 +761,10 @@ mod tests {
                 node.clone(),
                 &[PlotDescription::new(
                     plot_dir.as_ref(),
-                    bytesize::ByteSize::mib(32 * n_sectors),
-                )],
-                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
+                    ByteSize::b(PlotDescription::MIN_SIZE.as_u64() * n_sectors),
+                )
+                .unwrap()],
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .await
             .unwrap();
@@ -797,11 +799,8 @@ mod tests {
             .build(
                 Default::default(),
                 node.clone(),
-                &[PlotDescription::new(
-                    plot_dir.as_ref(),
-                    bytesize::ByteSize::mib(32),
-                )],
-                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
+                &[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .await
             .unwrap();
@@ -835,11 +834,8 @@ mod tests {
             .build(
                 Default::default(),
                 node.clone(),
-                &[PlotDescription::new(
-                    plot_dir.as_ref(),
-                    bytesize::ByteSize::mib(32),
-                )],
-                CacheDescription::new(cache_dir.as_ref(), ByteSize::mib(32)).unwrap(),
+                &[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .await
             .unwrap();
