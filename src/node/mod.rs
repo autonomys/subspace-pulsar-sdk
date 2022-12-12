@@ -40,7 +40,7 @@ mod builder {
     use derivative::Derivative;
     use derive_builder::Builder;
     use serde::{Deserialize, Serialize};
-    use std::net::SocketAddr;
+    use std::{net::SocketAddr, num::NonZeroUsize};
 
     /// Block pruning settings.
     #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
@@ -207,6 +207,10 @@ mod builder {
         format!("{}-{}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH"))
     }
 
+    fn default_segment_publish_concurrency() -> NonZeroUsize {
+        NonZeroUsize::new(10).unwrap()
+    }
+
     /// Node builder
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
@@ -217,6 +221,12 @@ mod builder {
         #[builder(default)]
         #[serde(default)]
         pub force_authoring: bool,
+        /// Max number of segments that can be published concurrently, impacts RAM usage and network
+        /// bandwidth.
+        #[builder(default = "default_segment_publish_concurrency()")]
+        #[derivative(Default(value = "default_segment_publish_concurrency()"))]
+        #[serde(default = "default_segment_publish_concurrency")]
+        pub segment_publish_concurrency: NonZeroUsize,
         /// Set node role
         #[builder(default)]
         #[serde(default)]
@@ -512,6 +522,7 @@ impl Config {
         let Self {
             force_authoring,
             role,
+            segment_publish_concurrency,
             blocks_pruning,
             state_pruning,
             execution_strategy,
@@ -708,6 +719,7 @@ impl Config {
                 runtime_cache_size: 2,
             },
             force_new_slot_notifications: false,
+            segment_publish_concurrency,
             subspace_networking: subspace_service::SubspaceNetworking::Create {
                 config: dsn_config,
                 piece_cache_size: piece_cache_size.as_u64(),

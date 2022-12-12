@@ -129,7 +129,10 @@ impl PlotDescription {
 }
 
 mod builder {
+    use std::num::NonZeroUsize;
+
     use crate::generate_builder;
+    use derivative::Derivative;
     use derive_builder::Builder;
     use libp2p_core::Multiaddr;
     use serde::{Deserialize, Serialize};
@@ -142,19 +145,31 @@ mod builder {
         12
     }
 
+    fn default_max_concurrent_plots() -> NonZeroUsize {
+        NonZeroUsize::new(10).unwrap()
+    }
+
     /// Technical type which stores all
-    #[derive(Debug, Clone, Default, Builder, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Derivative, Builder, Serialize, Deserialize)]
+    #[derivative(Default)]
     #[builder(pattern = "immutable", build_fn(name = "_build"), name = "Builder")]
     #[non_exhaustive]
     pub struct Config {
         /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
         #[builder(default = "default_piece_receiver_batch_size()")]
+        #[derivative(Default(value = "default_piece_receiver_batch_size()"))]
         #[serde(default = "default_piece_receiver_batch_size")]
         pub piece_receiver_batch_size: usize,
         /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
         #[builder(default = "default_piece_publisher_batch_size()")]
+        #[derivative(Default(value = "default_piece_publisher_batch_size()"))]
         #[serde(default = "default_piece_publisher_batch_size")]
         pub piece_publisher_batch_size: usize,
+        /// Number of plots that can be plotted concurrently, impacts RAM usage.
+        #[builder(default = "default_max_concurrent_plots()")]
+        #[derivative(Default(value = "default_max_concurrent_plots()"))]
+        #[serde(default = "default_max_concurrent_plots")]
+        pub max_concurrent_plots: NonZeroUsize,
         /// DSN options
         #[builder(default, setter(into))]
         pub dsn: Dsn,
@@ -344,6 +359,7 @@ impl Config {
             mut dsn,
             piece_receiver_batch_size,
             piece_publisher_batch_size,
+            max_concurrent_plots,
         } = self;
 
         if plots.is_empty() {
@@ -374,6 +390,8 @@ impl Config {
             Arc::new(tokio::sync::Semaphore::new(piece_receiver_batch_size));
         let piece_receiver_semaphore =
             Arc::new(tokio::sync::Semaphore::new(piece_publisher_batch_size));
+        let concurrent_plotting_semaphore =
+            Arc::new(tokio::sync::Semaphore::new(max_concurrent_plots.get()));
 
         for description in plots {
             let directory = description.directory.clone();
@@ -386,8 +404,9 @@ impl Config {
                 dsn_node: dsn_node.clone(),
                 piece_receiver_semaphore: Arc::clone(&piece_receiver_semaphore),
                 piece_publisher_semaphore: Arc::clone(&piece_publisher_semaphore),
+                concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
             };
-            let single_disk_plot = SingleDiskPlot::new(description)?;
+            let single_disk_plot = SingleDiskPlot::new(description).await?;
 
             let mut handlers = Vec::new();
             let progress = {
