@@ -353,6 +353,10 @@ impl Config {
         let mut single_disk_plots = Vec::with_capacity(plots.len());
         let mut plot_info = HashMap::with_capacity(plots.len());
         let (dsn_node, mut dsn_node_runner) = dsn.configure_dsn(cache).await?;
+        let piece_publisher_semaphore =
+            Arc::new(tokio::sync::Semaphore::new(piece_receiver_batch_size));
+        let piece_receiver_semaphore =
+            Arc::new(tokio::sync::Semaphore::new(piece_publisher_batch_size));
 
         for description in plots {
             let directory = description.directory.clone();
@@ -363,8 +367,8 @@ impl Config {
                 reward_address: *reward_address,
                 rpc_client: node.clone(),
                 dsn_node: dsn_node.clone(),
-                piece_receiver_batch_size,
-                piece_publisher_batch_size,
+                piece_receiver_semaphore: Arc::clone(&piece_receiver_semaphore),
+                piece_publisher_semaphore: Arc::clone(&piece_publisher_semaphore),
             };
             let single_disk_plot = SingleDiskPlot::new(description)?;
 
