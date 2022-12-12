@@ -23,6 +23,7 @@ use sp_core::H256;
 use subspace_core_primitives::SolutionRange;
 use subspace_farmer::RpcClient;
 use subspace_farmer_components::FarmerProtocolInfo;
+use subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler};
 use subspace_rpc_primitives::SlotInfo;
 use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
@@ -580,16 +581,68 @@ impl Config {
         let (keystore_remote, keystore) = (None, KeystoreConfig::InMemory);
         let telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
 
-        let dsn_config = {
+        let base = Configuration {
+            impl_name,
+            impl_version,
+            tokio_handle: tokio::runtime::Handle::current(),
+            transaction_pool: Default::default(),
+            network,
+            keystore_remote,
+            keystore,
+            database: DatabaseSource::ParityDb { path: config_dir.join("paritydb").join("full") },
+            trie_cache_maximum_size: Some(67_108_864),
+            state_pruning: Some(state_pruning.into()),
+            blocks_pruning: blocks_pruning.into(),
+            wasm_method: WasmExecutionMethod::Compiled {
+                instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
+            },
+            wasm_runtime_overrides: None,
+            execution_strategies: execution_strategy.into(),
+            rpc_http,
+            rpc_ws,
+            rpc_ipc,
+            rpc_methods: rpc_methods.into(),
+            rpc_ws_max_connections,
+            rpc_cors,
+            rpc_max_payload,
+            rpc_max_request_size,
+            rpc_max_response_size,
+            rpc_id_provider: None,
+            rpc_max_subs_per_conn: Some(rpc_max_subs_per_conn),
+            ws_max_out_buffer_capacity,
+            prometheus_config: None,
+            telemetry_endpoints,
+            default_heap_pages: None,
+            offchain_worker: offchain_worker.into(),
+            force_authoring,
+            disable_grandpa: false,
+            dev_key_seed: None,
+            tracing_targets: None,
+            tracing_receiver: TracingReceiver::Log,
+            chain_spec: Box::new(chain_spec),
+            max_runtime_instances: 8,
+            announce_block: true,
+            role: role.into(),
+            base_path: Some(base_path),
+            informant_output_format: Default::default(),
+            runtime_cache_size: 2,
+        };
+
+        let partial_components =
+            subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&base)
+                .context("Failed to build a partial subspace node")?;
+
+        let (subspace_networking, mut node_runner) = {
             let builder::Dsn {
                 listen_addresses,
                 boot_nodes,
-                reserved_nodes,
+                reserved_nodes: _,
                 allow_non_global_addresses_in_dht,
                 piece_publisher_batch_size,
             } = dsn;
             let keypair = {
-                let keypair = network
+                let keypair = base
+                    .network
                     .node_key
                     .clone()
                     .into_keypair()
@@ -600,7 +653,8 @@ impl Config {
                 subspace_networking::libp2p::identity::Keypair::from_protobuf_encoding(&keypair)
                     .expect("Address is correct")
             };
-            let bootstrap_nodes = chain_spec
+            let bootstrap_nodes = base
+                .chain_spec
                 .properties()
                 .get("dsnBootstrapNodes")
                 .cloned()
@@ -615,15 +669,7 @@ impl Config {
                         .parse()
                         .expect("Convertion between 2 libp2p version. Never panics")
                 })
-                .collect();
-            let reserved_nodes = reserved_nodes
-                .into_iter()
-                .map(|a| {
-                    a.to_string()
-                        .parse()
-                        .expect("Convertion between 2 libp2p version. Never panics")
-                })
-                .collect();
+                .collect::<Vec<_>>();
 
             let listen_on = listen_addresses
                 .into_iter()
@@ -634,77 +680,101 @@ impl Config {
                 })
                 .collect();
 
-            subspace_service::DsnConfig {
-                allow_non_global_addresses_in_dht,
-                bootstrap_nodes,
-                reserved_peers: reserved_nodes,
-                listen_on,
+            let piece_cache = subspace_service::piece_cache::PieceCache::new(
+                partial_components.client.clone(),
+                piece_cache_size.as_u64(),
+            );
+
+            // Start before archiver below, so we don't have potential race condition and
+            // miss pieces
+            tokio::spawn({
+                let piece_cache = piece_cache.clone();
+                let mut archived_segment_notification_stream =
+                    partial_components.other.1.archived_segment_notification_stream().subscribe();
+
+                async move {
+                    while let Some(archived_segment_notification) =
+                        archived_segment_notification_stream.next().await
+                    {
+                        let segment_index = archived_segment_notification
+                            .archived_segment
+                            .root_block
+                            .segment_index();
+                        if let Err(error) = piece_cache.add_pieces(
+                            segment_index * u64::from(subspace_core_primitives::PIECES_IN_SEGMENT),
+                            &archived_segment_notification.archived_segment.pieces,
+                        ) {
+                            tracing::error!(%segment_index, %error, "Failed to store pieces for segment in cache");
+                        }
+                    }
+                }
+            });
+
+            let record_store = subspace_networking::CustomRecordStore::new(
+                piece_cache.clone(),
+                subspace_networking::MemoryProviderStorage::default(),
+            );
+
+            let config = subspace_networking::Config {
                 keypair,
-                piece_publisher_batch_size,
-            }
+                listen_on,
+                allow_non_global_addresses_in_dht,
+                networking_parameters_registry:
+                    subspace_networking::BootstrappedNetworkingParameters::new(
+                        bootstrap_nodes.clone(),
+                    )
+                    .boxed(),
+                request_response_protocols: vec![PieceByHashRequestHandler::create(
+                    move |PieceByHashRequest { key }| {
+                        let result = if let subspace_networking::PieceKey::PieceIndex(piece_index) =
+                            key
+                        {
+                            match piece_cache.get_piece(*piece_index) {
+                                Ok(maybe_piece) => maybe_piece,
+                                Err(error) => {
+                                    tracing::error!(?key, %error, "Failed to get piece from cache");
+                                    None
+                                }
+                            }
+                        } else {
+                            tracing::debug!(
+                                ?key,
+                                "Incorrect piece request - unsupported key type."
+                            );
+
+                            None
+                        };
+
+                        Some(subspace_networking::PieceByHashResponse { piece: result })
+                    },
+                )],
+                record_store,
+                ..subspace_networking::Config::with_generated_keypair()
+            };
+
+            let (node, node_runner) = subspace_networking::create(config).await?;
+
+            (
+                subspace_service::SubspaceNetworking::Reuse {
+                    node: node.clone(),
+                    bootstrap_nodes,
+                    piece_publisher_batch_size,
+                },
+                node_runner,
+            )
         };
 
         // Default value are used for many of parameters
         let configuration = SubspaceConfiguration {
-            base: Configuration {
-                impl_name,
-                impl_version,
-                tokio_handle: tokio::runtime::Handle::current(),
-                transaction_pool: Default::default(),
-                network,
-                keystore_remote,
-                keystore,
-                database: DatabaseSource::ParityDb {
-                    path: config_dir.join("paritydb").join("full"),
-                },
-                trie_cache_maximum_size: Some(67_108_864),
-                state_pruning: Some(state_pruning.into()),
-                blocks_pruning: blocks_pruning.into(),
-                wasm_method: WasmExecutionMethod::Compiled {
-                    instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
-                },
-                wasm_runtime_overrides: None,
-                execution_strategies: execution_strategy.into(),
-                rpc_http,
-                rpc_ws,
-                rpc_ipc,
-                rpc_methods: rpc_methods.into(),
-                rpc_ws_max_connections,
-                rpc_cors,
-                rpc_max_payload,
-                rpc_max_request_size,
-                rpc_max_response_size,
-                rpc_id_provider: None,
-                rpc_max_subs_per_conn: Some(rpc_max_subs_per_conn),
-                ws_max_out_buffer_capacity,
-                prometheus_config: None,
-                telemetry_endpoints,
-                default_heap_pages: None,
-                offchain_worker: offchain_worker.into(),
-                force_authoring,
-                disable_grandpa: false,
-                dev_key_seed: None,
-                tracing_targets: None,
-                tracing_receiver: TracingReceiver::Log,
-                chain_spec: Box::new(chain_spec),
-                max_runtime_instances: 8,
-                announce_block: true,
-                role: role.into(),
-                base_path: Some(base_path),
-                informant_output_format: Default::default(),
-                runtime_cache_size: 2,
-            },
+            base,
             force_new_slot_notifications: false,
             segment_publish_concurrency,
-            subspace_networking: subspace_service::SubspaceNetworking::Create {
-                config: dsn_config,
-                piece_cache_size: piece_cache_size.as_u64(),
-            },
+            subspace_networking,
         };
 
-        let partial_components =
-            subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&configuration)
-                .context("Failed to build a partial subspace node")?;
+        tokio::spawn(async move {
+            node_runner.run().await;
+        });
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);
         let full_client =
