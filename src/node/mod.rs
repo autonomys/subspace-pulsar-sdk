@@ -40,7 +40,7 @@ mod builder {
     use derivative::Derivative;
     use derive_builder::Builder;
     use serde::{Deserialize, Serialize};
-    use std::net::SocketAddr;
+    use std::{net::SocketAddr, num::NonZeroUsize};
 
     /// Block pruning settings.
     #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
@@ -207,6 +207,10 @@ mod builder {
         format!("{}-{}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH"))
     }
 
+    fn default_segment_publish_concurrency() -> NonZeroUsize {
+        NonZeroUsize::new(10).unwrap()
+    }
+
     /// Node builder
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
@@ -217,6 +221,12 @@ mod builder {
         #[builder(default)]
         #[serde(default)]
         pub force_authoring: bool,
+        /// Max number of segments that can be published concurrently, impacts RAM usage and network
+        /// bandwidth.
+        #[builder(default = "default_segment_publish_concurrency()")]
+        #[derivative(Default(value = "default_segment_publish_concurrency()"))]
+        #[serde(default = "default_segment_publish_concurrency")]
+        pub segment_publish_concurrency: NonZeroUsize,
         /// Set node role
         #[builder(default)]
         #[serde(default)]
@@ -363,6 +373,10 @@ mod builder {
         vec!["/ip4/127.0.0.1/tcp/0".parse().expect("Always valid")]
     }
 
+    fn default_piece_publisher_batch_size() -> usize {
+        15
+    }
+
     /// Node DSN builder
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
@@ -386,6 +400,11 @@ mod builder {
         #[builder(default)]
         #[serde(default)]
         pub allow_non_global_addresses_in_dht: bool,
+        /// Sets piece publisher batch size
+        #[builder(default = "default_piece_publisher_batch_size()")]
+        #[derivative(Default(value = "default_piece_publisher_batch_size()"))]
+        #[serde(default = "default_piece_publisher_batch_size")]
+        pub piece_publisher_batch_size: usize,
     }
 
     /// Offchain worker config
@@ -503,6 +522,7 @@ impl Config {
         let Self {
             force_authoring,
             role,
+            segment_publish_concurrency,
             blocks_pruning,
             state_pruning,
             execution_strategy,
@@ -590,6 +610,7 @@ impl Config {
                 boot_nodes,
                 reserved_nodes,
                 allow_non_global_addresses_in_dht,
+                piece_publisher_batch_size,
             } = dsn;
             let keypair = {
                 let keypair = network
@@ -643,6 +664,7 @@ impl Config {
                 reserved_peers: reserved_nodes,
                 listen_on,
                 keypair,
+                piece_publisher_batch_size,
             }
         };
 
@@ -697,18 +719,22 @@ impl Config {
                 runtime_cache_size: 2,
             },
             force_new_slot_notifications: false,
-            dsn_config,
-            piece_cache_size: piece_cache_size.as_u64(),
+            segment_publish_concurrency,
+            subspace_networking: subspace_service::SubspaceNetworking::Create {
+                config: dsn_config,
+                piece_cache_size: piece_cache_size.as_u64(),
+            },
         };
 
+        let partial_components =
+            subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&configuration)
+                .context("Failed to build a partial subspace node")?;
+
         let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);
-        let full_client = subspace_service::new_full::<RuntimeApi, ExecutorDispatch>(
-            configuration,
-            true,
-            slot_proportion,
-        )
-        .await
-        .context("Failed to build a full subspace node")?;
+        let full_client =
+            subspace_service::new_full(configuration, partial_components, true, slot_proportion)
+                .await
+                .context("Failed to build a full subspace node")?;
 
         let subspace_service::NewFull {
             mut task_manager,
@@ -925,10 +951,7 @@ impl Node {
                         network
                             .status()
                             .map(|result_status| match result_status?.sync_state {
-                                SyncState::Idle => {
-                                    tracing::error!("Idle");
-                                    Err(backoff::Error::transient(()))
-                                }
+                                SyncState::Idle => Err(backoff::Error::transient(())),
                                 SyncState::Importing { target } => {
                                     Ok(SyncStatus::Importing { target })
                                 }

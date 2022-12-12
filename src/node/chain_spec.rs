@@ -384,6 +384,7 @@ mod secondary_chain {
     //! Secondary chain configurations.
 
     use super::utils::{chain_spec_properties, get_account_id_from_seed, get_public_key_from_seed};
+    use domain_runtime_primitives::RelayerId;
     use frame_support::weights::Weight;
     use sc_service::ChainType;
     use sc_subspace_chain_specs::ExecutionChainSpec;
@@ -394,7 +395,7 @@ mod secondary_chain {
     use subspace_runtime_primitives::SSC;
     use system_domain_runtime::{
         AccountId, Balance, BalancesConfig, DomainRegistryConfig, ExecutorRegistryConfig,
-        GenesisConfig, Hash, SystemConfig, WASM_BINARY,
+        GenesisConfig, Hash, MessengerConfig, SudoConfig, SystemConfig, WASM_BINARY,
     };
 
     type DomainConfig = sp_domains::DomainConfig<Hash, Balance, Weight>;
@@ -404,7 +405,7 @@ mod secondary_chain {
             // Name
             "Development",
             // ID
-            "execution_dev",
+            "system_domain_dev",
             ChainType::Development,
             move || {
                 testnet_genesis(
@@ -425,7 +426,10 @@ mod secondary_chain {
                         1_000 * SSC,
                         // TODO: proper genesis domain config
                         DomainConfig {
-                            wasm_runtime_hash: Hash::random(),
+                            wasm_runtime_hash: blake2b_256_hash(
+                                system_domain_runtime::CORE_PAYMENTS_WASM_BUNDLE,
+                            )
+                            .into(),
                             max_bundle_size: 1024 * 1024,
                             bundle_slot_probability: (1, 1),
                             max_bundle_weight: Weight::MAX,
@@ -433,6 +437,11 @@ mod secondary_chain {
                         },
                         get_account_id_from_seed("Alice"),
                         Percent::one(),
+                    )],
+                    Some(get_account_id_from_seed("Alice")),
+                    vec![(
+                        get_account_id_from_seed("Alice"),
+                        get_account_id_from_seed("Alice"),
                     )],
                 )
             },
@@ -450,7 +459,7 @@ mod secondary_chain {
             // Name
             "Local Testnet",
             // ID
-            "execution_local_testnet",
+            "system_domain_local_testnet",
             ChainType::Local,
             move || {
                 testnet_genesis(
@@ -479,7 +488,10 @@ mod secondary_chain {
                         1_000 * SSC,
                         // TODO: proper genesis domain config
                         DomainConfig {
-                            wasm_runtime_hash: Hash::zero(),
+                            wasm_runtime_hash: blake2b_256_hash(
+                                system_domain_runtime::CORE_PAYMENTS_WASM_BUNDLE,
+                            )
+                            .into(),
                             max_bundle_size: 1024 * 1024,
                             bundle_slot_probability: (1, 1),
                             max_bundle_weight: Weight::MAX,
@@ -488,6 +500,17 @@ mod secondary_chain {
                         get_account_id_from_seed("Alice"),
                         Percent::one(),
                     )],
+                    Some(get_account_id_from_seed("Alice")),
+                    vec![
+                        (
+                            get_account_id_from_seed("Alice"),
+                            get_account_id_from_seed("Alice"),
+                        ),
+                        (
+                            get_account_id_from_seed("Bob"),
+                            get_account_id_from_seed("Bob"),
+                        ),
+                    ],
                 )
             },
             // Bootnodes
@@ -557,6 +580,8 @@ mod secondary_chain {
                         .expect("Wrong executor account address"),
                         Percent::one(),
                     )],
+                    None,
+                    Default::default(),
                 )
             },
             // Bootnodes
@@ -621,6 +646,8 @@ mod secondary_chain {
                         get_account_id_from_seed("Alice"),
                         Percent::one(),
                     )],
+                    None,
+                    Default::default(),
                 )
             },
             // Bootnodes
@@ -641,12 +668,18 @@ mod secondary_chain {
         endowed_accounts: Vec<AccountId>,
         executors: Vec<(AccountId, Balance, AccountId, ExecutorPublicKey)>,
         domains: Vec<(AccountId, Balance, DomainConfig, AccountId, Percent)>,
+        maybe_sudo_account: Option<AccountId>,
+        relayers: Vec<(AccountId, RelayerId)>,
     ) -> GenesisConfig {
         GenesisConfig {
             system: SystemConfig {
                 code: WASM_BINARY
                     .expect("WASM binary was not build, please build it!")
                     .to_vec(),
+            },
+            sudo: SudoConfig {
+                // Assign network admin rights.
+                key: maybe_sudo_account,
             },
             transaction_payment: Default::default(),
             balances: BalancesConfig {
@@ -661,6 +694,7 @@ mod secondary_chain {
                 slot_probability: (1, 1),
             },
             domain_registry: DomainRegistryConfig { domains },
+            messenger: MessengerConfig { relayers },
         }
     }
 }
@@ -708,8 +742,10 @@ mod core_payments {
 
     use super::utils::{chain_spec_properties, get_account_id_from_seed};
     use core_payments_domain_runtime::{
-        AccountId, BalancesConfig, GenesisConfig, SystemConfig, WASM_BINARY,
+        AccountId, BalancesConfig, GenesisConfig, MessengerConfig, SudoConfig, SystemConfig,
+        WASM_BINARY,
     };
+    use domain_runtime_primitives::RelayerId;
     use sc_service::ChainType;
     use sc_subspace_chain_specs::ExecutionChainSpec;
     use sp_core::crypto::Ss58Codec;
@@ -725,12 +761,19 @@ mod core_payments {
             "core_payments_domain_dev",
             ChainType::Development,
             move || {
-                testnet_genesis(vec![
-                    get_account_id_from_seed("Alice"),
-                    get_account_id_from_seed("Bob"),
-                    get_account_id_from_seed("Alice//stash"),
-                    get_account_id_from_seed("Bob//stash"),
-                ])
+                testnet_genesis(
+                    vec![
+                        get_account_id_from_seed("Alice"),
+                        get_account_id_from_seed("Bob"),
+                        get_account_id_from_seed("Alice//stash"),
+                        get_account_id_from_seed("Bob//stash"),
+                    ],
+                    Some(get_account_id_from_seed("Alice")),
+                    vec![(
+                        get_account_id_from_seed("Alice"),
+                        get_account_id_from_seed("Alice"),
+                    )],
+                )
             },
             vec![],
             None,
@@ -749,20 +792,33 @@ mod core_payments {
             "core_payments_domain_local_testnet",
             ChainType::Local,
             move || {
-                testnet_genesis(vec![
-                    get_account_id_from_seed("Alice"),
-                    get_account_id_from_seed("Bob"),
-                    get_account_id_from_seed("Charlie"),
-                    get_account_id_from_seed("Dave"),
-                    get_account_id_from_seed("Eve"),
-                    get_account_id_from_seed("Ferdie"),
-                    get_account_id_from_seed("Alice//stash"),
-                    get_account_id_from_seed("Bob//stash"),
-                    get_account_id_from_seed("Charlie//stash"),
-                    get_account_id_from_seed("Dave//stash"),
-                    get_account_id_from_seed("Eve//stash"),
-                    get_account_id_from_seed("Ferdie//stash"),
-                ])
+                testnet_genesis(
+                    vec![
+                        get_account_id_from_seed("Alice"),
+                        get_account_id_from_seed("Bob"),
+                        get_account_id_from_seed("Charlie"),
+                        get_account_id_from_seed("Dave"),
+                        get_account_id_from_seed("Eve"),
+                        get_account_id_from_seed("Ferdie"),
+                        get_account_id_from_seed("Alice//stash"),
+                        get_account_id_from_seed("Bob//stash"),
+                        get_account_id_from_seed("Charlie//stash"),
+                        get_account_id_from_seed("Dave//stash"),
+                        get_account_id_from_seed("Eve//stash"),
+                        get_account_id_from_seed("Ferdie//stash"),
+                    ],
+                    Some(get_account_id_from_seed("Alice")),
+                    vec![
+                        (
+                            get_account_id_from_seed("Alice"),
+                            get_account_id_from_seed("Alice"),
+                        ),
+                        (
+                            get_account_id_from_seed("Bob"),
+                            get_account_id_from_seed("Bob"),
+                        ),
+                    ],
+                )
             },
             // Bootnodes
             vec![],
@@ -786,11 +842,17 @@ mod core_payments {
             "subspace_gemini_3a_core_payments_domain",
             ChainType::Local,
             move || {
-                testnet_genesis(vec![
-                    // Genesis executor
-                    AccountId::from_ss58check("5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ")
+                testnet_genesis(
+                    vec![
+                        // Genesis executor
+                        AccountId::from_ss58check(
+                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
+                        )
                         .expect("Wrong executor account address"),
-                ])
+                    ],
+                    None,
+                    Default::default(),
+                )
             },
             // Bootnodes
             vec![],
@@ -806,12 +868,19 @@ mod core_payments {
         )
     }
 
-    fn testnet_genesis(endowed_accounts: Vec<AccountId>) -> GenesisConfig {
+    fn testnet_genesis(
+        endowed_accounts: Vec<AccountId>,
+        maybe_sudo_account: Option<AccountId>,
+        relayers: Vec<(AccountId, RelayerId)>,
+    ) -> GenesisConfig {
         GenesisConfig {
             system: SystemConfig {
                 code: WASM_BINARY
                     .expect("WASM binary was not build, please build it!")
                     .to_vec(),
+            },
+            sudo: SudoConfig {
+                key: maybe_sudo_account,
             },
             transaction_payment: Default::default(),
             balances: BalancesConfig {
@@ -821,6 +890,7 @@ mod core_payments {
                     .map(|k| (k, 1_000_000 * SSC))
                     .collect(),
             },
+            messenger: MessengerConfig { relayers },
         }
     }
 }

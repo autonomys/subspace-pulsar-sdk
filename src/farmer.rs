@@ -13,7 +13,7 @@ use subspace_farmer_components::plotting::PlottedSector;
 use subspace_networking::libp2p::identity::Keypair;
 use subspace_networking::{
     CustomRecordStore, LimitedSizeRecordStorageWrapper, MemoryProviderStorage, Node as DSNNode,
-    NodeRunner as DSNNodeRunner, ParityDbRecordStorage,
+    NodeRunner as DSNNodeRunner, ParityDbRecordStorage, PieceByHashRequest,
 };
 use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
@@ -129,32 +129,47 @@ impl PlotDescription {
 }
 
 mod builder {
+    use std::num::NonZeroUsize;
+
     use crate::generate_builder;
+    use derivative::Derivative;
     use derive_builder::Builder;
     use libp2p_core::Multiaddr;
     use serde::{Deserialize, Serialize};
 
-    fn default_piece_receiver_batch_size() -> usize {
-        12
+    fn default_piece_receiver_batch_size() -> NonZeroUsize {
+        NonZeroUsize::new(12).unwrap()
     }
 
-    fn default_piece_publisher_batch_size() -> usize {
-        12
+    fn default_piece_publisher_batch_size() -> NonZeroUsize {
+        NonZeroUsize::new(12).unwrap()
+    }
+
+    fn default_max_concurrent_plots() -> NonZeroUsize {
+        NonZeroUsize::new(10).unwrap()
     }
 
     /// Technical type which stores all
-    #[derive(Debug, Clone, Default, Builder, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Derivative, Builder, Serialize, Deserialize)]
+    #[derivative(Default)]
     #[builder(pattern = "immutable", build_fn(name = "_build"), name = "Builder")]
     #[non_exhaustive]
     pub struct Config {
-        /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
+        /// Defines size for the pieces batch of the piece receiving process.
         #[builder(default = "default_piece_receiver_batch_size()")]
+        #[derivative(Default(value = "default_piece_receiver_batch_size()"))]
         #[serde(default = "default_piece_receiver_batch_size")]
-        pub piece_receiver_batch_size: usize,
-        /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
+        pub piece_receiver_batch_size: NonZeroUsize,
+        /// Defines size for the pieces batch of the piece publishing process.
         #[builder(default = "default_piece_publisher_batch_size()")]
+        #[derivative(Default(value = "default_piece_publisher_batch_size()"))]
         #[serde(default = "default_piece_publisher_batch_size")]
-        pub piece_publisher_batch_size: usize,
+        pub piece_publisher_batch_size: NonZeroUsize,
+        /// Number of plots that can be plotted concurrently, impacts RAM usage.
+        #[builder(default = "default_max_concurrent_plots()")]
+        #[derivative(Default(value = "default_max_concurrent_plots()"))]
+        #[serde(default = "default_max_concurrent_plots")]
+        pub max_concurrent_plots: NonZeroUsize,
         /// DSN options
         #[builder(default, setter(into))]
         pub dsn: Dsn,
@@ -183,6 +198,7 @@ impl builder::Dsn {
     async fn configure_dsn(
         self,
         cache: CacheDescription,
+        readers_and_pieces: std::sync::Weak<std::sync::Mutex<Option<ReadersAndPieces>>>,
     ) -> Result<(DSNNode, DSNNodeRunner<ConfiguredRecordStore>), BuildError> {
         use subspace_networking::{
             BootstrappedNetworkingParameters, Config, PieceByHashRequestHandler,
@@ -194,9 +210,6 @@ impl builder::Dsn {
             bootstrap_nodes,
             allow_non_global_addresses_in_dht,
         } = self;
-
-        let readers_and_pieces = Arc::new(std::sync::Mutex::new(None::<ReadersAndPieces>));
-        let weak_readers_and_pieces = Arc::downgrade(&readers_and_pieces);
 
         let handle = tokio::runtime::Handle::current();
         let default_config = Config::with_generated_keypair();
@@ -221,27 +234,44 @@ impl builder::Dsn {
                     .collect::<Vec<_>>(),
             )
             .boxed(),
-            request_response_protocols: vec![PieceByHashRequestHandler::create(move |req| {
-                let PieceKey::Sector(piece_index_hash) = req.key else { return None };
-                let Some(readers_and_pieces) = weak_readers_and_pieces.upgrade() else { return None };
-                let readers_and_pieces = readers_and_pieces.lock().unwrap();
-                let Some(readers_and_pieces) = readers_and_pieces.as_ref() else { return None };
-                let Some(piece_details) = readers_and_pieces.pieces.get(&piece_index_hash).copied() else { return None };
-                let mut reader = readers_and_pieces
-                    .readers
-                    .get(piece_details.plot_offset)
-                    .cloned()
-                    .expect("Offsets strictly correspond to existing plots; qed");
+            request_response_protocols: vec![PieceByHashRequestHandler::create(
+                move |PieceByHashRequest { key }| {
+                    let PieceKey::Sector(piece_index_hash) = key else {
+                        tracing::debug!(?key, "Incorrect piece request - unsupported key type.");
+                        return None
+                    };
+                    let Some(readers_and_pieces) = readers_and_pieces.upgrade() else {
+                        tracing::debug!("A readers and pieces are already dropped");
+                        return None
+                    };
+                    let readers_and_pieces = readers_and_pieces
+                        .lock()
+                        .expect("Readers lock is never poisoned");
+                    let Some(readers_and_pieces) = readers_and_pieces.as_ref() else {
+                        tracing::debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
+                        return None
+                    };
+                    let Some(piece_details) = readers_and_pieces.pieces.get(piece_index_hash).copied() else {
+                        tracing::trace!(?piece_index_hash, "Piece is not stored in any of the local plots");
+                        return None
+                    };
+                    let mut reader = readers_and_pieces
+                        .readers
+                        .get(piece_details.plot_offset)
+                        .cloned()
+                        .expect("Offsets strictly correspond to existing plots; qed");
 
-                let handle = handle.clone();
-                let result = tokio::task::block_in_place(move || {
-                    handle.block_on(
-                        reader.read_piece(piece_details.sector_index, piece_details.piece_offset),
-                    )
-                });
+                    let handle = handle.clone();
+                    let piece = tokio::task::block_in_place(move || {
+                        handle.block_on(
+                            reader
+                                .read_piece(piece_details.sector_index, piece_details.piece_offset),
+                        )
+                    });
 
-                Some(PieceByHashResponse { piece: result })
-            })],
+                    Some(PieceByHashResponse { piece })
+                },
+            )],
             record_store: cache.record_store(&default_config.keypair)?,
             allow_non_global_addresses_in_dht,
             ..default_config
@@ -327,6 +357,7 @@ impl Config {
             mut dsn,
             piece_receiver_batch_size,
             piece_publisher_batch_size,
+            max_concurrent_plots,
         } = self;
 
         if plots.is_empty() {
@@ -352,7 +383,18 @@ impl Config {
 
         let mut single_disk_plots = Vec::with_capacity(plots.len());
         let mut plot_info = HashMap::with_capacity(plots.len());
-        let (dsn_node, mut dsn_node_runner) = dsn.configure_dsn(cache).await?;
+
+        let readers_and_pieces = Arc::new(std::sync::Mutex::new(None));
+        let (dsn_node, mut dsn_node_runner) = dsn
+            .configure_dsn(cache, Arc::downgrade(&readers_and_pieces))
+            .await?;
+        let piece_publisher_semaphore =
+            Arc::new(tokio::sync::Semaphore::new(piece_receiver_batch_size.get()));
+        let piece_receiver_semaphore = Arc::new(tokio::sync::Semaphore::new(
+            piece_publisher_batch_size.get(),
+        ));
+        let concurrent_plotting_semaphore =
+            Arc::new(tokio::sync::Semaphore::new(max_concurrent_plots.get()));
 
         for description in plots {
             let directory = description.directory.clone();
@@ -363,10 +405,11 @@ impl Config {
                 reward_address: *reward_address,
                 rpc_client: node.clone(),
                 dsn_node: dsn_node.clone(),
-                piece_receiver_batch_size,
-                piece_publisher_batch_size,
+                piece_receiver_semaphore: Arc::clone(&piece_receiver_semaphore),
+                piece_publisher_semaphore: Arc::clone(&piece_publisher_semaphore),
+                concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
             };
-            let single_disk_plot = SingleDiskPlot::new(description)?;
+            let single_disk_plot = SingleDiskPlot::new(description).await?;
 
             let mut handlers = Vec::new();
             let progress = {
@@ -399,6 +442,98 @@ impl Config {
             };
             plot_info.insert(directory, plot);
             single_disk_plots.push(single_disk_plot);
+        }
+
+        // Store piece readers so we can reference them later
+        let piece_readers = single_disk_plots
+            .iter()
+            .map(SingleDiskPlot::piece_reader)
+            .collect::<Vec<_>>();
+
+        tracing::debug!("Collecting already plotted pieces");
+
+        // Collect already plotted pieces
+        let plotted_pieces = single_disk_plots
+            .iter()
+            .enumerate()
+            .flat_map(|(plot_offset, single_disk_plot)| {
+                single_disk_plot
+                    .plotted_sectors()
+                    .enumerate()
+                    .filter_map(move |(sector_offset, plotted_sector_result)| {
+                        match plotted_sector_result {
+                            Ok(plotted_sector) => Some(plotted_sector),
+                            Err(error) => {
+                                tracing::error!(
+                                    %error,
+                                    %plot_offset,
+                                    %sector_offset,
+                                    "Failed reading plotted sector on startup, skipping"
+                                );
+                                None
+                            }
+                        }
+                    })
+                    .flat_map(move |plotted_sector| {
+                        plotted_sector.piece_indexes.into_iter().enumerate().map(
+                            move |(piece_offset, piece_index)| {
+                                (
+                                    PieceIndexHash::from_index(piece_index),
+                                    PieceDetails {
+                                        plot_offset,
+                                        sector_index: plotted_sector.sector_index,
+                                        piece_offset: piece_offset as u64,
+                                    },
+                                )
+                            },
+                        )
+                    })
+            })
+            // We implicitly ignore duplicates here, reading just from one of the plots
+            .collect::<std::collections::HashMap<_, _>>();
+
+        tracing::debug!("Finished collecting already plotted pieces");
+
+        readers_and_pieces
+            .lock()
+            .expect("Readers and pieces can't poison lock")
+            .replace(ReadersAndPieces {
+                readers: piece_readers,
+                pieces: plotted_pieces,
+            });
+
+        for (plot_offset, single_disk_plot) in single_disk_plots.iter().enumerate() {
+            let readers_and_pieces = Arc::clone(&readers_and_pieces);
+
+            // Collect newly plotted pieces
+            // TODO: Once we have replotting, this will have to be updated
+            single_disk_plot
+                .on_sector_plotted(Arc::new(move |plotted_sector| {
+                    readers_and_pieces
+                        .lock()
+                        .expect("Readers and pieces can't poison lock")
+                        .as_mut()
+                        .expect("Initial value was populated above; qed")
+                        .pieces
+                        .extend(
+                            plotted_sector
+                                .piece_indexes
+                                .iter()
+                                .copied()
+                                .enumerate()
+                                .map(|(piece_offset, piece_index)| {
+                                    (
+                                        PieceIndexHash::from_index(piece_index),
+                                        PieceDetails {
+                                            plot_offset,
+                                            sector_index: plotted_sector.sector_index,
+                                            piece_offset: piece_offset as u64,
+                                        },
+                                    )
+                                }),
+                        );
+                }))
+                .detach();
         }
 
         let mut single_disk_plots_stream = single_disk_plots
