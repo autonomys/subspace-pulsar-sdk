@@ -925,10 +925,7 @@ impl Node {
                         network
                             .status()
                             .map(|result_status| match result_status?.sync_state {
-                                SyncState::Idle => {
-                                    tracing::error!("Idle");
-                                    Err(backoff::Error::transient(()))
-                                }
+                                SyncState::Idle => Err(backoff::Error::transient(())),
                                 SyncState::Importing { target } => {
                                     Ok(SyncStatus::Importing { target })
                                 }
