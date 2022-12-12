@@ -1219,100 +1219,13 @@
 <a href="#1219" id="1219">1219</a>
 <a href="#1220" id="1220">1220</a>
 <a href="#1221" id="1221">1221</a>
-<a href="#1222" id="1222">1222</a>
-<a href="#1223" id="1223">1223</a>
-<a href="#1224" id="1224">1224</a>
-<a href="#1225" id="1225">1225</a>
-<a href="#1226" id="1226">1226</a>
-<a href="#1227" id="1227">1227</a>
-<a href="#1228" id="1228">1228</a>
-<a href="#1229" id="1229">1229</a>
-<a href="#1230" id="1230">1230</a>
-<a href="#1231" id="1231">1231</a>
-<a href="#1232" id="1232">1232</a>
-<a href="#1233" id="1233">1233</a>
-<a href="#1234" id="1234">1234</a>
-<a href="#1235" id="1235">1235</a>
-<a href="#1236" id="1236">1236</a>
-<a href="#1237" id="1237">1237</a>
-<a href="#1238" id="1238">1238</a>
-<a href="#1239" id="1239">1239</a>
-<a href="#1240" id="1240">1240</a>
-<a href="#1241" id="1241">1241</a>
-<a href="#1242" id="1242">1242</a>
-<a href="#1243" id="1243">1243</a>
-<a href="#1244" id="1244">1244</a>
-<a href="#1245" id="1245">1245</a>
-<a href="#1246" id="1246">1246</a>
-<a href="#1247" id="1247">1247</a>
-<a href="#1248" id="1248">1248</a>
-<a href="#1249" id="1249">1249</a>
-<a href="#1250" id="1250">1250</a>
-<a href="#1251" id="1251">1251</a>
-<a href="#1252" id="1252">1252</a>
-<a href="#1253" id="1253">1253</a>
-<a href="#1254" id="1254">1254</a>
-<a href="#1255" id="1255">1255</a>
-<a href="#1256" id="1256">1256</a>
-<a href="#1257" id="1257">1257</a>
-<a href="#1258" id="1258">1258</a>
-<a href="#1259" id="1259">1259</a>
-<a href="#1260" id="1260">1260</a>
-<a href="#1261" id="1261">1261</a>
-<a href="#1262" id="1262">1262</a>
-<a href="#1263" id="1263">1263</a>
-<a href="#1264" id="1264">1264</a>
-<a href="#1265" id="1265">1265</a>
-<a href="#1266" id="1266">1266</a>
-<a href="#1267" id="1267">1267</a>
-<a href="#1268" id="1268">1268</a>
-<a href="#1269" id="1269">1269</a>
-<a href="#1270" id="1270">1270</a>
-<a href="#1271" id="1271">1271</a>
-<a href="#1272" id="1272">1272</a>
-<a href="#1273" id="1273">1273</a>
-<a href="#1274" id="1274">1274</a>
-<a href="#1275" id="1275">1275</a>
-<a href="#1276" id="1276">1276</a>
-<a href="#1277" id="1277">1277</a>
-<a href="#1278" id="1278">1278</a>
-<a href="#1279" id="1279">1279</a>
-<a href="#1280" id="1280">1280</a>
-<a href="#1281" id="1281">1281</a>
-<a href="#1282" id="1282">1282</a>
-<a href="#1283" id="1283">1283</a>
-<a href="#1284" id="1284">1284</a>
-<a href="#1285" id="1285">1285</a>
-<a href="#1286" id="1286">1286</a>
-<a href="#1287" id="1287">1287</a>
-<a href="#1288" id="1288">1288</a>
-<a href="#1289" id="1289">1289</a>
-<a href="#1290" id="1290">1290</a>
-<a href="#1291" id="1291">1291</a>
-<a href="#1292" id="1292">1292</a>
-<a href="#1293" id="1293">1293</a>
-<a href="#1294" id="1294">1294</a>
-<a href="#1295" id="1295">1295</a>
-<a href="#1296" id="1296">1296</a>
-<a href="#1297" id="1297">1297</a>
-<a href="#1298" id="1298">1298</a>
-<a href="#1299" id="1299">1299</a>
-<a href="#1300" id="1300">1300</a>
-<a href="#1301" id="1301">1301</a>
-<a href="#1302" id="1302">1302</a>
-<a href="#1303" id="1303">1303</a>
-<a href="#1304" id="1304">1304</a>
-<a href="#1305" id="1305">1305</a>
-<a href="#1306" id="1306">1306</a>
-<a href="#1307" id="1307">1307</a>
-<a href="#1308" id="1308">1308</a>
-<a href="#1309" id="1309">1309</a>
-<a href="#1310" id="1310">1310</a>
-<a href="#1311" id="1311">1311</a>
-<a href="#1312" id="1312">1312</a>
-<a href="#1313" id="1313">1313</a>
-<a href="#1314" id="1314">1314</a>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Context;
+</pre><pre class="rust"><code><span class="kw">use </span>std::io;
+<span class="kw">use </span>std::num::NonZeroU64;
+<span class="kw">use </span>std::path::Path;
+<span class="kw">use </span>std::sync::{Arc, Weak};
+<span class="kw">use </span>std::time::Duration;
+
+<span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>futures::channel::{mpsc, oneshot};
 <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
 <span class="kw">use </span>libp2p_core::Multiaddr;
@@ -1328,11 +1241,6 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>sp_consensus::SyncOracle;
 <span class="kw">use </span>sp_core::H256;
-<span class="kw">use </span>std::io;
-<span class="kw">use </span>std::num::NonZeroU64;
-<span class="kw">use </span>std::path::Path;
-<span class="kw">use </span>std::sync::{Arc, Weak};
-<span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>subspace_core_primitives::SolutionRange;
 <span class="kw">use </span>subspace_farmer::RpcClient;
 <span class="kw">use </span>subspace_farmer_components::FarmerProtocolInfo;
@@ -1350,11 +1258,14 @@
 };
 
 <span class="kw">mod </span>builder {
-    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+    <span class="kw">use </span>std::net::SocketAddr;
+    <span class="kw">use </span>std::num::NonZeroUsize;
+
     <span class="kw">use </span>derivative::Derivative;
     <span class="kw">use </span>derive_builder::Builder;
     <span class="kw">use </span>serde::{Deserialize, Serialize};
-    <span class="kw">use </span>std::{net::SocketAddr, num::NonZeroUsize};
+
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
     <span class="doccomment">/// Block pruning settings.
     </span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
@@ -1391,38 +1302,24 @@
     <span class="doccomment">/// Pruning constraints. If none are specified pruning is
     </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
     </span><span class="kw">pub struct </span>Constraints {
-        <span class="doccomment">/// Maximum blocks. Defaults to 0 when unspecified, effectively keeping only non-canonical
-        /// states.
+        <span class="doccomment">/// Maximum blocks. Defaults to 0 when unspecified, effectively keeping
+        /// only non-canonical states.
         </span><span class="kw">pub </span>max_blocks: <span class="prelude-ty">Option</span>&lt;u32&gt;,
         <span class="doccomment">/// Maximum memory in the pruning overlay.
         </span><span class="kw">pub </span>max_mem: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     }
 
     <span class="kw">impl </span>From&lt;Constraints&gt; <span class="kw">for </span>sc_state_db::Constraints {
-        <span class="kw">fn </span>from(
-            Constraints {
-                max_blocks,
-                max_mem,
-            }: Constraints,
-        ) -&gt; <span class="self">Self </span>{
-            <span class="self">Self </span>{
-                max_blocks,
-                max_mem,
-            }
+        <span class="kw">fn </span>from(Constraints { max_blocks, max_mem }: Constraints) -&gt; <span class="self">Self </span>{
+            <span class="self">Self </span>{ max_blocks, max_mem }
         }
     }
 
     <span class="kw">impl </span>From&lt;sc_state_db::Constraints&gt; <span class="kw">for </span>Constraints {
         <span class="kw">fn </span>from(
-            sc_state_db::Constraints {
-                max_blocks,
-                max_mem,
-            }: sc_state_db::Constraints,
+            sc_state_db::Constraints { max_blocks, max_mem }: sc_state_db::Constraints,
         ) -&gt; <span class="self">Self </span>{
-            <span class="self">Self </span>{
-                max_blocks,
-                max_mem,
-            }
+            <span class="self">Self </span>{ max_blocks, max_mem }
         }
     }
 
@@ -1432,7 +1329,8 @@
         <span class="doccomment">/// No pruning. Canonicalization is a no-op.
         </span><span class="attr">#[default]
         </span>ArchiveAll,
-        <span class="doccomment">/// Canonicalization discards non-canonical nodes. All the canonical nodes are kept in the DB.
+        <span class="doccomment">/// Canonicalization discards non-canonical nodes. All the canonical
+        /// nodes are kept in the DB.
         </span>ArchiveCanonical,
         <span class="doccomment">/// Maintain a pruning window.
         </span>Constrained(Constraints),
@@ -1461,14 +1359,14 @@
     <span class="doccomment">/// Strategy for executing a call into the runtime.
     </span><span class="attr">#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Deserialize, Serialize)]
     </span><span class="kw">pub enum </span>ExecutionStrategy {
-        <span class="doccomment">/// Execute with the native equivalent if it is compatible with the given wasm module;
-        /// otherwise fall back to the wasm.
+        <span class="doccomment">/// Execute with the native equivalent if it is compatible with the
+        /// given wasm module; otherwise fall back to the wasm.
         </span><span class="attr">#[default]
         </span>NativeWhenPossible,
         <span class="doccomment">/// Use the given wasm module.
         </span>AlwaysWasm,
-        <span class="doccomment">/// Run with both the wasm and the native variant (if compatible). Report any discrepancy
-        /// as an error.
+        <span class="doccomment">/// Run with both the wasm and the native variant (if compatible).
+        /// Report any discrepancy as an error.
         </span>Both,
         <span class="doccomment">/// First native, then if that fails or is not possible, wasm.
         </span>NativeElseWasm,
@@ -1535,8 +1433,8 @@
         </span><span class="attr">#[builder(default)]
         #[serde(default)]
         </span><span class="kw">pub </span>force_authoring: bool,
-        <span class="doccomment">/// Max number of segments that can be published concurrently, impacts RAM usage and network
-        /// bandwidth.
+        <span class="doccomment">/// Max number of segments that can be published concurrently, impacts
+        /// RAM usage and network bandwidth.
         </span><span class="attr">#[builder(default = <span class="string">&quot;default_segment_publish_concurrency()&quot;</span>)]
         #[derivative(Default(value = <span class="string">&quot;default_segment_publish_concurrency()&quot;</span>))]
         #[serde(default = <span class="string">&quot;default_segment_publish_concurrency&quot;</span>)]
@@ -1612,15 +1510,18 @@
         </span><span class="attr">#[builder(setter(strip_option), default)]
         #[serde(default)]
         </span><span class="kw">pub </span>ipc: <span class="prelude-ty">Option</span>&lt;String&gt;,
-        <span class="doccomment">/// Maximum number of connections for WebSockets RPC server. `None` if default.
+        <span class="doccomment">/// Maximum number of connections for WebSockets RPC server. `None` if
+        /// default.
         </span><span class="attr">#[builder(setter(strip_option), default)]
         #[serde(default)]
         </span><span class="kw">pub </span>ws_max_connections: <span class="prelude-ty">Option</span>&lt;usize&gt;,
-        <span class="doccomment">/// CORS settings for HTTP &amp; WS servers. `None` if all origins are allowed.
+        <span class="doccomment">/// CORS settings for HTTP &amp; WS servers. `None` if all origins are
+        /// allowed.
         </span><span class="attr">#[builder(setter(strip_option), default)]
         #[serde(default)]
         </span><span class="kw">pub </span>cors: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
-        <span class="doccomment">/// RPC methods to expose (by default only a safe subset or all of them).
+        <span class="doccomment">/// RPC methods to expose (by default only a safe subset or all of
+        /// them).
         </span><span class="attr">#[builder(default)]
         #[serde(default)]
         </span><span class="kw">pub </span>methods: RpcMethods,
@@ -1641,7 +1542,8 @@
         #[derivative(Default(value = <span class="string">&quot;default_max_subs_per_conn()&quot;</span>))]
         #[serde(default = <span class="string">&quot;default_max_subs_per_conn&quot;</span>)]
         </span><span class="kw">pub </span>max_subs_per_conn: usize,
-        <span class="doccomment">/// Maximum size of the output buffer capacity for websocket connections.
+        <span class="doccomment">/// Maximum size of the output buffer capacity for websocket
+        /// connections.
         </span><span class="attr">#[builder(setter(strip_option), default)]
         #[serde(default)]
         </span><span class="kw">pub </span>ws_max_out_buffer_capacity: <span class="prelude-ty">Option</span>&lt;usize&gt;,
@@ -1710,7 +1612,8 @@
         </span><span class="attr">#[builder(default)]
         #[serde(default)]
         </span><span class="kw">pub </span>reserved_nodes: Vec&lt;libp2p_core::Multiaddr&gt;,
-        <span class="doccomment">/// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
+        <span class="doccomment">/// Determines whether we allow keeping non-global (private, shared,
+        /// loopback..) addresses in Kademlia DHT.
         </span><span class="attr">#[builder(default)]
         #[serde(default)]
         </span><span class="kw">pub </span>allow_non_global_addresses_in_dht: bool,
@@ -1724,11 +1627,7 @@
     <span class="doccomment">/// Offchain worker config
     </span><span class="attr">#[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
-    #[builder(
-        pattern = <span class="string">&quot;owned&quot;</span>,
-        build_fn(name = <span class="string">&quot;_build&quot;</span>),
-        name = <span class="string">&quot;OffchainWorkerBuilder&quot;
-    </span>)]
+    #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;OffchainWorkerBuilder&quot;</span>)]
     #[non_exhaustive]
     </span><span class="kw">pub struct </span>OffchainWorker {
         <span class="doccomment">/// Is enabled
@@ -1742,16 +1641,8 @@
     }
 
     <span class="kw">impl </span>From&lt;OffchainWorker&gt; <span class="kw">for </span>OffchainWorkerConfig {
-        <span class="kw">fn </span>from(
-            OffchainWorker {
-                enabled,
-                indexing_enabled,
-            }: OffchainWorker,
-        ) -&gt; <span class="self">Self </span>{
-            <span class="self">Self </span>{
-                enabled,
-                indexing_enabled,
-            }
+        <span class="kw">fn </span>from(OffchainWorker { enabled, indexing_enabled }: OffchainWorker) -&gt; <span class="self">Self </span>{
+            <span class="self">Self </span>{ enabled, indexing_enabled }
         }
     }
 
@@ -1887,17 +1778,9 @@
             (
                 NetworkConfiguration {
                     listen_addresses,
-                    boot_nodes: chain_spec
-                        .boot_nodes()
-                        .iter()
-                        .cloned()
-                        .chain(boot_nodes)
-                        .collect(),
+                    boot_nodes: chain_spec.boot_nodes().iter().cloned().chain(boot_nodes).collect(),
                     force_synced,
-                    transport: TransportConfig::Normal {
-                        enable_mdns,
-                        allow_private_ipv4,
-                    },
+                    transport: TransportConfig::Normal { enable_mdns, allow_private_ipv4 },
                     ..NetworkConfiguration::new(
                         name.clone(),
                         client_id,
@@ -2088,13 +1971,7 @@
             <span class="kw">let _ </span>= stop_sender.send(());
         });
 
-        <span class="prelude-val">Ok</span>(Node {
-            client,
-            network,
-            name,
-            rpc_handle,
-            stop_sender,
-        })
+        <span class="prelude-val">Ok</span>(Node { client, network, name, rpc_handle, stop_sender })
     }
 }
 
@@ -2102,8 +1979,8 @@
 </span><span class="kw">struct </span>ExecutorDispatch;
 
 <span class="kw">impl </span>sc_executor::NativeExecutionDispatch <span class="kw">for </span>ExecutorDispatch {
-    <span class="comment">// /// Only enable the benchmarking host functions when we actually want to benchmark.
-    // #[cfg(feature = &quot;runtime-benchmarks&quot;)]
+    <span class="comment">// /// Only enable the benchmarking host functions when we actually want to
+    // benchmark. #[cfg(feature = &quot;runtime-benchmarks&quot;)]
     // type ExtendHostFunctions = frame_benchmarking::benchmarking::HostFunctions;
     // /// Otherwise we only use the default Substrate host functions.
     // #[cfg(not(feature = &quot;runtime-benchmarks&quot;))]
@@ -2262,26 +2139,20 @@
                 <span class="kw">loop </span>{
                     tokio::time::sleep(CHECK_SYNCED_EVERY).<span class="kw">await</span>;
                     <span class="kw">let </span>status = backoff::future::retry(backoff.clone(), || {
-                        network
-                            .status()
-                            .map(|result_status| <span class="kw">match </span>result_status<span class="question-mark">?</span>.sync_state {
-                                SyncState::Idle =&gt; <span class="prelude-val">Err</span>(backoff::Error::transient(())),
-                                SyncState::Importing { target } =&gt; {
-                                    <span class="prelude-val">Ok</span>(SyncStatus::Importing { target })
-                                }
-                                SyncState::Downloading { target } =&gt; {
-                                    <span class="prelude-val">Ok</span>(SyncStatus::Downloading { target })
-                                }
-                            })
+                        network.status().map(|result_status| <span class="kw">match </span>result_status<span class="question-mark">?</span>.sync_state {
+                            SyncState::Idle =&gt; <span class="prelude-val">Err</span>(backoff::Error::transient(())),
+                            SyncState::Importing { target } =&gt; <span class="prelude-val">Ok</span>(SyncStatus::Importing { target }),
+                            SyncState::Downloading { target } =&gt;
+                                <span class="prelude-val">Ok</span>(SyncStatus::Downloading { target }),
+                        })
                     })
                     .<span class="kw">await</span>;
 
                     <span class="kw">match </span>status {
-                        <span class="prelude-val">Ok</span>(status) =&gt; {
+                        <span class="prelude-val">Ok</span>(status) =&gt;
                             <span class="kw">if </span>sender.send(status).<span class="kw">await</span>.is_err() {
                                 <span class="kw">break</span>;
-                            }
-                        }
+                            },
                         <span class="prelude-val">Err</span>(()) =&gt; <span class="kw">break</span>,
                     }
                 }
@@ -2293,10 +2164,7 @@
 
     <span class="doccomment">/// Wait till the end of node syncing
     </span><span class="kw">pub async fn </span>sync(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.subscribe_syncing_progress()
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.for_each(|<span class="kw">_</span>| <span class="kw">async move </span>{})
-            .<span class="kw">await</span>;
+        <span class="self">self</span>.subscribe_syncing_progress().<span class="kw">await</span><span class="question-mark">?</span>.for_each(|<span class="kw">_</span>| <span class="kw">async move </span>{}).<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -2318,34 +2186,22 @@
     </span>}
 
     <span class="kw">fn </span>client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Arc&lt;FullClient&lt;RuntimeApi, ExecutorDispatch&gt;&gt;&gt; {
-        <span class="self">self</span>.client
-            .upgrade()
-            .ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;The node was already closed&quot;</span>))
+        <span class="self">self</span>.client.upgrade().ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;The node was already closed&quot;</span>))
     }
 
     <span class="doccomment">/// Get node info
     </span><span class="kw">pub async fn </span>get_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Info&gt; {
-        <span class="kw">let </span>SlotInfo {
-            solution_range,
-            voting_solution_range,
-            ..
-        } = <span class="self">self
+        <span class="kw">let </span>SlotInfo { solution_range, voting_solution_range, .. } = <span class="self">self
             </span>.subscribe_slot_info()
             .<span class="kw">await
             </span>.map_err(anyhow::Error::msg)<span class="question-mark">?
             </span>.next()
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;This stream never ends&quot;</span>);
-        <span class="kw">let </span>version = <span class="self">self
-            </span>.rpc_handle
-            .call(<span class="string">&quot;state_getRuntimeVersion&quot;</span>, <span class="kw-2">&amp;</span>[] <span class="kw">as </span><span class="kw-2">&amp;</span>[()])
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>version = <span class="self">self</span>.rpc_handle.call(<span class="string">&quot;state_getRuntimeVersion&quot;</span>, <span class="kw-2">&amp;</span>[] <span class="kw">as </span><span class="kw-2">&amp;</span>[()]).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>client = <span class="self">self</span>.client().context(<span class="string">&quot;Failed to fetch node info&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>NetworkState {
-            connected_peers,
-            not_connected_peers,
-            ..
-        } = <span class="self">self</span>.network.network_state().<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span>NetworkState { connected_peers, not_connected_peers, .. } =
+            <span class="self">self</span>.network.network_state().<span class="kw">await</span>.unwrap();
         <span class="kw">let </span>sp_blockchain::Info {
             best_hash,
             best_number,
@@ -2355,11 +2211,8 @@
             block_gap,
             ..
         } = client.chain_info();
-        <span class="kw">let </span>FarmerProtocolInfo { total_pieces, .. } = <span class="self">self
-            </span>.farmer_app_info()
-            .<span class="kw">await
-            </span>.map_err(anyhow::Error::msg)<span class="question-mark">?
-            </span>.protocol_info;
+        <span class="kw">let </span>FarmerProtocolInfo { total_pieces, .. } =
+            <span class="self">self</span>.farmer_app_info().<span class="kw">await</span>.map_err(anyhow::Error::msg)<span class="question-mark">?</span>.protocol_info;
         <span class="prelude-val">Ok</span>(Info {
             chain: ChainInfo { genesis_hash },
             best_block: (best_hash, best_number),
@@ -2388,14 +2241,7 @@
             .map(
                 |BlockImportNotification {
                      hash,
-                     header:
-                         Header {
-                             parent_hash,
-                             number,
-                             state_root,
-                             extrinsics_root,
-                             digest: <span class="kw">_</span>,
-                         },
+                     header: Header { parent_hash, number, state_root, extrinsics_root, digest: <span class="kw">_ </span>},
                      origin: <span class="kw">_</span>,
                      is_new_best,
                      tree_route: <span class="kw">_</span>,
@@ -2416,42 +2262,34 @@
     <span class="kw-2">mut </span>subscription: jsonrpsee_core::server::rpc_module::Subscription,
 ) -&gt; <span class="kw">impl </span>Stream&lt;Item = T&gt; + Unpin {
     futures::stream::poll_fn(<span class="kw">move </span>|cx| {
-        Box::pin(subscription.next())
-            .poll_unpin(cx)
-            .map(|x| x.and_then(Result::ok).map(|(x, <span class="kw">_</span>)| x))
+        Box::pin(subscription.next()).poll_unpin(cx).map(|x| x.and_then(Result::ok).map(|(x, <span class="kw">_</span>)| x))
     })
 }
 
 <span class="kw">mod </span>farmer_rpc_client {
-    <span class="kw">use super</span>::<span class="kw-2">*</span>;
-
-    <span class="kw">use </span>futures::Stream;
     <span class="kw">use </span>std::pin::Pin;
 
+    <span class="kw">use </span>futures::Stream;
     <span class="kw">use </span>subspace_archiving::archiver::ArchivedSegment;
     <span class="kw">use </span>subspace_core_primitives::{RecordsRoot, SegmentIndex};
     <span class="kw">use </span>subspace_farmer::rpc_client::{Error, RpcClient};
-    <span class="kw">use </span>subspace_rpc_primitives::FarmerAppInfo;
     <span class="kw">use </span>subspace_rpc_primitives::{
-        RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
+        FarmerAppInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
     };
+
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
     <span class="attr">#[async_trait::async_trait]
     </span><span class="kw">impl </span>RpcClient <span class="kw">for </span>Node {
         <span class="kw">async fn </span>farmer_app_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;FarmerAppInfo, Error&gt; {
-            <span class="prelude-val">Ok</span>(<span class="self">self
-                </span>.rpc_handle
-                .call(<span class="string">&quot;subspace_getFarmerAppInfo&quot;</span>, <span class="kw-2">&amp;</span>[] <span class="kw">as </span><span class="kw-2">&amp;</span>[()])
-                .<span class="kw">await</span><span class="question-mark">?</span>)
+            <span class="prelude-val">Ok</span>(<span class="self">self</span>.rpc_handle.call(<span class="string">&quot;subspace_getFarmerAppInfo&quot;</span>, <span class="kw-2">&amp;</span>[] <span class="kw">as </span><span class="kw-2">&amp;</span>[()]).<span class="kw">await</span><span class="question-mark">?</span>)
         }
 
         <span class="kw">async fn </span>subscribe_slot_info(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = SlotInfo&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;, Error&gt; {
             <span class="prelude-val">Ok</span>(Box::pin(subscription_to_stream(
-                <span class="self">self</span>.rpc_handle
-                    .subscribe(<span class="string">&quot;subspace_subscribeSlotInfo&quot;</span>, <span class="kw-2">&amp;</span>[] <span class="kw">as </span><span class="kw-2">&amp;</span>[()])
-                    .<span class="kw">await</span><span class="question-mark">?</span>,
+                <span class="self">self</span>.rpc_handle.subscribe(<span class="string">&quot;subspace_subscribeSlotInfo&quot;</span>, <span class="kw-2">&amp;</span>[] <span class="kw">as </span><span class="kw-2">&amp;</span>[()]).<span class="kw">await</span><span class="question-mark">?</span>,
             )))
         }
 
@@ -2459,10 +2297,7 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             solution_response: SolutionResponse,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
-            <span class="prelude-val">Ok</span>(<span class="self">self
-                </span>.rpc_handle
-                .call(<span class="string">&quot;subspace_submitSolutionResponse&quot;</span>, [solution_response])
-                .<span class="kw">await</span><span class="question-mark">?</span>)
+            <span class="prelude-val">Ok</span>(<span class="self">self</span>.rpc_handle.call(<span class="string">&quot;subspace_submitSolutionResponse&quot;</span>, [solution_response]).<span class="kw">await</span><span class="question-mark">?</span>)
         }
 
         <span class="kw">async fn </span>subscribe_reward_signing(
@@ -2470,9 +2305,7 @@
         ) -&gt; <span class="prelude-ty">Result</span>&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = RewardSigningInfo&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;, Error&gt;
         {
             <span class="prelude-val">Ok</span>(Box::pin(subscription_to_stream(
-                <span class="self">self</span>.rpc_handle
-                    .subscribe(<span class="string">&quot;subspace_subscribeRewardSigning&quot;</span>, <span class="kw-2">&amp;</span>[] <span class="kw">as </span><span class="kw-2">&amp;</span>[()])
-                    .<span class="kw">await</span><span class="question-mark">?</span>,
+                <span class="self">self</span>.rpc_handle.subscribe(<span class="string">&quot;subspace_subscribeRewardSigning&quot;</span>, <span class="kw-2">&amp;</span>[] <span class="kw">as </span><span class="kw-2">&amp;</span>[()]).<span class="kw">await</span><span class="question-mark">?</span>,
             )))
         }
 
@@ -2480,10 +2313,7 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             reward_signature: RewardSignatureResponse,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
-            <span class="prelude-val">Ok</span>(<span class="self">self
-                </span>.rpc_handle
-                .call(<span class="string">&quot;subspace_submitRewardSignature&quot;</span>, [reward_signature])
-                .<span class="kw">await</span><span class="question-mark">?</span>)
+            <span class="prelude-val">Ok</span>(<span class="self">self</span>.rpc_handle.call(<span class="string">&quot;subspace_submitRewardSignature&quot;</span>, [reward_signature]).<span class="kw">await</span><span class="question-mark">?</span>)
         }
 
         <span class="kw">async fn </span>subscribe_archived_segments(
@@ -2500,10 +2330,7 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             segment_indexes: Vec&lt;SegmentIndex&gt;,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="prelude-ty">Option</span>&lt;RecordsRoot&gt;&gt;, Error&gt; {
-            <span class="prelude-val">Ok</span>(<span class="self">self
-                </span>.rpc_handle
-                .call(<span class="string">&quot;subspace_recordsRoots&quot;</span>, [segment_indexes])
-                .<span class="kw">await</span><span class="question-mark">?</span>)
+            <span class="prelude-val">Ok</span>(<span class="self">self</span>.rpc_handle.call(<span class="string">&quot;subspace_recordsRoots&quot;</span>, [segment_indexes]).<span class="kw">await</span><span class="question-mark">?</span>)
         }
     }
 }
@@ -2513,26 +2340,21 @@
     <span class="kw">use </span>subspace_farmer::RpcClient;
     <span class="kw">use </span>tempfile::TempDir;
 
-    <span class="kw">use crate</span>::{farmer::CacheDescription, Farmer, PlotDescription};
-
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
+    <span class="kw">use </span><span class="kw">crate</span>::farmer::CacheDescription;
+    <span class="kw">use crate</span>::{Farmer, PlotDescription};
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_start_node() {
         <span class="kw">let </span>dir = TempDir::new().unwrap();
-        Node::builder()
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .<span class="kw">await
-            </span>.unwrap();
+        Node::builder().build(dir.path(), chain_spec::dev_config().unwrap()).<span class="kw">await</span>.unwrap();
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_rpc() {
         <span class="kw">let </span>dir = TempDir::new().unwrap();
-        <span class="kw">let </span>node = Node::builder()
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .<span class="kw">await
-            </span>.unwrap();
+        <span class="kw">let </span>node =
+            Node::builder().build(dir.path(), chain_spec::dev_config().unwrap()).<span class="kw">await</span>.unwrap();
 
         <span class="macro">assert!</span>(node.farmer_app_info().<span class="kw">await</span>.is_ok());
     }
@@ -2611,16 +2433,8 @@
             .<span class="kw">await
             </span>.unwrap();
 
-        other_node
-            .subscribe_syncing_progress()
-            .<span class="kw">await
-            </span>.unwrap()
-            .for_each(|<span class="kw">_</span>| <span class="kw">async </span>{})
-            .<span class="kw">await</span>;
-        <span class="macro">assert_eq!</span>(
-            other_node.get_info().<span class="kw">await</span>.unwrap().best_block.<span class="number">1</span>,
-            farm_blocks
-        );
+        other_node.subscribe_syncing_progress().<span class="kw">await</span>.unwrap().for_each(|<span class="kw">_</span>| <span class="kw">async </span>{}).<span class="kw">await</span>;
+        <span class="macro">assert_eq!</span>(other_node.get_info().<span class="kw">await</span>.unwrap().best_block.<span class="number">1</span>, farm_blocks);
 
         node.close().<span class="kw">await</span>;
         other_node.close().<span class="kw">await</span>;

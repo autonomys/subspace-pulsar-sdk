@@ -956,55 +956,23 @@
 <a href="#956" id="956">956</a>
 <a href="#957" id="957">957</a>
 <a href="#958" id="958">958</a>
-<a href="#959" id="959">959</a>
-<a href="#960" id="960">960</a>
-<a href="#961" id="961">961</a>
-<a href="#962" id="962">962</a>
-<a href="#963" id="963">963</a>
-<a href="#964" id="964">964</a>
-<a href="#965" id="965">965</a>
-<a href="#966" id="966">966</a>
-<a href="#967" id="967">967</a>
-<a href="#968" id="968">968</a>
-<a href="#969" id="969">969</a>
-<a href="#970" id="970">970</a>
-<a href="#971" id="971">971</a>
-<a href="#972" id="972">972</a>
-<a href="#973" id="973">973</a>
-<a href="#974" id="974">974</a>
-<a href="#975" id="975">975</a>
-<a href="#976" id="976">976</a>
-<a href="#977" id="977">977</a>
-<a href="#978" id="978">978</a>
-<a href="#979" id="979">979</a>
-<a href="#980" id="980">980</a>
-<a href="#981" id="981">981</a>
-<a href="#982" id="982">982</a>
-<a href="#983" id="983">983</a>
-<a href="#984" id="984">984</a>
-<a href="#985" id="985">985</a>
-<a href="#986" id="986">986</a>
-<a href="#987" id="987">987</a>
-<a href="#988" id="988">988</a>
-<a href="#989" id="989">989</a>
-<a href="#990" id="990">990</a>
-<a href="#991" id="991">991</a>
-<a href="#992" id="992">992</a>
-<a href="#993" id="993">993</a>
-<a href="#994" id="994">994</a>
-<a href="#995" id="995">995</a>
-<a href="#996" id="996">996</a>
-<a href="#997" id="997">997</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, io, num::NonZeroUsize, path::PathBuf, sync::Arc};
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>std::io;
+<span class="kw">use </span>std::num::NonZeroUsize;
+<span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::Context;
+<span class="kw">pub use </span>builder::{Builder, Config, Dsn, DsnBuilder};
 <span class="kw">use </span>bytesize::ByteSize;
-<span class="kw">use </span>futures::{prelude::<span class="kw-2">*</span>, stream::FuturesUnordered};
+<span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>subspace_core_primitives::{PieceIndexHash, SectorIndex, PLOT_SECTOR_SIZE};
+<span class="kw">use </span>subspace_farmer::single_disk_plot::piece_reader::PieceReader;
 <span class="kw">use </span>subspace_farmer::single_disk_plot::{
-    piece_reader::PieceReader, SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId,
-    SingleDiskPlotInfo, SingleDiskPlotOptions, SingleDiskPlotSummary,
+    SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
+    SingleDiskPlotOptions, SingleDiskPlotSummary,
 };
 <span class="kw">use </span>subspace_farmer_components::plotting::PlottedSector;
 <span class="kw">use </span>subspace_networking::libp2p::identity::Keypair;
@@ -1016,8 +984,6 @@
 <span class="kw">use </span>tokio::sync::{oneshot, watch, Mutex};
 
 <span class="kw">use crate</span>::{Node, PublicKey};
-
-<span class="kw">pub use </span>builder::{Builder, Config, Dsn, DsnBuilder};
 
 <span class="doccomment">/// Description of the cache
 </span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -1071,10 +1037,7 @@
         <span class="kw">if </span>space_dedicated &lt; <span class="self">Self</span>::MIN_SIZE {
             <span class="kw">return </span><span class="prelude-val">Err</span>(CacheTooSmall);
         }
-        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            directory: directory.into(),
-            space_dedicated,
-        })
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ directory: directory.into(), space_dedicated })
     }
 
     <span class="doccomment">/// Wipe all the data from the plot
@@ -1100,10 +1063,10 @@
 </span><span class="kw">pub struct </span>PlotConstructionError;
 
 <span class="kw">impl </span>PlotDescription {
-    <span class="comment">// TODO: Account for prefix and metadata sizes
-    </span><span class="kw">const </span>SECTOR_OVERHEAD: ByteSize = ByteSize::mb(<span class="number">2</span>);
     <span class="doccomment">/// Minimal plot size
     </span><span class="kw">pub const </span>MIN_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE + <span class="self">Self</span>::SECTOR_OVERHEAD.<span class="number">0</span>);
+    <span class="comment">// TODO: Account for prefix and metadata sizes
+    </span><span class="kw">const </span>SECTOR_OVERHEAD: ByteSize = ByteSize::mb(<span class="number">2</span>);
 
     <span class="doccomment">/// Construct Plot description
     </span><span class="kw">pub fn </span>new(
@@ -1113,10 +1076,7 @@
         <span class="kw">if </span>space_pledged &lt; <span class="self">Self</span>::MIN_SIZE {
             <span class="kw">return </span><span class="prelude-val">Err</span>(PlotConstructionError);
         }
-        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            directory: directory.into(),
-            space_pledged,
-        })
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ directory: directory.into(), space_pledged })
     }
 
     <span class="doccomment">/// Wipe all the data from the plot
@@ -1128,11 +1088,12 @@
 <span class="kw">mod </span>builder {
     <span class="kw">use </span>std::num::NonZeroUsize;
 
-    <span class="kw">use </span><span class="kw">crate</span>::generate_builder;
     <span class="kw">use </span>derivative::Derivative;
     <span class="kw">use </span>derive_builder::Builder;
     <span class="kw">use </span>libp2p_core::Multiaddr;
     <span class="kw">use </span>serde::{Deserialize, Serialize};
+
+    <span class="kw">use </span><span class="kw">crate</span>::generate_builder;
 
     <span class="kw">fn </span>default_piece_receiver_batch_size() -&gt; NonZeroUsize {
         NonZeroUsize::new(<span class="number">12</span>).unwrap()
@@ -1183,7 +1144,8 @@
         <span class="doccomment">/// Bootstrap nodes
         </span><span class="attr">#[builder(default)]
         </span><span class="kw">pub </span>bootstrap_nodes: Vec&lt;Multiaddr&gt;,
-        <span class="doccomment">/// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
+        <span class="doccomment">/// Determines whether we allow keeping non-global (private, shared,
+        /// loopback..) addresses in Kademlia DHT.
         </span><span class="attr">#[builder(default)]
         </span><span class="kw">pub </span>allow_non_global_addresses_in_dht: bool,
     }
@@ -1202,11 +1164,7 @@
             PieceByHashResponse, PieceKey,
         };
 
-        <span class="kw">let </span><span class="self">Self </span>{
-            listen_on,
-            bootstrap_nodes,
-            allow_non_global_addresses_in_dht,
-        } = <span class="self">self</span>;
+        <span class="kw">let </span><span class="self">Self </span>{ listen_on, bootstrap_nodes, allow_non_global_addresses_in_dht } = <span class="self">self</span>;
 
         <span class="kw">let </span>handle = tokio::runtime::Handle::current();
         <span class="kw">let </span>default_config = Config::with_generated_keypair();
@@ -1241,9 +1199,8 @@
                         <span class="macro">tracing::debug!</span>(<span class="string">&quot;A readers and pieces are already dropped&quot;</span>);
                         <span class="kw">return </span><span class="prelude-val">None
                     </span>};
-                    <span class="kw">let </span>readers_and_pieces = readers_and_pieces
-                        .lock()
-                        .expect(<span class="string">&quot;Readers lock is never poisoned&quot;</span>);
+                    <span class="kw">let </span>readers_and_pieces =
+                        readers_and_pieces.lock().expect(<span class="string">&quot;Readers lock is never poisoned&quot;</span>);
                     <span class="kw">let </span><span class="prelude-val">Some</span>(readers_and_pieces) = readers_and_pieces.as_ref() <span class="kw">else </span>{
                         <span class="macro">tracing::debug!</span>(<span class="question-mark">?</span>piece_index_hash, <span class="string">&quot;Readers and pieces are not initialized yet&quot;</span>);
                         <span class="kw">return </span><span class="prelude-val">None
@@ -1274,9 +1231,7 @@
             ..default_config
         };
 
-        subspace_networking::create(config)
-            .<span class="kw">await
-            </span>.map_err(Into::into)
+        subspace_networking::create(config).<span class="kw">await</span>.map_err(Into::into)
     }
 }
 
@@ -1335,9 +1290,7 @@
         plots: <span class="kw-2">&amp;</span>[PlotDescription],
         cache: CacheDescription,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Farmer, BuildError&gt; {
-        <span class="self">self</span>.configuration()
-            .build(reward_address, node, plots, cache)
-            .<span class="kw">await
+        <span class="self">self</span>.configuration().build(reward_address, node, plots, cache).<span class="kw">await
     </span>}
 }
 
@@ -1382,14 +1335,12 @@
         <span class="kw">let </span><span class="kw-2">mut </span>plot_info = HashMap::with_capacity(plots.len());
 
         <span class="kw">let </span>readers_and_pieces = Arc::new(std::sync::Mutex::new(<span class="prelude-val">None</span>));
-        <span class="kw">let </span>(dsn_node, <span class="kw-2">mut </span>dsn_node_runner) = dsn
-            .configure_dsn(cache, Arc::downgrade(<span class="kw-2">&amp;</span>readers_and_pieces))
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(dsn_node, <span class="kw-2">mut </span>dsn_node_runner) =
+            dsn.configure_dsn(cache, Arc::downgrade(<span class="kw-2">&amp;</span>readers_and_pieces)).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>piece_publisher_semaphore =
             Arc::new(tokio::sync::Semaphore::new(piece_receiver_batch_size.get()));
-        <span class="kw">let </span>piece_receiver_semaphore = Arc::new(tokio::sync::Semaphore::new(
-            piece_publisher_batch_size.get(),
-        ));
+        <span class="kw">let </span>piece_receiver_semaphore =
+            Arc::new(tokio::sync::Semaphore::new(piece_publisher_batch_size.get()));
         <span class="kw">let </span>concurrent_plotting_semaphore =
             Arc::new(tokio::sync::Semaphore::new(max_concurrent_plots.get()));
 
@@ -1442,10 +1393,8 @@
         }
 
         <span class="comment">// Store piece readers so we can reference them later
-        </span><span class="kw">let </span>piece_readers = single_disk_plots
-            .iter()
-            .map(SingleDiskPlot::piece_reader)
-            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        </span><span class="kw">let </span>piece_readers =
+            single_disk_plots.iter().map(SingleDiskPlot::piece_reader).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         <span class="macro">tracing::debug!</span>(<span class="string">&quot;Collecting already plotted pieces&quot;</span>);
 
@@ -1494,10 +1443,7 @@
         readers_and_pieces
             .lock()
             .expect(<span class="string">&quot;Readers and pieces can&#39;t poison lock&quot;</span>)
-            .replace(ReadersAndPieces {
-                readers: piece_readers,
-                pieces: plotted_pieces,
-            });
+            .replace(ReadersAndPieces { readers: piece_readers, pieces: plotted_pieces });
 
         <span class="kw">for </span>(plot_offset, single_disk_plot) <span class="kw">in </span>single_disk_plots.iter().enumerate() {
             <span class="kw">let </span>readers_and_pieces = Arc::clone(<span class="kw-2">&amp;</span>readers_and_pieces);
@@ -1512,31 +1458,24 @@
                         .as_mut()
                         .expect(<span class="string">&quot;Initial value was populated above; qed&quot;</span>)
                         .pieces
-                        .extend(
-                            plotted_sector
-                                .piece_indexes
-                                .iter()
-                                .copied()
-                                .enumerate()
-                                .map(|(piece_offset, piece_index)| {
-                                    (
-                                        PieceIndexHash::from_index(piece_index),
-                                        PieceDetails {
-                                            plot_offset,
-                                            sector_index: plotted_sector.sector_index,
-                                            piece_offset: piece_offset <span class="kw">as </span>u64,
-                                        },
-                                    )
-                                }),
-                        );
+                        .extend(plotted_sector.piece_indexes.iter().copied().enumerate().map(
+                            |(piece_offset, piece_index)| {
+                                (
+                                    PieceIndexHash::from_index(piece_index),
+                                    PieceDetails {
+                                        plot_offset,
+                                        sector_index: plotted_sector.sector_index,
+                                        piece_offset: piece_offset <span class="kw">as </span>u64,
+                                    },
+                                )
+                            },
+                        ));
                 }))
                 .detach();
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>single_disk_plots_stream = single_disk_plots
-            .into_iter()
-            .map(SingleDiskPlot::run)
-            .collect::&lt;FuturesUnordered&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span><span class="kw-2">mut </span>single_disk_plots_stream =
+            single_disk_plots.into_iter().map(SingleDiskPlot::run).collect::&lt;FuturesUnordered&lt;<span class="kw">_</span>&gt;&gt;();
 
         tokio::spawn(<span class="kw">async move </span>{
             dsn_node_runner.run().<span class="kw">await</span>;
@@ -1555,9 +1494,8 @@
                 <span class="kw">match </span>result_maybe_sender {
                     <span class="comment">// If node is closed when we might get some random error, so just ignore it
                     </span>future::Either::Left((<span class="kw">_</span>, <span class="kw">_</span>)) <span class="kw">if </span>handle.block_on(node.is_closed()) =&gt; <span class="prelude-val">Ok</span>(()),
-                    future::Either::Left((maybe_result, <span class="kw">_</span>)) =&gt; {
-                        maybe_result.expect(<span class="string">&quot;There is at least one plot&quot;</span>)
-                    }
+                    future::Either::Left((maybe_result, <span class="kw">_</span>)) =&gt;
+                        maybe_result.expect(<span class="string">&quot;There is at least one plot&quot;</span>),
                     future::Either::Right((<span class="kw">_</span>, <span class="kw">_</span>)) =&gt; <span class="prelude-val">Ok</span>(()),
                 }
             }
@@ -1596,9 +1534,10 @@
     </span><span class="kw">pub </span>public_key: PublicKey,
     <span class="doccomment">/// First sector index in this plot
     ///
-    /// Multiple plots can reuse the same identity, but they have to use different ranges for
-    /// sector indexes or else they&#39;ll essentially plot the same data and will not result in
-    /// increased probability of winning the reward.
+    /// Multiple plots can reuse the same identity, but they have to use
+    /// different ranges for sector indexes or else they&#39;ll essentially plot
+    /// the same data and will not result in increased probability of
+    /// winning the reward.
     </span><span class="kw">pub </span>first_sector_index: SectorIndex,
     <span class="doccomment">/// How much space in bytes is allocated for this plot
     </span><span class="kw">pub </span>allocated_space: ByteSize,
@@ -1687,6 +1626,7 @@
             result =&gt; result,
         }
     }
+
     <span class="kw">fn </span>size_hint(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (usize, <span class="prelude-ty">Option</span>&lt;usize&gt;) {
         <span class="kw">let </span>left = <span class="self">self</span>.last_initial_plotting_progress.total_sectors
             - <span class="self">self</span>.last_initial_plotting_progress.current_sector;
@@ -1704,12 +1644,14 @@
 
 <span class="kw">impl </span>Stream <span class="kw">for </span>InitialPlottingProgressStream {
     <span class="kw">type </span>Item = InitialPlottingProgress;
+
     <span class="kw">fn </span>poll_next(
         <span class="self">self</span>: std::pin::Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
         cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; std::task::Poll&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt;&gt; {
         <span class="self">self</span>.project().boxed_stream.poll_next(cx)
     }
+
     <span class="kw">fn </span>size_hint(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (usize, <span class="prelude-ty">Option</span>&lt;usize&gt;) {
         <span class="self">self</span>.boxed_stream.size_hint()
     }
@@ -1726,7 +1668,8 @@
         ByteSize::b(<span class="self">self</span>.allocated_space)
     }
 
-    <span class="doccomment">/// Will return a stream of initial plotting progress which will end once we finish plotting
+    <span class="doccomment">/// Will return a stream of initial plotting progress which will end once we
+    /// finish plotting
     </span><span class="kw">pub async fn </span>subscribe_initial_plotting_progress(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; InitialPlottingProgressStream {
         <span class="kw">let </span>initial = <span class="kw-2">*</span><span class="self">self</span>.initial_plotting_progress.lock().<span class="kw">await</span>;
         <span class="kw">if </span>initial.current_sector == initial.total_sectors {
@@ -1747,13 +1690,9 @@
                     }
                 }
             })
-            .take_while(
-                |InitialPlottingProgress {
-                     current_sector,
-                     total_sectors,
-                     ..
-                 }| futures::future::ready(current_sector != total_sectors),
-            )
+            .take_while(|InitialPlottingProgress { current_sector, total_sectors, .. }| {
+                futures::future::ready(current_sector != total_sectors)
+            })
             .chain(futures::stream::once({
                 <span class="kw">let </span><span class="kw-2">mut </span>initial_progress = <span class="kw-2">*</span><span class="self">self</span>.initial_plotting_progress.lock().<span class="kw">await</span>;
                 initial_progress.current_sector = initial_progress.total_sectors;
@@ -1788,22 +1727,16 @@
     </span><span class="kw">pub async fn </span>get_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Info&gt; {
         <span class="kw">let </span>plots_info = tokio::task::spawn_blocking({
             <span class="kw">let </span>dirs = <span class="self">self</span>.plot_info.keys().cloned().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-            || {
-                dirs.into_iter()
-                    .map(SingleDiskPlot::collect_summary)
-                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-            }
+            || dirs.into_iter().map(SingleDiskPlot::collect_summary).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
         })
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into_iter()
         .map(|summary| <span class="kw">match </span>summary {
             SingleDiskPlotSummary::Found { info, directory } =&gt; <span class="prelude-val">Ok</span>((directory, info.into())),
-            SingleDiskPlotSummary::NotFound { directory } =&gt; {
-                <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Didn&#39;t found plot at `{directory:?}&#39;&quot;</span>))
-            }
-            SingleDiskPlotSummary::Error { directory, error } =&gt; {
-                <span class="prelude-val">Err</span>(error).context(<span class="macro">format!</span>(<span class="string">&quot;Failed to get plot summary at `{directory:?}&#39;&quot;</span>))
-            }
+            SingleDiskPlotSummary::NotFound { directory } =&gt;
+                <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Didn&#39;t found plot at `{directory:?}&#39;&quot;</span>)),
+            SingleDiskPlotSummary::Error { directory, error } =&gt;
+                <span class="prelude-val">Err</span>(error).context(<span class="macro">format!</span>(<span class="string">&quot;Failed to get plot summary at `{directory:?}&#39;&quot;</span>)),
         })
         .collect::&lt;anyhow::Result&lt;<span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
 
@@ -1833,9 +1766,10 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>tempfile::TempDir;
+
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
     <span class="kw">use </span><span class="kw">crate</span>::node::{chain_spec, Node, Role};
-    <span class="kw">use </span>tempfile::TempDir;
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_get_info() {
@@ -1860,17 +1794,10 @@
             </span>.unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
 
-        <span class="kw">let </span>Info {
-            reward_address,
-            plots_info,
-            ..
-        } = farmer.get_info().<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span>Info { reward_address, plots_info, .. } = farmer.get_info().<span class="kw">await</span>.unwrap();
         <span class="macro">assert_eq!</span>(reward_address, Default::default());
         <span class="macro">assert_eq!</span>(plots_info.len(), <span class="number">1</span>);
-        <span class="macro">assert_eq!</span>(
-            plots_info[plot_dir.as_ref()].allocated_space,
-            PlotDescription::MIN_SIZE
-        );
+        <span class="macro">assert_eq!</span>(plots_info[plot_dir.as_ref()].allocated_space, PlotDescription::MIN_SIZE);
 
         farmer.close().<span class="kw">await</span>.unwrap();
         node.close().<span class="kw">await</span>;
@@ -1974,16 +1901,11 @@
 
         <span class="kw">let </span>plot = farmer.iter_plots().<span class="kw">await</span>.next().unwrap();
 
-        plot.subscribe_initial_plotting_progress()
-            .<span class="kw">await
-            </span>.for_each(|<span class="kw">_</span>| <span class="kw">async </span>{})
-            .<span class="kw">await</span>;
+        plot.subscribe_initial_plotting_progress().<span class="kw">await</span>.for_each(|<span class="kw">_</span>| <span class="kw">async </span>{}).<span class="kw">await</span>;
 
         tokio::time::timeout(
             std::time::Duration::from_secs(<span class="number">5</span>),
-            plot.subscribe_initial_plotting_progress()
-                .<span class="kw">await
-                </span>.for_each(|<span class="kw">_</span>| <span class="kw">async </span>{}),
+            plot.subscribe_initial_plotting_progress().<span class="kw">await</span>.for_each(|<span class="kw">_</span>| <span class="kw">async </span>{}),
         )
         .<span class="kw">await
         </span>.unwrap();
