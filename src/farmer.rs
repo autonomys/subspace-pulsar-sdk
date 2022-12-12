@@ -11,7 +11,6 @@ use futures::prelude::*;
 use futures::stream::FuturesUnordered;
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::{PieceIndexHash, SectorIndex, PLOT_SECTOR_SIZE};
-use subspace_farmer::single_disk_plot::piece_reader::PieceReader;
 use subspace_farmer::single_disk_plot::{
     SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
     SingleDiskPlotOptions, SingleDiskPlotSummary,
@@ -25,6 +24,7 @@ use subspace_networking::{
 use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 
+use crate::networking::{PieceDetails, ReadersAndPieces};
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -208,7 +208,6 @@ impl builder::Dsn {
 
         let Self { listen_on, bootstrap_nodes, allow_non_global_addresses_in_dht } = self;
 
-        let handle = tokio::runtime::Handle::current();
         let default_config = Config::with_generated_keypair();
 
         let config = Config::<ConfiguredRecordStore> {
@@ -247,23 +246,7 @@ impl builder::Dsn {
                         tracing::debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
                         return None
                     };
-                    let Some(piece_details) = readers_and_pieces.pieces.get(piece_index_hash).copied() else {
-                        tracing::trace!(?piece_index_hash, "Piece is not stored in any of the local plots");
-                        return None
-                    };
-                    let mut reader = readers_and_pieces
-                        .readers
-                        .get(piece_details.plot_offset)
-                        .cloned()
-                        .expect("Offsets strictly correspond to existing plots; qed");
-
-                    let handle = handle.clone();
-                    let piece = tokio::task::block_in_place(move || {
-                        handle.block_on(
-                            reader
-                                .read_piece(piece_details.sector_index, piece_details.piece_offset),
-                        )
-                    });
+                    let piece = readers_and_pieces.get_piece(piece_index_hash)?;
 
                     Some(PieceByHashResponse { piece })
                 },
@@ -304,19 +287,6 @@ type ConfiguredRecordStore = subspace_networking::CustomRecordStore<
     >,
     subspace_networking::MemoryProviderStorage,
 >;
-
-#[derive(Debug, Copy, Clone)]
-struct PieceDetails {
-    plot_offset: usize,
-    sector_index: SectorIndex,
-    piece_offset: u64,
-}
-
-#[derive(Debug)]
-struct ReadersAndPieces {
-    readers: Vec<PieceReader>,
-    pieces: HashMap<PieceIndexHash, PieceDetails>,
-}
 
 impl Builder {
     /// Get configuration for saving on disk
@@ -434,58 +404,10 @@ impl Config {
             single_disk_plots.push(single_disk_plot);
         }
 
-        // Store piece readers so we can reference them later
-        let piece_readers =
-            single_disk_plots.iter().map(SingleDiskPlot::piece_reader).collect::<Vec<_>>();
-
-        tracing::debug!("Collecting already plotted pieces");
-
-        // Collect already plotted pieces
-        let plotted_pieces = single_disk_plots
-            .iter()
-            .enumerate()
-            .flat_map(|(plot_offset, single_disk_plot)| {
-                single_disk_plot
-                    .plotted_sectors()
-                    .enumerate()
-                    .filter_map(move |(sector_offset, plotted_sector_result)| {
-                        match plotted_sector_result {
-                            Ok(plotted_sector) => Some(plotted_sector),
-                            Err(error) => {
-                                tracing::error!(
-                                    %error,
-                                    %plot_offset,
-                                    %sector_offset,
-                                    "Failed reading plotted sector on startup, skipping"
-                                );
-                                None
-                            }
-                        }
-                    })
-                    .flat_map(move |plotted_sector| {
-                        plotted_sector.piece_indexes.into_iter().enumerate().map(
-                            move |(piece_offset, piece_index)| {
-                                (
-                                    PieceIndexHash::from_index(piece_index),
-                                    PieceDetails {
-                                        plot_offset,
-                                        sector_index: plotted_sector.sector_index,
-                                        piece_offset: piece_offset as u64,
-                                    },
-                                )
-                            },
-                        )
-                    })
-            })
-            // We implicitly ignore duplicates here, reading just from one of the plots
-            .collect::<std::collections::HashMap<_, _>>();
-
-        tracing::debug!("Finished collecting already plotted pieces");
-
         readers_and_pieces
             .lock()
             .expect("Readers and pieces can't poison lock")
-            .replace(ReadersAndPieces { readers: piece_readers, pieces: plotted_pieces });
+            .replace(ReadersAndPieces::new(&single_disk_plots).await);
 
         for (plot_offset, single_disk_plot) in single_disk_plots.iter().enumerate() {
             let readers_and_pieces = Arc::clone(&readers_and_pieces);
@@ -499,7 +421,6 @@ impl Config {
                         .expect("Readers and pieces can't poison lock")
                         .as_mut()
                         .expect("Initial value was populated above; qed")
-                        .pieces
                         .extend(plotted_sector.piece_indexes.iter().copied().enumerate().map(
                             |(piece_offset, piece_index)| {
                                 (

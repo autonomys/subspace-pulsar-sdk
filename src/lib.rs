@@ -5,6 +5,7 @@
 
 /// Module related to the farmer
 pub mod farmer;
+pub(crate) mod networking;
 /// Module related to the node
 pub mod node;
 
