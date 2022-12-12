@@ -1,7 +1,6 @@
 use bytesize::ByteSize;
-use subspace_sdk::{
-    chain_spec, farmer::CacheDescription, Farmer, Node, PlotDescription, PublicKey,
-};
+use subspace_sdk::farmer::CacheDescription;
+use subspace_sdk::{chain_spec, Farmer, Node, PlotDescription, PublicKey};
 
 #[tokio::main]
 async fn main() {
