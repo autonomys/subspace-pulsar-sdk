@@ -13,7 +13,7 @@ use subspace_farmer_components::plotting::PlottedSector;
 use subspace_networking::libp2p::identity::Keypair;
 use subspace_networking::{
     CustomRecordStore, LimitedSizeRecordStorageWrapper, MemoryProviderStorage, Node as DSNNode,
-    NodeRunner as DSNNodeRunner, ParityDbRecordStorage,
+    NodeRunner as DSNNodeRunner, ParityDbRecordStorage, PieceByHashRequest,
 };
 use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
@@ -221,27 +221,44 @@ impl builder::Dsn {
                     .collect::<Vec<_>>(),
             )
             .boxed(),
-            request_response_protocols: vec![PieceByHashRequestHandler::create(move |req| {
-                let PieceKey::Sector(piece_index_hash) = req.key else { return None };
-                let Some(readers_and_pieces) = weak_readers_and_pieces.upgrade() else { return None };
-                let readers_and_pieces = readers_and_pieces.lock().unwrap();
-                let Some(readers_and_pieces) = readers_and_pieces.as_ref() else { return None };
-                let Some(piece_details) = readers_and_pieces.pieces.get(&piece_index_hash).copied() else { return None };
-                let mut reader = readers_and_pieces
-                    .readers
-                    .get(piece_details.plot_offset)
-                    .cloned()
-                    .expect("Offsets strictly correspond to existing plots; qed");
+            request_response_protocols: vec![PieceByHashRequestHandler::create(
+                move |PieceByHashRequest { key }| {
+                    let PieceKey::Sector(piece_index_hash) = key else {
+                        tracing::debug!(?key, "Incorrect piece request - unsupported key type.");
+                        return None
+                    };
+                    let Some(readers_and_pieces) = weak_readers_and_pieces.upgrade() else {
+                        tracing::debug!("A readers and pieces are already dropped");
+                        return None
+                    };
+                    let readers_and_pieces = readers_and_pieces
+                        .lock()
+                        .expect("Readers lock is never poisoned");
+                    let Some(readers_and_pieces) = readers_and_pieces.as_ref() else {
+                        tracing::debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
+                        return None
+                    };
+                    let Some(piece_details) = readers_and_pieces.pieces.get(&piece_index_hash).copied() else {
+                        tracing::trace!(?piece_index_hash, "Piece is not stored in any of the local plots");
+                        return None
+                    };
+                    let mut reader = readers_and_pieces
+                        .readers
+                        .get(piece_details.plot_offset)
+                        .cloned()
+                        .expect("Offsets strictly correspond to existing plots; qed");
 
-                let handle = handle.clone();
-                let result = tokio::task::block_in_place(move || {
-                    handle.block_on(
-                        reader.read_piece(piece_details.sector_index, piece_details.piece_offset),
-                    )
-                });
+                    let handle = handle.clone();
+                    let piece = tokio::task::block_in_place(move || {
+                        handle.block_on(
+                            reader
+                                .read_piece(piece_details.sector_index, piece_details.piece_offset),
+                        )
+                    });
 
-                Some(PieceByHashResponse { piece: result })
-            })],
+                    Some(PieceByHashResponse { piece })
+                },
+            )],
             record_store: cache.record_store(&default_config.keypair)?,
             allow_non_global_addresses_in_dht,
             ..default_config
