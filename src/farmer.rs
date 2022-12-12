@@ -198,6 +198,7 @@ impl builder::Dsn {
     async fn configure_dsn(
         self,
         cache: CacheDescription,
+        readers_and_pieces: std::sync::Weak<std::sync::Mutex<Option<ReadersAndPieces>>>,
     ) -> Result<(DSNNode, DSNNodeRunner<ConfiguredRecordStore>), BuildError> {
         use subspace_networking::{
             BootstrappedNetworkingParameters, Config, PieceByHashRequestHandler,
@@ -209,9 +210,6 @@ impl builder::Dsn {
             bootstrap_nodes,
             allow_non_global_addresses_in_dht,
         } = self;
-
-        let readers_and_pieces = Arc::new(std::sync::Mutex::new(None::<ReadersAndPieces>));
-        let weak_readers_and_pieces = Arc::downgrade(&readers_and_pieces);
 
         let handle = tokio::runtime::Handle::current();
         let default_config = Config::with_generated_keypair();
@@ -242,7 +240,7 @@ impl builder::Dsn {
                         tracing::debug!(?key, "Incorrect piece request - unsupported key type.");
                         return None
                     };
-                    let Some(readers_and_pieces) = weak_readers_and_pieces.upgrade() else {
+                    let Some(readers_and_pieces) = readers_and_pieces.upgrade() else {
                         tracing::debug!("A readers and pieces are already dropped");
                         return None
                     };
@@ -253,7 +251,7 @@ impl builder::Dsn {
                         tracing::debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
                         return None
                     };
-                    let Some(piece_details) = readers_and_pieces.pieces.get(&piece_index_hash).copied() else {
+                    let Some(piece_details) = readers_and_pieces.pieces.get(piece_index_hash).copied() else {
                         tracing::trace!(?piece_index_hash, "Piece is not stored in any of the local plots");
                         return None
                     };
@@ -385,7 +383,11 @@ impl Config {
 
         let mut single_disk_plots = Vec::with_capacity(plots.len());
         let mut plot_info = HashMap::with_capacity(plots.len());
-        let (dsn_node, mut dsn_node_runner) = dsn.configure_dsn(cache).await?;
+
+        let readers_and_pieces = Arc::new(std::sync::Mutex::new(None));
+        let (dsn_node, mut dsn_node_runner) = dsn
+            .configure_dsn(cache, Arc::downgrade(&readers_and_pieces))
+            .await?;
         let piece_publisher_semaphore =
             Arc::new(tokio::sync::Semaphore::new(piece_receiver_batch_size.get()));
         let piece_receiver_semaphore = Arc::new(tokio::sync::Semaphore::new(
@@ -440,6 +442,98 @@ impl Config {
             };
             plot_info.insert(directory, plot);
             single_disk_plots.push(single_disk_plot);
+        }
+
+        // Store piece readers so we can reference them later
+        let piece_readers = single_disk_plots
+            .iter()
+            .map(SingleDiskPlot::piece_reader)
+            .collect::<Vec<_>>();
+
+        tracing::debug!("Collecting already plotted pieces");
+
+        // Collect already plotted pieces
+        let plotted_pieces = single_disk_plots
+            .iter()
+            .enumerate()
+            .flat_map(|(plot_offset, single_disk_plot)| {
+                single_disk_plot
+                    .plotted_sectors()
+                    .enumerate()
+                    .filter_map(move |(sector_offset, plotted_sector_result)| {
+                        match plotted_sector_result {
+                            Ok(plotted_sector) => Some(plotted_sector),
+                            Err(error) => {
+                                tracing::error!(
+                                    %error,
+                                    %plot_offset,
+                                    %sector_offset,
+                                    "Failed reading plotted sector on startup, skipping"
+                                );
+                                None
+                            }
+                        }
+                    })
+                    .flat_map(move |plotted_sector| {
+                        plotted_sector.piece_indexes.into_iter().enumerate().map(
+                            move |(piece_offset, piece_index)| {
+                                (
+                                    PieceIndexHash::from_index(piece_index),
+                                    PieceDetails {
+                                        plot_offset,
+                                        sector_index: plotted_sector.sector_index,
+                                        piece_offset: piece_offset as u64,
+                                    },
+                                )
+                            },
+                        )
+                    })
+            })
+            // We implicitly ignore duplicates here, reading just from one of the plots
+            .collect::<std::collections::HashMap<_, _>>();
+
+        tracing::debug!("Finished collecting already plotted pieces");
+
+        readers_and_pieces
+            .lock()
+            .expect("Readers and pieces can't poison lock")
+            .replace(ReadersAndPieces {
+                readers: piece_readers,
+                pieces: plotted_pieces,
+            });
+
+        for (plot_offset, single_disk_plot) in single_disk_plots.iter().enumerate() {
+            let readers_and_pieces = Arc::clone(&readers_and_pieces);
+
+            // Collect newly plotted pieces
+            // TODO: Once we have replotting, this will have to be updated
+            single_disk_plot
+                .on_sector_plotted(Arc::new(move |plotted_sector| {
+                    readers_and_pieces
+                        .lock()
+                        .expect("Readers and pieces can't poison lock")
+                        .as_mut()
+                        .expect("Initial value was populated above; qed")
+                        .pieces
+                        .extend(
+                            plotted_sector
+                                .piece_indexes
+                                .iter()
+                                .copied()
+                                .enumerate()
+                                .map(|(piece_offset, piece_index)| {
+                                    (
+                                        PieceIndexHash::from_index(piece_index),
+                                        PieceDetails {
+                                            plot_offset,
+                                            sector_index: plotted_sector.sector_index,
+                                            piece_offset: piece_offset as u64,
+                                        },
+                                    )
+                                }),
+                        );
+                }))
+                .detach();
         }
 
         let mut single_disk_plots_stream = single_disk_plots
