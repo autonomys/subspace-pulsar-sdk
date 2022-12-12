@@ -137,12 +137,12 @@ mod builder {
     use libp2p_core::Multiaddr;
     use serde::{Deserialize, Serialize};
 
-    fn default_piece_receiver_batch_size() -> usize {
-        12
+    fn default_piece_receiver_batch_size() -> NonZeroUsize {
+        NonZeroUsize::new(12).unwrap()
     }
 
-    fn default_piece_publisher_batch_size() -> usize {
-        12
+    fn default_piece_publisher_batch_size() -> NonZeroUsize {
+        NonZeroUsize::new(12).unwrap()
     }
 
     fn default_max_concurrent_plots() -> NonZeroUsize {
@@ -155,16 +155,16 @@ mod builder {
     #[builder(pattern = "immutable", build_fn(name = "_build"), name = "Builder")]
     #[non_exhaustive]
     pub struct Config {
-        /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
+        /// Defines size for the pieces batch of the piece receiving process.
         #[builder(default = "default_piece_receiver_batch_size()")]
         #[derivative(Default(value = "default_piece_receiver_batch_size()"))]
         #[serde(default = "default_piece_receiver_batch_size")]
-        pub piece_receiver_batch_size: usize,
-        /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
+        pub piece_receiver_batch_size: NonZeroUsize,
+        /// Defines size for the pieces batch of the piece publishing process.
         #[builder(default = "default_piece_publisher_batch_size()")]
         #[derivative(Default(value = "default_piece_publisher_batch_size()"))]
         #[serde(default = "default_piece_publisher_batch_size")]
-        pub piece_publisher_batch_size: usize,
+        pub piece_publisher_batch_size: NonZeroUsize,
         /// Number of plots that can be plotted concurrently, impacts RAM usage.
         #[builder(default = "default_max_concurrent_plots()")]
         #[derivative(Default(value = "default_max_concurrent_plots()"))]
@@ -387,9 +387,10 @@ impl Config {
         let mut plot_info = HashMap::with_capacity(plots.len());
         let (dsn_node, mut dsn_node_runner) = dsn.configure_dsn(cache).await?;
         let piece_publisher_semaphore =
-            Arc::new(tokio::sync::Semaphore::new(piece_receiver_batch_size));
-        let piece_receiver_semaphore =
-            Arc::new(tokio::sync::Semaphore::new(piece_publisher_batch_size));
+            Arc::new(tokio::sync::Semaphore::new(piece_receiver_batch_size.get()));
+        let piece_receiver_semaphore = Arc::new(tokio::sync::Semaphore::new(
+            piece_publisher_batch_size.get(),
+        ));
         let concurrent_plotting_semaphore =
             Arc::new(tokio::sync::Semaphore::new(max_concurrent_plots.get()));
 
