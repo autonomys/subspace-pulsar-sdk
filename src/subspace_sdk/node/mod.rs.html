@@ -1300,6 +1300,18 @@
 <a href="#1300" id="1300">1300</a>
 <a href="#1301" id="1301">1301</a>
 <a href="#1302" id="1302">1302</a>
+<a href="#1303" id="1303">1303</a>
+<a href="#1304" id="1304">1304</a>
+<a href="#1305" id="1305">1305</a>
+<a href="#1306" id="1306">1306</a>
+<a href="#1307" id="1307">1307</a>
+<a href="#1308" id="1308">1308</a>
+<a href="#1309" id="1309">1309</a>
+<a href="#1310" id="1310">1310</a>
+<a href="#1311" id="1311">1311</a>
+<a href="#1312" id="1312">1312</a>
+<a href="#1313" id="1313">1313</a>
+<a href="#1314" id="1314">1314</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>futures::channel::{mpsc, oneshot};
 <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
@@ -1319,7 +1331,6 @@
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
-<span class="kw">use </span>std::sync::atomic::AtomicU32;
 <span class="kw">use </span>std::sync::{Arc, Weak};
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>subspace_core_primitives::SolutionRange;
@@ -1343,7 +1354,7 @@
     <span class="kw">use </span>derivative::Derivative;
     <span class="kw">use </span>derive_builder::Builder;
     <span class="kw">use </span>serde::{Deserialize, Serialize};
-    <span class="kw">use </span>std::net::SocketAddr;
+    <span class="kw">use </span>std::{net::SocketAddr, num::NonZeroUsize};
 
     <span class="doccomment">/// Block pruning settings.
     </span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
@@ -1510,6 +1521,10 @@
         <span class="macro">format!</span>(<span class="string">&quot;{}-{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;CARGO_PKG_VERSION&quot;</span>), <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>))
     }
 
+    <span class="kw">fn </span>default_segment_publish_concurrency() -&gt; NonZeroUsize {
+        NonZeroUsize::new(<span class="number">10</span>).unwrap()
+    }
+
     <span class="doccomment">/// Node builder
     </span><span class="attr">#[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
@@ -1520,6 +1535,12 @@
         </span><span class="attr">#[builder(default)]
         #[serde(default)]
         </span><span class="kw">pub </span>force_authoring: bool,
+        <span class="doccomment">/// Max number of segments that can be published concurrently, impacts RAM usage and network
+        /// bandwidth.
+        </span><span class="attr">#[builder(default = <span class="string">&quot;default_segment_publish_concurrency()&quot;</span>)]
+        #[derivative(Default(value = <span class="string">&quot;default_segment_publish_concurrency()&quot;</span>))]
+        #[serde(default = <span class="string">&quot;default_segment_publish_concurrency&quot;</span>)]
+        </span><span class="kw">pub </span>segment_publish_concurrency: NonZeroUsize,
         <span class="doccomment">/// Set node role
         </span><span class="attr">#[builder(default)]
         #[serde(default)]
@@ -1666,6 +1687,10 @@
         </span><span class="macro">vec!</span>[<span class="string">&quot;/ip4/127.0.0.1/tcp/0&quot;</span>.parse().expect(<span class="string">&quot;Always valid&quot;</span>)]
     }
 
+    <span class="kw">fn </span>default_piece_publisher_batch_size() -&gt; usize {
+        <span class="number">15
+    </span>}
+
     <span class="doccomment">/// Node DSN builder
     </span><span class="attr">#[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
@@ -1689,6 +1714,11 @@
         </span><span class="attr">#[builder(default)]
         #[serde(default)]
         </span><span class="kw">pub </span>allow_non_global_addresses_in_dht: bool,
+        <span class="doccomment">/// Sets piece publisher batch size
+        </span><span class="attr">#[builder(default = <span class="string">&quot;default_piece_publisher_batch_size()&quot;</span>)]
+        #[derivative(Default(value = <span class="string">&quot;default_piece_publisher_batch_size()&quot;</span>))]
+        #[serde(default = <span class="string">&quot;default_piece_publisher_batch_size&quot;</span>)]
+        </span><span class="kw">pub </span>piece_publisher_batch_size: usize,
     }
 
     <span class="doccomment">/// Offchain worker config
@@ -1806,6 +1836,7 @@
         <span class="kw">let </span><span class="self">Self </span>{
             force_authoring,
             role,
+            segment_publish_concurrency,
             blocks_pruning,
             state_pruning,
             execution_strategy,
@@ -1893,6 +1924,7 @@
                 boot_nodes,
                 reserved_nodes,
                 allow_non_global_addresses_in_dht,
+                piece_publisher_batch_size,
             } = dsn;
             <span class="kw">let </span>keypair = {
                 <span class="kw">let </span>keypair = network
@@ -1946,6 +1978,7 @@
                 reserved_peers: reserved_nodes,
                 listen_on,
                 keypair,
+                piece_publisher_batch_size,
             }
         };
 
@@ -2000,18 +2033,22 @@
                 runtime_cache_size: <span class="number">2</span>,
             },
             force_new_slot_notifications: <span class="bool-val">false</span>,
-            dsn_config,
-            piece_cache_size: piece_cache_size.as_u64(),
+            segment_publish_concurrency,
+            subspace_networking: subspace_service::SubspaceNetworking::Create {
+                config: dsn_config,
+                piece_cache_size: piece_cache_size.as_u64(),
+            },
         };
 
+        <span class="kw">let </span>partial_components =
+            subspace_service::new_partial::&lt;RuntimeApi, ExecutorDispatch&gt;(<span class="kw-2">&amp;</span>configuration)
+                .context(<span class="string">&quot;Failed to build a partial subspace node&quot;</span>)<span class="question-mark">?</span>;
+
         <span class="kw">let </span>slot_proportion = sc_consensus_slots::SlotProportion::new(<span class="number">2f32 </span>/ <span class="number">3f32</span>);
-        <span class="kw">let </span>full_client = subspace_service::new_full::&lt;RuntimeApi, ExecutorDispatch&gt;(
-            configuration,
-            <span class="bool-val">true</span>,
-            slot_proportion,
-        )
-        .<span class="kw">await
-        </span>.context(<span class="string">&quot;Failed to build a full subspace node&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>full_client =
+            subspace_service::new_full(configuration, partial_components, <span class="bool-val">true</span>, slot_proportion)
+                .<span class="kw">await
+                </span>.context(<span class="string">&quot;Failed to build a full subspace node&quot;</span>)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>subspace_service::NewFull {
             <span class="kw-2">mut </span>task_manager,
@@ -2202,7 +2239,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; anyhow::Result&lt;<span class="kw">impl </span>Stream&lt;Item = SyncStatus&gt; + Send + Unpin + <span class="lifetime">&#39;static</span>&gt; {
         <span class="kw">const </span>CHECK_SYNCED_EVERY: Duration = Duration::from_millis(<span class="number">100</span>);
-        <span class="kw">const </span>SYNCING_TIMEOUT: Duration = Duration::from_secs(<span class="number">6</span>);
+        <span class="kw">const </span>SYNCING_TIMEOUT: Duration = Duration::from_secs(<span class="number">60</span>);
 
         <span class="kw">let </span>backoff = backoff::ExponentialBackoff {
             max_elapsed_time: <span class="prelude-val">Some</span>(SYNCING_TIMEOUT),
@@ -2221,34 +2258,21 @@
         <span class="kw">let </span>(sender, receiver) = tokio::sync::mpsc::channel(<span class="number">10</span>);
         tokio::spawn({
             <span class="kw">let </span>network = Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.network);
-            <span class="kw">let </span>client = <span class="self">self</span>.client().unwrap();
             <span class="kw">async move </span>{
-                <span class="kw">let </span>best_number = Arc::new(AtomicU32::new(<span class="number">0</span>));
                 <span class="kw">loop </span>{
                     tokio::time::sleep(CHECK_SYNCED_EVERY).<span class="kw">await</span>;
                     <span class="kw">let </span>status = backoff::future::retry(backoff.clone(), || {
-                        <span class="kw">let </span>(best_number, network, client) =
-                            (Arc::clone(<span class="kw-2">&amp;</span>best_number), <span class="kw-2">&amp;</span>network, <span class="kw-2">&amp;</span>client);
-                        <span class="kw">async move </span>{
-                            <span class="kw">let </span>new_best_number = client.chain_info().best_number;
-                            <span class="kw">let </span>not_imported_blocks = best_number
-                                .swap(new_best_number, std::sync::atomic::Ordering::Relaxed)
-                                == new_best_number;
-                            <span class="kw">match </span>network.status().<span class="kw">await</span><span class="question-mark">?</span>.sync_state {
-                                SyncState::Idle <span class="kw">if </span>not_imported_blocks =&gt; {
-                                    <span class="prelude-val">Err</span>(backoff::Error::transient(()))
-                                }
-                                SyncState::Idle =&gt; <span class="prelude-val">Ok</span>(SyncStatus::Importing {
-                                    target: new_best_number,
-                                }),
+                        network
+                            .status()
+                            .map(|result_status| <span class="kw">match </span>result_status<span class="question-mark">?</span>.sync_state {
+                                SyncState::Idle =&gt; <span class="prelude-val">Err</span>(backoff::Error::transient(())),
                                 SyncState::Importing { target } =&gt; {
                                     <span class="prelude-val">Ok</span>(SyncStatus::Importing { target })
                                 }
                                 SyncState::Downloading { target } =&gt; {
                                     <span class="prelude-val">Ok</span>(SyncStatus::Downloading { target })
                                 }
-                            }
-                        }
+                            })
                     })
                     .<span class="kw">await</span>;
 
