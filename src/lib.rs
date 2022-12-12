@@ -8,11 +8,10 @@ pub mod farmer;
 /// Module related to the node
 pub mod node;
 
+use derive_more::{Deref, DerefMut};
 pub use farmer::{Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotDescription};
 pub use node::{chain_spec, Builder as NodeBuilder, Info as FarmerInfo, Node};
 pub use parse_ss58::Ss58ParsingError;
-
-use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::PUBLIC_KEY_LENGTH;
 
@@ -99,8 +98,8 @@ mod parse_ss58 {
     // See the License for the specific language governing permissions and
     // limitations under the License.
 
-    //! Modified version of SS58 parser extracted from Substrate in order to not pull the whole
-    //! `sp-core` into farmer application
+    //! Modified version of SS58 parser extracted from Substrate in order to not
+    //! pull the whole `sp-core` into farmer application
 
     use base58::FromBase58;
     use blake2::digest::typenum::U64;
@@ -142,8 +141,8 @@ mod parse_ss58 {
         let (prefix_len, ident) = match data[0] {
             0..=63 => (1, data[0] as u16),
             64..=127 => {
-                // weird bit manipulation owing to the combination of LE encoding and missing two
-                // bits from the left.
+                // weird bit manipulation owing to the combination of LE encoding and missing
+                // two bits from the left.
                 // d[0] d[1] are: 01aaaaaa bbcccccc
                 // they make the LE-encoded 16-bit value: aaaaaabb 00cccccc
                 // so the lower byte is formed of aaaaaabb and the higher byte is 00cccccc
@@ -189,6 +188,7 @@ mod parse_ss58 {
     /// ```
     impl std::str::FromStr for super::PublicKey {
         type Err = Ss58ParsingError;
+
         fn from_str(s: &str) -> Result<Self, Self::Err> {
             parse_ss58_reward_address(s).map(Self)
         }

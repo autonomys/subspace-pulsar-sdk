@@ -1,9 +1,8 @@
 use bytesize::ByteSize;
 use futures::StreamExt;
-use subspace_sdk::{
-    chain_spec, farmer::CacheDescription, node, node::NetworkBuilder, Farmer, Node,
-    PlotDescription, PublicKey,
-};
+use subspace_sdk::farmer::CacheDescription;
+use subspace_sdk::node::NetworkBuilder;
+use subspace_sdk::{chain_spec, node, Farmer, Node, PlotDescription, PublicKey};
 
 #[tokio::main]
 async fn main() {
@@ -32,13 +31,8 @@ async fn main() {
         .expect("Failed to init a farmer");
 
     tokio::spawn({
-        let mut solutions = farmer
-            .iter_plots()
-            .await
-            .next()
-            .unwrap()
-            .subscribe_new_solutions()
-            .await;
+        let mut solutions =
+            farmer.iter_plots().await.next().unwrap().subscribe_new_solutions().await;
         async move {
             while let Some(solution) = solutions.next().await {
                 eprintln!("Found solution: {solution:?}");

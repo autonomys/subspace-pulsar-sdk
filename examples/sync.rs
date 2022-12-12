@@ -1,13 +1,12 @@
-use futures::stream::StreamExt;
 use std::path::PathBuf;
 
 use bytesize::ByteSize;
 use clap::Parser;
+use futures::stream::StreamExt;
 use sc_network_common::config::MultiaddrWithPeerId;
-use subspace_sdk::{
-    chain_spec, farmer::CacheDescription, node::NetworkBuilder, Farmer, Node, PlotDescription,
-    PublicKey,
-};
+use subspace_sdk::farmer::CacheDescription;
+use subspace_sdk::node::NetworkBuilder;
+use subspace_sdk::{chain_spec, Farmer, Node, PlotDescription, PublicKey};
 use tempfile::TempDir;
 
 #[derive(clap::Parser, Debug)]
@@ -49,7 +48,7 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
     match args {
-        Args::GenerateSpec { path } => {
+        Args::GenerateSpec { path } =>
             tokio::fs::write(
                 path,
                 serde_json::to_string_pretty(
@@ -57,19 +56,11 @@ async fn main() -> anyhow::Result<()> {
                         .map_err(|err| anyhow::anyhow!("Failed to generate a chain spec: {err}"))?,
                 )?,
             )
-            .await?
-        }
-        Args::Farm {
-            plot,
-            plot_size,
-            node,
-            spec,
-        } => {
+            .await?,
+        Args::Farm { plot, plot_size, node, spec } => {
             let chain_spec = serde_json::from_str(&tokio::fs::read_to_string(spec).await?)?;
-            let (plot_size, cache_size) = (
-                ByteSize::b(plot_size.as_u64() * 9 / 10),
-                ByteSize::b(plot_size.as_u64() / 10),
-            );
+            let (plot_size, cache_size) =
+                (ByteSize::b(plot_size.as_u64() * 9 / 10), ByteSize::b(plot_size.as_u64() / 10));
             let node = Node::builder()
                 .network(
                     NetworkBuilder::new()

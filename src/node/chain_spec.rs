@@ -15,16 +15,11 @@ const SUBSPACE_TELEMETRY_URL: &str = "wss://telemetry.subspace.network/submit/";
 const X_NET_2_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-x-net-2.json");
 const GEMINI_3A_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-gemini-3a.json");
 
-/// List of accounts which should receive token grants, amounts are specified in SSC.
+/// List of accounts which should receive token grants, amounts are specified in
+/// SSC.
 const TOKEN_GRANTS: &[(&str, u128)] = &[
-    (
-        "5Dns1SVEeDqnbSm2fVUqHJPCvQFXHVsgiw28uMBwmuaoKFYi",
-        3_000_000,
-    ),
-    (
-        "5DxtHHQL9JGapWCQARYUAWj4yDcwuhg9Hsk5AjhEzuzonVyE",
-        1_500_000,
-    ),
+    ("5Dns1SVEeDqnbSm2fVUqHJPCvQFXHVsgiw28uMBwmuaoKFYi", 3_000_000),
+    ("5DxtHHQL9JGapWCQARYUAWj4yDcwuhg9Hsk5AjhEzuzonVyE", 1_500_000),
     ("5EHhw9xuQNdwieUkNoucq2YcateoMVJQdN8EZtmRy3roQkVK", 133_333),
     ("5C5qYYCQBnanGNPGwgmv6jiR2MxNPrGnWYLPFEyV1Xdy2P3x", 178_889),
     ("5GBWVfJ253YWVPHzWDTos1nzYZpa9TemP7FpQT9RnxaFN6Sz", 350_000),
@@ -88,13 +83,7 @@ pub fn gemini_3a_compiled(
 
                     [
                         // 1/4 of tokens are released after 1 year.
-                        (
-                            account_id.clone(),
-                            start_block,
-                            one_month_in_blocks * 12,
-                            1,
-                            amount / 4,
-                        ),
+                        (account_id.clone(), start_block, one_month_in_blocks * 12, 1, amount / 4),
                         // 1/48 of tokens are released every month after that for 3 more years.
                         (
                             account_id,
@@ -138,9 +127,7 @@ pub fn gemini_3a_compiled(
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions {
-            execution_chain_spec: secondary_chain::gemini_3a_config(),
-        },
+        ChainSpecExtensions { execution_chain_spec: secondary_chain::gemini_3a_config() },
     ))
 }
 
@@ -183,13 +170,7 @@ pub fn x_net_2_config_compiled(
 
                     [
                         // 1/4 of tokens are released after 1 year.
-                        (
-                            account_id.clone(),
-                            start_block,
-                            one_month_in_blocks * 12,
-                            1,
-                            amount / 4,
-                        ),
+                        (account_id.clone(), start_block, one_month_in_blocks * 12, 1, amount / 4),
                         // 1/48 of tokens are released every month after that for 3 more years.
                         (
                             account_id,
@@ -227,9 +208,7 @@ pub fn x_net_2_config_compiled(
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions {
-            execution_chain_spec: secondary_chain::x_net_2_config(),
-        },
+        ChainSpecExtensions { execution_chain_spec: secondary_chain::x_net_2_config() },
     ))
 }
 
@@ -275,9 +254,7 @@ pub fn dev_config() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGene
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions {
-            execution_chain_spec: secondary_chain::development_config(),
-        },
+        ChainSpecExtensions { execution_chain_spec: secondary_chain::development_config() },
     ))
 }
 
@@ -307,16 +284,10 @@ pub fn local_config() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGe
                     (utils::get_account_id_from_seed("Ferdie"), 1_000 * SSC),
                     (utils::get_account_id_from_seed("Alice//stash"), 1_000 * SSC),
                     (utils::get_account_id_from_seed("Bob//stash"), 1_000 * SSC),
-                    (
-                        utils::get_account_id_from_seed("Charlie//stash"),
-                        1_000 * SSC,
-                    ),
+                    (utils::get_account_id_from_seed("Charlie//stash"), 1_000 * SSC),
                     (utils::get_account_id_from_seed("Dave//stash"), 1_000 * SSC),
                     (utils::get_account_id_from_seed("Eve//stash"), 1_000 * SSC),
-                    (
-                        utils::get_account_id_from_seed("Ferdie//stash"),
-                        1_000 * SSC,
-                    ),
+                    (utils::get_account_id_from_seed("Ferdie//stash"), 1_000 * SSC),
                 ],
                 vec![],
                 GenesisParams {
@@ -337,9 +308,7 @@ pub fn local_config() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGe
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions {
-            execution_chain_spec: secondary_chain::local_testnet_config(),
-        },
+        ChainSpecExtensions { execution_chain_spec: secondary_chain::local_testnet_config() },
     ))
 }
 
@@ -370,11 +339,7 @@ pub fn subspace_genesis_config(
             // Assign network admin rights.
             key: Some(sudo_account),
         },
-        subspace: SubspaceConfig {
-            enable_rewards,
-            enable_storage_access,
-            allow_authoring_by,
-        },
+        subspace: SubspaceConfig { enable_rewards, enable_storage_access, allow_authoring_by },
         vesting: VestingConfig { vesting },
         runtime_configs: RuntimeConfigsConfig { enable_executor },
     }
@@ -383,7 +348,6 @@ pub fn subspace_genesis_config(
 mod secondary_chain {
     //! Secondary chain configurations.
 
-    use super::utils::{chain_spec_properties, get_account_id_from_seed, get_public_key_from_seed};
     use domain_runtime_primitives::RelayerId;
     use frame_support::weights::Weight;
     use sc_service::ChainType;
@@ -397,6 +361,8 @@ mod secondary_chain {
         AccountId, Balance, BalancesConfig, DomainRegistryConfig, ExecutorRegistryConfig,
         GenesisConfig, Hash, MessengerConfig, SudoConfig, SystemConfig, WASM_BINARY,
     };
+
+    use super::utils::{chain_spec_properties, get_account_id_from_seed, get_public_key_from_seed};
 
     type DomainConfig = sp_domains::DomainConfig<Hash, Balance, Weight>;
 
@@ -439,10 +405,7 @@ mod secondary_chain {
                         Percent::one(),
                     )],
                     Some(get_account_id_from_seed("Alice")),
-                    vec![(
-                        get_account_id_from_seed("Alice"),
-                        get_account_id_from_seed("Alice"),
-                    )],
+                    vec![(get_account_id_from_seed("Alice"), get_account_id_from_seed("Alice"))],
                 )
             },
             vec![],
@@ -502,14 +465,8 @@ mod secondary_chain {
                     )],
                     Some(get_account_id_from_seed("Alice")),
                     vec![
-                        (
-                            get_account_id_from_seed("Alice"),
-                            get_account_id_from_seed("Alice"),
-                        ),
-                        (
-                            get_account_id_from_seed("Bob"),
-                            get_account_id_from_seed("Bob"),
-                        ),
+                        (get_account_id_from_seed("Alice"), get_account_id_from_seed("Alice")),
+                        (get_account_id_from_seed("Bob"), get_account_id_from_seed("Bob")),
                     ],
                 )
             },
@@ -673,9 +630,7 @@ mod secondary_chain {
     ) -> GenesisConfig {
         GenesisConfig {
             system: SystemConfig {
-                code: WASM_BINARY
-                    .expect("WASM binary was not build, please build it!")
-                    .to_vec(),
+                code: WASM_BINARY.expect("WASM binary was not build, please build it!").to_vec(),
             },
             sudo: SudoConfig {
                 // Assign network admin rights.
@@ -683,16 +638,9 @@ mod secondary_chain {
             },
             transaction_payment: Default::default(),
             balances: BalancesConfig {
-                balances: endowed_accounts
-                    .iter()
-                    .cloned()
-                    .map(|k| (k, 1_000_000 * SSC))
-                    .collect(),
+                balances: endowed_accounts.iter().cloned().map(|k| (k, 1_000_000 * SSC)).collect(),
             },
-            executor_registry: ExecutorRegistryConfig {
-                executors,
-                slot_probability: (1, 1),
-            },
+            executor_registry: ExecutorRegistryConfig { executors, slot_probability: (1, 1) },
             domain_registry: DomainRegistryConfig { domains },
             messenger: MessengerConfig { relayers },
         }
@@ -740,7 +688,6 @@ mod utils {
 mod core_payments {
     //! Secondary chain configurations.
 
-    use super::utils::{chain_spec_properties, get_account_id_from_seed};
     use core_payments_domain_runtime::{
         AccountId, BalancesConfig, GenesisConfig, MessengerConfig, SudoConfig, SystemConfig,
         WASM_BINARY,
@@ -750,6 +697,8 @@ mod core_payments {
     use sc_subspace_chain_specs::ExecutionChainSpec;
     use sp_core::crypto::Ss58Codec;
     use subspace_runtime_primitives::SSC;
+
+    use super::utils::{chain_spec_properties, get_account_id_from_seed};
 
     pub type ChainSpec = ExecutionChainSpec<GenesisConfig>;
 
@@ -769,10 +718,7 @@ mod core_payments {
                         get_account_id_from_seed("Bob//stash"),
                     ],
                     Some(get_account_id_from_seed("Alice")),
-                    vec![(
-                        get_account_id_from_seed("Alice"),
-                        get_account_id_from_seed("Alice"),
-                    )],
+                    vec![(get_account_id_from_seed("Alice"), get_account_id_from_seed("Alice"))],
                 )
             },
             vec![],
@@ -809,14 +755,8 @@ mod core_payments {
                     ],
                     Some(get_account_id_from_seed("Alice")),
                     vec![
-                        (
-                            get_account_id_from_seed("Alice"),
-                            get_account_id_from_seed("Alice"),
-                        ),
-                        (
-                            get_account_id_from_seed("Bob"),
-                            get_account_id_from_seed("Bob"),
-                        ),
+                        (get_account_id_from_seed("Alice"), get_account_id_from_seed("Alice")),
+                        (get_account_id_from_seed("Bob"), get_account_id_from_seed("Bob")),
                     ],
                 )
             },
@@ -875,20 +815,12 @@ mod core_payments {
     ) -> GenesisConfig {
         GenesisConfig {
             system: SystemConfig {
-                code: WASM_BINARY
-                    .expect("WASM binary was not build, please build it!")
-                    .to_vec(),
+                code: WASM_BINARY.expect("WASM binary was not build, please build it!").to_vec(),
             },
-            sudo: SudoConfig {
-                key: maybe_sudo_account,
-            },
+            sudo: SudoConfig { key: maybe_sudo_account },
             transaction_payment: Default::default(),
             balances: BalancesConfig {
-                balances: endowed_accounts
-                    .iter()
-                    .cloned()
-                    .map(|k| (k, 1_000_000 * SSC))
-                    .collect(),
+                balances: endowed_accounts.iter().cloned().map(|k| (k, 1_000_000 * SSC)).collect(),
             },
             messenger: MessengerConfig { relayers },
         }

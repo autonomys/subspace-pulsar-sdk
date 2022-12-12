@@ -1,13 +1,20 @@
-use std::{collections::HashMap, io, num::NonZeroUsize, path::PathBuf, sync::Arc};
+use std::collections::HashMap;
+use std::io;
+use std::num::NonZeroUsize;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::Context;
+pub use builder::{Builder, Config, Dsn, DsnBuilder};
 use bytesize::ByteSize;
-use futures::{prelude::*, stream::FuturesUnordered};
+use futures::prelude::*;
+use futures::stream::FuturesUnordered;
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::{PieceIndexHash, SectorIndex, PLOT_SECTOR_SIZE};
+use subspace_farmer::single_disk_plot::piece_reader::PieceReader;
 use subspace_farmer::single_disk_plot::{
-    piece_reader::PieceReader, SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId,
-    SingleDiskPlotInfo, SingleDiskPlotOptions, SingleDiskPlotSummary,
+    SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
+    SingleDiskPlotOptions, SingleDiskPlotSummary,
 };
 use subspace_farmer_components::plotting::PlottedSector;
 use subspace_networking::libp2p::identity::Keypair;
@@ -19,8 +26,6 @@ use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 
 use crate::{Node, PublicKey};
-
-pub use builder::{Builder, Config, Dsn, DsnBuilder};
 
 /// Description of the cache
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -74,10 +79,7 @@ impl CacheDescription {
         if space_dedicated < Self::MIN_SIZE {
             return Err(CacheTooSmall);
         }
-        Ok(Self {
-            directory: directory.into(),
-            space_dedicated,
-        })
+        Ok(Self { directory: directory.into(), space_dedicated })
     }
 
     /// Wipe all the data from the plot
@@ -103,10 +105,10 @@ pub struct PlotDescription {
 pub struct PlotConstructionError;
 
 impl PlotDescription {
-    // TODO: Account for prefix and metadata sizes
-    const SECTOR_OVERHEAD: ByteSize = ByteSize::mb(2);
     /// Minimal plot size
     pub const MIN_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE + Self::SECTOR_OVERHEAD.0);
+    // TODO: Account for prefix and metadata sizes
+    const SECTOR_OVERHEAD: ByteSize = ByteSize::mb(2);
 
     /// Construct Plot description
     pub fn new(
@@ -116,10 +118,7 @@ impl PlotDescription {
         if space_pledged < Self::MIN_SIZE {
             return Err(PlotConstructionError);
         }
-        Ok(Self {
-            directory: directory.into(),
-            space_pledged,
-        })
+        Ok(Self { directory: directory.into(), space_pledged })
     }
 
     /// Wipe all the data from the plot
@@ -131,11 +130,12 @@ impl PlotDescription {
 mod builder {
     use std::num::NonZeroUsize;
 
-    use crate::generate_builder;
     use derivative::Derivative;
     use derive_builder::Builder;
     use libp2p_core::Multiaddr;
     use serde::{Deserialize, Serialize};
+
+    use crate::generate_builder;
 
     fn default_piece_receiver_batch_size() -> NonZeroUsize {
         NonZeroUsize::new(12).unwrap()
@@ -186,7 +186,8 @@ mod builder {
         /// Bootstrap nodes
         #[builder(default)]
         pub bootstrap_nodes: Vec<Multiaddr>,
-        /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
+        /// Determines whether we allow keeping non-global (private, shared,
+        /// loopback..) addresses in Kademlia DHT.
         #[builder(default)]
         pub allow_non_global_addresses_in_dht: bool,
     }
@@ -205,11 +206,7 @@ impl builder::Dsn {
             PieceByHashResponse, PieceKey,
         };
 
-        let Self {
-            listen_on,
-            bootstrap_nodes,
-            allow_non_global_addresses_in_dht,
-        } = self;
+        let Self { listen_on, bootstrap_nodes, allow_non_global_addresses_in_dht } = self;
 
         let handle = tokio::runtime::Handle::current();
         let default_config = Config::with_generated_keypair();
@@ -244,9 +241,8 @@ impl builder::Dsn {
                         tracing::debug!("A readers and pieces are already dropped");
                         return None
                     };
-                    let readers_and_pieces = readers_and_pieces
-                        .lock()
-                        .expect("Readers lock is never poisoned");
+                    let readers_and_pieces =
+                        readers_and_pieces.lock().expect("Readers lock is never poisoned");
                     let Some(readers_and_pieces) = readers_and_pieces.as_ref() else {
                         tracing::debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
                         return None
@@ -277,9 +273,7 @@ impl builder::Dsn {
             ..default_config
         };
 
-        subspace_networking::create(config)
-            .await
-            .map_err(Into::into)
+        subspace_networking::create(config).await.map_err(Into::into)
     }
 }
 
@@ -338,9 +332,7 @@ impl Builder {
         plots: &[PlotDescription],
         cache: CacheDescription,
     ) -> Result<Farmer, BuildError> {
-        self.configuration()
-            .build(reward_address, node, plots, cache)
-            .await
+        self.configuration().build(reward_address, node, plots, cache).await
     }
 }
 
@@ -385,14 +377,12 @@ impl Config {
         let mut plot_info = HashMap::with_capacity(plots.len());
 
         let readers_and_pieces = Arc::new(std::sync::Mutex::new(None));
-        let (dsn_node, mut dsn_node_runner) = dsn
-            .configure_dsn(cache, Arc::downgrade(&readers_and_pieces))
-            .await?;
+        let (dsn_node, mut dsn_node_runner) =
+            dsn.configure_dsn(cache, Arc::downgrade(&readers_and_pieces)).await?;
         let piece_publisher_semaphore =
             Arc::new(tokio::sync::Semaphore::new(piece_receiver_batch_size.get()));
-        let piece_receiver_semaphore = Arc::new(tokio::sync::Semaphore::new(
-            piece_publisher_batch_size.get(),
-        ));
+        let piece_receiver_semaphore =
+            Arc::new(tokio::sync::Semaphore::new(piece_publisher_batch_size.get()));
         let concurrent_plotting_semaphore =
             Arc::new(tokio::sync::Semaphore::new(max_concurrent_plots.get()));
 
@@ -445,10 +435,8 @@ impl Config {
         }
 
         // Store piece readers so we can reference them later
-        let piece_readers = single_disk_plots
-            .iter()
-            .map(SingleDiskPlot::piece_reader)
-            .collect::<Vec<_>>();
+        let piece_readers =
+            single_disk_plots.iter().map(SingleDiskPlot::piece_reader).collect::<Vec<_>>();
 
         tracing::debug!("Collecting already plotted pieces");
 
@@ -497,10 +485,7 @@ impl Config {
         readers_and_pieces
             .lock()
             .expect("Readers and pieces can't poison lock")
-            .replace(ReadersAndPieces {
-                readers: piece_readers,
-                pieces: plotted_pieces,
-            });
+            .replace(ReadersAndPieces { readers: piece_readers, pieces: plotted_pieces });
 
         for (plot_offset, single_disk_plot) in single_disk_plots.iter().enumerate() {
             let readers_and_pieces = Arc::clone(&readers_and_pieces);
@@ -515,31 +500,24 @@ impl Config {
                         .as_mut()
                         .expect("Initial value was populated above; qed")
                         .pieces
-                        .extend(
-                            plotted_sector
-                                .piece_indexes
-                                .iter()
-                                .copied()
-                                .enumerate()
-                                .map(|(piece_offset, piece_index)| {
-                                    (
-                                        PieceIndexHash::from_index(piece_index),
-                                        PieceDetails {
-                                            plot_offset,
-                                            sector_index: plotted_sector.sector_index,
-                                            piece_offset: piece_offset as u64,
-                                        },
-                                    )
-                                }),
-                        );
+                        .extend(plotted_sector.piece_indexes.iter().copied().enumerate().map(
+                            |(piece_offset, piece_index)| {
+                                (
+                                    PieceIndexHash::from_index(piece_index),
+                                    PieceDetails {
+                                        plot_offset,
+                                        sector_index: plotted_sector.sector_index,
+                                        piece_offset: piece_offset as u64,
+                                    },
+                                )
+                            },
+                        ));
                 }))
                 .detach();
         }
 
-        let mut single_disk_plots_stream = single_disk_plots
-            .into_iter()
-            .map(SingleDiskPlot::run)
-            .collect::<FuturesUnordered<_>>();
+        let mut single_disk_plots_stream =
+            single_disk_plots.into_iter().map(SingleDiskPlot::run).collect::<FuturesUnordered<_>>();
 
         tokio::spawn(async move {
             dsn_node_runner.run().await;
@@ -558,9 +536,8 @@ impl Config {
                 match result_maybe_sender {
                     // If node is closed when we might get some random error, so just ignore it
                     future::Either::Left((_, _)) if handle.block_on(node.is_closed()) => Ok(()),
-                    future::Either::Left((maybe_result, _)) => {
-                        maybe_result.expect("There is at least one plot")
-                    }
+                    future::Either::Left((maybe_result, _)) =>
+                        maybe_result.expect("There is at least one plot"),
                     future::Either::Right((_, _)) => Ok(()),
                 }
             }
@@ -599,9 +576,10 @@ pub struct PlotInfo {
     pub public_key: PublicKey,
     /// First sector index in this plot
     ///
-    /// Multiple plots can reuse the same identity, but they have to use different ranges for
-    /// sector indexes or else they'll essentially plot the same data and will not result in
-    /// increased probability of winning the reward.
+    /// Multiple plots can reuse the same identity, but they have to use
+    /// different ranges for sector indexes or else they'll essentially plot
+    /// the same data and will not result in increased probability of
+    /// winning the reward.
     pub first_sector_index: SectorIndex,
     /// How much space in bytes is allocated for this plot
     pub allocated_space: ByteSize,
@@ -690,6 +668,7 @@ where
             result => result,
         }
     }
+
     fn size_hint(&self) -> (usize, Option<usize>) {
         let left = self.last_initial_plotting_progress.total_sectors
             - self.last_initial_plotting_progress.current_sector;
@@ -707,12 +686,14 @@ pub struct InitialPlottingProgressStream {
 
 impl Stream for InitialPlottingProgressStream {
     type Item = InitialPlottingProgress;
+
     fn poll_next(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         self.project().boxed_stream.poll_next(cx)
     }
+
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.boxed_stream.size_hint()
     }
@@ -729,7 +710,8 @@ impl Plot {
         ByteSize::b(self.allocated_space)
     }
 
-    /// Will return a stream of initial plotting progress which will end once we finish plotting
+    /// Will return a stream of initial plotting progress which will end once we
+    /// finish plotting
     pub async fn subscribe_initial_plotting_progress(&self) -> InitialPlottingProgressStream {
         let initial = *self.initial_plotting_progress.lock().await;
         if initial.current_sector == initial.total_sectors {
@@ -750,13 +732,9 @@ impl Plot {
                     }
                 }
             })
-            .take_while(
-                |InitialPlottingProgress {
-                     current_sector,
-                     total_sectors,
-                     ..
-                 }| futures::future::ready(current_sector != total_sectors),
-            )
+            .take_while(|InitialPlottingProgress { current_sector, total_sectors, .. }| {
+                futures::future::ready(current_sector != total_sectors)
+            })
             .chain(futures::stream::once({
                 let mut initial_progress = *self.initial_plotting_progress.lock().await;
                 initial_progress.current_sector = initial_progress.total_sectors;
@@ -791,22 +769,16 @@ impl Farmer {
     pub async fn get_info(&self) -> anyhow::Result<Info> {
         let plots_info = tokio::task::spawn_blocking({
             let dirs = self.plot_info.keys().cloned().collect::<Vec<_>>();
-            || {
-                dirs.into_iter()
-                    .map(SingleDiskPlot::collect_summary)
-                    .collect::<Vec<_>>()
-            }
+            || dirs.into_iter().map(SingleDiskPlot::collect_summary).collect::<Vec<_>>()
         })
         .await?
         .into_iter()
         .map(|summary| match summary {
             SingleDiskPlotSummary::Found { info, directory } => Ok((directory, info.into())),
-            SingleDiskPlotSummary::NotFound { directory } => {
-                Err(anyhow::anyhow!("Didn't found plot at `{directory:?}'"))
-            }
-            SingleDiskPlotSummary::Error { directory, error } => {
-                Err(error).context(format!("Failed to get plot summary at `{directory:?}'"))
-            }
+            SingleDiskPlotSummary::NotFound { directory } =>
+                Err(anyhow::anyhow!("Didn't found plot at `{directory:?}'")),
+            SingleDiskPlotSummary::Error { directory, error } =>
+                Err(error).context(format!("Failed to get plot summary at `{directory:?}'")),
         })
         .collect::<anyhow::Result<_>>()?;
 
@@ -836,9 +808,10 @@ impl Farmer {
 
 #[cfg(test)]
 mod tests {
+    use tempfile::TempDir;
+
     use super::*;
     use crate::node::{chain_spec, Node, Role};
-    use tempfile::TempDir;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_get_info() {
@@ -863,17 +836,10 @@ mod tests {
             .unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-        let Info {
-            reward_address,
-            plots_info,
-            ..
-        } = farmer.get_info().await.unwrap();
+        let Info { reward_address, plots_info, .. } = farmer.get_info().await.unwrap();
         assert_eq!(reward_address, Default::default());
         assert_eq!(plots_info.len(), 1);
-        assert_eq!(
-            plots_info[plot_dir.as_ref()].allocated_space,
-            PlotDescription::MIN_SIZE
-        );
+        assert_eq!(plots_info[plot_dir.as_ref()].allocated_space, PlotDescription::MIN_SIZE);
 
         farmer.close().await.unwrap();
         node.close().await;
@@ -977,16 +943,11 @@ mod tests {
 
         let plot = farmer.iter_plots().await.next().unwrap();
 
-        plot.subscribe_initial_plotting_progress()
-            .await
-            .for_each(|_| async {})
-            .await;
+        plot.subscribe_initial_plotting_progress().await.for_each(|_| async {}).await;
 
         tokio::time::timeout(
             std::time::Duration::from_secs(5),
-            plot.subscribe_initial_plotting_progress()
-                .await
-                .for_each(|_| async {}),
+            plot.subscribe_initial_plotting_progress().await.for_each(|_| async {}),
         )
         .await
         .unwrap();

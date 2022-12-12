@@ -1,3 +1,9 @@
+use std::io;
+use std::num::NonZeroU64;
+use std::path::Path;
+use std::sync::{Arc, Weak};
+use std::time::Duration;
+
 use anyhow::Context;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
@@ -14,11 +20,6 @@ use sc_subspace_chain_specs::ConsensusChainSpec;
 use serde::{Deserialize, Serialize};
 use sp_consensus::SyncOracle;
 use sp_core::H256;
-use std::io;
-use std::num::NonZeroU64;
-use std::path::Path;
-use std::sync::{Arc, Weak};
-use std::time::Duration;
 use subspace_core_primitives::SolutionRange;
 use subspace_farmer::RpcClient;
 use subspace_farmer_components::FarmerProtocolInfo;
@@ -36,11 +37,14 @@ pub use builder::{
 };
 
 mod builder {
-    use super::*;
+    use std::net::SocketAddr;
+    use std::num::NonZeroUsize;
+
     use derivative::Derivative;
     use derive_builder::Builder;
     use serde::{Deserialize, Serialize};
-    use std::{net::SocketAddr, num::NonZeroUsize};
+
+    use super::*;
 
     /// Block pruning settings.
     #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
@@ -77,38 +81,24 @@ mod builder {
     /// Pruning constraints. If none are specified pruning is
     #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
     pub struct Constraints {
-        /// Maximum blocks. Defaults to 0 when unspecified, effectively keeping only non-canonical
-        /// states.
+        /// Maximum blocks. Defaults to 0 when unspecified, effectively keeping
+        /// only non-canonical states.
         pub max_blocks: Option<u32>,
         /// Maximum memory in the pruning overlay.
         pub max_mem: Option<usize>,
     }
 
     impl From<Constraints> for sc_state_db::Constraints {
-        fn from(
-            Constraints {
-                max_blocks,
-                max_mem,
-            }: Constraints,
-        ) -> Self {
-            Self {
-                max_blocks,
-                max_mem,
-            }
+        fn from(Constraints { max_blocks, max_mem }: Constraints) -> Self {
+            Self { max_blocks, max_mem }
         }
     }
 
     impl From<sc_state_db::Constraints> for Constraints {
         fn from(
-            sc_state_db::Constraints {
-                max_blocks,
-                max_mem,
-            }: sc_state_db::Constraints,
+            sc_state_db::Constraints { max_blocks, max_mem }: sc_state_db::Constraints,
         ) -> Self {
-            Self {
-                max_blocks,
-                max_mem,
-            }
+            Self { max_blocks, max_mem }
         }
     }
 
@@ -118,7 +108,8 @@ mod builder {
         /// No pruning. Canonicalization is a no-op.
         #[default]
         ArchiveAll,
-        /// Canonicalization discards non-canonical nodes. All the canonical nodes are kept in the DB.
+        /// Canonicalization discards non-canonical nodes. All the canonical
+        /// nodes are kept in the DB.
         ArchiveCanonical,
         /// Maintain a pruning window.
         Constrained(Constraints),
@@ -147,14 +138,14 @@ mod builder {
     /// Strategy for executing a call into the runtime.
     #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Deserialize, Serialize)]
     pub enum ExecutionStrategy {
-        /// Execute with the native equivalent if it is compatible with the given wasm module;
-        /// otherwise fall back to the wasm.
+        /// Execute with the native equivalent if it is compatible with the
+        /// given wasm module; otherwise fall back to the wasm.
         #[default]
         NativeWhenPossible,
         /// Use the given wasm module.
         AlwaysWasm,
-        /// Run with both the wasm and the native variant (if compatible). Report any discrepancy
-        /// as an error.
+        /// Run with both the wasm and the native variant (if compatible).
+        /// Report any discrepancy as an error.
         Both,
         /// First native, then if that fails or is not possible, wasm.
         NativeElseWasm,
@@ -221,8 +212,8 @@ mod builder {
         #[builder(default)]
         #[serde(default)]
         pub force_authoring: bool,
-        /// Max number of segments that can be published concurrently, impacts RAM usage and network
-        /// bandwidth.
+        /// Max number of segments that can be published concurrently, impacts
+        /// RAM usage and network bandwidth.
         #[builder(default = "default_segment_publish_concurrency()")]
         #[derivative(Default(value = "default_segment_publish_concurrency()"))]
         #[serde(default = "default_segment_publish_concurrency")]
@@ -298,15 +289,18 @@ mod builder {
         #[builder(setter(strip_option), default)]
         #[serde(default)]
         pub ipc: Option<String>,
-        /// Maximum number of connections for WebSockets RPC server. `None` if default.
+        /// Maximum number of connections for WebSockets RPC server. `None` if
+        /// default.
         #[builder(setter(strip_option), default)]
         #[serde(default)]
         pub ws_max_connections: Option<usize>,
-        /// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
+        /// CORS settings for HTTP & WS servers. `None` if all origins are
+        /// allowed.
         #[builder(setter(strip_option), default)]
         #[serde(default)]
         pub cors: Option<Vec<String>>,
-        /// RPC methods to expose (by default only a safe subset or all of them).
+        /// RPC methods to expose (by default only a safe subset or all of
+        /// them).
         #[builder(default)]
         #[serde(default)]
         pub methods: RpcMethods,
@@ -327,7 +321,8 @@ mod builder {
         #[derivative(Default(value = "default_max_subs_per_conn()"))]
         #[serde(default = "default_max_subs_per_conn")]
         pub max_subs_per_conn: usize,
-        /// Maximum size of the output buffer capacity for websocket connections.
+        /// Maximum size of the output buffer capacity for websocket
+        /// connections.
         #[builder(setter(strip_option), default)]
         #[serde(default)]
         pub ws_max_out_buffer_capacity: Option<usize>,
@@ -396,7 +391,8 @@ mod builder {
         #[builder(default)]
         #[serde(default)]
         pub reserved_nodes: Vec<libp2p_core::Multiaddr>,
-        /// Determines whether we allow keeping non-global (private, shared, loopback..) addresses in Kademlia DHT.
+        /// Determines whether we allow keeping non-global (private, shared,
+        /// loopback..) addresses in Kademlia DHT.
         #[builder(default)]
         #[serde(default)]
         pub allow_non_global_addresses_in_dht: bool,
@@ -410,11 +406,7 @@ mod builder {
     /// Offchain worker config
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
-    #[builder(
-        pattern = "owned",
-        build_fn(name = "_build"),
-        name = "OffchainWorkerBuilder"
-    )]
+    #[builder(pattern = "owned", build_fn(name = "_build"), name = "OffchainWorkerBuilder")]
     #[non_exhaustive]
     pub struct OffchainWorker {
         /// Is enabled
@@ -428,16 +420,8 @@ mod builder {
     }
 
     impl From<OffchainWorker> for OffchainWorkerConfig {
-        fn from(
-            OffchainWorker {
-                enabled,
-                indexing_enabled,
-            }: OffchainWorker,
-        ) -> Self {
-            Self {
-                enabled,
-                indexing_enabled,
-            }
+        fn from(OffchainWorker { enabled, indexing_enabled }: OffchainWorker) -> Self {
+            Self { enabled, indexing_enabled }
         }
     }
 
@@ -573,17 +557,9 @@ impl Config {
             (
                 NetworkConfiguration {
                     listen_addresses,
-                    boot_nodes: chain_spec
-                        .boot_nodes()
-                        .iter()
-                        .cloned()
-                        .chain(boot_nodes)
-                        .collect(),
+                    boot_nodes: chain_spec.boot_nodes().iter().cloned().chain(boot_nodes).collect(),
                     force_synced,
-                    transport: TransportConfig::Normal {
-                        enable_mdns,
-                        allow_private_ipv4,
-                    },
+                    transport: TransportConfig::Normal { enable_mdns, allow_private_ipv4 },
                     ..NetworkConfiguration::new(
                         name.clone(),
                         client_id,
@@ -774,13 +750,7 @@ impl Config {
             let _ = stop_sender.send(());
         });
 
-        Ok(Node {
-            client,
-            network,
-            name,
-            rpc_handle,
-            stop_sender,
-        })
+        Ok(Node { client, network, name, rpc_handle, stop_sender })
     }
 }
 
@@ -788,8 +758,8 @@ impl Config {
 struct ExecutorDispatch;
 
 impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
-    // /// Only enable the benchmarking host functions when we actually want to benchmark.
-    // #[cfg(feature = "runtime-benchmarks")]
+    // /// Only enable the benchmarking host functions when we actually want to
+    // benchmark. #[cfg(feature = "runtime-benchmarks")]
     // type ExtendHostFunctions = frame_benchmarking::benchmarking::HostFunctions;
     // /// Otherwise we only use the default Substrate host functions.
     // #[cfg(not(feature = "runtime-benchmarks"))]
@@ -948,26 +918,20 @@ impl Node {
                 loop {
                     tokio::time::sleep(CHECK_SYNCED_EVERY).await;
                     let status = backoff::future::retry(backoff.clone(), || {
-                        network
-                            .status()
-                            .map(|result_status| match result_status?.sync_state {
-                                SyncState::Idle => Err(backoff::Error::transient(())),
-                                SyncState::Importing { target } => {
-                                    Ok(SyncStatus::Importing { target })
-                                }
-                                SyncState::Downloading { target } => {
-                                    Ok(SyncStatus::Downloading { target })
-                                }
-                            })
+                        network.status().map(|result_status| match result_status?.sync_state {
+                            SyncState::Idle => Err(backoff::Error::transient(())),
+                            SyncState::Importing { target } => Ok(SyncStatus::Importing { target }),
+                            SyncState::Downloading { target } =>
+                                Ok(SyncStatus::Downloading { target }),
+                        })
                     })
                     .await;
 
                     match status {
-                        Ok(status) => {
+                        Ok(status) =>
                             if sender.send(status).await.is_err() {
                                 break;
-                            }
-                        }
+                            },
                         Err(()) => break,
                     }
                 }
@@ -979,10 +943,7 @@ impl Node {
 
     /// Wait till the end of node syncing
     pub async fn sync(&self) -> anyhow::Result<()> {
-        self.subscribe_syncing_progress()
-            .await?
-            .for_each(|_| async move {})
-            .await;
+        self.subscribe_syncing_progress().await?.for_each(|_| async move {}).await;
         Ok(())
     }
 
@@ -1004,34 +965,22 @@ impl Node {
     }
 
     fn client(&self) -> anyhow::Result<Arc<FullClient<RuntimeApi, ExecutorDispatch>>> {
-        self.client
-            .upgrade()
-            .ok_or_else(|| anyhow::anyhow!("The node was already closed"))
+        self.client.upgrade().ok_or_else(|| anyhow::anyhow!("The node was already closed"))
     }
 
     /// Get node info
     pub async fn get_info(&self) -> anyhow::Result<Info> {
-        let SlotInfo {
-            solution_range,
-            voting_solution_range,
-            ..
-        } = self
+        let SlotInfo { solution_range, voting_solution_range, .. } = self
             .subscribe_slot_info()
             .await
             .map_err(anyhow::Error::msg)?
             .next()
             .await
             .expect("This stream never ends");
-        let version = self
-            .rpc_handle
-            .call("state_getRuntimeVersion", &[] as &[()])
-            .await?;
+        let version = self.rpc_handle.call("state_getRuntimeVersion", &[] as &[()]).await?;
         let client = self.client().context("Failed to fetch node info")?;
-        let NetworkState {
-            connected_peers,
-            not_connected_peers,
-            ..
-        } = self.network.network_state().await.unwrap();
+        let NetworkState { connected_peers, not_connected_peers, .. } =
+            self.network.network_state().await.unwrap();
         let sp_blockchain::Info {
             best_hash,
             best_number,
@@ -1041,11 +990,8 @@ impl Node {
             block_gap,
             ..
         } = client.chain_info();
-        let FarmerProtocolInfo { total_pieces, .. } = self
-            .farmer_app_info()
-            .await
-            .map_err(anyhow::Error::msg)?
-            .protocol_info;
+        let FarmerProtocolInfo { total_pieces, .. } =
+            self.farmer_app_info().await.map_err(anyhow::Error::msg)?.protocol_info;
         Ok(Info {
             chain: ChainInfo { genesis_hash },
             best_block: (best_hash, best_number),
@@ -1074,14 +1020,7 @@ impl Node {
             .map(
                 |BlockImportNotification {
                      hash,
-                     header:
-                         Header {
-                             parent_hash,
-                             number,
-                             state_root,
-                             extrinsics_root,
-                             digest: _,
-                         },
+                     header: Header { parent_hash, number, state_root, extrinsics_root, digest: _ },
                      origin: _,
                      is_new_best,
                      tree_route: _,
@@ -1102,42 +1041,34 @@ fn subscription_to_stream<T: serde::de::DeserializeOwned>(
     mut subscription: jsonrpsee_core::server::rpc_module::Subscription,
 ) -> impl Stream<Item = T> + Unpin {
     futures::stream::poll_fn(move |cx| {
-        Box::pin(subscription.next())
-            .poll_unpin(cx)
-            .map(|x| x.and_then(Result::ok).map(|(x, _)| x))
+        Box::pin(subscription.next()).poll_unpin(cx).map(|x| x.and_then(Result::ok).map(|(x, _)| x))
     })
 }
 
 mod farmer_rpc_client {
-    use super::*;
-
-    use futures::Stream;
     use std::pin::Pin;
 
+    use futures::Stream;
     use subspace_archiving::archiver::ArchivedSegment;
     use subspace_core_primitives::{RecordsRoot, SegmentIndex};
     use subspace_farmer::rpc_client::{Error, RpcClient};
-    use subspace_rpc_primitives::FarmerAppInfo;
     use subspace_rpc_primitives::{
-        RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
+        FarmerAppInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
     };
+
+    use super::*;
 
     #[async_trait::async_trait]
     impl RpcClient for Node {
         async fn farmer_app_info(&self) -> Result<FarmerAppInfo, Error> {
-            Ok(self
-                .rpc_handle
-                .call("subspace_getFarmerAppInfo", &[] as &[()])
-                .await?)
+            Ok(self.rpc_handle.call("subspace_getFarmerAppInfo", &[] as &[()]).await?)
         }
 
         async fn subscribe_slot_info(
             &self,
         ) -> Result<Pin<Box<dyn Stream<Item = SlotInfo> + Send + 'static>>, Error> {
             Ok(Box::pin(subscription_to_stream(
-                self.rpc_handle
-                    .subscribe("subspace_subscribeSlotInfo", &[] as &[()])
-                    .await?,
+                self.rpc_handle.subscribe("subspace_subscribeSlotInfo", &[] as &[()]).await?,
             )))
         }
 
@@ -1145,10 +1076,7 @@ mod farmer_rpc_client {
             &self,
             solution_response: SolutionResponse,
         ) -> Result<(), Error> {
-            Ok(self
-                .rpc_handle
-                .call("subspace_submitSolutionResponse", [solution_response])
-                .await?)
+            Ok(self.rpc_handle.call("subspace_submitSolutionResponse", [solution_response]).await?)
         }
 
         async fn subscribe_reward_signing(
@@ -1156,9 +1084,7 @@ mod farmer_rpc_client {
         ) -> Result<Pin<Box<dyn Stream<Item = RewardSigningInfo> + Send + 'static>>, Error>
         {
             Ok(Box::pin(subscription_to_stream(
-                self.rpc_handle
-                    .subscribe("subspace_subscribeRewardSigning", &[] as &[()])
-                    .await?,
+                self.rpc_handle.subscribe("subspace_subscribeRewardSigning", &[] as &[()]).await?,
             )))
         }
 
@@ -1166,10 +1092,7 @@ mod farmer_rpc_client {
             &self,
             reward_signature: RewardSignatureResponse,
         ) -> Result<(), Error> {
-            Ok(self
-                .rpc_handle
-                .call("subspace_submitRewardSignature", [reward_signature])
-                .await?)
+            Ok(self.rpc_handle.call("subspace_submitRewardSignature", [reward_signature]).await?)
         }
 
         async fn subscribe_archived_segments(
@@ -1186,10 +1109,7 @@ mod farmer_rpc_client {
             &self,
             segment_indexes: Vec<SegmentIndex>,
         ) -> Result<Vec<Option<RecordsRoot>>, Error> {
-            Ok(self
-                .rpc_handle
-                .call("subspace_recordsRoots", [segment_indexes])
-                .await?)
+            Ok(self.rpc_handle.call("subspace_recordsRoots", [segment_indexes]).await?)
         }
     }
 }
@@ -1199,26 +1119,21 @@ mod tests {
     use subspace_farmer::RpcClient;
     use tempfile::TempDir;
 
-    use crate::{farmer::CacheDescription, Farmer, PlotDescription};
-
     use super::*;
+    use crate::farmer::CacheDescription;
+    use crate::{Farmer, PlotDescription};
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_start_node() {
         let dir = TempDir::new().unwrap();
-        Node::builder()
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
+        Node::builder().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_rpc() {
         let dir = TempDir::new().unwrap();
-        let node = Node::builder()
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
+        let node =
+            Node::builder().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
 
         assert!(node.farmer_app_info().await.is_ok());
     }
@@ -1297,16 +1212,8 @@ mod tests {
             .await
             .unwrap();
 
-        other_node
-            .subscribe_syncing_progress()
-            .await
-            .unwrap()
-            .for_each(|_| async {})
-            .await;
-        assert_eq!(
-            other_node.get_info().await.unwrap().best_block.1,
-            farm_blocks
-        );
+        other_node.subscribe_syncing_progress().await.unwrap().for_each(|_| async {}).await;
+        assert_eq!(other_node.get_info().await.unwrap().best_block.1, farm_blocks);
 
         node.close().await;
         other_node.close().await;
