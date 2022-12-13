@@ -15,10 +15,6 @@ async fn main() {
 
     let plots = [PlotDescription::new("plot", ByteSize::mb(100)).unwrap()];
     let farmer: Farmer = Farmer::builder()
-        .dsn(
-            subspace_sdk::farmer::DsnBuilder::new()
-                .listen_on(vec!["/ip4/0.0.0.0/tcp/40333".parse().unwrap()]),
-        )
         .build(
             PublicKey::from([13; 32]),
             node.clone(),

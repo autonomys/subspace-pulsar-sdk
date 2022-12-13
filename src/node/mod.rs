@@ -37,6 +37,10 @@ pub use builder::{
     NetworkBuilder, OffchainWorker, OffchainWorkerBuilder, PruningMode, Rpc, RpcBuilder,
 };
 
+use crate::networking::{
+    FarmerRecordStorage, MaybeRecordStorage, NodeRecordStorage, ReadersAndPieces, RecordStorage,
+};
+
 mod builder {
     use std::net::SocketAddr;
     use std::num::NonZeroUsize;
@@ -631,8 +635,10 @@ impl Config {
         let partial_components =
             subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&base)
                 .context("Failed to build a partial subspace node")?;
+        let readers_and_pieces = Arc::new(std::sync::Mutex::new(None::<ReadersAndPieces>));
+        let farmer_record_storage = MaybeRecordStorage::none();
 
-        let (subspace_networking, mut node_runner) = {
+        let (subspace_networking, (node, mut node_runner)) = {
             let builder::Dsn {
                 listen_addresses,
                 boot_nodes,
@@ -680,7 +686,7 @@ impl Config {
                 })
                 .collect();
 
-            let piece_cache = subspace_service::piece_cache::PieceCache::new(
+            let piece_cache = NodeRecordStorage::new(
                 partial_components.client.clone(),
                 piece_cache_size.as_u64(),
             );
@@ -711,9 +717,10 @@ impl Config {
             });
 
             let record_store = subspace_networking::CustomRecordStore::new(
-                piece_cache.clone(),
+                RecordStorage::new(farmer_record_storage.clone(), piece_cache.clone()),
                 subspace_networking::MemoryProviderStorage::default(),
             );
+            let readers_and_pieces = Arc::downgrade(&readers_and_pieces);
 
             let config = subspace_networking::Config {
                 keypair,
@@ -724,8 +731,8 @@ impl Config {
                         bootstrap_nodes.clone(),
                     )
                     .boxed(),
-                request_response_protocols: vec![PieceByHashRequestHandler::create(
-                    move |PieceByHashRequest { key }| {
+                request_response_protocols: vec![
+                    PieceByHashRequestHandler::create(move |PieceByHashRequest { key }| {
                         let result = if let subspace_networking::PieceKey::PieceIndex(piece_index) =
                             key
                         {
@@ -746,8 +753,27 @@ impl Config {
                         };
 
                         Some(subspace_networking::PieceByHashResponse { piece: result })
-                    },
-                )],
+                    }),
+                    PieceByHashRequestHandler::create(move |PieceByHashRequest { key }| {
+                        let subspace_networking::PieceKey::Sector(piece_index_hash) = key else {
+                            tracing::debug!(?key, "Incorrect piece request - unsupported key type.");
+                            return None
+                        };
+                        let Some(readers_and_pieces) = readers_and_pieces.upgrade() else {
+                            tracing::debug!("A readers and pieces are already dropped");
+                            return None
+                        };
+                        let readers_and_pieces =
+                            readers_and_pieces.lock().expect("Readers lock is never poisoned");
+                        let Some(readers_and_pieces) = readers_and_pieces.as_ref() else {
+                            tracing::debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
+                            return None
+                        };
+                        let piece = readers_and_pieces.get_piece(piece_index_hash)?;
+
+                        Some(subspace_networking::PieceByHashResponse { piece })
+                    }),
+                ],
                 record_store,
                 ..subspace_networking::Config::with_generated_keypair()
             };
@@ -760,7 +786,7 @@ impl Config {
                     bootstrap_nodes,
                     piece_publisher_batch_size,
                 },
-                node_runner,
+                (node, node_runner),
             )
         };
 
@@ -820,7 +846,16 @@ impl Config {
             let _ = stop_sender.send(());
         });
 
-        Ok(Node { client, network, name, rpc_handle, stop_sender })
+        Ok(Node {
+            client,
+            network,
+            name,
+            farmer_record_storage,
+            rpc_handle,
+            readers_and_pieces,
+            dsn_node: node,
+            stop_sender,
+        })
     }
 }
 
@@ -851,6 +886,9 @@ pub struct Node {
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     rpc_handle: Arc<jsonrpsee_core::server::rpc_module::RpcModule<()>>,
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
+    pub(crate) farmer_record_storage: MaybeRecordStorage<FarmerRecordStorage>,
+    pub(crate) readers_and_pieces: Arc<std::sync::Mutex<Option<ReadersAndPieces>>>,
+    pub(crate) dsn_node: subspace_networking::Node,
     name: String,
 }
 

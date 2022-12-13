@@ -1,6 +1,8 @@
 use subspace_core_primitives::{Piece, PieceIndexHash, SectorIndex};
 use subspace_farmer::single_disk_plot::piece_reader::PieceReader;
 use subspace_farmer::single_disk_plot::SingleDiskPlot;
+use subspace_networking::{LimitedSizeRecordStorageWrapper, ParityDbRecordStorage};
+use subspace_service::piece_cache::PieceCache;
 
 #[derive(Debug, Copy, Clone)]
 pub struct PieceDetails {
@@ -70,7 +72,7 @@ impl ReadersAndPieces {
     }
 
     pub fn get_piece(&self, key: &PieceIndexHash) -> Option<Option<Piece>> {
-        let Some(piece_details) = self.pieces.get(&key).copied() else {
+        let Some(piece_details) = self.pieces.get(key).copied() else {
             tracing::trace!(?key, "Piece is not stored in any of the local plots");
             return None
         };
@@ -93,3 +95,97 @@ impl Extend<(PieceIndexHash, PieceDetails)> for ReadersAndPieces {
         self.pieces.extend(iter)
     }
 }
+
+#[derive(Debug)]
+pub struct MaybeRecordStorage<S> {
+    inner: std::sync::Arc<std::sync::Mutex<Option<S>>>,
+}
+
+impl<S> Clone for MaybeRecordStorage<S> {
+    fn clone(&self) -> Self {
+        Self { inner: std::sync::Arc::clone(&self.inner) }
+    }
+}
+
+impl<S> MaybeRecordStorage<S> {
+    pub fn none() -> Self {
+        Self { inner: std::sync::Arc::new(std::sync::Mutex::new(None)) }
+    }
+
+    pub fn swap(&self, value: S) {
+        *self.inner.lock().unwrap() = Some(value);
+    }
+}
+
+impl<S: subspace_networking::RecordStorage> subspace_networking::RecordStorage
+    for MaybeRecordStorage<S>
+{
+    fn get(
+        &'_ self,
+        k: &subspace_networking::libp2p::kad::record::Key,
+    ) -> Option<std::borrow::Cow<'_, subspace_networking::libp2p::kad::Record>> {
+        let lock = self.inner.lock().unwrap();
+        let Some(x) = &*lock else { return None };
+        x.get(k)
+            .map(std::borrow::Cow::into_owned)
+            .map(std::borrow::Cow::<'static, subspace_networking::libp2p::kad::Record>::Owned)
+    }
+
+    fn put(
+        &mut self,
+        r: subspace_networking::libp2p::kad::Record,
+    ) -> subspace_networking::libp2p::kad::store::Result<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .as_mut()
+            .map(|x| x.put(r))
+            .unwrap_or(Err(subspace_networking::libp2p::kad::store::Error::MaxRecords))
+    }
+
+    fn remove(&mut self, k: &subspace_networking::libp2p::kad::record::Key) {
+        if let Some(x) = self.inner.lock().unwrap().as_mut() {
+            x.remove(k)
+        }
+    }
+}
+
+pub struct AndRecordStorage<A, B> {
+    a: A,
+    b: B,
+}
+
+impl<A, B> AndRecordStorage<A, B> {
+    pub fn new(a: A, b: B) -> Self {
+        Self { a, b }
+    }
+}
+
+impl<A: subspace_networking::RecordStorage, B: subspace_networking::RecordStorage>
+    subspace_networking::RecordStorage for AndRecordStorage<A, B>
+{
+    fn get(
+        &'_ self,
+        k: &subspace_networking::libp2p::kad::record::Key,
+    ) -> Option<std::borrow::Cow<'_, subspace_networking::libp2p::kad::Record>> {
+        self.a.get(k)
+    }
+
+    fn put(
+        &mut self,
+        r: subspace_networking::libp2p::kad::Record,
+    ) -> subspace_networking::libp2p::kad::store::Result<()> {
+        self.a.put(r.clone())?;
+        self.b.put(r)
+    }
+
+    fn remove(&mut self, k: &subspace_networking::libp2p::kad::record::Key) {
+        self.a.remove(k);
+        self.b.remove(k)
+    }
+}
+
+pub type FarmerRecordStorage = LimitedSizeRecordStorageWrapper<ParityDbRecordStorage>;
+pub type NodeRecordStorage<C> = PieceCache<C>;
+pub type RecordStorage<C> =
+    AndRecordStorage<MaybeRecordStorage<FarmerRecordStorage>, NodeRecordStorage<C>>;
