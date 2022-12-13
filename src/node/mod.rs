@@ -731,49 +731,43 @@ impl Config {
                         bootstrap_nodes.clone(),
                     )
                     .boxed(),
-                request_response_protocols: vec![
-                    PieceByHashRequestHandler::create(move |PieceByHashRequest { key }| {
-                        let result = if let subspace_networking::PieceKey::PieceIndex(piece_index) =
-                            key
-                        {
-                            match piece_cache.get_piece(*piece_index) {
-                                Ok(maybe_piece) => maybe_piece,
-                                Err(error) => {
-                                    tracing::error!(?key, %error, "Failed to get piece from cache");
-                                    None
-                                }
+                request_response_protocols: vec![PieceByHashRequestHandler::create(
+                    move |PieceByHashRequest { key }| {
+                        let piece = match key {
+                            subspace_networking::PieceKey::PieceIndex(piece_index) =>
+                                match piece_cache.get_piece(*piece_index) {
+                                    Ok(maybe_piece) => maybe_piece,
+                                    Err(error) => {
+                                        tracing::error!(?key, %error, "Failed to get piece from cache");
+                                        None
+                                    }
+                                },
+                            subspace_networking::PieceKey::Sector(piece_index_hash) => {
+                                let Some(readers_and_pieces) = readers_and_pieces.upgrade() else {
+                                    tracing::debug!("A readers and pieces are already dropped");
+                                    return None
+                                };
+                                let readers_and_pieces = readers_and_pieces
+                                    .lock()
+                                    .expect("Readers lock is never poisoned");
+                                let Some(readers_and_pieces) = readers_and_pieces.as_ref() else {
+                                    tracing::debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
+                                    return None
+                                };
+                                readers_and_pieces.get_piece(piece_index_hash)?
                             }
-                        } else {
-                            tracing::debug!(
-                                ?key,
-                                "Incorrect piece request - unsupported key type."
-                            );
-
-                            None
+                            subspace_networking::PieceKey::PieceIndexHash(_piece_index_hash) => {
+                                tracing::debug!(
+                                    ?key,
+                                    "Incorrect piece request - unsupported key type."
+                                );
+                                return None;
+                            }
                         };
-
-                        Some(subspace_networking::PieceByHashResponse { piece: result })
-                    }),
-                    PieceByHashRequestHandler::create(move |PieceByHashRequest { key }| {
-                        let subspace_networking::PieceKey::Sector(piece_index_hash) = key else {
-                            tracing::debug!(?key, "Incorrect piece request - unsupported key type.");
-                            return None
-                        };
-                        let Some(readers_and_pieces) = readers_and_pieces.upgrade() else {
-                            tracing::debug!("A readers and pieces are already dropped");
-                            return None
-                        };
-                        let readers_and_pieces =
-                            readers_and_pieces.lock().expect("Readers lock is never poisoned");
-                        let Some(readers_and_pieces) = readers_and_pieces.as_ref() else {
-                            tracing::debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
-                            return None
-                        };
-                        let piece = readers_and_pieces.get_piece(piece_index_hash)?;
 
                         Some(subspace_networking::PieceByHashResponse { piece })
-                    }),
-                ],
+                    },
+                )],
                 record_store,
                 ..subspace_networking::Config::with_generated_keypair()
             };
