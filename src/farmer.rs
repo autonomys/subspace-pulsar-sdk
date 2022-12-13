@@ -269,10 +269,11 @@ impl Config {
             single_disk_plots.push(single_disk_plot);
         }
 
+        let readers_and_pieces = ReadersAndPieces::new(&single_disk_plots).await;
         node.readers_and_pieces
             .lock()
             .expect("Readers and pieces can't poison lock")
-            .replace(ReadersAndPieces::new(&single_disk_plots).await);
+            .replace(readers_and_pieces);
 
         for (plot_offset, single_disk_plot) in single_disk_plots.iter().enumerate() {
             let readers_and_pieces = Arc::clone(&node.readers_and_pieces);
