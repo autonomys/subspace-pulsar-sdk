@@ -71,7 +71,7 @@ impl ReadersAndPieces {
         Self { readers, pieces, handle }
     }
 
-    pub fn get_piece(&self, key: &PieceIndexHash) -> Option<Option<Piece>> {
+    pub fn get_piece(&self, key: &PieceIndexHash) -> Option<Piece> {
         let Some(piece_details) = self.pieces.get(key).copied() else {
             tracing::trace!(?key, "Piece is not stored in any of the local plots");
             return None
@@ -83,10 +83,10 @@ impl ReadersAndPieces {
             .expect("Offsets strictly correspond to existing plots; qed");
 
         let handle = &self.handle;
-        Some(tokio::task::block_in_place(move || {
+        tokio::task::block_in_place(move || {
             handle
                 .block_on(reader.read_piece(piece_details.sector_index, piece_details.piece_offset))
-        }))
+        })
     }
 }
 

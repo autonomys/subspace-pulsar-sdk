@@ -754,7 +754,7 @@ impl Config {
                                     tracing::debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
                                     return None
                                 };
-                                readers_and_pieces.get_piece(piece_index_hash)?
+                                readers_and_pieces.get_piece(piece_index_hash)
                             }
                             subspace_networking::PieceKey::PieceIndexHash(_piece_index_hash) => {
                                 tracing::debug!(
