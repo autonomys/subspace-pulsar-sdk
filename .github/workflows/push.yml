@@ -4,6 +4,14 @@ on:
     paths-ignore:
       - '**.md'
       - '.gitignore'
+  workflow_dispatch:
+    inputs:
+      test-macos:
+        description: 'Whether to run macOS tests'
+        required: true
+        default: false
+        type: boolean
+
 
 env:
   # Not needed in CI, should make things a bit faster
@@ -30,6 +38,11 @@ jobs:
           - ubuntu-22.04
           - macos-12
           - windows-2022
+        run-all: 
+          - ${{ inputs.test-macos == true || github.ref == 'refs/heads/main' }}
+        exclude:  # exclude macos-12 when the condition is false
+          - run-all: false
+            os: macos-12
 
     runs-on: ${{ matrix.os }}
 
@@ -66,6 +79,11 @@ jobs:
           - ubuntu-22.04
           - macos-12
           - windows-2022
+        run-all: 
+          - ${{ inputs.test-macos == true || github.ref == 'refs/heads/main' }}
+        exclude:  # exclude macos-12 when the condition is false
+          - run-all: false
+            os: macos-12
 
     runs-on: ${{ matrix.os }}
 
