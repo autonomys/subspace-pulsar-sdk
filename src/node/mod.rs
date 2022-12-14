@@ -959,15 +959,49 @@ pub struct BlockNotification {
 #[derive(Clone, Copy, Debug)]
 pub enum SyncStatus {
     /// Importing some block
-    Importing {
-        /// Target block (tip of the chain)
-        target: BlockNumber,
-    },
+    Importing,
     /// Downloading some block
-    Downloading {
-        /// Target block (tip of the chain)
-        target: BlockNumber,
-    },
+    Downloading,
+}
+
+/// Current syncing progress
+#[derive(Clone, Copy, Debug)]
+pub struct SyncingProgress {
+    /// Imported this much blocks
+    pub at: BlockNumber,
+    /// Number of total blocks
+    pub target: BlockNumber,
+    /// Current syncing status
+    pub status: SyncStatus,
+}
+
+#[pin_project::pin_project]
+struct SyncingProgressStream<S> {
+    #[pin]
+    inner: S,
+    at: BlockNumber,
+    target: BlockNumber,
+}
+
+impl<S: Stream<Item = SyncingProgress>> Stream for SyncingProgressStream<S> {
+    type Item = SyncingProgress;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        let this = self.project();
+        let next = this.inner.poll_next(cx);
+        if let std::task::Poll::Ready(Some(SyncingProgress { at, target, .. })) = next {
+            *this.at = at;
+            *this.target = target;
+        }
+        next
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.at as _, Some(self.target as _))
+    }
 }
 
 impl Node {
@@ -995,7 +1029,7 @@ impl Node {
     /// Subscribe for node syncing progress
     pub async fn subscribe_syncing_progress(
         &self,
-    ) -> anyhow::Result<impl Stream<Item = SyncStatus> + Send + Unpin + 'static> {
+    ) -> anyhow::Result<impl Stream<Item = SyncingProgress> + Send + Unpin + 'static> {
         const CHECK_SYNCED_EVERY: Duration = Duration::from_millis(100);
         const SYNCING_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -1014,6 +1048,37 @@ impl Node {
         .map_err(|_| anyhow::anyhow!("Failed to connect to the network"))?;
 
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        let client = self.client().context("Failed to fetch best block")?;
+
+        let (target, status) = match backoff::future::retry(backoff.clone(), || {
+            self.network.status().map(|result_status| match result_status?.sync_state {
+                SyncState::Idle => Err(backoff::Error::transient(())),
+                SyncState::Importing { target } => Ok((target, SyncStatus::Importing)),
+                SyncState::Downloading { target } => Ok((target, SyncStatus::Downloading)),
+            })
+        })
+        .await
+        {
+            Ok((target, status)) => (target, status),
+            Err(()) =>
+                return Ok(SyncingProgressStream {
+                    inner: tokio_stream::wrappers::ReceiverStream::new(receiver),
+                    at: 0,
+                    target: 0,
+                }),
+        };
+
+        let at = client.chain_info().best_number;
+        let stream = SyncingProgressStream {
+            inner: tokio_stream::wrappers::ReceiverStream::new(receiver),
+            at,
+            target,
+        };
+        sender
+            .send(SyncingProgress { target, at, status })
+            .await
+            .expect("We are holding receiver, so it will never panic");
+
         tokio::spawn({
             let network = Arc::clone(&self.network);
             async move {
@@ -1022,25 +1087,27 @@ impl Node {
                     let status = backoff::future::retry(backoff.clone(), || {
                         network.status().map(|result_status| match result_status?.sync_state {
                             SyncState::Idle => Err(backoff::Error::transient(())),
-                            SyncState::Importing { target } => Ok(SyncStatus::Importing { target }),
+                            SyncState::Importing { target } => Ok((target, SyncStatus::Importing)),
                             SyncState::Downloading { target } =>
-                                Ok(SyncStatus::Downloading { target }),
+                                Ok((target, SyncStatus::Downloading)),
                         })
                     })
                     .await;
 
                     match status {
-                        Ok(status) =>
-                            if sender.send(status).await.is_err() {
+                        Ok((target, status)) => {
+                            let at = client.chain_info().best_number;
+                            if sender.send(SyncingProgress { target, at, status }).await.is_err() {
                                 break;
-                            },
+                            }
+                        }
                         Err(()) => break,
                     }
                 }
             }
         });
 
-        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
+        Ok(stream)
     }
 
     /// Wait till the end of node syncing
