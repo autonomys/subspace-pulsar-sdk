@@ -20,11 +20,9 @@ use sc_subspace_chain_specs::ConsensusChainSpec;
 use serde::{Deserialize, Serialize};
 use sp_consensus::SyncOracle;
 use sp_core::H256;
-use subspace_core_primitives::SolutionRange;
 use subspace_farmer::RpcClient;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler};
-use subspace_rpc_primitives::SlotInfo;
 use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::{FullClient, SubspaceConfiguration};
@@ -931,10 +929,6 @@ pub struct Info {
     pub not_connected_peers: u64,
     /// Total number of pieces stored on chain
     pub total_pieces: NonZeroU64,
-    /// Range for solution
-    pub solution_range: SolutionRange,
-    /// Range for voting solutions
-    pub voting_solution_range: SolutionRange,
 }
 
 /// New block notification
@@ -1014,6 +1008,19 @@ impl Node {
         .map_err(|_| anyhow::anyhow!("Failed to connect to the network"))?;
 
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        match backoff::future::retry(backoff.clone(), || {
+            self.network.status().map(|result_status| match result_status?.sync_state {
+                SyncState::Idle => Err(backoff::Error::transient(())),
+                SyncState::Importing { target } => Ok(SyncStatus::Importing { target }),
+                SyncState::Downloading { target } => Ok(SyncStatus::Downloading { target }),
+            })
+        })
+        .await
+        {
+            Ok(status) => sender.send(status).await.expect("We are holding receiver, so "),
+            Err(()) => return Ok(tokio_stream::wrappers::ReceiverStream::new(receiver)),
+        }
+
         tokio::spawn({
             let network = Arc::clone(&self.network);
             async move {
@@ -1072,13 +1079,6 @@ impl Node {
 
     /// Get node info
     pub async fn get_info(&self) -> anyhow::Result<Info> {
-        let SlotInfo { solution_range, voting_solution_range, .. } = self
-            .subscribe_slot_info()
-            .await
-            .map_err(anyhow::Error::msg)?
-            .next()
-            .await
-            .expect("This stream never ends");
         let version = self.rpc_handle.call("state_getRuntimeVersion", &[] as &[()]).await?;
         let client = self.client().context("Failed to fetch node info")?;
         let NetworkState { connected_peers, not_connected_peers, .. } =
@@ -1104,8 +1104,6 @@ impl Node {
             connected_peers: connected_peers.len() as u64,
             not_connected_peers: not_connected_peers.len() as u64,
             total_pieces,
-            solution_range,
-            voting_solution_range,
         })
     }
 
