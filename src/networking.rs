@@ -135,12 +135,7 @@ impl<S: subspace_networking::RecordStorage> subspace_networking::RecordStorage
         &mut self,
         r: subspace_networking::libp2p::kad::Record,
     ) -> subspace_networking::libp2p::kad::store::Result<()> {
-        self.inner
-            .lock()
-            .unwrap()
-            .as_mut()
-            .map(|x| x.put(r))
-            .unwrap_or(Err(subspace_networking::libp2p::kad::store::Error::MaxRecords))
+        self.inner.lock().unwrap().as_mut().map(|x| x.put(r)).unwrap_or(Ok(()))
     }
 
     fn remove(&mut self, k: &subspace_networking::libp2p::kad::record::Key) {
