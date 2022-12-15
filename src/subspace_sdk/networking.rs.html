@@ -184,11 +184,6 @@
 <a href="#184" id="184">184</a>
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
 </pre><pre class="rust"><code><span class="kw">use </span>subspace_core_primitives::{Piece, PieceIndexHash, SectorIndex};
 <span class="kw">use </span>subspace_farmer::single_disk_plot::piece_reader::PieceReader;
 <span class="kw">use </span>subspace_farmer::single_disk_plot::SingleDiskPlot;
@@ -326,12 +321,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         r: subspace_networking::libp2p::kad::Record,
     ) -&gt; subspace_networking::libp2p::kad::store::Result&lt;()&gt; {
-        <span class="self">self</span>.inner
-            .lock()
-            .unwrap()
-            .as_mut()
-            .map(|x| x.put(r))
-            .unwrap_or(<span class="prelude-val">Err</span>(subspace_networking::libp2p::kad::store::Error::MaxRecords))
+        <span class="self">self</span>.inner.lock().unwrap().as_mut().map(|x| x.put(r)).unwrap_or(<span class="prelude-val">Ok</span>(()))
     }
 
     <span class="kw">fn </span>remove(<span class="kw-2">&amp;mut </span><span class="self">self</span>, k: <span class="kw-2">&amp;</span>subspace_networking::libp2p::kad::record::Key) {
