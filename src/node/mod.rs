@@ -983,8 +983,8 @@ struct SyncingProgressStream<S> {
     target: BlockNumber,
 }
 
-impl<S: Stream<Item = SyncingProgress>> Stream for SyncingProgressStream<S> {
-    type Item = SyncingProgress;
+impl<E, S: Stream<Item = Result<SyncingProgress, E>>> Stream for SyncingProgressStream<S> {
+    type Item = Result<SyncingProgress, E>;
 
     fn poll_next(
         self: std::pin::Pin<&mut Self>,
@@ -992,7 +992,7 @@ impl<S: Stream<Item = SyncingProgress>> Stream for SyncingProgressStream<S> {
     ) -> std::task::Poll<Option<Self::Item>> {
         let this = self.project();
         let next = this.inner.poll_next(cx);
-        if let std::task::Poll::Ready(Some(SyncingProgress { at, target, .. })) = next {
+        if let std::task::Poll::Ready(Some(Ok(SyncingProgress { at, target, .. }))) = next {
             *this.at = at;
             *this.target = target;
         }
@@ -1029,53 +1029,34 @@ impl Node {
     /// Subscribe for node syncing progress
     pub async fn subscribe_syncing_progress(
         &self,
-    ) -> anyhow::Result<impl Stream<Item = SyncingProgress> + Send + Unpin + 'static> {
+    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<SyncingProgress>> + Send + Unpin + 'static>
+    {
         const CHECK_SYNCED_EVERY: Duration = Duration::from_millis(100);
-        const SYNCING_TIMEOUT: Duration = Duration::from_secs(60);
 
-        let backoff = backoff::ExponentialBackoff {
-            max_elapsed_time: Some(SYNCING_TIMEOUT),
-            ..backoff::ExponentialBackoff::default()
-        };
-
-        backoff::retry(backoff.clone(), || {
-            if self.network.is_offline() {
-                Err(backoff::Error::transient(()))
-            } else {
-                Ok(())
-            }
-        })
-        .map_err(|_| anyhow::anyhow!("Failed to connect to the network"))?;
+        while self.network.is_offline() {
+            tokio::time::sleep(CHECK_SYNCED_EVERY).await;
+        }
 
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
         let client = self.client().context("Failed to fetch best block")?;
+        let inner = tokio_stream::wrappers::ReceiverStream::new(receiver);
 
-        let (target, status) = match backoff::future::retry(backoff.clone(), || {
-            self.network.status().map(|result_status| match result_status?.sync_state {
-                SyncState::Idle => Err(backoff::Error::transient(())),
-                SyncState::Importing { target } => Ok((target, SyncStatus::Importing)),
-                SyncState::Downloading { target } => Ok((target, SyncStatus::Downloading)),
-            })
-        })
-        .await
+        let (target, status) = match self
+            .network
+            .status()
+            .await
+            .map_err(|()| anyhow::anyhow!("Failed to fetch networking status"))?
+            .sync_state
         {
-            Ok((target, status)) => (target, status),
-            Err(()) =>
-                return Ok(SyncingProgressStream {
-                    inner: tokio_stream::wrappers::ReceiverStream::new(receiver),
-                    at: 0,
-                    target: 0,
-                }),
+            SyncState::Idle => return Ok(SyncingProgressStream { inner, at: 0, target: 0 }),
+            SyncState::Importing { target } => (target, SyncStatus::Importing),
+            SyncState::Downloading { target } => (target, SyncStatus::Downloading),
         };
 
         let at = client.chain_info().best_number;
-        let stream = SyncingProgressStream {
-            inner: tokio_stream::wrappers::ReceiverStream::new(receiver),
-            at,
-            target,
-        };
+        let stream = SyncingProgressStream { inner, at, target };
         sender
-            .send(SyncingProgress { target, at, status })
+            .send(Ok(SyncingProgress { target, at, status }))
             .await
             .expect("We are holding receiver, so it will never panic");
 
@@ -1084,24 +1065,24 @@ impl Node {
             async move {
                 loop {
                     tokio::time::sleep(CHECK_SYNCED_EVERY).await;
-                    let status = backoff::future::retry(backoff.clone(), || {
-                        network.status().map(|result_status| match result_status?.sync_state {
-                            SyncState::Idle => Err(backoff::Error::transient(())),
-                            SyncState::Importing { target } => Ok((target, SyncStatus::Importing)),
-                            SyncState::Downloading { target } =>
-                                Ok((target, SyncStatus::Downloading)),
-                        })
-                    })
-                    .await;
+                    let result = match network.status().await.map(|status| status.sync_state) {
+                        Ok(SyncState::Idle) => break,
+                        Ok(SyncState::Importing { target }) => Ok((target, SyncStatus::Importing)),
+                        Ok(SyncState::Downloading { target }) =>
+                            Ok((target, SyncStatus::Downloading)),
+                        Err(()) => Err(anyhow::anyhow!("Failed to fetch networking status")),
+                    };
 
-                    match status {
+                    let result = match result {
                         Ok((target, status)) => {
                             let at = client.chain_info().best_number;
-                            if sender.send(SyncingProgress { target, at, status }).await.is_err() {
-                                break;
-                            }
+                            Ok(SyncingProgress { target, at, status })
                         }
-                        Err(()) => break,
+                        Err(err) => Err(err),
+                    };
+
+                    if sender.send(result).await.is_err() {
+                        break;
                     }
                 }
             }
