@@ -122,6 +122,9 @@ mod builder {
     use derive_builder::Builder;
     use serde::{Deserialize, Serialize};
 
+    use super::{BuildError, CacheDescription};
+    use crate::{Farmer, Node, PlotDescription, PublicKey};
+
     fn default_piece_receiver_batch_size() -> NonZeroUsize {
         NonZeroUsize::new(12).unwrap()
     }
@@ -137,7 +140,7 @@ mod builder {
     /// Technical type which stores all
     #[derive(Debug, Clone, Derivative, Builder, Serialize, Deserialize)]
     #[derivative(Default)]
-    #[builder(pattern = "immutable", build_fn(name = "_build"), name = "Builder")]
+    #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "Builder")]
     #[non_exhaustive]
     pub struct Config {
         /// Defines size for the pieces batch of the piece receiving process.
@@ -156,6 +159,24 @@ mod builder {
         #[serde(default = "default_max_concurrent_plots")]
         pub max_concurrent_plots: NonZeroUsize,
     }
+
+    impl Builder {
+        /// Get configuration for saving on disk
+        pub fn configuration(&self) -> Config {
+            self._build().expect("Build is infallible")
+        }
+
+        /// Open and start farmer
+        pub async fn build(
+            self,
+            reward_address: PublicKey,
+            node: Node,
+            plots: &[PlotDescription],
+            cache: CacheDescription,
+        ) -> Result<Farmer, BuildError> {
+            self.configuration().build(reward_address, node, plots, cache).await
+        }
+    }
 }
 
 /// Build Error
@@ -173,24 +194,6 @@ pub enum BuildError {
     /// Failed to create parity db record storage
     #[error("Failed to create parity db record storage: {0}")]
     ParityDbError(#[from] parity_db::Error),
-}
-
-impl Builder {
-    /// Get configuration for saving on disk
-    pub fn configuration(&self) -> Config {
-        self._build().expect("Build is infallible")
-    }
-
-    /// Open and start farmer
-    pub async fn build(
-        self,
-        reward_address: PublicKey,
-        node: Node,
-        plots: &[PlotDescription],
-        cache: CacheDescription,
-    ) -> Result<Farmer, BuildError> {
-        self.configuration().build(reward_address, node, plots, cache).await
-    }
 }
 
 impl Config {

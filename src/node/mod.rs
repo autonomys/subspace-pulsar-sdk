@@ -207,7 +207,7 @@ mod builder {
     /// Node builder
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
-    #[builder(pattern = "immutable", build_fn(name = "_build"), name = "Builder")]
+    #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "Builder")]
     #[non_exhaustive]
     pub struct Config {
         /// Force block authoring
@@ -276,7 +276,7 @@ mod builder {
     /// Node RPC builder
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
-    #[builder(pattern = "owned", build_fn(name = "_build"), name = "RpcBuilder")]
+    #[builder(pattern = "owned", build_fn(private, name = "_build"), name = "RpcBuilder")]
     #[non_exhaustive]
     pub struct Rpc {
         /// RPC over HTTP binding address. `None` if disabled.
@@ -332,7 +332,7 @@ mod builder {
 
     /// Node network builder
     #[derive(Debug, Default, Clone, Builder, Deserialize, Serialize)]
-    #[builder(pattern = "owned", build_fn(name = "_build"), name = "NetworkBuilder")]
+    #[builder(pattern = "owned", build_fn(private, name = "_build"), name = "NetworkBuilder")]
     #[non_exhaustive]
     pub struct Network {
         /// Listen on some address for other nodes
@@ -377,7 +377,7 @@ mod builder {
     /// Node DSN builder
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
-    #[builder(pattern = "owned", build_fn(name = "_build"), name = "DsnBuilder")]
+    #[builder(pattern = "owned", build_fn(private, name = "_build"), name = "DsnBuilder")]
     #[non_exhaustive]
     pub struct Dsn {
         /// Listen on some address for other nodes
@@ -427,6 +427,27 @@ mod builder {
         }
     }
 
+    impl Builder {
+        /// Get configuration for saving on disk
+        pub fn configuration(&self) -> Config {
+            self._build().expect("Build is infallible")
+        }
+
+        /// New builder
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        /// Start a node with supplied parameters
+        pub async fn build(
+            self,
+            directory: impl AsRef<Path>,
+            chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
+        ) -> anyhow::Result<Node> {
+            self.configuration().build(directory, chain_spec).await
+        }
+    }
+
     crate::generate_builder!(Rpc, Network, Dsn, OffchainWorker);
 }
 
@@ -473,27 +494,6 @@ impl From<RpcMethods> for sc_service::RpcMethods {
 }
 
 const NODE_NAME_MAX_LENGTH: usize = 64;
-
-impl Builder {
-    /// Get configuration for saving on disk
-    pub fn configuration(&self) -> Config {
-        self._build().expect("Build is infallible")
-    }
-
-    /// New builder
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Start a node with supplied parameters
-    pub async fn build(
-        self,
-        directory: impl AsRef<Path>,
-        chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
-    ) -> anyhow::Result<Node> {
-        self.configuration().build(directory, chain_spec).await
-    }
-}
 
 impl Config {
     /// Start a node with supplied parameters
