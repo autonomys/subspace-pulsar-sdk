@@ -1069,15 +1069,15 @@ impl Node {
                         Err(()) => Err(anyhow::anyhow!("Failed to fetch networking status")),
                     };
 
-                    let result = match result {
-                        Ok((target, status)) => {
-                            let at = client.chain_info().best_number;
-                            Ok(SyncingProgress { target, at, status })
-                        }
-                        Err(err) => Err(err),
-                    };
-
-                    if sender.send(result).await.is_err() {
+                    if sender
+                        .send(result.map(|(target, status)| SyncingProgress {
+                            target,
+                            at: client.chain_info().best_number,
+                            status,
+                        }))
+                        .await
+                        .is_err()
+                    {
                         break;
                     }
                 }
