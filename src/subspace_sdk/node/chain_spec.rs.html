@@ -841,7 +841,7 @@
 
 <span class="kw">const </span>SUBSPACE_TELEMETRY_URL: <span class="kw-2">&amp;</span>str = <span class="string">&quot;wss://telemetry.subspace.network/submit/&quot;</span>;
 <span class="kw">const </span>X_NET_2_CHAIN_SPEC: <span class="kw-2">&amp;</span>[u8] = <span class="macro">include_bytes!</span>(<span class="string">&quot;../../res/chain-spec-raw-x-net-2.json&quot;</span>);
-<span class="kw">const </span>GEMINI_3A_CHAIN_SPEC: <span class="kw-2">&amp;</span>[u8] = <span class="macro">include_bytes!</span>(<span class="string">&quot;../../res/chain-spec-raw-gemini-3a.json&quot;</span>);
+<span class="kw">const </span>GEMINI_3B_CHAIN_SPEC: <span class="kw-2">&amp;</span>[u8] = <span class="macro">include_bytes!</span>(<span class="string">&quot;../../res/chain-spec-raw-gemini-3b.json&quot;</span>);
 
 <span class="doccomment">/// List of accounts which should receive token grants, amounts are specified in
 /// SSC.
@@ -873,20 +873,20 @@
     enable_executor: bool,
 }
 
-<span class="doccomment">/// Gemini 3a chain spec
-</span><span class="kw">pub fn </span>gemini_3a() -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusChainSpec&lt;GenesisConfig, SystemDomainGenesisConfig&gt;, String&gt; {
-    ConsensusChainSpec::from_json_bytes(GEMINI_3A_CHAIN_SPEC)
+<span class="doccomment">/// Gemini 3b chain spec
+</span><span class="kw">pub fn </span>gemini_3b() -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusChainSpec&lt;GenesisConfig, SystemDomainGenesisConfig&gt;, String&gt; {
+    ConsensusChainSpec::from_json_bytes(GEMINI_3B_CHAIN_SPEC)
 }
 
-<span class="doccomment">/// Gemini 3a compiled chain spec
-</span><span class="kw">pub fn </span>gemini_3a_compiled(
+<span class="doccomment">/// Gemini 3b compiled chain spec
+</span><span class="kw">pub fn </span>gemini_3b_compiled(
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusChainSpec&lt;GenesisConfig, SystemDomainGenesisConfig&gt;, String&gt; {
     <span class="prelude-val">Ok</span>(ConsensusChainSpec::from_genesis(
         <span class="comment">// Name
-        </span><span class="string">&quot;Subspace Gemini 3a&quot;</span>,
+        </span><span class="string">&quot;Subspace Gemini 3b&quot;</span>,
         <span class="comment">// ID
-        </span><span class="string">&quot;subspace_gemini_3a&quot;</span>,
-        ChainType::Custom(<span class="string">&quot;Subspace Gemini 3a&quot;</span>.to_string()),
+        </span><span class="string">&quot;subspace_gemini_3b&quot;</span>,
+        ChainType::Custom(<span class="string">&quot;Subspace Gemini 3b&quot;</span>.to_string()),
         || {
             <span class="kw">let </span>sudo_account =
                 AccountId::from_ss58check(<span class="string">&quot;5CXTmJEusve5ixyJufqHThmy4qUrrm6FyLCR7QfE4bbyMTNC&quot;</span>)
@@ -950,12 +950,12 @@
                 .map_err(|error| error.to_string())<span class="question-mark">?</span>,
         ),
         <span class="comment">// Protocol ID
-        </span><span class="prelude-val">Some</span>(<span class="string">&quot;subspace-gemini-3a&quot;</span>),
+        </span><span class="prelude-val">Some</span>(<span class="string">&quot;subspace-gemini-3b&quot;</span>),
         <span class="prelude-val">None</span>,
         <span class="comment">// Properties
         </span><span class="prelude-val">Some</span>(utils::chain_spec_properties()),
         <span class="comment">// Extensions
-        </span>ChainSpecExtensions { execution_chain_spec: secondary_chain::gemini_3a_config() },
+        </span>ChainSpecExtensions { execution_chain_spec: secondary_chain::gemini_3b_config() },
     ))
 }
 
@@ -1312,12 +1312,12 @@
         )
     }
 
-    <span class="kw">pub fn </span>gemini_3a_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
+    <span class="kw">pub fn </span>gemini_3b_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
         ExecutionChainSpec::from_genesis(
             <span class="comment">// Name
-            </span><span class="string">&quot;Subspace Gemini 3a System Domain&quot;</span>,
+            </span><span class="string">&quot;Subspace Gemini 3b System Domain&quot;</span>,
             <span class="comment">// ID
-            </span><span class="string">&quot;subspace_gemini_3a_system_domain&quot;</span>,
+            </span><span class="string">&quot;subspace_gemini_3b_system_domain&quot;</span>,
             ChainType::Local,
             <span class="kw">move </span>|| {
                 testnet_genesis(
@@ -1374,7 +1374,7 @@
             <span class="comment">// Telemetry
             </span><span class="prelude-val">None</span>,
             <span class="comment">// Protocol ID
-            </span><span class="prelude-val">Some</span>(<span class="string">&quot;subspace-gemini-3a-system-domain&quot;</span>),
+            </span><span class="prelude-val">Some</span>(<span class="string">&quot;subspace-gemini-3b-system-domain&quot;</span>),
             <span class="prelude-val">None</span>,
             <span class="comment">// Properties
             </span><span class="prelude-val">Some</span>(chain_spec_properties()),
@@ -1602,12 +1602,12 @@
         )
     }
 
-    <span class="kw">pub fn </span>gemini_3a_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
+    <span class="kw">pub fn </span>gemini_3b_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
         ExecutionChainSpec::from_genesis(
             <span class="comment">// Name
-            </span><span class="string">&quot;Subspace Gemini 3a Core Payments Domain&quot;</span>,
+            </span><span class="string">&quot;Subspace Gemini 3b Core Payments Domain&quot;</span>,
             <span class="comment">// ID
-            </span><span class="string">&quot;subspace_gemini_3a_core_payments_domain&quot;</span>,
+            </span><span class="string">&quot;subspace_gemini_3b_core_payments_domain&quot;</span>,
             ChainType::Local,
             <span class="kw">move </span>|| {
                 testnet_genesis(
@@ -1627,7 +1627,7 @@
             <span class="comment">// Telemetry
             </span><span class="prelude-val">None</span>,
             <span class="comment">// Protocol ID
-            </span><span class="prelude-val">Some</span>(<span class="string">&quot;subspace-gemini-3a-core-payments-domain&quot;</span>),
+            </span><span class="prelude-val">Some</span>(<span class="string">&quot;subspace-gemini-3b-core-payments-domain&quot;</span>),
             <span class="prelude-val">None</span>,
             <span class="comment">// Properties
             </span><span class="prelude-val">Some</span>(chain_spec_properties()),
