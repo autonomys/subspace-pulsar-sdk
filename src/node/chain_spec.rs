@@ -13,7 +13,7 @@ use system_domain_runtime::GenesisConfig as SystemDomainGenesisConfig;
 
 const SUBSPACE_TELEMETRY_URL: &str = "wss://telemetry.subspace.network/submit/";
 const X_NET_2_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-x-net-2.json");
-const GEMINI_3A_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-gemini-3a.json");
+const GEMINI_3B_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-gemini-3b.json");
 
 /// List of accounts which should receive token grants, amounts are specified in
 /// SSC.
@@ -45,20 +45,20 @@ pub struct GenesisParams {
     enable_executor: bool,
 }
 
-/// Gemini 3a chain spec
-pub fn gemini_3a() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String> {
-    ConsensusChainSpec::from_json_bytes(GEMINI_3A_CHAIN_SPEC)
+/// Gemini 3b chain spec
+pub fn gemini_3b() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String> {
+    ConsensusChainSpec::from_json_bytes(GEMINI_3B_CHAIN_SPEC)
 }
 
-/// Gemini 3a compiled chain spec
-pub fn gemini_3a_compiled(
+/// Gemini 3b compiled chain spec
+pub fn gemini_3b_compiled(
 ) -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String> {
     Ok(ConsensusChainSpec::from_genesis(
         // Name
-        "Subspace Gemini 3a",
+        "Subspace Gemini 3b",
         // ID
-        "subspace_gemini_3a",
-        ChainType::Custom("Subspace Gemini 3a".to_string()),
+        "subspace_gemini_3b",
+        ChainType::Custom("Subspace Gemini 3b".to_string()),
         || {
             let sudo_account =
                 AccountId::from_ss58check("5CXTmJEusve5ixyJufqHThmy4qUrrm6FyLCR7QfE4bbyMTNC")
@@ -122,12 +122,12 @@ pub fn gemini_3a_compiled(
                 .map_err(|error| error.to_string())?,
         ),
         // Protocol ID
-        Some("subspace-gemini-3a"),
+        Some("subspace-gemini-3b"),
         None,
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions { execution_chain_spec: secondary_chain::gemini_3a_config() },
+        ChainSpecExtensions { execution_chain_spec: secondary_chain::gemini_3b_config() },
     ))
 }
 
@@ -484,12 +484,12 @@ mod secondary_chain {
         )
     }
 
-    pub fn gemini_3a_config() -> ExecutionChainSpec<GenesisConfig> {
+    pub fn gemini_3b_config() -> ExecutionChainSpec<GenesisConfig> {
         ExecutionChainSpec::from_genesis(
             // Name
-            "Subspace Gemini 3a System Domain",
+            "Subspace Gemini 3b System Domain",
             // ID
-            "subspace_gemini_3a_system_domain",
+            "subspace_gemini_3b_system_domain",
             ChainType::Local,
             move || {
                 testnet_genesis(
@@ -546,7 +546,7 @@ mod secondary_chain {
             // Telemetry
             None,
             // Protocol ID
-            Some("subspace-gemini-3a-system-domain"),
+            Some("subspace-gemini-3b-system-domain"),
             None,
             // Properties
             Some(chain_spec_properties()),
@@ -774,12 +774,12 @@ mod core_payments {
         )
     }
 
-    pub fn gemini_3a_config() -> ExecutionChainSpec<GenesisConfig> {
+    pub fn gemini_3b_config() -> ExecutionChainSpec<GenesisConfig> {
         ExecutionChainSpec::from_genesis(
             // Name
-            "Subspace Gemini 3a Core Payments Domain",
+            "Subspace Gemini 3b Core Payments Domain",
             // ID
-            "subspace_gemini_3a_core_payments_domain",
+            "subspace_gemini_3b_core_payments_domain",
             ChainType::Local,
             move || {
                 testnet_genesis(
@@ -799,7 +799,7 @@ mod core_payments {
             // Telemetry
             None,
             // Protocol ID
-            Some("subspace-gemini-3a-core-payments-domain"),
+            Some("subspace-gemini-3b-core-payments-domain"),
             None,
             // Properties
             Some(chain_spec_properties()),
