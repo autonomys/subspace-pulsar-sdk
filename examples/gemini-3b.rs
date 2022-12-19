@@ -6,7 +6,6 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("runtime::subspace::executor=off".parse().unwrap())
                 .add_directive("info".parse().unwrap()),
         )
         .init();
@@ -40,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
         ]))
         .execution_strategy(node::ExecutionStrategy::AlwaysWasm)
         .offchain_worker(node::OffchainWorkerBuilder::new().enabled(true))
-        .build(node_dir.as_ref(), node::chain_spec::gemini_3a().unwrap())
+        .build(node_dir.as_ref(), node::chain_spec::gemini_3b().unwrap())
         .await?;
 
     node.sync().await?;

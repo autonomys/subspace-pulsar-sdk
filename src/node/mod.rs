@@ -89,21 +89,17 @@ mod builder {
         /// Maximum blocks. Defaults to 0 when unspecified, effectively keeping
         /// only non-canonical states.
         pub max_blocks: Option<u32>,
-        /// Maximum memory in the pruning overlay.
-        pub max_mem: Option<usize>,
     }
 
     impl From<Constraints> for sc_state_db::Constraints {
-        fn from(Constraints { max_blocks, max_mem }: Constraints) -> Self {
-            Self { max_blocks, max_mem }
+        fn from(Constraints { max_blocks }: Constraints) -> Self {
+            Self { max_blocks }
         }
     }
 
     impl From<sc_state_db::Constraints> for Constraints {
-        fn from(
-            sc_state_db::Constraints { max_blocks, max_mem }: sc_state_db::Constraints,
-        ) -> Self {
-            Self { max_blocks, max_mem }
+        fn from(sc_state_db::Constraints { max_blocks }: sc_state_db::Constraints) -> Self {
+            Self { max_blocks }
         }
     }
 
@@ -1073,15 +1069,15 @@ impl Node {
                         Err(()) => Err(anyhow::anyhow!("Failed to fetch networking status")),
                     };
 
-                    let result = match result {
-                        Ok((target, status)) => {
-                            let at = client.chain_info().best_number;
-                            Ok(SyncingProgress { target, at, status })
-                        }
-                        Err(err) => Err(err),
-                    };
-
-                    if sender.send(result).await.is_err() {
+                    if sender
+                        .send(result.map(|(target, status)| SyncingProgress {
+                            target,
+                            at: client.chain_info().best_number,
+                            status,
+                        }))
+                        .await
+                        .is_err()
+                    {
                         break;
                     }
                 }
