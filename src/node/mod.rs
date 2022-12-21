@@ -14,6 +14,7 @@ use sc_network::config::{NodeKeyConfig, Secret};
 use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider, SyncState};
 use sc_network_common::config::{MultiaddrWithPeerId, TransportConfig};
+use sc_rpc_api::state::StateApiClient;
 use sc_service::config::{KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig};
 use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use sc_subspace_chain_specs::ConsensusChainSpec;
@@ -815,7 +816,7 @@ impl Config {
         } = full_client;
 
         let client = Arc::downgrade(&client);
-        let rpc_handle = rpc_handlers.handle();
+        let rpc_handle = crate::utils::Rpc::new(&rpc_handlers);
         network_starter.start_network();
         let (stop_sender, mut stop_receiver) = mpsc::channel::<oneshot::Sender<()>>(1);
 
@@ -874,7 +875,7 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 pub struct Node {
     client: Weak<FullClient<RuntimeApi, ExecutorDispatch>>,
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
-    rpc_handle: Arc<jsonrpsee_core::server::rpc_module::RpcModule<()>>,
+    pub(crate) rpc_handle: crate::utils::Rpc,
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
     pub(crate) farmer_record_storage: MaybeRecordStorage<FarmerRecordStorage>,
     pub(crate) readers_and_pieces: Arc<std::sync::Mutex<Option<ReadersAndPieces>>>,
@@ -1123,7 +1124,6 @@ impl Node {
             .next()
             .await
             .expect("This stream never ends");
-        let version = self.rpc_handle.call("state_getRuntimeVersion", &[] as &[()]).await?;
         let client = self.client().context("Failed to fetch node info")?;
         let NetworkState { connected_peers, not_connected_peers, .. } =
             self.network.network_state().await.unwrap();
@@ -1136,6 +1136,7 @@ impl Node {
             block_gap,
             ..
         } = client.chain_info();
+        let version = self.rpc_handle.runtime_version(Some(best_hash)).await?;
         let FarmerProtocolInfo { total_pieces, .. } =
             self.farmer_app_info().await.map_err(anyhow::Error::msg)?.protocol_info;
         Ok(Info {
@@ -1183,18 +1184,11 @@ impl Node {
     }
 }
 
-fn subscription_to_stream<T: serde::de::DeserializeOwned>(
-    mut subscription: jsonrpsee_core::server::rpc_module::Subscription,
-) -> impl Stream<Item = T> + Unpin {
-    futures::stream::poll_fn(move |cx| {
-        Box::pin(subscription.next()).poll_unpin(cx).map(|x| x.and_then(Result::ok).map(|(x, _)| x))
-    })
-}
-
 mod farmer_rpc_client {
     use std::pin::Pin;
 
     use futures::Stream;
+    use sc_consensus_subspace_rpc::SubspaceRpcApiClient;
     use subspace_archiving::archiver::ArchivedSegment;
     use subspace_core_primitives::{RecordsRoot, SegmentIndex};
     use subspace_farmer::rpc_client::{Error, RpcClient};
@@ -1207,55 +1201,62 @@ mod farmer_rpc_client {
     #[async_trait::async_trait]
     impl RpcClient for Node {
         async fn farmer_app_info(&self) -> Result<FarmerAppInfo, Error> {
-            Ok(self.rpc_handle.call("subspace_getFarmerAppInfo", &[] as &[()]).await?)
+            Ok(self.rpc_handle.get_farmer_app_info().await?)
         }
 
         async fn subscribe_slot_info(
             &self,
         ) -> Result<Pin<Box<dyn Stream<Item = SlotInfo> + Send + 'static>>, Error> {
-            Ok(Box::pin(subscription_to_stream(
-                self.rpc_handle.subscribe("subspace_subscribeSlotInfo", &[] as &[()]).await?,
-            )))
+            Ok(Box::pin(
+                self.rpc_handle
+                    .subscribe_slot_info()
+                    .await?
+                    .filter_map(|result| futures::future::ready(result.ok())),
+            ))
         }
 
         async fn submit_solution_response(
             &self,
             solution_response: SolutionResponse,
         ) -> Result<(), Error> {
-            Ok(self.rpc_handle.call("subspace_submitSolutionResponse", [solution_response]).await?)
+            Ok(self.rpc_handle.submit_solution_response(solution_response).await?)
         }
 
         async fn subscribe_reward_signing(
             &self,
         ) -> Result<Pin<Box<dyn Stream<Item = RewardSigningInfo> + Send + 'static>>, Error>
         {
-            Ok(Box::pin(subscription_to_stream(
-                self.rpc_handle.subscribe("subspace_subscribeRewardSigning", &[] as &[()]).await?,
-            )))
+            Ok(Box::pin(
+                self.rpc_handle
+                    .subscribe_reward_signing()
+                    .await?
+                    .filter_map(|result| futures::future::ready(result.ok())),
+            ))
         }
 
         async fn submit_reward_signature(
             &self,
             reward_signature: RewardSignatureResponse,
         ) -> Result<(), Error> {
-            Ok(self.rpc_handle.call("subspace_submitRewardSignature", [reward_signature]).await?)
+            Ok(self.rpc_handle.submit_reward_signature(reward_signature).await?)
         }
 
         async fn subscribe_archived_segments(
             &self,
         ) -> Result<Pin<Box<dyn Stream<Item = ArchivedSegment> + Send + 'static>>, Error> {
-            Ok(Box::pin(subscription_to_stream(
+            Ok(Box::pin(
                 self.rpc_handle
-                    .subscribe("subspace_subscribeArchivedSegment", &[] as &[()])
-                    .await?,
-            )))
+                    .subscribe_archived_segment()
+                    .await?
+                    .filter_map(|result| futures::future::ready(result.ok())),
+            ))
         }
 
         async fn records_roots(
             &self,
             segment_indexes: Vec<SegmentIndex>,
         ) -> Result<Vec<Option<RecordsRoot>>, Error> {
-            Ok(self.rpc_handle.call("subspace_recordsRoots", [segment_indexes]).await?)
+            Ok(self.rpc_handle.records_roots(segment_indexes).await?)
         }
     }
 }

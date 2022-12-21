@@ -8,6 +8,7 @@ pub mod farmer;
 pub(crate) mod networking;
 /// Module related to the node
 pub mod node;
+pub(crate) mod utils;
 
 use derive_more::{Deref, DerefMut};
 pub use farmer::{Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotDescription};
