@@ -8991,6 +8991,7 @@ dependencies = [
  "sc-executor",
  "sc-network",
  "sc-network-common",
+ "sc-rpc-api",
  "sc-service",
  "sc-state-db",
  "sc-subspace-chain-specs",
