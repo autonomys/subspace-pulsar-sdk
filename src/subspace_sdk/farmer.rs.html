@@ -739,6 +739,9 @@
 <a href="#739" id="739">739</a>
 <a href="#740" id="740">740</a>
 <a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -863,6 +866,9 @@
     <span class="kw">use </span>derive_builder::Builder;
     <span class="kw">use </span>serde::{Deserialize, Serialize};
 
+    <span class="kw">use super</span>::{BuildError, CacheDescription};
+    <span class="kw">use crate</span>::{Farmer, Node, PlotDescription, PublicKey};
+
     <span class="kw">fn </span>default_piece_receiver_batch_size() -&gt; NonZeroUsize {
         NonZeroUsize::new(<span class="number">12</span>).unwrap()
     }
@@ -878,7 +884,7 @@
     <span class="doccomment">/// Technical type which stores all
     </span><span class="attr">#[derive(Debug, Clone, Derivative, Builder, Serialize, Deserialize)]
     #[derivative(Default)]
-    #[builder(pattern = <span class="string">&quot;immutable&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;Builder&quot;</span>)]
+    #[builder(pattern = <span class="string">&quot;immutable&quot;</span>, build_fn(private, name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;Builder&quot;</span>)]
     #[non_exhaustive]
     </span><span class="kw">pub struct </span>Config {
         <span class="doccomment">/// Defines size for the pieces batch of the piece receiving process.
@@ -897,6 +903,24 @@
         #[serde(default = <span class="string">&quot;default_max_concurrent_plots&quot;</span>)]
         </span><span class="kw">pub </span>max_concurrent_plots: NonZeroUsize,
     }
+
+    <span class="kw">impl </span>Builder {
+        <span class="doccomment">/// Get configuration for saving on disk
+        </span><span class="kw">pub fn </span>configuration(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Config {
+            <span class="self">self</span>._build().expect(<span class="string">&quot;Build is infallible&quot;</span>)
+        }
+
+        <span class="doccomment">/// Open and start farmer
+        </span><span class="kw">pub async fn </span>build(
+            <span class="self">self</span>,
+            reward_address: PublicKey,
+            node: Node,
+            plots: <span class="kw-2">&amp;</span>[PlotDescription],
+            cache: CacheDescription,
+        ) -&gt; <span class="prelude-ty">Result</span>&lt;Farmer, BuildError&gt; {
+            <span class="self">self</span>.configuration().build(reward_address, node, plots, cache).<span class="kw">await
+        </span>}
+    }
 }
 
 <span class="doccomment">/// Build Error
@@ -914,24 +938,6 @@
     <span class="doccomment">/// Failed to create parity db record storage
     </span><span class="attr">#[error(<span class="string">&quot;Failed to create parity db record storage: {0}&quot;</span>)]
     </span>ParityDbError(<span class="attr">#[from] </span>parity_db::Error),
-}
-
-<span class="kw">impl </span>Builder {
-    <span class="doccomment">/// Get configuration for saving on disk
-    </span><span class="kw">pub fn </span>configuration(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Config {
-        <span class="self">self</span>._build().expect(<span class="string">&quot;Build is infallible&quot;</span>)
-    }
-
-    <span class="doccomment">/// Open and start farmer
-    </span><span class="kw">pub async fn </span>build(
-        <span class="self">self</span>,
-        reward_address: PublicKey,
-        node: Node,
-        plots: <span class="kw-2">&amp;</span>[PlotDescription],
-        cache: CacheDescription,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Farmer, BuildError&gt; {
-        <span class="self">self</span>.configuration().build(reward_address, node, plots, cache).<span class="kw">await
-    </span>}
 }
 
 <span class="kw">impl </span>Config {

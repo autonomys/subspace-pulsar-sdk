@@ -1366,6 +1366,54 @@
 <a href="#1366" id="1366">1366</a>
 <a href="#1367" id="1367">1367</a>
 <a href="#1368" id="1368">1368</a>
+<a href="#1369" id="1369">1369</a>
+<a href="#1370" id="1370">1370</a>
+<a href="#1371" id="1371">1371</a>
+<a href="#1372" id="1372">1372</a>
+<a href="#1373" id="1373">1373</a>
+<a href="#1374" id="1374">1374</a>
+<a href="#1375" id="1375">1375</a>
+<a href="#1376" id="1376">1376</a>
+<a href="#1377" id="1377">1377</a>
+<a href="#1378" id="1378">1378</a>
+<a href="#1379" id="1379">1379</a>
+<a href="#1380" id="1380">1380</a>
+<a href="#1381" id="1381">1381</a>
+<a href="#1382" id="1382">1382</a>
+<a href="#1383" id="1383">1383</a>
+<a href="#1384" id="1384">1384</a>
+<a href="#1385" id="1385">1385</a>
+<a href="#1386" id="1386">1386</a>
+<a href="#1387" id="1387">1387</a>
+<a href="#1388" id="1388">1388</a>
+<a href="#1389" id="1389">1389</a>
+<a href="#1390" id="1390">1390</a>
+<a href="#1391" id="1391">1391</a>
+<a href="#1392" id="1392">1392</a>
+<a href="#1393" id="1393">1393</a>
+<a href="#1394" id="1394">1394</a>
+<a href="#1395" id="1395">1395</a>
+<a href="#1396" id="1396">1396</a>
+<a href="#1397" id="1397">1397</a>
+<a href="#1398" id="1398">1398</a>
+<a href="#1399" id="1399">1399</a>
+<a href="#1400" id="1400">1400</a>
+<a href="#1401" id="1401">1401</a>
+<a href="#1402" id="1402">1402</a>
+<a href="#1403" id="1403">1403</a>
+<a href="#1404" id="1404">1404</a>
+<a href="#1405" id="1405">1405</a>
+<a href="#1406" id="1406">1406</a>
+<a href="#1407" id="1407">1407</a>
+<a href="#1408" id="1408">1408</a>
+<a href="#1409" id="1409">1409</a>
+<a href="#1410" id="1410">1410</a>
+<a href="#1411" id="1411">1411</a>
+<a href="#1412" id="1412">1412</a>
+<a href="#1413" id="1413">1413</a>
+<a href="#1414" id="1414">1414</a>
+<a href="#1415" id="1415">1415</a>
+<a href="#1416" id="1416">1416</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
@@ -1402,8 +1450,9 @@
 <span class="kw">pub mod </span>chain_spec;
 
 <span class="kw">pub use </span>builder::{
-    BlocksPruning, Builder, Config, Constraints, Dsn, DsnBuilder, ExecutionStrategy, Network,
-    NetworkBuilder, OffchainWorker, OffchainWorkerBuilder, PruningMode, Rpc, RpcBuilder,
+    Base, BaseBuilder, BlocksPruning, Builder, Config, Constraints, Dsn, DsnBuilder,
+    ExecutionStrategy, Network, NetworkBuilder, OffchainWorker, OffchainWorkerBuilder, PruningMode,
+    Rpc, RpcBuilder,
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::networking::{
@@ -1560,6 +1609,40 @@
         bytesize::ByteSize::gib(<span class="number">1</span>)
     }
 
+    <span class="kw">fn </span>default_segment_publish_concurrency() -&gt; NonZeroUsize {
+        NonZeroUsize::new(<span class="number">10</span>).unwrap()
+    }
+
+    <span class="doccomment">/// Node builder
+    </span><span class="attr">#[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
+    #[derivative(Default)]
+    #[builder(pattern = <span class="string">&quot;immutable&quot;</span>, build_fn(private, name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;Builder&quot;</span>)]
+    #[non_exhaustive]
+    </span><span class="kw">pub struct </span>Config {
+        <span class="attr">#[doc(hidden)]
+        #[builder(
+            setter(into, strip_option),
+            field(<span class="kw">type </span>= <span class="string">&quot;BaseBuilder&quot;</span>, build = <span class="string">&quot;self.base.build()&quot;</span>)
+        )]
+        #[serde(default)]
+        </span><span class="kw">pub </span>base: Base,
+        <span class="doccomment">/// Set piece cache size
+        </span><span class="attr">#[builder(default = <span class="string">&quot;default_piece_cache_size()&quot;</span>)]
+        #[derivative(Default(value = <span class="string">&quot;default_piece_cache_size()&quot;</span>))]
+        #[serde(with = <span class="string">&quot;bytesize_serde&quot;</span>, default = <span class="string">&quot;default_piece_cache_size&quot;</span>)]
+        </span><span class="kw">pub </span>piece_cache_size: bytesize::ByteSize,
+        <span class="doccomment">/// Max number of segments that can be published concurrently, impacts
+        /// RAM usage and network bandwidth.
+        </span><span class="attr">#[builder(default = <span class="string">&quot;default_segment_publish_concurrency()&quot;</span>)]
+        #[derivative(Default(value = <span class="string">&quot;default_segment_publish_concurrency()&quot;</span>))]
+        #[serde(default = <span class="string">&quot;default_segment_publish_concurrency&quot;</span>)]
+        </span><span class="kw">pub </span>segment_publish_concurrency: NonZeroUsize,
+        <span class="doccomment">/// DSN settings
+        </span><span class="attr">#[builder(setter(into), default)]
+        #[serde(default)]
+        </span><span class="kw">pub </span>dsn: Dsn,
+    }
+
     <span class="kw">fn </span>default_impl_name() -&gt; String {
         <span class="macro">env!</span>(<span class="string">&quot;CARGO_PKG_NAME&quot;</span>).to_owned()
     }
@@ -1568,26 +1651,16 @@
         <span class="macro">format!</span>(<span class="string">&quot;{}-{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;CARGO_PKG_VERSION&quot;</span>), <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>))
     }
 
-    <span class="kw">fn </span>default_segment_publish_concurrency() -&gt; NonZeroUsize {
-        NonZeroUsize::new(<span class="number">10</span>).unwrap()
-    }
-
-    <span class="doccomment">/// Node builder
-    </span><span class="attr">#[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
+    <span class="attr">#[doc(hidden)]
+    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
-    #[builder(pattern = <span class="string">&quot;immutable&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;Builder&quot;</span>)]
+    #[builder(pattern = <span class="string">&quot;immutable&quot;</span>, build_fn(private, name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;BaseBuilder&quot;</span>)]
     #[non_exhaustive]
-    </span><span class="kw">pub struct </span>Config {
+    </span><span class="kw">pub struct </span>Base {
         <span class="doccomment">/// Force block authoring
         </span><span class="attr">#[builder(default)]
         #[serde(default)]
         </span><span class="kw">pub </span>force_authoring: bool,
-        <span class="doccomment">/// Max number of segments that can be published concurrently, impacts
-        /// RAM usage and network bandwidth.
-        </span><span class="attr">#[builder(default = <span class="string">&quot;default_segment_publish_concurrency()&quot;</span>)]
-        #[derivative(Default(value = <span class="string">&quot;default_segment_publish_concurrency()&quot;</span>))]
-        #[serde(default = <span class="string">&quot;default_segment_publish_concurrency&quot;</span>)]
-        </span><span class="kw">pub </span>segment_publish_concurrency: NonZeroUsize,
         <span class="doccomment">/// Set node role
         </span><span class="attr">#[builder(default)]
         #[serde(default)]
@@ -1604,11 +1677,6 @@
         </span><span class="attr">#[builder(default)]
         #[serde(default)]
         </span><span class="kw">pub </span>execution_strategy: ExecutionStrategy,
-        <span class="doccomment">/// Set piece cache size
-        </span><span class="attr">#[builder(default = <span class="string">&quot;default_piece_cache_size()&quot;</span>)]
-        #[derivative(Default(value = <span class="string">&quot;default_piece_cache_size()&quot;</span>))]
-        #[serde(with = <span class="string">&quot;bytesize_serde&quot;</span>, default = <span class="string">&quot;default_piece_cache_size&quot;</span>)]
-        </span><span class="kw">pub </span>piece_cache_size: bytesize::ByteSize,
         <span class="doccomment">/// Implementation name
         </span><span class="attr">#[builder(default = <span class="string">&quot;default_impl_name()&quot;</span>)]
         #[derivative(Default(value = <span class="string">&quot;default_impl_name()&quot;</span>))]
@@ -1627,14 +1695,143 @@
         </span><span class="attr">#[builder(setter(into), default)]
         #[serde(default)]
         </span><span class="kw">pub </span>network: Network,
-        <span class="doccomment">/// DSN settings
-        </span><span class="attr">#[builder(setter(into), default)]
-        #[serde(default)]
-        </span><span class="kw">pub </span>dsn: Dsn,
         <span class="doccomment">/// Offchain worker settings
         </span><span class="attr">#[builder(setter(into), default)]
         #[serde(default)]
         </span><span class="kw">pub </span>offchain_worker: OffchainWorker,
+    }
+
+    <span class="kw">impl </span>Base {
+        <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>configuration(
+            <span class="self">self</span>,
+            directory: <span class="kw">impl </span>AsRef&lt;Path&gt;,
+            chain_spec: ConsensusChainSpec&lt;ConsensusGenesisConfig, ExecutionGenesisConfig&gt;,
+        ) -&gt; Configuration {
+            <span class="kw">const </span>NODE_KEY_ED25519_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;secret_ed25519&quot;</span>;
+            <span class="kw">const </span>DEFAULT_NETWORK_CONFIG_PATH: <span class="kw-2">&amp;</span>str = <span class="string">&quot;network&quot;</span>;
+
+            <span class="kw">let </span><span class="self">Self </span>{
+                force_authoring,
+                role,
+                blocks_pruning,
+                state_pruning,
+                execution_strategy,
+                impl_name,
+                impl_version,
+                rpc:
+                    Rpc {
+                        http: rpc_http,
+                        ws: rpc_ws,
+                        ws_max_connections: rpc_ws_max_connections,
+                        ipc: rpc_ipc,
+                        cors: rpc_cors,
+                        methods: rpc_methods,
+                        max_payload: rpc_max_payload,
+                        max_request_size: rpc_max_request_size,
+                        max_response_size: rpc_max_response_size,
+                        max_subs_per_conn: rpc_max_subs_per_conn,
+                        ws_max_out_buffer_capacity,
+                    },
+                network,
+                offchain_worker,
+            } = <span class="self">self</span>;
+
+            <span class="kw">let </span>base_path = BasePath::new(directory.as_ref());
+            <span class="kw">let </span>config_dir = base_path.config_dir(chain_spec.id());
+
+            <span class="kw">let </span><span class="kw-2">mut </span>network = {
+                <span class="kw">let </span>builder::Network {
+                    listen_addresses,
+                    boot_nodes,
+                    force_synced,
+                    name,
+                    client_id,
+                    enable_mdns,
+                    allow_private_ipv4,
+                } = network;
+                <span class="kw">let </span>name = name.unwrap_or_else(|| {
+                    names::Generator::with_naming(names::Name::Numbered)
+                        .next()
+                        .filter(|name| name.chars().count() &lt; NODE_NAME_MAX_LENGTH)
+                        .expect(<span class="string">&quot;RNG is available on all supported platforms; qed&quot;</span>)
+                });
+
+                <span class="kw">let </span>client_id =
+                    client_id.unwrap_or_else(|| <span class="macro">format!</span>(<span class="string">&quot;{}/v{}&quot;</span>, impl_name, impl_version));
+                <span class="kw">let </span>config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
+
+                NetworkConfiguration {
+                    listen_addresses,
+                    boot_nodes: chain_spec.boot_nodes().iter().cloned().chain(boot_nodes).collect(),
+                    force_synced,
+                    transport: TransportConfig::Normal { enable_mdns, allow_private_ipv4 },
+                    ..NetworkConfiguration::new(
+                        name,
+                        client_id,
+                        NodeKeyConfig::Ed25519(Secret::File(
+                            config_dir.join(NODE_KEY_ED25519_FILE),
+                        )),
+                        <span class="prelude-val">Some</span>(config_dir),
+                    )
+                }
+            };
+
+            <span class="comment">// Increase default value of 25 to improve success rate of sync
+            </span>network.default_peers_set.out_peers = <span class="number">50</span>;
+            <span class="comment">// Full + Light clients
+            </span>network.default_peers_set.in_peers = <span class="number">25 </span>+ <span class="number">100</span>;
+            <span class="kw">let </span>(keystore_remote, keystore) = (<span class="prelude-val">None</span>, KeystoreConfig::InMemory);
+            <span class="kw">let </span>telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
+
+            Configuration {
+                impl_name,
+                impl_version,
+                tokio_handle: tokio::runtime::Handle::current(),
+                transaction_pool: Default::default(),
+                network,
+                keystore_remote,
+                keystore,
+                database: DatabaseSource::ParityDb {
+                    path: config_dir.join(<span class="string">&quot;paritydb&quot;</span>).join(<span class="string">&quot;full&quot;</span>),
+                },
+                trie_cache_maximum_size: <span class="prelude-val">Some</span>(<span class="number">67_108_864</span>),
+                state_pruning: <span class="prelude-val">Some</span>(state_pruning.into()),
+                blocks_pruning: blocks_pruning.into(),
+                wasm_method: WasmExecutionMethod::Compiled {
+                    instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
+                },
+                wasm_runtime_overrides: <span class="prelude-val">None</span>,
+                execution_strategies: execution_strategy.into(),
+                rpc_http,
+                rpc_ws,
+                rpc_ipc,
+                rpc_methods: rpc_methods.into(),
+                rpc_ws_max_connections,
+                rpc_cors,
+                rpc_max_payload,
+                rpc_max_request_size,
+                rpc_max_response_size,
+                rpc_id_provider: <span class="prelude-val">None</span>,
+                rpc_max_subs_per_conn: <span class="prelude-val">Some</span>(rpc_max_subs_per_conn),
+                ws_max_out_buffer_capacity,
+                prometheus_config: <span class="prelude-val">None</span>,
+                telemetry_endpoints,
+                default_heap_pages: <span class="prelude-val">None</span>,
+                offchain_worker: offchain_worker.into(),
+                force_authoring,
+                disable_grandpa: <span class="bool-val">false</span>,
+                dev_key_seed: <span class="prelude-val">None</span>,
+                tracing_targets: <span class="prelude-val">None</span>,
+                tracing_receiver: TracingReceiver::Log,
+                chain_spec: Box::new(chain_spec),
+                max_runtime_instances: <span class="number">8</span>,
+                announce_block: <span class="bool-val">true</span>,
+                role: role.into(),
+                base_path: <span class="prelude-val">Some</span>(base_path),
+                informant_output_format: Default::default(),
+                runtime_cache_size: <span class="number">2</span>,
+            }
+        }
     }
 
     <span class="kw">fn </span>default_max_subs_per_conn() -&gt; usize {
@@ -1644,7 +1841,7 @@
     <span class="doccomment">/// Node RPC builder
     </span><span class="attr">#[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
-    #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;RpcBuilder&quot;</span>)]
+    #[builder(pattern = <span class="string">&quot;immutable&quot;</span>, build_fn(private, name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;RpcBuilder&quot;</span>)]
     #[non_exhaustive]
     </span><span class="kw">pub struct </span>Rpc {
         <span class="doccomment">/// RPC over HTTP binding address. `None` if disabled.
@@ -1700,7 +1897,7 @@
 
     <span class="doccomment">/// Node network builder
     </span><span class="attr">#[derive(Debug, Default, Clone, Builder, Deserialize, Serialize)]
-    #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;NetworkBuilder&quot;</span>)]
+    #[builder(pattern = <span class="string">&quot;immutable&quot;</span>, build_fn(private, name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;NetworkBuilder&quot;</span>)]
     #[non_exhaustive]
     </span><span class="kw">pub struct </span>Network {
         <span class="doccomment">/// Listen on some address for other nodes
@@ -1745,7 +1942,7 @@
     <span class="doccomment">/// Node DSN builder
     </span><span class="attr">#[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
-    #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;DsnBuilder&quot;</span>)]
+    #[builder(pattern = <span class="string">&quot;immutable&quot;</span>, build_fn(private, name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;DsnBuilder&quot;</span>)]
     #[non_exhaustive]
     </span><span class="kw">pub struct </span>Dsn {
         <span class="doccomment">/// Listen on some address for other nodes
@@ -1766,7 +1963,7 @@
         </span><span class="attr">#[builder(default)]
         #[serde(default)]
         </span><span class="kw">pub </span>allow_non_global_addresses_in_dht: bool,
-        <span class="doccomment">/// Sets piece publisher batch size
+        <span class="doccomment">/// Sets piece publШрек чтолиisher batch size
         </span><span class="attr">#[builder(default = <span class="string">&quot;default_piece_publisher_batch_size()&quot;</span>)]
         #[derivative(Default(value = <span class="string">&quot;default_piece_publisher_batch_size()&quot;</span>))]
         #[serde(default = <span class="string">&quot;default_piece_publisher_batch_size&quot;</span>)]
@@ -1776,7 +1973,7 @@
     <span class="doccomment">/// Offchain worker config
     </span><span class="attr">#[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
-    #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;OffchainWorkerBuilder&quot;</span>)]
+    #[builder(pattern = <span class="string">&quot;immutable&quot;</span>, build_fn(name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;OffchainWorkerBuilder&quot;</span>)]
     #[non_exhaustive]
     </span><span class="kw">pub struct </span>OffchainWorker {
         <span class="doccomment">/// Is enabled
@@ -1795,7 +1992,50 @@
         }
     }
 
-    <span class="macro">crate::generate_builder!</span>(Rpc, Network, Dsn, OffchainWorker);
+    <span class="kw">impl </span>Builder {
+        <span class="doccomment">/// Get configuration for saving on disk
+        </span><span class="kw">pub fn </span>configuration(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Config {
+            <span class="self">self</span>._build().expect(<span class="string">&quot;Build is infallible&quot;</span>)
+        }
+
+        <span class="doccomment">/// New builder
+        </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+            <span class="self">Self</span>::default()
+        }
+
+        <span class="doccomment">/// Start a node with supplied parameters
+        </span><span class="kw">pub async fn </span>build(
+            <span class="self">self</span>,
+            directory: <span class="kw">impl </span>AsRef&lt;Path&gt;,
+            chain_spec: ConsensusChainSpec&lt;ConsensusGenesisConfig, ExecutionGenesisConfig&gt;,
+        ) -&gt; anyhow::Result&lt;Node&gt; {
+            <span class="self">self</span>.configuration().build(directory, chain_spec).<span class="kw">await
+        </span>}
+    }
+
+    <span class="macro">crate::derive_base!</span>(Base =&gt; Builder {
+        <span class="doccomment">/// Force block authoring
+        </span>force_authoring: bool,
+        <span class="doccomment">/// Set node role
+        </span>role: Role,
+        <span class="doccomment">/// Blocks pruning options
+        </span>blocks_pruning: BlocksPruning,
+        <span class="doccomment">/// State pruning options
+        </span>state_pruning: PruningMode,
+        <span class="doccomment">/// Set execution strategies
+        </span>execution_strategy: ExecutionStrategy,
+        <span class="doccomment">/// Implementation name
+        </span>impl_name: String,
+        <span class="doccomment">/// Implementation version
+        </span>impl_version: String,
+        <span class="doccomment">/// Rpc settings
+        </span>rpc: Rpc,
+        <span class="doccomment">/// Network settings
+        </span>network: Network,
+        <span class="doccomment">/// Offchain worker settings
+        </span>offchain_worker: OffchainWorker,
+    });
+    <span class="macro">crate::generate_builder!</span>(Base, Rpc, Network, Dsn, OffchainWorker);
 }
 
 <span class="doccomment">/// Role of the local node.
@@ -1842,27 +2082,6 @@
 
 <span class="kw">const </span>NODE_NAME_MAX_LENGTH: usize = <span class="number">64</span>;
 
-<span class="kw">impl </span>Builder {
-    <span class="doccomment">/// Get configuration for saving on disk
-    </span><span class="kw">pub fn </span>configuration(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Config {
-        <span class="self">self</span>._build().expect(<span class="string">&quot;Build is infallible&quot;</span>)
-    }
-
-    <span class="doccomment">/// New builder
-    </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::default()
-    }
-
-    <span class="doccomment">/// Start a node with supplied parameters
-    </span><span class="kw">pub async fn </span>build(
-        <span class="self">self</span>,
-        directory: <span class="kw">impl </span>AsRef&lt;Path&gt;,
-        chain_spec: ConsensusChainSpec&lt;ConsensusGenesisConfig, ExecutionGenesisConfig&gt;,
-    ) -&gt; anyhow::Result&lt;Node&gt; {
-        <span class="self">self</span>.configuration().build(directory, chain_spec).<span class="kw">await
-    </span>}
-}
-
 <span class="kw">impl </span>Config {
     <span class="doccomment">/// Start a node with supplied parameters
     </span><span class="kw">pub async fn </span>build(
@@ -1870,132 +2089,9 @@
         directory: <span class="kw">impl </span>AsRef&lt;Path&gt;,
         chain_spec: ConsensusChainSpec&lt;ConsensusGenesisConfig, ExecutionGenesisConfig&gt;,
     ) -&gt; anyhow::Result&lt;Node&gt; {
-        <span class="kw">const </span>NODE_KEY_ED25519_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;secret_ed25519&quot;</span>;
-        <span class="kw">const </span>DEFAULT_NETWORK_CONFIG_PATH: <span class="kw-2">&amp;</span>str = <span class="string">&quot;network&quot;</span>;
-
-        <span class="kw">let </span><span class="self">Self </span>{
-            force_authoring,
-            role,
-            segment_publish_concurrency,
-            blocks_pruning,
-            state_pruning,
-            execution_strategy,
-            piece_cache_size,
-            impl_name,
-            impl_version,
-            rpc:
-                builder::Rpc {
-                    http: rpc_http,
-                    ws: rpc_ws,
-                    ws_max_connections: rpc_ws_max_connections,
-                    ipc: rpc_ipc,
-                    cors: rpc_cors,
-                    methods: rpc_methods,
-                    max_payload: rpc_max_payload,
-                    max_request_size: rpc_max_request_size,
-                    max_response_size: rpc_max_response_size,
-                    max_subs_per_conn: rpc_max_subs_per_conn,
-                    ws_max_out_buffer_capacity,
-                },
-            network,
-            dsn,
-            offchain_worker,
-        } = <span class="self">self</span>;
-        <span class="kw">let </span>base_path = BasePath::new(directory.as_ref());
-        <span class="kw">let </span>config_dir = base_path.config_dir(chain_spec.id());
-
-        <span class="kw">let </span>(<span class="kw-2">mut </span>network, name) = {
-            <span class="kw">let </span>builder::Network {
-                listen_addresses,
-                boot_nodes,
-                force_synced,
-                name,
-                client_id,
-                enable_mdns,
-                allow_private_ipv4,
-            } = network;
-            <span class="kw">let </span>name = name.unwrap_or_else(|| {
-                names::Generator::with_naming(names::Name::Numbered)
-                    .next()
-                    .filter(|name| name.chars().count() &lt; NODE_NAME_MAX_LENGTH)
-                    .expect(<span class="string">&quot;RNG is available on all supported platforms; qed&quot;</span>)
-            });
-
-            <span class="kw">let </span>client_id = client_id.unwrap_or_else(|| <span class="macro">format!</span>(<span class="string">&quot;{}/v{}&quot;</span>, impl_name, impl_version));
-            <span class="kw">let </span>config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
-
-            (
-                NetworkConfiguration {
-                    listen_addresses,
-                    boot_nodes: chain_spec.boot_nodes().iter().cloned().chain(boot_nodes).collect(),
-                    force_synced,
-                    transport: TransportConfig::Normal { enable_mdns, allow_private_ipv4 },
-                    ..NetworkConfiguration::new(
-                        name.clone(),
-                        client_id,
-                        NodeKeyConfig::Ed25519(Secret::File(
-                            config_dir.join(NODE_KEY_ED25519_FILE),
-                        )),
-                        <span class="prelude-val">Some</span>(config_dir),
-                    )
-                },
-                name,
-            )
-        };
-
-        <span class="comment">// Increase default value of 25 to improve success rate of sync
-        </span>network.default_peers_set.out_peers = <span class="number">50</span>;
-        <span class="comment">// Full + Light clients
-        </span>network.default_peers_set.in_peers = <span class="number">25 </span>+ <span class="number">100</span>;
-        <span class="kw">let </span>(keystore_remote, keystore) = (<span class="prelude-val">None</span>, KeystoreConfig::InMemory);
-        <span class="kw">let </span>telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
-
-        <span class="kw">let </span>base = Configuration {
-            impl_name,
-            impl_version,
-            tokio_handle: tokio::runtime::Handle::current(),
-            transaction_pool: Default::default(),
-            network,
-            keystore_remote,
-            keystore,
-            database: DatabaseSource::ParityDb { path: config_dir.join(<span class="string">&quot;paritydb&quot;</span>).join(<span class="string">&quot;full&quot;</span>) },
-            trie_cache_maximum_size: <span class="prelude-val">Some</span>(<span class="number">67_108_864</span>),
-            state_pruning: <span class="prelude-val">Some</span>(state_pruning.into()),
-            blocks_pruning: blocks_pruning.into(),
-            wasm_method: WasmExecutionMethod::Compiled {
-                instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
-            },
-            wasm_runtime_overrides: <span class="prelude-val">None</span>,
-            execution_strategies: execution_strategy.into(),
-            rpc_http,
-            rpc_ws,
-            rpc_ipc,
-            rpc_methods: rpc_methods.into(),
-            rpc_ws_max_connections,
-            rpc_cors,
-            rpc_max_payload,
-            rpc_max_request_size,
-            rpc_max_response_size,
-            rpc_id_provider: <span class="prelude-val">None</span>,
-            rpc_max_subs_per_conn: <span class="prelude-val">Some</span>(rpc_max_subs_per_conn),
-            ws_max_out_buffer_capacity,
-            prometheus_config: <span class="prelude-val">None</span>,
-            telemetry_endpoints,
-            default_heap_pages: <span class="prelude-val">None</span>,
-            offchain_worker: offchain_worker.into(),
-            force_authoring,
-            disable_grandpa: <span class="bool-val">false</span>,
-            dev_key_seed: <span class="prelude-val">None</span>,
-            tracing_targets: <span class="prelude-val">None</span>,
-            tracing_receiver: TracingReceiver::Log,
-            chain_spec: Box::new(chain_spec),
-            max_runtime_instances: <span class="number">8</span>,
-            announce_block: <span class="bool-val">true</span>,
-            role: role.into(),
-            base_path: <span class="prelude-val">Some</span>(base_path),
-            informant_output_format: Default::default(),
-            runtime_cache_size: <span class="number">2</span>,
-        };
+        <span class="kw">let </span><span class="self">Self </span>{ base, piece_cache_size, dsn, segment_publish_concurrency } = <span class="self">self</span>;
+        <span class="kw">let </span>base = base.configuration(directory, chain_spec).<span class="kw">await</span>;
+        <span class="kw">let </span>name = base.network.node_name.clone();
 
         <span class="kw">let </span>partial_components =
             subspace_service::new_partial::&lt;RuntimeApi, ExecutorDispatch&gt;(<span class="kw-2">&amp;</span>base)
