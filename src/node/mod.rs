@@ -34,8 +34,9 @@ use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 pub mod chain_spec;
 
 pub use builder::{
-    BlocksPruning, Builder, Config, Constraints, Dsn, DsnBuilder, ExecutionStrategy, Network,
-    NetworkBuilder, OffchainWorker, OffchainWorkerBuilder, PruningMode, Rpc, RpcBuilder,
+    Base, BaseBuilder, BlocksPruning, Builder, Config, Constraints, Dsn, DsnBuilder,
+    ExecutionStrategy, Network, NetworkBuilder, OffchainWorker, OffchainWorkerBuilder, PruningMode,
+    Rpc, RpcBuilder,
 };
 
 use crate::networking::{
@@ -192,6 +193,40 @@ mod builder {
         bytesize::ByteSize::gib(1)
     }
 
+    fn default_segment_publish_concurrency() -> NonZeroUsize {
+        NonZeroUsize::new(10).unwrap()
+    }
+
+    /// Node builder
+    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
+    #[derivative(Default)]
+    #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "Builder")]
+    #[non_exhaustive]
+    pub struct Config {
+        #[doc(hidden)]
+        #[builder(
+            setter(into, strip_option),
+            field(type = "BaseBuilder", build = "self.base.build()")
+        )]
+        #[serde(default)]
+        pub base: Base,
+        /// Set piece cache size
+        #[builder(default = "default_piece_cache_size()")]
+        #[derivative(Default(value = "default_piece_cache_size()"))]
+        #[serde(with = "bytesize_serde", default = "default_piece_cache_size")]
+        pub piece_cache_size: bytesize::ByteSize,
+        /// Max number of segments that can be published concurrently, impacts
+        /// RAM usage and network bandwidth.
+        #[builder(default = "default_segment_publish_concurrency()")]
+        #[derivative(Default(value = "default_segment_publish_concurrency()"))]
+        #[serde(default = "default_segment_publish_concurrency")]
+        pub segment_publish_concurrency: NonZeroUsize,
+        /// DSN settings
+        #[builder(setter(into), default)]
+        #[serde(default)]
+        pub dsn: Dsn,
+    }
+
     fn default_impl_name() -> String {
         env!("CARGO_PKG_NAME").to_owned()
     }
@@ -200,26 +235,16 @@ mod builder {
         format!("{}-{}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH"))
     }
 
-    fn default_segment_publish_concurrency() -> NonZeroUsize {
-        NonZeroUsize::new(10).unwrap()
-    }
-
-    /// Node builder
+    #[doc(hidden)]
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
-    #[builder(pattern = "immutable", build_fn(name = "_build"), name = "Builder")]
+    #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "BaseBuilder")]
     #[non_exhaustive]
-    pub struct Config {
+    pub struct Base {
         /// Force block authoring
         #[builder(default)]
         #[serde(default)]
         pub force_authoring: bool,
-        /// Max number of segments that can be published concurrently, impacts
-        /// RAM usage and network bandwidth.
-        #[builder(default = "default_segment_publish_concurrency()")]
-        #[derivative(Default(value = "default_segment_publish_concurrency()"))]
-        #[serde(default = "default_segment_publish_concurrency")]
-        pub segment_publish_concurrency: NonZeroUsize,
         /// Set node role
         #[builder(default)]
         #[serde(default)]
@@ -236,11 +261,6 @@ mod builder {
         #[builder(default)]
         #[serde(default)]
         pub execution_strategy: ExecutionStrategy,
-        /// Set piece cache size
-        #[builder(default = "default_piece_cache_size()")]
-        #[derivative(Default(value = "default_piece_cache_size()"))]
-        #[serde(with = "bytesize_serde", default = "default_piece_cache_size")]
-        pub piece_cache_size: bytesize::ByteSize,
         /// Implementation name
         #[builder(default = "default_impl_name()")]
         #[derivative(Default(value = "default_impl_name()"))]
@@ -259,14 +279,143 @@ mod builder {
         #[builder(setter(into), default)]
         #[serde(default)]
         pub network: Network,
-        /// DSN settings
-        #[builder(setter(into), default)]
-        #[serde(default)]
-        pub dsn: Dsn,
         /// Offchain worker settings
         #[builder(setter(into), default)]
         #[serde(default)]
         pub offchain_worker: OffchainWorker,
+    }
+
+    impl Base {
+        pub(crate) async fn configuration(
+            self,
+            directory: impl AsRef<Path>,
+            chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
+        ) -> Configuration {
+            const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
+            const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
+
+            let Self {
+                force_authoring,
+                role,
+                blocks_pruning,
+                state_pruning,
+                execution_strategy,
+                impl_name,
+                impl_version,
+                rpc:
+                    Rpc {
+                        http: rpc_http,
+                        ws: rpc_ws,
+                        ws_max_connections: rpc_ws_max_connections,
+                        ipc: rpc_ipc,
+                        cors: rpc_cors,
+                        methods: rpc_methods,
+                        max_payload: rpc_max_payload,
+                        max_request_size: rpc_max_request_size,
+                        max_response_size: rpc_max_response_size,
+                        max_subs_per_conn: rpc_max_subs_per_conn,
+                        ws_max_out_buffer_capacity,
+                    },
+                network,
+                offchain_worker,
+            } = self;
+
+            let base_path = BasePath::new(directory.as_ref());
+            let config_dir = base_path.config_dir(chain_spec.id());
+
+            let mut network = {
+                let builder::Network {
+                    listen_addresses,
+                    boot_nodes,
+                    force_synced,
+                    name,
+                    client_id,
+                    enable_mdns,
+                    allow_private_ipv4,
+                } = network;
+                let name = name.unwrap_or_else(|| {
+                    names::Generator::with_naming(names::Name::Numbered)
+                        .next()
+                        .filter(|name| name.chars().count() < NODE_NAME_MAX_LENGTH)
+                        .expect("RNG is available on all supported platforms; qed")
+                });
+
+                let client_id =
+                    client_id.unwrap_or_else(|| format!("{}/v{}", impl_name, impl_version));
+                let config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
+
+                NetworkConfiguration {
+                    listen_addresses,
+                    boot_nodes: chain_spec.boot_nodes().iter().cloned().chain(boot_nodes).collect(),
+                    force_synced,
+                    transport: TransportConfig::Normal { enable_mdns, allow_private_ipv4 },
+                    ..NetworkConfiguration::new(
+                        name,
+                        client_id,
+                        NodeKeyConfig::Ed25519(Secret::File(
+                            config_dir.join(NODE_KEY_ED25519_FILE),
+                        )),
+                        Some(config_dir),
+                    )
+                }
+            };
+
+            // Increase default value of 25 to improve success rate of sync
+            network.default_peers_set.out_peers = 50;
+            // Full + Light clients
+            network.default_peers_set.in_peers = 25 + 100;
+            let (keystore_remote, keystore) = (None, KeystoreConfig::InMemory);
+            let telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
+
+            Configuration {
+                impl_name,
+                impl_version,
+                tokio_handle: tokio::runtime::Handle::current(),
+                transaction_pool: Default::default(),
+                network,
+                keystore_remote,
+                keystore,
+                database: DatabaseSource::ParityDb {
+                    path: config_dir.join("paritydb").join("full"),
+                },
+                trie_cache_maximum_size: Some(67_108_864),
+                state_pruning: Some(state_pruning.into()),
+                blocks_pruning: blocks_pruning.into(),
+                wasm_method: WasmExecutionMethod::Compiled {
+                    instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
+                },
+                wasm_runtime_overrides: None,
+                execution_strategies: execution_strategy.into(),
+                rpc_http,
+                rpc_ws,
+                rpc_ipc,
+                rpc_methods: rpc_methods.into(),
+                rpc_ws_max_connections,
+                rpc_cors,
+                rpc_max_payload,
+                rpc_max_request_size,
+                rpc_max_response_size,
+                rpc_id_provider: None,
+                rpc_max_subs_per_conn: Some(rpc_max_subs_per_conn),
+                ws_max_out_buffer_capacity,
+                prometheus_config: None,
+                telemetry_endpoints,
+                default_heap_pages: None,
+                offchain_worker: offchain_worker.into(),
+                force_authoring,
+                disable_grandpa: false,
+                dev_key_seed: None,
+                tracing_targets: None,
+                tracing_receiver: TracingReceiver::Log,
+                chain_spec: Box::new(chain_spec),
+                max_runtime_instances: 8,
+                announce_block: true,
+                role: role.into(),
+                base_path: Some(base_path),
+                informant_output_format: Default::default(),
+                runtime_cache_size: 2,
+            }
+        }
     }
 
     fn default_max_subs_per_conn() -> usize {
@@ -276,7 +425,7 @@ mod builder {
     /// Node RPC builder
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
-    #[builder(pattern = "owned", build_fn(name = "_build"), name = "RpcBuilder")]
+    #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "RpcBuilder")]
     #[non_exhaustive]
     pub struct Rpc {
         /// RPC over HTTP binding address. `None` if disabled.
@@ -332,7 +481,7 @@ mod builder {
 
     /// Node network builder
     #[derive(Debug, Default, Clone, Builder, Deserialize, Serialize)]
-    #[builder(pattern = "owned", build_fn(name = "_build"), name = "NetworkBuilder")]
+    #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "NetworkBuilder")]
     #[non_exhaustive]
     pub struct Network {
         /// Listen on some address for other nodes
@@ -377,7 +526,7 @@ mod builder {
     /// Node DSN builder
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
-    #[builder(pattern = "owned", build_fn(name = "_build"), name = "DsnBuilder")]
+    #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "DsnBuilder")]
     #[non_exhaustive]
     pub struct Dsn {
         /// Listen on some address for other nodes
@@ -398,7 +547,7 @@ mod builder {
         #[builder(default)]
         #[serde(default)]
         pub allow_non_global_addresses_in_dht: bool,
-        /// Sets piece publisher batch size
+        /// Sets piece publШрек чтолиisher batch size
         #[builder(default = "default_piece_publisher_batch_size()")]
         #[derivative(Default(value = "default_piece_publisher_batch_size()"))]
         #[serde(default = "default_piece_publisher_batch_size")]
@@ -408,7 +557,7 @@ mod builder {
     /// Offchain worker config
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
     #[derivative(Default)]
-    #[builder(pattern = "owned", build_fn(name = "_build"), name = "OffchainWorkerBuilder")]
+    #[builder(pattern = "immutable", build_fn(name = "_build"), name = "OffchainWorkerBuilder")]
     #[non_exhaustive]
     pub struct OffchainWorker {
         /// Is enabled
@@ -427,7 +576,50 @@ mod builder {
         }
     }
 
-    crate::generate_builder!(Rpc, Network, Dsn, OffchainWorker);
+    impl Builder {
+        /// Get configuration for saving on disk
+        pub fn configuration(&self) -> Config {
+            self._build().expect("Build is infallible")
+        }
+
+        /// New builder
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        /// Start a node with supplied parameters
+        pub async fn build(
+            self,
+            directory: impl AsRef<Path>,
+            chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
+        ) -> anyhow::Result<Node> {
+            self.configuration().build(directory, chain_spec).await
+        }
+    }
+
+    crate::derive_base!(Base => Builder {
+        /// Force block authoring
+        force_authoring: bool,
+        /// Set node role
+        role: Role,
+        /// Blocks pruning options
+        blocks_pruning: BlocksPruning,
+        /// State pruning options
+        state_pruning: PruningMode,
+        /// Set execution strategies
+        execution_strategy: ExecutionStrategy,
+        /// Implementation name
+        impl_name: String,
+        /// Implementation version
+        impl_version: String,
+        /// Rpc settings
+        rpc: Rpc,
+        /// Network settings
+        network: Network,
+        /// Offchain worker settings
+        offchain_worker: OffchainWorker,
+    });
+    crate::generate_builder!(Base, Rpc, Network, Dsn, OffchainWorker);
 }
 
 /// Role of the local node.
@@ -474,27 +666,6 @@ impl From<RpcMethods> for sc_service::RpcMethods {
 
 const NODE_NAME_MAX_LENGTH: usize = 64;
 
-impl Builder {
-    /// Get configuration for saving on disk
-    pub fn configuration(&self) -> Config {
-        self._build().expect("Build is infallible")
-    }
-
-    /// New builder
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Start a node with supplied parameters
-    pub async fn build(
-        self,
-        directory: impl AsRef<Path>,
-        chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
-    ) -> anyhow::Result<Node> {
-        self.configuration().build(directory, chain_spec).await
-    }
-}
-
 impl Config {
     /// Start a node with supplied parameters
     pub async fn build(
@@ -502,132 +673,9 @@ impl Config {
         directory: impl AsRef<Path>,
         chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
     ) -> anyhow::Result<Node> {
-        const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
-        const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
-
-        let Self {
-            force_authoring,
-            role,
-            segment_publish_concurrency,
-            blocks_pruning,
-            state_pruning,
-            execution_strategy,
-            piece_cache_size,
-            impl_name,
-            impl_version,
-            rpc:
-                builder::Rpc {
-                    http: rpc_http,
-                    ws: rpc_ws,
-                    ws_max_connections: rpc_ws_max_connections,
-                    ipc: rpc_ipc,
-                    cors: rpc_cors,
-                    methods: rpc_methods,
-                    max_payload: rpc_max_payload,
-                    max_request_size: rpc_max_request_size,
-                    max_response_size: rpc_max_response_size,
-                    max_subs_per_conn: rpc_max_subs_per_conn,
-                    ws_max_out_buffer_capacity,
-                },
-            network,
-            dsn,
-            offchain_worker,
-        } = self;
-        let base_path = BasePath::new(directory.as_ref());
-        let config_dir = base_path.config_dir(chain_spec.id());
-
-        let (mut network, name) = {
-            let builder::Network {
-                listen_addresses,
-                boot_nodes,
-                force_synced,
-                name,
-                client_id,
-                enable_mdns,
-                allow_private_ipv4,
-            } = network;
-            let name = name.unwrap_or_else(|| {
-                names::Generator::with_naming(names::Name::Numbered)
-                    .next()
-                    .filter(|name| name.chars().count() < NODE_NAME_MAX_LENGTH)
-                    .expect("RNG is available on all supported platforms; qed")
-            });
-
-            let client_id = client_id.unwrap_or_else(|| format!("{}/v{}", impl_name, impl_version));
-            let config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
-
-            (
-                NetworkConfiguration {
-                    listen_addresses,
-                    boot_nodes: chain_spec.boot_nodes().iter().cloned().chain(boot_nodes).collect(),
-                    force_synced,
-                    transport: TransportConfig::Normal { enable_mdns, allow_private_ipv4 },
-                    ..NetworkConfiguration::new(
-                        name.clone(),
-                        client_id,
-                        NodeKeyConfig::Ed25519(Secret::File(
-                            config_dir.join(NODE_KEY_ED25519_FILE),
-                        )),
-                        Some(config_dir),
-                    )
-                },
-                name,
-            )
-        };
-
-        // Increase default value of 25 to improve success rate of sync
-        network.default_peers_set.out_peers = 50;
-        // Full + Light clients
-        network.default_peers_set.in_peers = 25 + 100;
-        let (keystore_remote, keystore) = (None, KeystoreConfig::InMemory);
-        let telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
-
-        let base = Configuration {
-            impl_name,
-            impl_version,
-            tokio_handle: tokio::runtime::Handle::current(),
-            transaction_pool: Default::default(),
-            network,
-            keystore_remote,
-            keystore,
-            database: DatabaseSource::ParityDb { path: config_dir.join("paritydb").join("full") },
-            trie_cache_maximum_size: Some(67_108_864),
-            state_pruning: Some(state_pruning.into()),
-            blocks_pruning: blocks_pruning.into(),
-            wasm_method: WasmExecutionMethod::Compiled {
-                instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
-            },
-            wasm_runtime_overrides: None,
-            execution_strategies: execution_strategy.into(),
-            rpc_http,
-            rpc_ws,
-            rpc_ipc,
-            rpc_methods: rpc_methods.into(),
-            rpc_ws_max_connections,
-            rpc_cors,
-            rpc_max_payload,
-            rpc_max_request_size,
-            rpc_max_response_size,
-            rpc_id_provider: None,
-            rpc_max_subs_per_conn: Some(rpc_max_subs_per_conn),
-            ws_max_out_buffer_capacity,
-            prometheus_config: None,
-            telemetry_endpoints,
-            default_heap_pages: None,
-            offchain_worker: offchain_worker.into(),
-            force_authoring,
-            disable_grandpa: false,
-            dev_key_seed: None,
-            tracing_targets: None,
-            tracing_receiver: TracingReceiver::Log,
-            chain_spec: Box::new(chain_spec),
-            max_runtime_instances: 8,
-            announce_block: true,
-            role: role.into(),
-            base_path: Some(base_path),
-            informant_output_format: Default::default(),
-            runtime_cache_size: 2,
-        };
+        let Self { base, piece_cache_size, dsn, segment_publish_concurrency } = self;
+        let base = base.configuration(directory, chain_spec).await;
+        let name = base.network.node_name.clone();
 
         let partial_components =
             subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&base)
