@@ -32,12 +32,14 @@ use subspace_service::{FullClient, SubspaceConfiguration};
 use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
 pub mod chain_spec;
+mod domains;
 
 pub use builder::{
     Base, BaseBuilder, BlocksPruning, Builder, Config, Constraints, Dsn, DsnBuilder,
     ExecutionStrategy, Network, NetworkBuilder, OffchainWorker, OffchainWorkerBuilder, PruningMode,
     Rpc, RpcBuilder,
 };
+pub use domains::{ConfigBuilder as SecondaryNodeBuilder, SecondaryNode};
 
 use self::builder::{ListenAddresses, SegmentPublishConcurrency};
 use crate::networking::{
@@ -255,6 +257,10 @@ mod builder {
         )]
         #[serde(flatten, skip_serializing_if = "crate::utils::is_default")]
         pub base: Base,
+        /// Secondary chain settings
+        #[builder(setter(into, strip_option), default)]
+        #[serde(default)]
+        pub secondary_chain: Option<domains::Config>,
         /// DSN settings
         #[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
@@ -752,9 +758,10 @@ impl Config {
             base,
             piece_cache_size,
             dsn,
+            secondary_chain,
             segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
         } = self;
-        let base = base.configuration(directory, chain_spec).await;
+        let base = base.configuration(directory.as_ref(), chain_spec.clone()).await;
         let name = base.network.node_name.clone();
 
         let partial_components =
@@ -918,12 +925,38 @@ impl Config {
         });
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);
-        let full_client =
+        let mut full_client =
             subspace_service::new_full(configuration, partial_components, true, slot_proportion)
                 .await
                 .context("Failed to build a full subspace node")?;
 
-        let subspace_service::NewFull {
+        let secondary_node = if let Some(config) = secondary_chain {
+            use sc_service::ChainSpecExtension;
+
+            let secondary_chain_spec = chain_spec
+                .extensions()
+                .get_any(std::any::TypeId::of::<
+                    sc_subspace_chain_specs::ExecutionChainSpec<ExecutionGenesisConfig>,
+                >())
+                .downcast_ref()
+                .cloned()
+                .ok_or_else(|| {
+                    anyhow::anyhow!("Primary chain spec must contain secondary chain spec")
+                })?;
+
+            SecondaryNode::new(
+                config,
+                directory.as_ref().join("secondary"),
+                secondary_chain_spec,
+                &mut full_client,
+            )
+            .await
+            .map(Some)?
+        } else {
+            None
+        };
+
+        let PrimaryNewFull {
             mut task_manager,
             client,
             rpc_handlers,
@@ -932,11 +965,11 @@ impl Config {
 
             select_chain: _,
             backend: _,
-            new_slot_notification_stream: _,
             reward_signing_notification_stream: _,
-            imported_block_notification_stream: _,
             archived_segment_notification_stream: _,
             transaction_pool: _,
+            imported_block_notification_stream: _,
+            new_slot_notification_stream: _,
         } = full_client;
 
         let client = Arc::downgrade(&client);
@@ -963,6 +996,7 @@ impl Config {
 
         Ok(Node {
             client,
+            secondary_node,
             network,
             name,
             farmer_record_storage,
@@ -975,7 +1009,7 @@ impl Config {
 }
 
 /// Executor dispatch for subspace runtime
-struct ExecutorDispatch;
+pub(crate) struct ExecutorDispatch;
 
 impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     // /// Only enable the benchmarking host functions when we actually want to
@@ -994,10 +1028,18 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     }
 }
 
+pub(crate) type PrimaryFullClient =
+    subspace_service::FullClient<subspace_runtime::RuntimeApi, ExecutorDispatch>;
+pub(crate) type PrimaryNewFull = subspace_service::NewFull<
+    PrimaryFullClient,
+    subspace_service::FraudProofVerifier<RuntimeApi, ExecutorDispatch>,
+>;
+
 /// Node structure
 #[derive(Clone)]
 pub struct Node {
-    client: Weak<FullClient<RuntimeApi, ExecutorDispatch>>,
+    secondary_node: Option<SecondaryNode>,
+    client: Weak<PrimaryFullClient>,
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     pub(crate) rpc_handle: crate::utils::Rpc,
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
@@ -1265,6 +1307,11 @@ impl Node {
 
     fn client(&self) -> anyhow::Result<Arc<FullClient<RuntimeApi, ExecutorDispatch>>> {
         self.client.upgrade().ok_or_else(|| anyhow::anyhow!("The node was already closed"))
+    }
+
+    /// Returns reference to secondary node
+    pub fn secondary_node(&self) -> Option<SecondaryNode> {
+        self.secondary_node.as_ref().cloned()
     }
 
     /// Get node info
