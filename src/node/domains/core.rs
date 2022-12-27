@@ -87,8 +87,10 @@ pub(crate) type ChainSpec =
     sc_subspace_chain_specs::ExecutionChainSpec<core_payments_domain_runtime::GenesisConfig>;
 
 /// Secondary executor node
-#[derive(Clone)]
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub struct CoreNode {
+    #[derivative(Debug = "ignore")]
     client: Weak<FullClient>,
     _rpc_handlers: crate::utils::Rpc,
 }

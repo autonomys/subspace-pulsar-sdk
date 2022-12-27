@@ -1,3 +1,4 @@
+use derivative::Derivative;
 use subspace_core_primitives::{Piece, PieceIndexHash, SectorIndex};
 use subspace_farmer::single_disk_plot::piece_reader::PieceReader;
 use subspace_farmer::single_disk_plot::SingleDiskPlot;
@@ -96,8 +97,10 @@ impl Extend<(PieceIndexHash, PieceDetails)> for ReadersAndPieces {
     }
 }
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct MaybeRecordStorage<S> {
+    #[derivative(Debug = "ignore")]
     inner: std::sync::Arc<std::sync::Mutex<Option<S>>>,
 }
 

@@ -5,6 +5,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use anyhow::Context;
+use derivative::Derivative;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 use libp2p_core::Multiaddr;
@@ -953,7 +954,7 @@ impl Config {
 
             SecondaryNode::new(
                 config,
-                directory.as_ref().join("secondary"),
+                directory.as_ref().join("domains"),
                 secondary_chain_spec,
                 &mut full_client,
             )
@@ -1043,10 +1044,14 @@ pub(crate) type PrimaryNewFull = subspace_service::NewFull<
 >;
 
 /// Node structure
-#[derive(Clone)]
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub struct Node {
+    #[derivative(Debug = "ignore")]
     secondary_node: Option<SecondaryNode>,
+    #[derivative(Debug = "ignore")]
     client: Weak<PrimaryFullClient>,
+    #[derivative(Debug = "ignore")]
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     pub(crate) rpc_handle: crate::utils::Rpc,
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
@@ -1054,16 +1059,6 @@ pub struct Node {
     pub(crate) readers_and_pieces: Arc<std::sync::Mutex<Option<ReadersAndPieces>>>,
     pub(crate) dsn_node: subspace_networking::Node,
     name: String,
-}
-
-impl std::fmt::Debug for Node {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Node")
-            .field("rpc_handle", &self.rpc_handle)
-            .field("stop_sender", &self.stop_sender)
-            .field("name", &self.name)
-            .finish_non_exhaustive()
-    }
 }
 
 /// Hash type

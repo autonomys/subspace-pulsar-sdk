@@ -75,8 +75,10 @@ pub(crate) type NewFull = domain_service::NewFull<
 >;
 
 /// Secondary executor node
-#[derive(Clone)]
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub struct SecondaryNode {
+    #[derivative(Debug = "ignore")]
     client: Weak<FullClient>,
     core: Option<CoreNode>,
     _rpc_handlers: crate::utils::Rpc,
