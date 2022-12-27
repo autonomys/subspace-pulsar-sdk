@@ -10,10 +10,9 @@ use derive_builder::Builder;
 use domain_service::DomainConfiguration;
 use futures::prelude::*;
 use sc_client_api::client::BlockImportNotification;
-use sc_subspace_chain_specs::ConsensusChainSpec;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
-use subspace_runtime::{Block, GenesisConfig as ConsensusGenesisConfig};
+use subspace_runtime::Block;
 use subspace_runtime_primitives::opaque::Header;
 use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
@@ -73,6 +72,8 @@ pub(crate) type NewFull = domain_service::NewFull<
     system_domain_runtime::RuntimeApi,
     ExecutorDispatch,
 >;
+/// Chain spec of the secondary chain
+pub type ChainSpec = sc_subspace_chain_specs::ExecutionChainSpec<ExecutionGenesisConfig>;
 
 /// Secondary executor node
 #[derive(Clone, Derivative)]
@@ -88,7 +89,7 @@ impl SecondaryNode {
     pub(crate) async fn new(
         cfg: Config,
         directory: impl AsRef<Path>,
-        chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
+        chain_spec: ChainSpec,
         primary_new_full: &mut crate::node::PrimaryNewFull,
     ) -> anyhow::Result<Self> {
         let Config { base, relayer_id: maybe_relayer_id, core } = cfg;

@@ -345,7 +345,7 @@ pub fn subspace_genesis_config(
     }
 }
 
-mod secondary_chain {
+pub mod secondary_chain {
     //! Secondary chain configurations.
 
     use domain_runtime_primitives::RelayerId;
@@ -366,6 +366,7 @@ mod secondary_chain {
 
     type DomainConfig = sp_domains::DomainConfig<Hash, Balance, Weight>;
 
+    /// Development config
     pub fn development_config() -> ExecutionChainSpec<GenesisConfig> {
         ExecutionChainSpec::from_genesis(
             // Name
@@ -417,6 +418,7 @@ mod secondary_chain {
         )
     }
 
+    /// Local config
     pub fn local_testnet_config() -> ExecutionChainSpec<GenesisConfig> {
         ExecutionChainSpec::from_genesis(
             // Name
@@ -484,6 +486,7 @@ mod secondary_chain {
         )
     }
 
+    /// Gemini 3b config
     pub fn gemini_3b_config() -> ExecutionChainSpec<GenesisConfig> {
         ExecutionChainSpec::from_genesis(
             // Name
@@ -555,6 +558,7 @@ mod secondary_chain {
         )
     }
 
+    /// X net 2 config
     pub fn x_net_2_config() -> ExecutionChainSpec<GenesisConfig> {
         ExecutionChainSpec::from_genesis(
             // Name
@@ -683,9 +687,7 @@ mod utils {
     }
 }
 
-// TODO: Add secondary chain support for node
-#[allow(unused)]
-mod core_payments {
+pub mod core_payments {
     //! Secondary chain configurations.
 
     use core_payments_domain_runtime::{
@@ -700,8 +702,10 @@ mod core_payments {
 
     use super::utils::{chain_spec_properties, get_account_id_from_seed};
 
+    /// Chain spec
     pub type ChainSpec = ExecutionChainSpec<GenesisConfig>;
 
+    /// Development config
     pub fn development_config() -> ExecutionChainSpec<GenesisConfig> {
         ExecutionChainSpec::from_genesis(
             // Name
@@ -730,6 +734,7 @@ mod core_payments {
         )
     }
 
+    /// Local test net
     pub fn local_testnet_config() -> ExecutionChainSpec<GenesisConfig> {
         ExecutionChainSpec::from_genesis(
             // Name
@@ -774,6 +779,7 @@ mod core_payments {
         )
     }
 
+    /// Gemini 3b chain spec
     pub fn gemini_3b_config() -> ExecutionChainSpec<GenesisConfig> {
         ExecutionChainSpec::from_genesis(
             // Name

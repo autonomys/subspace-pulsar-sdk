@@ -943,9 +943,7 @@ impl Config {
 
             let secondary_chain_spec = chain_spec
                 .extensions()
-                .get_any(std::any::TypeId::of::<
-                    sc_subspace_chain_specs::ExecutionChainSpec<ExecutionGenesisConfig>,
-                >())
+                .get_any(std::any::TypeId::of::<domains::ChainSpec>())
                 .downcast_ref()
                 .cloned()
                 .ok_or_else(|| {

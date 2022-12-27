@@ -36,7 +36,7 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 
 /// Node builder
 #[derive(Clone, Derivative, Builder, Deserialize, Serialize)]
-#[derivative(Debug)]
+#[derivative(Debug, PartialEq)]
 #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "ConfigBuilder")]
 #[non_exhaustive]
 pub struct Config {
@@ -47,7 +47,7 @@ pub struct Config {
     )]
     #[serde(default)]
     pub base: Base,
-    #[derivative(Debug = "ignore")]
+    #[derivative(Debug = "ignore", PartialEq = "ignore")]
     #[builder(setter(skip), field(type = "()", build = "None"))]
     chain_spec: Option<ChainSpec>,
     /// Id of the relayer
@@ -83,7 +83,8 @@ pub(crate) type NewFull = domain_service::NewFullCore<
     core_payments_domain_runtime::RuntimeApi,
     ExecutorDispatch,
 >;
-pub(crate) type ChainSpec =
+/// Chain spec of the core domain
+pub type ChainSpec =
     sc_subspace_chain_specs::ExecutionChainSpec<core_payments_domain_runtime::GenesisConfig>;
 
 /// Secondary executor node
@@ -192,5 +193,47 @@ impl CoreNode {
                 },
             );
         Ok(stream)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::TempDir;
+
+    use super::*;
+    use crate::farmer::CacheDescription;
+    use crate::node::{chain_spec, domains, Role};
+    use crate::{Farmer, Node, PlotDescription};
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_core() {
+        let _ = tracing_subscriber::fmt().try_init();
+
+        let dir = TempDir::new().unwrap();
+        let core = ConfigBuilder::new().build(chain_spec::core_payments::development_config());
+        let node = Node::builder()
+            .secondary_chain(domains::ConfigBuilder::new().core(core))
+            .force_authoring(true)
+            .role(Role::Authority)
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
+        let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
+        let farmer = Farmer::builder()
+            .build(
+                Default::default(),
+                node.clone(),
+                &[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::gb(1)).unwrap()],
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let core = node.secondary_node().unwrap().core().unwrap();
+
+        core.subscribe_new_blocks().await.unwrap().next().await.unwrap();
+
+        farmer.close().await.unwrap();
+        node.close().await;
     }
 }
