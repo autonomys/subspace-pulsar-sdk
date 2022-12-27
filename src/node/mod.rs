@@ -357,11 +357,18 @@ mod builder {
     }
 
     impl Base {
-        pub(crate) async fn configuration(
+        pub(crate) async fn configuration<CS>(
             self,
             directory: impl AsRef<Path>,
-            chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
-        ) -> Configuration {
+            chain_spec: CS,
+        ) -> Configuration
+        where
+            CS: sc_chain_spec::ChainSpec
+                + serde::Serialize
+                + serde::de::DeserializeOwned
+                + sp_runtime::BuildStorage
+                + 'static,
+        {
             const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
             const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
 

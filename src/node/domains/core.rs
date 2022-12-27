@@ -8,20 +8,14 @@ use derive_builder::Builder;
 use domain_service::DomainConfiguration;
 use futures::prelude::*;
 use sc_client_api::client::BlockImportNotification;
-use sc_subspace_chain_specs::ConsensusChainSpec;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
-use subspace_runtime::{Block, GenesisConfig as ConsensusGenesisConfig};
 use subspace_runtime_primitives::opaque::Header;
-use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
-use self::core::CoreNode;
 use crate::node::{Base, BaseBuilder, BlockNotification};
 
-mod core;
-
-/// System domain executor instance.
-pub(crate) struct ExecutorDispatch;
+/// Core payments domain executor instance.
+pub struct ExecutorDispatch;
 
 impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     // #[cfg(feature = "runtime-benchmarks")]
@@ -30,17 +24,17 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     type ExtendHostFunctions = ();
 
     fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-        system_domain_runtime::api::dispatch(method, data)
+        core_payments_domain_runtime::api::dispatch(method, data)
     }
 
     fn native_version() -> sc_executor::NativeVersion {
-        system_domain_runtime::native_version()
+        core_payments_domain_runtime::native_version()
     }
 }
 
 /// Node builder
-#[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
-#[derivative(Default)]
+#[derive(Clone, Derivative, Builder, Deserialize, Serialize)]
+#[derivative(Debug)]
 #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "ConfigBuilder")]
 #[non_exhaustive]
 pub struct Config {
@@ -51,56 +45,72 @@ pub struct Config {
     )]
     #[serde(default)]
     pub base: Base,
-    /// The core config
-    #[builder(setter(strip_option), default)]
-    #[serde(default)]
-    pub core: Option<core::Config>,
+    #[derivative(Debug = "ignore")]
+    #[builder(setter(skip), field(type = "()", build = "None"))]
+    chain_spec: Option<ChainSpec>,
     /// Id of the relayer
     #[builder(setter(strip_option), default)]
     #[serde(default)]
     pub relayer_id: Option<RelayerId>,
 }
 
+impl ConfigBuilder {
+    /// Constructor
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Build Config
+    pub fn build(&self, chain_spec: ChainSpec) -> Config {
+        Config { chain_spec: Some(chain_spec), ..self._build().expect("Infallible") }
+    }
+}
+
 pub(crate) type FullClient =
-    domain_service::FullClient<system_domain_runtime::RuntimeApi, ExecutorDispatch>;
-pub(crate) type NewFull = domain_service::NewFull<
+    domain_service::FullClient<core_payments_domain_runtime::RuntimeApi, ExecutorDispatch>;
+pub(crate) type NewFull = domain_service::NewFullCore<
     Arc<FullClient>,
     sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
-    subspace_runtime_primitives::opaque::Block,
-    crate::node::PrimaryFullClient,
-    system_domain_runtime::RuntimeApi,
-    ExecutorDispatch,
->;
-pub(crate) type NetworkService = sc_network::NetworkService<
     sp_runtime::generic::Block<
         sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>,
         sp_runtime::OpaqueExtrinsic,
     >,
-    super::Hash,
+    subspace_runtime_primitives::opaque::Block,
+    super::FullClient,
+    crate::node::PrimaryFullClient,
+    core_payments_domain_runtime::RuntimeApi,
+    ExecutorDispatch,
 >;
+pub(crate) type ChainSpec =
+    sc_subspace_chain_specs::ExecutionChainSpec<core_payments_domain_runtime::GenesisConfig>;
 
 /// Secondary executor node
 #[derive(Clone)]
-pub struct SecondaryNode {
+pub struct CoreNode {
     client: Weak<FullClient>,
-    core: Option<CoreNode>,
-    network: Weak<NetworkService>,
-    _rpc_handlers: crate::utils::Rpc,
+    rpc_handlers: crate::utils::Rpc,
 }
 
-impl SecondaryNode {
+impl CoreNode {
     pub(crate) async fn new(
         cfg: Config,
         directory: impl AsRef<Path>,
-        chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
-        primary_new_full: &mut crate::node::PrimaryNewFull,
+        primary_chain_node: &mut crate::node::PrimaryNewFull,
+        secondary_node: &super::NewFull,
+        gossip_msg_sink: domain_client_message_relayer::GossipMessageSink,
+        domain_tx_pool_sinks: &mut impl Extend<(
+            DomainId,
+            cross_domain_message_gossip::DomainTxPoolSink,
+        )>,
     ) -> anyhow::Result<Self> {
-        let Config { base, relayer_id: maybe_relayer_id, core } = cfg;
-        let service_config =
-            base.configuration(directory.as_ref().join("system"), chain_spec).await;
+        let Config { base, relayer_id: maybe_relayer_id, chain_spec } = cfg;
+        let chain_spec = chain_spec.expect("Always set in builder");
+        let service_config = base.configuration(directory, chain_spec).await;
+        let core_domain_config = DomainConfiguration { service_config, maybe_relayer_id };
 
-        let secondary_chain_config = DomainConfiguration { service_config, maybe_relayer_id };
-        let imported_block_notification_stream = primary_new_full
+        // TODO: proper value
+        let block_import_throttling_buffer_size = 10;
+        let imported_block_notification_stream = primary_chain_node
             .imported_block_notification_stream
             .subscribe()
             .then(|imported_block_notification| async move {
@@ -110,8 +120,7 @@ impl SecondaryNode {
                     imported_block_notification.block_import_acknowledgement_sender,
                 )
             });
-
-        let new_slot_notification_stream = primary_new_full
+        let new_slot_notification_stream = primary_chain_node
             .new_slot_notification_stream
             .subscribe()
             .then(|slot_notification| async move {
@@ -121,60 +130,30 @@ impl SecondaryNode {
                 )
             });
 
-        let (gossip_msg_sink, gossip_msg_stream) =
-            sc_utils::mpsc::tracing_unbounded("Cross domain gossip messages");
-
-        // TODO: proper value
-        let block_import_throttling_buffer_size = 10;
-
-        let secondary_chain_node = domain_service::new_full(
-            secondary_chain_config,
-            primary_new_full.client.clone(),
-            primary_new_full.network.clone(),
-            &primary_new_full.select_chain,
-            imported_block_notification_stream,
-            new_slot_notification_stream,
-            block_import_throttling_buffer_size,
-            gossip_msg_sink.clone(),
-        )
-        .await?;
-
-        let mut domain_tx_pool_sinks = std::collections::BTreeMap::new();
-
-        let core = if let Some(core) = core {
-            CoreNode::new(
-                core,
-                directory.as_ref().join("core"),
-                primary_new_full,
-                &secondary_chain_node,
-                gossip_msg_sink.clone(),
-                &mut domain_tx_pool_sinks,
+        let NewFull { client, rpc_handlers, tx_pool_sink, task_manager, network_starter, .. } =
+            domain_service::new_full_core(
+                DomainId::CORE_PAYMENTS,
+                core_domain_config,
+                secondary_node.client.clone(),
+                secondary_node.network.clone(),
+                primary_chain_node.client.clone(),
+                primary_chain_node.network.clone(),
+                &primary_chain_node.select_chain,
+                imported_block_notification_stream,
+                new_slot_notification_stream,
+                block_import_throttling_buffer_size,
+                gossip_msg_sink,
             )
-            .await
-            .map(Some)?
-        } else {
-            None
-        };
+            .await?;
 
-        domain_tx_pool_sinks.insert(DomainId::SYSTEM, secondary_chain_node.tx_pool_sink);
-        primary_new_full.task_manager.add_child(secondary_chain_node.task_manager);
+        domain_tx_pool_sinks.extend([(DomainId::CORE_PAYMENTS, tx_pool_sink)]);
+        primary_chain_node.task_manager.add_child(task_manager);
 
-        let cross_domain_message_gossip_worker =
-            cross_domain_message_gossip::GossipWorker::<Block>::new(
-                primary_new_full.network.clone(),
-                domain_tx_pool_sinks,
-            );
-
-        let NewFull { client, network_starter, network, rpc_handlers, .. } = secondary_chain_node;
-
-        tokio::spawn(cross_domain_message_gossip_worker.run(gossip_msg_stream));
         network_starter.start_network();
 
         Ok(Self {
             client: Arc::downgrade(&client),
-            core,
-            network: Arc::downgrade(&network),
-            _rpc_handlers: crate::utils::Rpc::new(&rpc_handlers),
+            rpc_handlers: crate::utils::Rpc::new(&rpc_handlers),
         })
     }
 
@@ -211,5 +190,3 @@ impl SecondaryNode {
         Ok(stream)
     }
 }
-
-crate::generate_builder!(Config);
