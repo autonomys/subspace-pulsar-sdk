@@ -1,3 +1,5 @@
+//! Core payments domain module
+
 use std::path::Path;
 use std::sync::{Arc, Weak};
 
@@ -15,7 +17,7 @@ use subspace_runtime_primitives::opaque::Header;
 use crate::node::{Base, BaseBuilder, BlockNotification};
 
 /// Core payments domain executor instance.
-pub struct ExecutorDispatch;
+pub(crate) struct ExecutorDispatch;
 
 impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     // #[cfg(feature = "runtime-benchmarks")]
@@ -88,7 +90,7 @@ pub(crate) type ChainSpec =
 #[derive(Clone)]
 pub struct CoreNode {
     client: Weak<FullClient>,
-    rpc_handlers: crate::utils::Rpc,
+    _rpc_handlers: crate::utils::Rpc,
 }
 
 impl CoreNode {
@@ -153,7 +155,7 @@ impl CoreNode {
 
         Ok(Self {
             client: Arc::downgrade(&client),
-            rpc_handlers: crate::utils::Rpc::new(&rpc_handlers),
+            _rpc_handlers: crate::utils::Rpc::new(&rpc_handlers),
         })
     }
 

@@ -32,7 +32,7 @@ use subspace_service::{FullClient, SubspaceConfiguration};
 use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
 pub mod chain_spec;
-mod domains;
+pub mod domains;
 
 pub use builder::{
     Base, BaseBuilder, BlocksPruning, Builder, Config, Constraints, Dsn, DsnBuilder,

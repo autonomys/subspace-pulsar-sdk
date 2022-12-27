@@ -1,3 +1,5 @@
+//! Module for executor and its domains
+
 use std::path::Path;
 use std::sync::{Arc, Weak};
 
@@ -18,7 +20,7 @@ use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 use self::core::CoreNode;
 use crate::node::{Base, BaseBuilder, BlockNotification};
 
-mod core;
+pub mod core;
 
 /// System domain executor instance.
 pub(crate) struct ExecutorDispatch;
@@ -71,20 +73,12 @@ pub(crate) type NewFull = domain_service::NewFull<
     system_domain_runtime::RuntimeApi,
     ExecutorDispatch,
 >;
-pub(crate) type NetworkService = sc_network::NetworkService<
-    sp_runtime::generic::Block<
-        sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>,
-        sp_runtime::OpaqueExtrinsic,
-    >,
-    super::Hash,
->;
 
 /// Secondary executor node
 #[derive(Clone)]
 pub struct SecondaryNode {
     client: Weak<FullClient>,
     core: Option<CoreNode>,
-    network: Weak<NetworkService>,
     _rpc_handlers: crate::utils::Rpc,
 }
 
@@ -165,7 +159,7 @@ impl SecondaryNode {
                 domain_tx_pool_sinks,
             );
 
-        let NewFull { client, network_starter, network, rpc_handlers, .. } = secondary_chain_node;
+        let NewFull { client, network_starter, rpc_handlers, .. } = secondary_chain_node;
 
         tokio::spawn(cross_domain_message_gossip_worker.run(gossip_msg_stream));
         network_starter.start_network();
@@ -173,13 +167,17 @@ impl SecondaryNode {
         Ok(Self {
             client: Arc::downgrade(&client),
             core,
-            network: Arc::downgrade(&network),
             _rpc_handlers: crate::utils::Rpc::new(&rpc_handlers),
         })
     }
 
     pub(crate) fn client(&self) -> anyhow::Result<Arc<FullClient>> {
         self.client.upgrade().ok_or_else(|| anyhow::anyhow!("The node was already closed"))
+    }
+
+    /// Get the core node handler
+    pub fn core(&self) -> Option<CoreNode> {
+        self.core.clone()
     }
 
     /// Subscribe to new blocks imported
