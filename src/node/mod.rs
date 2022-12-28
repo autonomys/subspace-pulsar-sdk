@@ -704,6 +704,7 @@ impl Config {
                 subspace_networking::libp2p::identity::Keypair::from_protobuf_encoding(&keypair)
                     .expect("Address is correct")
             };
+
             let bootstrap_nodes = base
                 .chain_spec
                 .properties()
@@ -729,7 +730,7 @@ impl Config {
                         .parse()
                         .expect("Convertion between 2 libp2p version. Never panics")
                 })
-                .collect();
+                .collect::<Vec<_>>();
 
             let piece_cache = NodeRecordStorage::new(
                 partial_components.client.clone(),
@@ -1128,6 +1129,7 @@ impl Node {
             async move {
                 loop {
                     tokio::time::sleep(CHECK_SYNCED_EVERY).await;
+
                     let result = backoff::future::retry(check_synced_backoff.clone(), || {
                         network.status().map(|result| {
                             match result.map(|status| status.sync_state) {
@@ -1344,6 +1346,10 @@ mod tests {
     use crate::farmer::CacheDescription;
     use crate::{Farmer, PlotDescription};
 
+    fn init() {
+        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn test_start_node() {
         let dir = TempDir::new().unwrap();
@@ -1361,6 +1367,8 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_closing() {
+        init();
+
         let dir = TempDir::new().unwrap();
         let node = Node::builder()
             .force_authoring(true)
@@ -1386,8 +1394,9 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    #[ignore = "Works most of times though"]
     async fn test_sync_block() {
+        init();
+
         let dir = TempDir::new().unwrap();
         let chain = chain_spec::dev_config().unwrap();
         let node = Node::builder()

@@ -163,7 +163,7 @@ impl<A: subspace_networking::RecordStorage, B: subspace_networking::RecordStorag
         &'_ self,
         k: &subspace_networking::libp2p::kad::record::Key,
     ) -> Option<std::borrow::Cow<'_, subspace_networking::libp2p::kad::Record>> {
-        self.a.get(k)
+        self.a.get(k).or_else(|| self.b.get(k))
     }
 
     fn put(
