@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1"
 async-trait = "0.1"
+backoff = "0.4"
 base58 = "0.2"
 blake2 = "0.10.5"
 bytesize = "1.1"
