@@ -704,6 +704,7 @@ impl Config {
                 subspace_networking::libp2p::identity::Keypair::from_protobuf_encoding(&keypair)
                     .expect("Address is correct")
             };
+
             let bootstrap_nodes = base
                 .chain_spec
                 .properties()
@@ -729,7 +730,7 @@ impl Config {
                         .parse()
                         .expect("Convertion between 2 libp2p version. Never panics")
                 })
-                .collect();
+                .collect::<Vec<_>>();
 
             let piece_cache = NodeRecordStorage::new(
                 partial_components.client.clone(),
@@ -1077,29 +1078,47 @@ impl Node {
     ) -> anyhow::Result<impl Stream<Item = anyhow::Result<SyncingProgress>> + Send + Unpin + 'static>
     {
         const CHECK_SYNCED_EVERY: Duration = Duration::from_millis(100);
+        let check_offline_backoff = backoff::ExponentialBackoffBuilder::new()
+            .with_max_elapsed_time(Some(Duration::from_secs(60)))
+            .build();
+        let check_synced_backoff = backoff::ExponentialBackoffBuilder::new()
+            .with_max_elapsed_time(Some(Duration::from_secs(60)))
+            .build();
 
-        while self.network.is_offline() {
-            tokio::time::sleep(CHECK_SYNCED_EVERY).await;
-        }
+        backoff::future::retry(check_offline_backoff, || {
+            futures::future::ready(if self.network.is_offline() {
+                Err(backoff::Error::transient(()))
+            } else {
+                Ok(())
+            })
+        })
+        .await
+        .map_err(|_| anyhow::anyhow!("Failed to connect to the network"))?;
 
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
         let client = self.client().context("Failed to fetch best block")?;
         let inner = tokio_stream::wrappers::ReceiverStream::new(receiver);
 
-        let (target, status) = match self
-            .network
-            .status()
-            .await
-            .map_err(|()| anyhow::anyhow!("Failed to fetch networking status"))?
-            .sync_state
-        {
-            SyncState::Idle => return Ok(SyncingProgressStream { inner, at: 0, target: 0 }),
-            SyncState::Importing { target } => (target, SyncStatus::Importing),
-            SyncState::Downloading { target } => (target, SyncStatus::Downloading),
+        let result = backoff::future::retry(check_synced_backoff.clone(), || {
+            self.network.status().map(|result| match result.map(|status| status.sync_state) {
+                Ok(SyncState::Importing { target }) => Ok((target, SyncStatus::Importing)),
+                Ok(SyncState::Downloading { target }) => Ok((target, SyncStatus::Downloading)),
+                Err(()) => Err(backoff::Error::transient(Some(anyhow::anyhow!(
+                    "Failed to fetch networking status"
+                )))),
+                Ok(SyncState::Idle) => Err(backoff::Error::transient(None)),
+            })
+        })
+        .await;
+
+        let (target, status) = match result {
+            Ok(result) => result,
+            Err(Some(err)) => return Err(err),
+            // We are idle for quite some time
+            Err(None) => return Ok(SyncingProgressStream { inner, at: 0, target: 0 }),
         };
 
         let at = client.chain_info().best_number;
-        let stream = SyncingProgressStream { inner, at, target };
         sender
             .send(Ok(SyncingProgress { target, at, status }))
             .await
@@ -1110,13 +1129,22 @@ impl Node {
             async move {
                 loop {
                     tokio::time::sleep(CHECK_SYNCED_EVERY).await;
-                    let result = match network.status().await.map(|status| status.sync_state) {
-                        Ok(SyncState::Idle) => break,
-                        Ok(SyncState::Importing { target }) => Ok((target, SyncStatus::Importing)),
-                        Ok(SyncState::Downloading { target }) =>
-                            Ok((target, SyncStatus::Downloading)),
-                        Err(()) => Err(anyhow::anyhow!("Failed to fetch networking status")),
-                    };
+
+                    let result = backoff::future::retry(check_synced_backoff.clone(), || {
+                        network.status().map(|result| {
+                            match result.map(|status| status.sync_state) {
+                                Ok(SyncState::Importing { target }) =>
+                                    Ok(Ok((target, SyncStatus::Importing))),
+                                Ok(SyncState::Downloading { target }) =>
+                                    Ok(Ok((target, SyncStatus::Downloading))),
+                                Err(()) =>
+                                    Ok(Err(anyhow::anyhow!("Failed to fetch networking status"))),
+                                Ok(SyncState::Idle) => Err(backoff::Error::transient(())),
+                            }
+                        })
+                    })
+                    .await;
+                    let Ok(result) = result else { break };
 
                     if sender
                         .send(result.map(|(target, status)| SyncingProgress {
@@ -1133,7 +1161,7 @@ impl Node {
             }
         });
 
-        Ok(stream)
+        Ok(SyncingProgressStream { inner, at, target })
     }
 
     /// Wait till the end of node syncing
@@ -1318,6 +1346,10 @@ mod tests {
     use crate::farmer::CacheDescription;
     use crate::{Farmer, PlotDescription};
 
+    fn init() {
+        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn test_start_node() {
         let dir = TempDir::new().unwrap();
@@ -1335,6 +1367,8 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_closing() {
+        init();
+
         let dir = TempDir::new().unwrap();
         let node = Node::builder()
             .force_authoring(true)
@@ -1360,8 +1394,9 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    #[ignore = "Works most of times though"]
     async fn test_sync_block() {
+        init();
+
         let dir = TempDir::new().unwrap();
         let chain = chain_spec::dev_config().unwrap();
         let node = Node::builder()
