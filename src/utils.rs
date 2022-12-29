@@ -88,3 +88,7 @@ impl SubscriptionClientT for Rpc {
         unreachable!("It isn't called")
     }
 }
+
+pub fn is_default<T: Default + PartialEq>(t: &T) -> bool {
+    t == &T::default()
+}

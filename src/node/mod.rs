@@ -39,6 +39,7 @@ pub use builder::{
     Rpc, RpcBuilder,
 };
 
+use self::builder::{ListenAddresses, PiecePublisherBatchSize, SegmentPublishConcurrency};
 use crate::networking::{
     FarmerRecordStorage, MaybeRecordStorage, NodeRecordStorage, ReadersAndPieces, RecordStorage,
 };
@@ -49,12 +50,15 @@ mod builder {
 
     use derivative::Derivative;
     use derive_builder::Builder;
+    use derive_more::{Deref, DerefMut, Display, From};
     use serde::{Deserialize, Serialize};
 
     use super::*;
 
     /// Block pruning settings.
-    #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+    #[derive(
+        Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, Eq, PartialOrd, Ord,
+    )]
     pub enum BlocksPruning {
         #[default]
         /// Keep full block history, of every block that was ever imported.
@@ -189,99 +193,160 @@ mod builder {
         }
     }
 
-    fn default_piece_cache_size() -> bytesize::ByteSize {
-        bytesize::ByteSize::gib(1)
-    }
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct PieceCacheSize(
+        #[derivative(Default(value = "bytesize::ByteSize::gib(1)"))]
+        #[serde(with = "bytesize_serde")]
+        pub(crate) bytesize::ByteSize,
+    );
 
-    fn default_segment_publish_concurrency() -> NonZeroUsize {
-        NonZeroUsize::new(10).unwrap()
-    }
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct SegmentPublishConcurrency(
+        #[derivative(Default(value = "NonZeroUsize::new(10).unwrap()"))] pub(crate) NonZeroUsize,
+    );
 
     /// Node builder
-    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
+    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
     #[derivative(Default)]
     #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "Builder")]
     #[non_exhaustive]
     pub struct Config {
+        /// Set piece cache size
+        #[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub piece_cache_size: PieceCacheSize,
+        /// Max number of segments that can be published concurrently, impacts
+        /// RAM usage and network bandwidth.
+        #[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub segment_publish_concurrency: SegmentPublishConcurrency,
         #[doc(hidden)]
         #[builder(
             setter(into, strip_option),
             field(type = "BaseBuilder", build = "self.base.build()")
         )]
-        #[serde(default)]
+        #[serde(flatten, skip_serializing_if = "crate::utils::is_default")]
         pub base: Base,
-        /// Set piece cache size
-        #[builder(default = "default_piece_cache_size()")]
-        #[derivative(Default(value = "default_piece_cache_size()"))]
-        #[serde(with = "bytesize_serde", default = "default_piece_cache_size")]
-        pub piece_cache_size: bytesize::ByteSize,
-        /// Max number of segments that can be published concurrently, impacts
-        /// RAM usage and network bandwidth.
-        #[builder(default = "default_segment_publish_concurrency()")]
-        #[derivative(Default(value = "default_segment_publish_concurrency()"))]
-        #[serde(default = "default_segment_publish_concurrency")]
-        pub segment_publish_concurrency: NonZeroUsize,
         /// DSN settings
         #[builder(setter(into), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub dsn: Dsn,
     }
 
-    fn default_impl_name() -> String {
-        env!("CARGO_PKG_NAME").to_owned()
-    }
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct ImplName(
+        #[derivative(Default(value = "env!(\"CARGO_PKG_NAME\").to_owned()"))] pub(crate) String,
+    );
 
-    fn default_impl_version() -> String {
-        format!("{}-{}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH"))
-    }
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct ImplVersion(
+        #[derivative(Default(
+            value = "format!(\"{}-{}\", env!(\"CARGO_PKG_VERSION\"), env!(\"GIT_HASH\"))"
+        ))]
+        pub(crate) String,
+    );
 
     #[doc(hidden)]
-    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
+    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
     #[derivative(Default)]
     #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "BaseBuilder")]
     #[non_exhaustive]
     pub struct Base {
         /// Force block authoring
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub force_authoring: bool,
         /// Set node role
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub role: Role,
         /// Blocks pruning options
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub blocks_pruning: BlocksPruning,
         /// State pruning options
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub state_pruning: PruningMode,
         /// Set execution strategies
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub execution_strategy: ExecutionStrategy,
         /// Implementation name
-        #[builder(default = "default_impl_name()")]
-        #[derivative(Default(value = "default_impl_name()"))]
-        #[serde(default = "default_impl_name")]
-        pub impl_name: String,
+        #[builder(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub impl_name: ImplName,
         /// Implementation version
-        #[builder(default = "default_impl_version()")]
-        #[derivative(Default(value = "default_impl_version()"))]
-        #[serde(default = "default_impl_version")]
-        pub impl_version: String,
+        #[builder(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub impl_version: ImplVersion,
         /// Rpc settings
         #[builder(setter(into), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub rpc: Rpc,
         /// Network settings
         #[builder(setter(into), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub network: Network,
         /// Offchain worker settings
         #[builder(setter(into), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub offchain_worker: OffchainWorker,
     }
 
@@ -300,8 +365,8 @@ mod builder {
                 blocks_pruning,
                 state_pruning,
                 execution_strategy,
-                impl_name,
-                impl_version,
+                impl_name: ImplName(impl_name),
+                impl_version: ImplVersion(impl_version),
                 rpc:
                     Rpc {
                         http: rpc_http,
@@ -418,155 +483,186 @@ mod builder {
         }
     }
 
-    fn default_max_subs_per_conn() -> usize {
-        1024
-    }
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct MaxSubsPerConn(#[derivative(Default(value = "1024"))] pub(crate) usize);
 
     /// Node RPC builder
-    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
+    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq, Eq)]
     #[derivative(Default)]
     #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "RpcBuilder")]
     #[non_exhaustive]
     pub struct Rpc {
         /// RPC over HTTP binding address. `None` if disabled.
         #[builder(setter(strip_option), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub http: Option<SocketAddr>,
         /// RPC over Websockets binding address. `None` if disabled.
         #[builder(setter(strip_option), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub ws: Option<SocketAddr>,
         /// RPC over IPC binding path. `None` if disabled.
         #[builder(setter(strip_option), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub ipc: Option<String>,
         /// Maximum number of connections for WebSockets RPC server. `None` if
         /// default.
         #[builder(setter(strip_option), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub ws_max_connections: Option<usize>,
         /// CORS settings for HTTP & WS servers. `None` if all origins are
         /// allowed.
         #[builder(setter(strip_option), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub cors: Option<Vec<String>>,
         /// RPC methods to expose (by default only a safe subset or all of
         /// them).
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub methods: RpcMethods,
         /// Maximum payload of rpc request/responses.
         #[builder(setter(strip_option), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub max_payload: Option<usize>,
         /// Maximum payload of a rpc request
         #[builder(setter(strip_option), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub max_request_size: Option<usize>,
         /// Maximum payload of a rpc request
         #[builder(setter(strip_option), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub max_response_size: Option<usize>,
         /// Maximum allowed subscriptions per rpc connection
-        #[builder(default = "default_max_subs_per_conn()")]
-        #[derivative(Default(value = "default_max_subs_per_conn()"))]
-        #[serde(default = "default_max_subs_per_conn")]
+        #[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub max_subs_per_conn: usize,
         /// Maximum size of the output buffer capacity for websocket
         /// connections.
         #[builder(setter(strip_option), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub ws_max_out_buffer_capacity: Option<usize>,
     }
 
     /// Node network builder
-    #[derive(Debug, Default, Clone, Builder, Deserialize, Serialize)]
+    #[derive(Debug, Default, Clone, Builder, Deserialize, Serialize, PartialEq)]
     #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "NetworkBuilder")]
     #[non_exhaustive]
     pub struct Network {
         /// Listen on some address for other nodes
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub enable_mdns: bool,
         /// Listen on some address for other nodes
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub allow_private_ipv4: bool,
         /// Listen on some address for other nodes
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub listen_addresses: Vec<Multiaddr>,
         /// Boot nodes
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         pub boot_nodes: Vec<MultiaddrWithPeerId>,
         /// Force node to think it is synced
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub force_synced: bool,
         /// Node name
         #[builder(setter(into, strip_option), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub name: Option<String>,
         /// Client id for telemetry (default is `{IMPL_NAME}/v{IMPL_VERSION}`)
         #[builder(setter(into, strip_option), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub client_id: Option<String>,
     }
 
-    fn default_listen_addresses() -> Vec<libp2p_core::Multiaddr> {
+    #[derive(
+        Debug, Clone, Derivative, Deserialize, Serialize, PartialEq, Eq, From, Deref, DerefMut,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct ListenAddresses(
+        #[derivative(Default(
         // TODO: get rid of it, once it won't be required by monorepo
-        vec!["/ip4/127.0.0.1/tcp/0".parse().expect("Always valid")]
-    }
+            value = "vec![\"/ip4/127.0.0.1/tcp/0\".parse().expect(\"Always valid\")]"
+        ))]
+        pub(crate) Vec<libp2p_core::Multiaddr>,
+    );
 
-    fn default_piece_publisher_batch_size() -> usize {
-        15
-    }
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct PiecePublisherBatchSize(#[derivative(Default(value = "15"))] pub(crate) usize);
 
     /// Node DSN builder
-    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
+    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq, Eq)]
     #[derivative(Default)]
     #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "DsnBuilder")]
     #[non_exhaustive]
     pub struct Dsn {
         /// Listen on some address for other nodes
-        #[builder(default = "default_listen_addresses()")]
-        #[derivative(Default(value = "default_listen_addresses()"))]
-        #[serde(default = "default_listen_addresses")]
-        pub listen_addresses: Vec<libp2p_core::Multiaddr>,
+        #[builder(default, setter(into))]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub listen_addresses: ListenAddresses,
         /// Boot nodes
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub boot_nodes: Vec<libp2p_core::Multiaddr>,
         /// Reserved nodes
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub reserved_nodes: Vec<libp2p_core::Multiaddr>,
         /// Determines whether we allow keeping non-global (private, shared,
         /// loopback..) addresses in Kademlia DHT.
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub allow_non_global_addresses_in_dht: bool,
-        /// Sets piece publШрек чтолиisher batch size
-        #[builder(default = "default_piece_publisher_batch_size()")]
-        #[derivative(Default(value = "default_piece_publisher_batch_size()"))]
-        #[serde(default = "default_piece_publisher_batch_size")]
-        pub piece_publisher_batch_size: usize,
+        /// Sets piece publisher batch size
+        #[builder(default, setter(into))]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub piece_publisher_batch_size: PiecePublisherBatchSize,
     }
 
     /// Offchain worker config
-    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize)]
+    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq, Eq)]
     #[derivative(Default)]
     #[builder(pattern = "immutable", build_fn(name = "_build"), name = "OffchainWorkerBuilder")]
     #[non_exhaustive]
     pub struct OffchainWorker {
         /// Is enabled
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub enabled: bool,
         /// Is indexing enabled
         #[builder(default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub indexing_enabled: bool,
     }
 
@@ -609,9 +705,9 @@ mod builder {
         /// Set execution strategies
         execution_strategy: ExecutionStrategy,
         /// Implementation name
-        impl_name: String,
+        impl_name: ImplName,
         /// Implementation version
-        impl_version: String,
+        impl_version: ImplVersion,
         /// Rpc settings
         rpc: Rpc,
         /// Network settings
@@ -623,7 +719,7 @@ mod builder {
 }
 
 /// Role of the local node.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Role {
     #[default]
     /// Regular full node.
@@ -642,7 +738,7 @@ impl From<Role> for sc_service::Role {
 }
 
 /// Available RPC methods.
-#[derive(Debug, Copy, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcMethods {
     /// Expose every RPC method only when RPC is listening on `localhost`,
     /// otherwise serve only safe RPC methods.
@@ -673,7 +769,12 @@ impl Config {
         directory: impl AsRef<Path>,
         chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
     ) -> anyhow::Result<Node> {
-        let Self { base, piece_cache_size, dsn, segment_publish_concurrency } = self;
+        let Self {
+            base,
+            piece_cache_size,
+            dsn,
+            segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
+        } = self;
         let base = base.configuration(directory, chain_spec).await;
         let name = base.network.node_name.clone();
 
@@ -685,11 +786,11 @@ impl Config {
 
         let (subspace_networking, (node, mut node_runner)) = {
             let builder::Dsn {
-                listen_addresses,
+                listen_addresses: ListenAddresses(listen_addresses),
                 boot_nodes,
                 reserved_nodes: _,
                 allow_non_global_addresses_in_dht,
-                piece_publisher_batch_size,
+                piece_publisher_batch_size: PiecePublisherBatchSize(piece_publisher_batch_size),
             } = dsn;
             let keypair = {
                 let keypair = base

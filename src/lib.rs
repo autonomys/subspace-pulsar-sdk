@@ -261,4 +261,67 @@ mod tests {
             assert!(slot_info_sub.next().await.is_some());
         }
     }
+
+    #[test]
+    fn check_toml_serializable_max() {
+        const DEFAULT_NODE_CONFIGS: &'static [&'static str] = &[
+            r#"
+piece_cache_size = "1073.7 MB"
+segment_publish_concurrency = 10
+force_authoring = false
+role = "Full"
+blocks_pruning = "KeepAll"
+state_pruning = "ArchiveAll"
+execution_strategy = "NativeWhenPossible"
+impl_name = "subspace-sdk"
+impl_version = "0.1.0-c88c59ab7a7cae3518b224302a3c96beb7c5afaf"
+
+[rpc]
+methods = "Auto"
+max_subs_per_conn = 1024
+
+[network]
+enable_mdns = false
+allow_private_ipv4 = false
+listen_addresses = []
+boot_nodes = []
+force_synced = false
+
+[offchain_worker]
+enabled = false
+indexing_enabled = false
+"#,
+            "piece_cache_size = \"1073.7 MB\"\nsegment_publish_concurrency = 10",
+            r#""#,
+        ];
+        const DEFAULT_FARMER_CONFIGS: &'static [&'static str] = &[
+            r#"
+[dsn]
+listen_addresses = ["/ip4/127.0.0.1/tcp/0"]
+boot_nodes = []
+reserved_nodes = []
+allow_non_global_addresses_in_dht = false
+piece_publisher_batch_size = 15
+
+piece_receiver_batch_size = 12
+piece_publisher_batch_size = 12
+max_concurrent_plots = 10
+"#,
+            r#"
+piece_receiver_batch_size = 12
+piece_publisher_batch_size = 12
+max_concurrent_plots = 10
+"#,
+            r#""#,
+        ];
+
+        for node in DEFAULT_NODE_CONFIGS {
+            let node = toml::from_str::<node::Config>(node).unwrap();
+            toml::to_string(&node).unwrap();
+        }
+        for farmer in DEFAULT_FARMER_CONFIGS {
+            let farmer = toml::from_str::<farmer::Config>(farmer).unwrap();
+            toml::to_string(&farmer).unwrap();
+        }
+    }
 }
