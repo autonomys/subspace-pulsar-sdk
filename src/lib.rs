@@ -292,6 +292,7 @@ enabled = false
 indexing_enabled = false
 "#,
             "piece_cache_size = \"1073.7 MB\"\nsegment_publish_concurrency = 10",
+            r#""#,
         ];
         const DEFAULT_FARMER_CONFIGS: &'static [&'static str] = &[
             r#"
@@ -311,6 +312,7 @@ piece_receiver_batch_size = 12
 piece_publisher_batch_size = 12
 max_concurrent_plots = 10
 "#,
+            r#""#,
         ];
 
         for node in DEFAULT_NODE_CONFIGS {

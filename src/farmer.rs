@@ -120,22 +120,68 @@ mod builder {
 
     use derivative::Derivative;
     use derive_builder::Builder;
+    use derive_more::{Deref, DerefMut, Display, From};
     use serde::{Deserialize, Serialize};
 
     use super::{BuildError, CacheDescription};
     use crate::{Farmer, Node, PlotDescription, PublicKey};
 
-    fn default_piece_receiver_batch_size() -> NonZeroUsize {
-        NonZeroUsize::new(12).unwrap()
-    }
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct PiecePublisherBatchSize(
+        #[derivative(Default(value = "NonZeroUsize::new(12).unwrap()"))] pub(crate) NonZeroUsize,
+    );
 
-    fn default_piece_publisher_batch_size() -> NonZeroUsize {
-        NonZeroUsize::new(12).unwrap()
-    }
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct PieceReceiverBatchSize(
+        #[derivative(Default(value = "NonZeroUsize::new(12).unwrap()"))] pub(crate) NonZeroUsize,
+    );
 
-    fn default_max_concurrent_plots() -> NonZeroUsize {
-        NonZeroUsize::new(10).unwrap()
-    }
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct MaxConcurrentPlots(
+        #[derivative(Default(value = "NonZeroUsize::new(10).unwrap()"))] pub(crate) NonZeroUsize,
+    );
 
     /// Technical type which stores all
     #[derive(Debug, Clone, Derivative, Builder, Serialize, Deserialize)]
@@ -144,20 +190,17 @@ mod builder {
     #[non_exhaustive]
     pub struct Config {
         /// Defines size for the pieces batch of the piece receiving process.
-        #[builder(default = "default_piece_receiver_batch_size()")]
-        #[derivative(Default(value = "default_piece_receiver_batch_size()"))]
-        #[serde(default = "default_piece_receiver_batch_size")]
-        pub piece_receiver_batch_size: NonZeroUsize,
+        #[builder(default, setter(into))]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub piece_receiver_batch_size: PieceReceiverBatchSize,
         /// Defines size for the pieces batch of the piece publishing process.
-        #[builder(default = "default_piece_publisher_batch_size()")]
-        #[derivative(Default(value = "default_piece_publisher_batch_size()"))]
-        #[serde(default = "default_piece_publisher_batch_size")]
-        pub piece_publisher_batch_size: NonZeroUsize,
+        #[builder(default, setter(into))]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub piece_publisher_batch_size: PiecePublisherBatchSize,
         /// Number of plots that can be plotted concurrently, impacts RAM usage.
-        #[builder(default = "default_max_concurrent_plots()")]
-        #[derivative(Default(value = "default_max_concurrent_plots()"))]
-        #[serde(default = "default_max_concurrent_plots")]
-        pub max_concurrent_plots: NonZeroUsize,
+        #[builder(default, setter(into))]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub max_concurrent_plots: MaxConcurrentPlots,
     }
 
     impl Builder {
