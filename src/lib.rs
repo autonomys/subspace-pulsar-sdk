@@ -264,7 +264,7 @@ mod tests {
 
     #[test]
     fn check_toml_serializable_max() {
-        const DEFAULT_NODE_CONFIGS: &'static [&'static str] = &[
+        const DEFAULT_NODE_CONFIGS: &[&str] = &[
             r#"
 piece_cache_size = "1073.7 MB"
 segment_publish_concurrency = 10
@@ -294,7 +294,7 @@ indexing_enabled = false
             "piece_cache_size = \"1073.7 MB\"\nsegment_publish_concurrency = 10",
             r#""#,
         ];
-        const DEFAULT_FARMER_CONFIGS: &'static [&'static str] = &[
+        const DEFAULT_FARMER_CONFIGS: &[&str] = &[
             r#"
 [dsn]
 listen_addresses = ["/ip4/127.0.0.1/tcp/0"]
