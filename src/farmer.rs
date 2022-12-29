@@ -141,44 +141,6 @@ mod builder {
     )]
     #[derivative(Default)]
     #[serde(transparent)]
-    pub struct PiecePublisherBatchSize(
-        #[derivative(Default(value = "NonZeroUsize::new(12).unwrap()"))] pub(crate) NonZeroUsize,
-    );
-
-    #[derive(
-        Debug,
-        Clone,
-        Derivative,
-        Deserialize,
-        Serialize,
-        PartialEq,
-        Eq,
-        From,
-        Deref,
-        DerefMut,
-        Display,
-    )]
-    #[derivative(Default)]
-    #[serde(transparent)]
-    pub struct PieceReceiverBatchSize(
-        #[derivative(Default(value = "NonZeroUsize::new(12).unwrap()"))] pub(crate) NonZeroUsize,
-    );
-
-    #[derive(
-        Debug,
-        Clone,
-        Derivative,
-        Deserialize,
-        Serialize,
-        PartialEq,
-        Eq,
-        From,
-        Deref,
-        DerefMut,
-        Display,
-    )]
-    #[derivative(Default)]
-    #[serde(transparent)]
     pub struct MaxConcurrentPlots(
         #[derivative(Default(value = "NonZeroUsize::new(10).unwrap()"))] pub(crate) NonZeroUsize,
     );
@@ -189,14 +151,6 @@ mod builder {
     #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "Builder")]
     #[non_exhaustive]
     pub struct Config {
-        /// Defines size for the pieces batch of the piece receiving process.
-        #[builder(default, setter(into))]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub piece_receiver_batch_size: PieceReceiverBatchSize,
-        /// Defines size for the pieces batch of the piece publishing process.
-        #[builder(default, setter(into))]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub piece_publisher_batch_size: PiecePublisherBatchSize,
         /// Number of plots that can be plotted concurrently, impacts RAM usage.
         #[builder(default, setter(into))]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
@@ -252,16 +206,11 @@ impl Config {
             return Err(BuildError::NoPlotsSupplied);
         }
 
-        let Self { piece_receiver_batch_size, piece_publisher_batch_size, max_concurrent_plots } =
-            self;
+        let Self { max_concurrent_plots } = self;
 
         let mut single_disk_plots = Vec::with_capacity(plots.len());
         let mut plot_info = HashMap::with_capacity(plots.len());
 
-        let piece_publisher_semaphore =
-            Arc::new(tokio::sync::Semaphore::new(piece_receiver_batch_size.get()));
-        let piece_receiver_semaphore =
-            Arc::new(tokio::sync::Semaphore::new(piece_publisher_batch_size.get()));
         let concurrent_plotting_semaphore =
             Arc::new(tokio::sync::Semaphore::new(max_concurrent_plots.get()));
 
@@ -276,8 +225,6 @@ impl Config {
                 reward_address: *reward_address,
                 rpc_client: node.clone(),
                 dsn_node: node.dsn_node.clone(),
-                piece_receiver_semaphore: Arc::clone(&piece_receiver_semaphore),
-                piece_publisher_semaphore: Arc::clone(&piece_publisher_semaphore),
                 concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
             };
             let single_disk_plot = SingleDiskPlot::new(description).await?;
