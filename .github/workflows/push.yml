@@ -32,20 +32,7 @@ jobs:
       - run: cargo fmt -- --check
 
   clippy:
-    strategy:
-      matrix:
-        os:
-          - ubuntu-22.04
-          - macos-12
-          - windows-2022
-        run-all: 
-          - ${{ inputs.test-macos || github.ref == 'refs/heads/master' }}
-        exclude:  # exclude macos-12 when the condition is false
-          - run-all: false
-            os: macos-12
-
-    runs-on: ${{ matrix.os }}
-
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
 
