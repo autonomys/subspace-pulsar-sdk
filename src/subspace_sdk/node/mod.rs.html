@@ -1525,31 +1525,6 @@
 <a href="#1525" id="1525">1525</a>
 <a href="#1526" id="1526">1526</a>
 <a href="#1527" id="1527">1527</a>
-<a href="#1528" id="1528">1528</a>
-<a href="#1529" id="1529">1529</a>
-<a href="#1530" id="1530">1530</a>
-<a href="#1531" id="1531">1531</a>
-<a href="#1532" id="1532">1532</a>
-<a href="#1533" id="1533">1533</a>
-<a href="#1534" id="1534">1534</a>
-<a href="#1535" id="1535">1535</a>
-<a href="#1536" id="1536">1536</a>
-<a href="#1537" id="1537">1537</a>
-<a href="#1538" id="1538">1538</a>
-<a href="#1539" id="1539">1539</a>
-<a href="#1540" id="1540">1540</a>
-<a href="#1541" id="1541">1541</a>
-<a href="#1542" id="1542">1542</a>
-<a href="#1543" id="1543">1543</a>
-<a href="#1544" id="1544">1544</a>
-<a href="#1545" id="1545">1545</a>
-<a href="#1546" id="1546">1546</a>
-<a href="#1547" id="1547">1547</a>
-<a href="#1548" id="1548">1548</a>
-<a href="#1549" id="1549">1549</a>
-<a href="#1550" id="1550">1550</a>
-<a href="#1551" id="1551">1551</a>
-<a href="#1552" id="1552">1552</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
@@ -1591,7 +1566,7 @@
     Rpc, RpcBuilder,
 };
 
-<span class="kw">use </span><span class="self">self</span>::builder::{ListenAddresses, PiecePublisherBatchSize, SegmentPublishConcurrency};
+<span class="kw">use </span><span class="self">self</span>::builder::{ListenAddresses, SegmentPublishConcurrency};
 <span class="kw">use </span><span class="kw">crate</span>::networking::{
     FarmerRecordStorage, MaybeRecordStorage, NodeRecordStorage, ReadersAndPieces, RecordStorage,
 };
@@ -2156,23 +2131,6 @@
         </span><span class="kw">pub</span>(<span class="kw">crate</span>) Vec&lt;libp2p_core::Multiaddr&gt;,
     );
 
-    <span class="attr">#[derive(
-        Debug,
-        Clone,
-        Derivative,
-        Deserialize,
-        Serialize,
-        PartialEq,
-        Eq,
-        From,
-        Deref,
-        DerefMut,
-        Display,
-    )]
-    #[derivative(Default)]
-    #[serde(transparent)]
-    </span><span class="kw">pub struct </span>PiecePublisherBatchSize(<span class="attr">#[derivative(Default(value = <span class="string">&quot;15&quot;</span>))] </span><span class="kw">pub</span>(<span class="kw">crate</span>) usize);
-
     <span class="doccomment">/// Node DSN builder
     </span><span class="attr">#[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq, Eq)]
     #[derivative(Default)]
@@ -2196,10 +2154,6 @@
         </span><span class="attr">#[builder(default)]
         #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
         </span><span class="kw">pub </span>allow_non_global_addresses_in_dht: bool,
-        <span class="doccomment">/// Sets piece publisher batch size
-        </span><span class="attr">#[builder(default, setter(into))]
-        #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
-        </span><span class="kw">pub </span>piece_publisher_batch_size: PiecePublisherBatchSize,
     }
 
     <span class="doccomment">/// Offchain worker config
@@ -2342,7 +2296,6 @@
                 boot_nodes,
                 reserved_nodes: <span class="kw">_</span>,
                 allow_non_global_addresses_in_dht,
-                piece_publisher_batch_size: PiecePublisherBatchSize(piece_publisher_batch_size),
             } = dsn;
             <span class="kw">let </span>keypair = {
                 <span class="kw">let </span>keypair = base
@@ -2474,11 +2427,7 @@
             <span class="kw">let </span>(node, node_runner) = subspace_networking::create(config).<span class="kw">await</span><span class="question-mark">?</span>;
 
             (
-                subspace_service::SubspaceNetworking::Reuse {
-                    node: node.clone(),
-                    bootstrap_nodes,
-                    piece_publisher_batch_size,
-                },
+                subspace_service::SubspaceNetworking::Reuse { node: node.clone(), bootstrap_nodes },
                 (node, node_runner),
             )
         };
@@ -2759,7 +2708,7 @@
                 <span class="prelude-val">Err</span>(()) =&gt; <span class="prelude-val">Err</span>(backoff::Error::transient(<span class="prelude-val">Some</span>(<span class="macro">anyhow::anyhow!</span>(
                     <span class="string">&quot;Failed to fetch networking status&quot;
                 </span>)))),
-                <span class="prelude-val">Ok</span>(SyncState::Idle) =&gt; <span class="prelude-val">Err</span>(backoff::Error::transient(<span class="prelude-val">None</span>)),
+                <span class="prelude-val">Ok</span>(SyncState::Idle | SyncState::Pending) =&gt; <span class="prelude-val">Err</span>(backoff::Error::transient(<span class="prelude-val">None</span>)),
             })
         })
         .<span class="kw">await</span>;
@@ -2792,7 +2741,8 @@
                                     <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((target, SyncStatus::Downloading))),
                                 <span class="prelude-val">Err</span>(()) =&gt;
                                     <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Failed to fetch networking status&quot;</span>))),
-                                <span class="prelude-val">Ok</span>(SyncState::Idle) =&gt; <span class="prelude-val">Err</span>(backoff::Error::transient(())),
+                                <span class="prelude-val">Ok</span>(SyncState::Idle | SyncState::Pending) =&gt;
+                                    <span class="prelude-val">Err</span>(backoff::Error::transient(())),
                             }
                         })
                     })

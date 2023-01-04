@@ -591,7 +591,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>check_toml_serializable_max() {
-        <span class="kw">const </span>DEFAULT_NODE_CONFIGS: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str] = <span class="kw-2">&amp;</span>[
+        <span class="kw">const </span>DEFAULT_NODE_CONFIGS: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str] = <span class="kw-2">&amp;</span>[
             <span class="string">r#&quot;
 piece_cache_size = &quot;1073.7 MB&quot;
 segment_publish_concurrency = 10
@@ -621,7 +621,7 @@ indexing_enabled = false
             <span class="string">&quot;piece_cache_size = \&quot;1073.7 MB\&quot;\nsegment_publish_concurrency = 10&quot;</span>,
             <span class="string">r#&quot;&quot;#</span>,
         ];
-        <span class="kw">const </span>DEFAULT_FARMER_CONFIGS: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str] = <span class="kw-2">&amp;</span>[
+        <span class="kw">const </span>DEFAULT_FARMER_CONFIGS: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str] = <span class="kw-2">&amp;</span>[
             <span class="string">r#&quot;
 [dsn]
 listen_addresses = [&quot;/ip4/127.0.0.1/tcp/0&quot;]
