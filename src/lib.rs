@@ -290,8 +290,57 @@ force_synced = false
 [offchain_worker]
 enabled = false
 indexing_enabled = false
+
+[secondary_chain]
+relayer_id = "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM"
+force_authoring = false
+role = "Full"
+blocks_pruning = "KeepAll"
+state_pruning = "ArchiveAll"
+execution_strategy = "NativeWhenPossible"
+impl_name = "subspace-sdk"
+impl_version = "0.1.0-c88c59ab7a7cae3518b224302a3c96beb7c5afaf"
+
+[secondary_chain.rpc]
+methods = "Auto"
+max_subs_per_conn = 1024
+
+[secondary_chain.network]
+enable_mdns = false
+allow_private_ipv4 = false
+listen_addresses = []
+boot_nodes = []
+force_synced = false
+
+[secondary_chain.offchain_worker]
+enabled = false
+indexing_enabled = false
+
+[secondary_chain.core]
+relayer_id = "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM"
+force_authoring = false
+role = "Full"
+blocks_pruning = "KeepAll"
+state_pruning = "ArchiveAll"
+execution_strategy = "NativeWhenPossible"
+impl_name = "subspace-sdk"
+impl_version = "0.1.0-c88c59ab7a7cae3518b224302a3c96beb7c5afaf"
+
+[secondary_chain.core.rpc]
+methods = "Auto"
+max_subs_per_conn = 1024
+
+[secondary_chain.core.network]
+enable_mdns = false
+allow_private_ipv4 = false
+listen_addresses = []
+boot_nodes = []
+force_synced = false
+
+[secondary_chain.core.offchain_worker]
+enabled = false
+indexing_enabled = false
 "#,
-            "piece_cache_size = \"1073.7 MB\"\nsegment_publish_concurrency = 10",
             r#""#,
         ];
         const DEFAULT_FARMER_CONFIGS: &[&str] = &[

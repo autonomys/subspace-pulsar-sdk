@@ -260,7 +260,7 @@ mod builder {
         pub base: Base,
         /// Secondary chain settings
         #[builder(setter(into, strip_option), default)]
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub secondary_chain: Option<domains::Config>,
         /// DSN settings
         #[builder(setter(into), default)]

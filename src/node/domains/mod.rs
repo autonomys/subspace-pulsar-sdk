@@ -45,21 +45,21 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "ConfigBuilder")]
 #[non_exhaustive]
 pub struct Config {
+    /// Id of the relayer
+    #[builder(setter(strip_option), default)]
+    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    pub relayer_id: Option<RelayerId>,
     #[doc(hidden)]
     #[builder(
         setter(into, strip_option),
         field(type = "BaseBuilder", build = "self.base.build()")
     )]
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
     pub base: Base,
     /// The core config
     #[builder(setter(strip_option), default)]
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
     pub core: Option<core::Config>,
-    /// Id of the relayer
-    #[builder(setter(strip_option), default)]
-    #[serde(default)]
-    pub relayer_id: Option<RelayerId>,
 }
 
 pub(crate) type FullClient =

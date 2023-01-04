@@ -40,20 +40,21 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "ConfigBuilder")]
 #[non_exhaustive]
 pub struct Config {
+    /// Id of the relayer
+    #[builder(setter(strip_option), default)]
+    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    pub relayer_id: Option<RelayerId>,
     #[doc(hidden)]
     #[builder(
         setter(into, strip_option),
         field(type = "BaseBuilder", build = "self.base.build()")
     )]
-    #[serde(default)]
+    #[serde(flatten, skip_serializing_if = "crate::utils::is_default")]
     pub base: Base,
     #[derivative(Debug = "ignore", PartialEq = "ignore")]
     #[builder(setter(skip), field(type = "()", build = "None"))]
+    #[serde(skip)]
     chain_spec: Option<ChainSpec>,
-    /// Id of the relayer
-    #[builder(setter(strip_option), default)]
-    #[serde(default)]
-    pub relayer_id: Option<RelayerId>,
 }
 
 impl ConfigBuilder {
@@ -207,7 +208,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_core() {
-        let _ = tracing_subscriber::fmt().try_init();
+        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
 
         let dir = TempDir::new().unwrap();
         let core = ConfigBuilder::new().build(chain_spec::core_payments::development_config());
