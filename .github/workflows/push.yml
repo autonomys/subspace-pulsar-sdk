@@ -39,7 +39,7 @@ jobs:
           - macos-12
           - windows-2022
         run-all: 
-          - ${{ inputs.test-macos == true || github.ref == 'refs/heads/main' }}
+          - ${{ inputs.test-macos || github.ref == 'refs/heads/master' }}
         exclude:  # exclude macos-12 when the condition is false
           - run-all: false
             os: macos-12
@@ -67,7 +67,7 @@ jobs:
       - name: Configure cache
         uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
 
-      - uses: actions-rs/clippy-check@v1
+      - uses: actions-rs/clippy-check@b5b5f21f4797c02da247df37026fcd0a5024aa4d # v1.0.7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --locked -- -D warnings
@@ -80,7 +80,7 @@ jobs:
           - macos-12
           - windows-2022
         run-all: 
-          - ${{ inputs.test-macos == true || github.ref == 'refs/heads/main' }}
+          - ${{ inputs.test-macos || github.ref == 'refs/heads/master' }}
         exclude:  # exclude macos-12 when the condition is false
           - run-all: false
             os: macos-12
@@ -116,7 +116,7 @@ jobs:
       - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v1
+        uses: arduino/setup-protoc@64c0c85d18e984422218383b81c52f8b077404d3 # v1.1.2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -130,7 +130,6 @@ jobs:
 
   udeps:
     runs-on: ubuntu-22.04
-    continue-on-error: true
     steps:
       - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
 

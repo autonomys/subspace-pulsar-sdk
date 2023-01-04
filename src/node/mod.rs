@@ -39,7 +39,7 @@ pub use builder::{
     Rpc, RpcBuilder,
 };
 
-use self::builder::{ListenAddresses, PiecePublisherBatchSize, SegmentPublishConcurrency};
+use self::builder::{ListenAddresses, SegmentPublishConcurrency};
 use crate::networking::{
     FarmerRecordStorage, MaybeRecordStorage, NodeRecordStorage, ReadersAndPieces, RecordStorage,
 };
@@ -604,23 +604,6 @@ mod builder {
         pub(crate) Vec<libp2p_core::Multiaddr>,
     );
 
-    #[derive(
-        Debug,
-        Clone,
-        Derivative,
-        Deserialize,
-        Serialize,
-        PartialEq,
-        Eq,
-        From,
-        Deref,
-        DerefMut,
-        Display,
-    )]
-    #[derivative(Default)]
-    #[serde(transparent)]
-    pub struct PiecePublisherBatchSize(#[derivative(Default(value = "15"))] pub(crate) usize);
-
     /// Node DSN builder
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq, Eq)]
     #[derivative(Default)]
@@ -644,10 +627,6 @@ mod builder {
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub allow_non_global_addresses_in_dht: bool,
-        /// Sets piece publisher batch size
-        #[builder(default, setter(into))]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub piece_publisher_batch_size: PiecePublisherBatchSize,
     }
 
     /// Offchain worker config
@@ -790,7 +769,6 @@ impl Config {
                 boot_nodes,
                 reserved_nodes: _,
                 allow_non_global_addresses_in_dht,
-                piece_publisher_batch_size: PiecePublisherBatchSize(piece_publisher_batch_size),
             } = dsn;
             let keypair = {
                 let keypair = base
@@ -922,11 +900,7 @@ impl Config {
             let (node, node_runner) = subspace_networking::create(config).await?;
 
             (
-                subspace_service::SubspaceNetworking::Reuse {
-                    node: node.clone(),
-                    bootstrap_nodes,
-                    piece_publisher_batch_size,
-                },
+                subspace_service::SubspaceNetworking::Reuse { node: node.clone(), bootstrap_nodes },
                 (node, node_runner),
             )
         };
@@ -1207,7 +1181,7 @@ impl Node {
                 Err(()) => Err(backoff::Error::transient(Some(anyhow::anyhow!(
                     "Failed to fetch networking status"
                 )))),
-                Ok(SyncState::Idle) => Err(backoff::Error::transient(None)),
+                Ok(SyncState::Idle | SyncState::Pending) => Err(backoff::Error::transient(None)),
             })
         })
         .await;
@@ -1240,7 +1214,8 @@ impl Node {
                                     Ok(Ok((target, SyncStatus::Downloading))),
                                 Err(()) =>
                                     Ok(Err(anyhow::anyhow!("Failed to fetch networking status"))),
-                                Ok(SyncState::Idle) => Err(backoff::Error::transient(())),
+                                Ok(SyncState::Idle | SyncState::Pending) =>
+                                    Err(backoff::Error::transient(())),
                             }
                         })
                     })
