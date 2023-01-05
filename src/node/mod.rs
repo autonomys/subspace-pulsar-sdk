@@ -379,7 +379,7 @@ mod builder {
             }
         };
         ( $base:ty => $builder:ident ) => {
-            crate::derive_base!($base => $builder {
+            $crate::derive_base!($base => $builder {
                 /// Force block authoring
                 force_authoring: bool,
                 /// Set node role
