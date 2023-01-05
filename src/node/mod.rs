@@ -9,7 +9,6 @@ use derivative::Derivative;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 use libp2p_core::Multiaddr;
-use sc_client_api::client::BlockImportNotification;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
 use sc_network::network_state::NetworkState;
@@ -1150,6 +1149,21 @@ pub struct BlockNotification {
     pub is_new_best: bool,
 }
 
+impl<B: sp_runtime::traits::Block<Hash = Hash, Header = Header>>
+    From<sc_client_api::client::BlockImportNotification<B>> for BlockNotification
+{
+    fn from(value: sc_client_api::client::BlockImportNotification<B>) -> Self {
+        let sc_client_api::client::BlockImportNotification {
+            hash,
+            header: Header { parent_hash, number, state_root, extrinsics_root, digest: _ },
+            origin: _,
+            is_new_best,
+            tree_route: _,
+        } = value;
+        Self { hash, number, parent_hash, state_root, extrinsics_root, is_new_best }
+    }
+}
+
 /// Syncing status
 #[derive(Clone, Copy, Debug)]
 pub enum SyncStatus {
@@ -1395,22 +1409,7 @@ impl Node {
             .client()
             .context("Failed to subscribe to new blocks")?
             .import_notification_stream()
-            .map(
-                |BlockImportNotification {
-                     hash,
-                     header: Header { parent_hash, number, state_root, extrinsics_root, digest: _ },
-                     origin: _,
-                     is_new_best,
-                     tree_route: _,
-                 }| BlockNotification {
-                    hash,
-                    number,
-                    parent_hash,
-                    state_root,
-                    extrinsics_root,
-                    is_new_best,
-                },
-            );
+            .map(Into::into);
         Ok(stream)
     }
 }

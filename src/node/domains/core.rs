@@ -9,10 +9,8 @@ use derivative::Derivative;
 use derive_builder::Builder;
 use domain_service::DomainConfiguration;
 use futures::prelude::*;
-use sc_client_api::client::BlockImportNotification;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
-use subspace_runtime_primitives::opaque::Header;
 
 use crate::node::{Base, BaseBuilder, BlockNotification};
 
@@ -179,22 +177,7 @@ impl CoreNode {
             .client()
             .context("Failed to subscribe to new blocks")?
             .import_notification_stream()
-            .map(
-                |BlockImportNotification {
-                     hash,
-                     header: Header { parent_hash, number, state_root, extrinsics_root, digest: _ },
-                     origin: _,
-                     is_new_best,
-                     tree_route: _,
-                 }| BlockNotification {
-                    hash,
-                    number,
-                    parent_hash,
-                    state_root,
-                    extrinsics_root,
-                    is_new_best,
-                },
-            );
+            .map(Into::into);
         Ok(stream)
     }
 }
