@@ -62,6 +62,8 @@ pub struct Config {
     pub core: Option<core::Config>,
 }
 
+crate::derive_base!(crate::node::Base => ConfigBuilder);
+
 pub(crate) type FullClient =
     domain_service::FullClient<system_domain_runtime::RuntimeApi, ExecutorDispatch>;
 pub(crate) type NewFull = domain_service::NewFull<

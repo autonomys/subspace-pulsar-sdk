@@ -57,6 +57,8 @@ pub struct Config {
     chain_spec: Option<ChainSpec>,
 }
 
+crate::derive_base!(crate::node::Base => ConfigBuilder);
+
 impl ConfigBuilder {
     /// Constructor
     pub fn new() -> Self {

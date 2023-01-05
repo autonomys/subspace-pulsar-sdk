@@ -40,6 +40,7 @@ pub use builder::{
     ExecutionStrategy, Network, NetworkBuilder, OffchainWorker, OffchainWorkerBuilder, PruningMode,
     Rpc, RpcBuilder,
 };
+pub(crate) use builder::{ImplName, ImplVersion};
 pub use domains::{ConfigBuilder as SecondaryNodeBuilder, SecondaryNode};
 
 use self::builder::{ListenAddresses, SegmentPublishConcurrency};
@@ -355,6 +356,55 @@ mod builder {
         #[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub offchain_worker: OffchainWorker,
+    }
+
+    #[doc(hidden)]
+    #[macro_export]
+    macro_rules! derive_base {
+        (
+            $base:ty => $builder:ident {
+                $(
+                    #[doc = $doc:literal]
+                    $field:ident : $field_ty:ty
+                ),+
+                $(,)?
+            }
+        ) => {
+            impl $builder {
+                $(
+                #[doc = $doc]
+                pub fn $field(&self, $field: impl Into<$field_ty>) -> Self {
+                    let mut me = self.clone();
+                    me.base = me.base.$field($field.into());
+                    me
+                }
+                )*
+            }
+        };
+        ( $base:ty => $builder:ident ) => {
+            crate::derive_base!($base => $builder {
+                /// Force block authoring
+                force_authoring: bool,
+                /// Set node role
+                role: crate::node::Role,
+                /// Blocks pruning options
+                blocks_pruning: crate::node::BlocksPruning,
+                /// State pruning options
+                state_pruning: crate::node::PruningMode,
+                /// Set execution strategies
+                execution_strategy: crate::node::ExecutionStrategy,
+                /// Implementation name
+                impl_name: crate::node::ImplName,
+                /// Implementation version
+                impl_version: crate::node::ImplVersion,
+                /// Rpc settings
+                rpc: crate::node::Rpc,
+                /// Network settings
+                network: crate::node::Network,
+                /// Offchain worker settings
+                offchain_worker: crate::node::OffchainWorker,
+            });
+        }
     }
 
     impl Base {
@@ -686,28 +736,7 @@ mod builder {
         }
     }
 
-    crate::derive_base!(Base => Builder {
-        /// Force block authoring
-        force_authoring: bool,
-        /// Set node role
-        role: Role,
-        /// Blocks pruning options
-        blocks_pruning: BlocksPruning,
-        /// State pruning options
-        state_pruning: PruningMode,
-        /// Set execution strategies
-        execution_strategy: ExecutionStrategy,
-        /// Implementation name
-        impl_name: ImplName,
-        /// Implementation version
-        impl_version: ImplVersion,
-        /// Rpc settings
-        rpc: Rpc,
-        /// Network settings
-        network: Network,
-        /// Offchain worker settings
-        offchain_worker: OffchainWorker,
-    });
+    crate::derive_base!(Base => Builder);
     crate::generate_builder!(Base, Rpc, Network, Dsn, OffchainWorker);
 }
 
