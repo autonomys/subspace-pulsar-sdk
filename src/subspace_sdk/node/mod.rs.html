@@ -1525,6 +1525,10 @@
 <a href="#1525" id="1525">1525</a>
 <a href="#1526" id="1526">1526</a>
 <a href="#1527" id="1527">1527</a>
+<a href="#1528" id="1528">1528</a>
+<a href="#1529" id="1529">1529</a>
+<a href="#1530" id="1530">1530</a>
+<a href="#1531" id="1531">1531</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
@@ -2997,6 +3001,10 @@
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    #[cfg_attr(
+        any(tarpaulin, target_family = <span class="string">&quot;windows&quot;</span>),
+        ignore = <span class="string">&quot;Ignored for coverage tests and for windows&quot;
+    </span>)]
     </span><span class="kw">async fn </span>test_sync_block() {
         init();
 
