@@ -70,7 +70,7 @@ pub(crate) type NewFull = domain_service::NewFull<
     Arc<FullClient>,
     sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
     subspace_runtime_primitives::opaque::Block,
-    crate::node::PrimaryFullClient,
+    crate::node::FullClient,
     system_domain_runtime::RuntimeApi,
     ExecutorDispatch,
 >;
@@ -92,7 +92,7 @@ impl SecondaryNode {
         cfg: Config,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,
-        primary_new_full: &mut crate::node::PrimaryNewFull,
+        primary_new_full: &mut crate::node::NewFull,
     ) -> anyhow::Result<Self> {
         let Config { base, relayer_id: maybe_relayer_id, core } = cfg;
         let service_config =

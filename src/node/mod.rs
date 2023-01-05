@@ -18,7 +18,6 @@ use sc_network_common::config::{MultiaddrWithPeerId, TransportConfig};
 use sc_rpc_api::state::StateApiClient;
 use sc_service::config::{KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig};
 use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
-use sc_subspace_chain_specs::ConsensusChainSpec;
 use serde::{Deserialize, Serialize};
 use sp_consensus::SyncOracle;
 use sp_core::H256;
@@ -27,10 +26,9 @@ use subspace_farmer::RpcClient;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler};
 use subspace_rpc_primitives::SlotInfo;
-use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
+use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
-use subspace_service::{FullClient, SubspaceConfiguration};
-use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
+use subspace_service::SubspaceConfiguration;
 
 pub mod chain_spec;
 pub mod domains;
@@ -730,7 +728,7 @@ mod builder {
         pub async fn build(
             self,
             directory: impl AsRef<Path>,
-            chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
+            chain_spec: super::ChainSpec,
         ) -> anyhow::Result<Node> {
             self.configuration().build(directory, chain_spec).await
         }
@@ -789,7 +787,7 @@ impl Config {
     pub async fn build(
         self,
         directory: impl AsRef<Path>,
-        chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
+        chain_spec: ChainSpec,
     ) -> anyhow::Result<Node> {
         let Self {
             base,
@@ -991,7 +989,7 @@ impl Config {
             None
         };
 
-        let PrimaryNewFull {
+        let NewFull {
             mut task_manager,
             client,
             rpc_handlers,
@@ -1063,10 +1061,15 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     }
 }
 
-pub(crate) type PrimaryFullClient =
+/// Chain spec for subspace node
+pub type ChainSpec = sc_subspace_chain_specs::ConsensusChainSpec<
+    subspace_runtime::GenesisConfig,
+    system_domain_runtime::GenesisConfig,
+>;
+pub(crate) type FullClient =
     subspace_service::FullClient<subspace_runtime::RuntimeApi, ExecutorDispatch>;
-pub(crate) type PrimaryNewFull = subspace_service::NewFull<
-    PrimaryFullClient,
+pub(crate) type NewFull = subspace_service::NewFull<
+    FullClient,
     subspace_service::FraudProofVerifier<RuntimeApi, ExecutorDispatch>,
 >;
 
@@ -1077,7 +1080,7 @@ pub struct Node {
     #[derivative(Debug = "ignore")]
     secondary_node: Option<SecondaryNode>,
     #[derivative(Debug = "ignore")]
-    client: Weak<PrimaryFullClient>,
+    client: Weak<FullClient>,
     #[derivative(Debug = "ignore")]
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     pub(crate) rpc_handle: crate::utils::Rpc,
@@ -1334,7 +1337,7 @@ impl Node {
         tokio::fs::remove_dir_all(path).await
     }
 
-    fn client(&self) -> anyhow::Result<Arc<FullClient<RuntimeApi, ExecutorDispatch>>> {
+    fn client(&self) -> anyhow::Result<Arc<FullClient>> {
         self.client.upgrade().ok_or_else(|| anyhow::anyhow!("The node was already closed"))
     }
 

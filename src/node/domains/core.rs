@@ -82,7 +82,7 @@ pub(crate) type NewFull = domain_service::NewFullCore<
     >,
     subspace_runtime_primitives::opaque::Block,
     super::FullClient,
-    crate::node::PrimaryFullClient,
+    crate::node::FullClient,
     core_payments_domain_runtime::RuntimeApi,
     ExecutorDispatch,
 >;
@@ -103,7 +103,7 @@ impl CoreNode {
     pub(crate) async fn new(
         cfg: Config,
         directory: impl AsRef<Path>,
-        primary_chain_node: &mut crate::node::PrimaryNewFull,
+        primary_chain_node: &mut crate::node::NewFull,
         secondary_node: &super::NewFull,
         gossip_msg_sink: domain_client_message_relayer::GossipMessageSink,
         domain_tx_pool_sinks: &mut impl Extend<(
