@@ -14,7 +14,7 @@ use sp_domains::DomainId;
 use subspace_runtime::Block;
 use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
-use self::core::CoreNode;
+use self::core::CoreDomainNode;
 use crate::node::{Base, BaseBuilder, BlockNotification};
 
 pub mod core;
@@ -72,20 +72,20 @@ pub(crate) type NewFull = domain_service::NewFull<
     system_domain_runtime::RuntimeApi,
     ExecutorDispatch,
 >;
-/// Chain spec of the secondary chain
+/// Chain spec of the system domain
 pub type ChainSpec = sc_subspace_chain_specs::ExecutionChainSpec<ExecutionGenesisConfig>;
 
-/// Secondary executor node
+/// System domain node
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
-pub struct SecondaryNode {
+pub struct SystemDomainNode {
     #[derivative(Debug = "ignore")]
     client: Weak<FullClient>,
-    core: Option<CoreNode>,
+    core: Option<CoreDomainNode>,
     _rpc_handlers: crate::utils::Rpc,
 }
 
-impl SecondaryNode {
+impl SystemDomainNode {
     pub(crate) async fn new(
         cfg: Config,
         directory: impl AsRef<Path>,
@@ -96,7 +96,7 @@ impl SecondaryNode {
         let service_config =
             base.configuration(directory.as_ref().join("system"), chain_spec).await;
 
-        let secondary_chain_config = DomainConfiguration { service_config, maybe_relayer_id };
+        let system_domain_config = DomainConfiguration { service_config, maybe_relayer_id };
         let imported_block_notification_stream = primary_new_full
             .imported_block_notification_stream
             .subscribe()
@@ -124,8 +124,8 @@ impl SecondaryNode {
         // TODO: proper value
         let block_import_throttling_buffer_size = 10;
 
-        let secondary_chain_node = domain_service::new_full(
-            secondary_chain_config,
+        let system_domain_node = domain_service::new_full(
+            system_domain_config,
             primary_new_full.client.clone(),
             primary_new_full.network.clone(),
             &primary_new_full.select_chain,
@@ -139,11 +139,12 @@ impl SecondaryNode {
         let mut domain_tx_pool_sinks = std::collections::BTreeMap::new();
 
         let core = if let Some(core) = core {
-            CoreNode::new(
+            let core_domain_id = u32::from(DomainId::CORE_PAYMENTS);
+            CoreDomainNode::new(
                 core,
-                directory.as_ref().join("core"),
+                directory.as_ref().join(format!("core-{core_domain_id}")),
                 primary_new_full,
-                &secondary_chain_node,
+                &system_domain_node,
                 gossip_msg_sink.clone(),
                 &mut domain_tx_pool_sinks,
             )
@@ -153,8 +154,8 @@ impl SecondaryNode {
             None
         };
 
-        domain_tx_pool_sinks.insert(DomainId::SYSTEM, secondary_chain_node.tx_pool_sink);
-        primary_new_full.task_manager.add_child(secondary_chain_node.task_manager);
+        domain_tx_pool_sinks.insert(DomainId::SYSTEM, system_domain_node.tx_pool_sink);
+        primary_new_full.task_manager.add_child(system_domain_node.task_manager);
 
         let cross_domain_message_gossip_worker =
             cross_domain_message_gossip::GossipWorker::<Block>::new(
@@ -162,7 +163,7 @@ impl SecondaryNode {
                 domain_tx_pool_sinks,
             );
 
-        let NewFull { client, network_starter, rpc_handlers, .. } = secondary_chain_node;
+        let NewFull { client, network_starter, rpc_handlers, .. } = system_domain_node;
 
         tokio::spawn(cross_domain_message_gossip_worker.run(gossip_msg_stream));
         network_starter.start_network();
@@ -179,7 +180,7 @@ impl SecondaryNode {
     }
 
     /// Get the core node handler
-    pub fn core(&self) -> Option<CoreNode> {
+    pub fn core(&self) -> Option<CoreDomainNode> {
         self.core.clone()
     }
 

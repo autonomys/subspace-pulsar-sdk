@@ -38,7 +38,7 @@ pub use builder::{
     Rpc, RpcBuilder,
 };
 pub(crate) use builder::{ImplName, ImplVersion};
-pub use domains::{ConfigBuilder as SecondaryNodeBuilder, SecondaryNode};
+pub use domains::{ConfigBuilder as SecondaryNodeBuilder, SystemDomainNode};
 
 use self::builder::{ListenAddresses, SegmentPublishConcurrency};
 use crate::networking::{
@@ -256,10 +256,10 @@ mod builder {
         )]
         #[serde(flatten, skip_serializing_if = "crate::utils::is_default")]
         pub base: Base,
-        /// Secondary chain settings
+        /// System domain settings
         #[builder(setter(into, strip_option), default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub secondary_chain: Option<domains::Config>,
+        pub system_domain: Option<domains::Config>,
         /// DSN settings
         #[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
@@ -383,23 +383,23 @@ mod builder {
                 /// Force block authoring
                 force_authoring: bool,
                 /// Set node role
-                role: crate::node::Role,
+                role: $crate::node::Role,
                 /// Blocks pruning options
-                blocks_pruning: crate::node::BlocksPruning,
+                blocks_pruning: $crate::node::BlocksPruning,
                 /// State pruning options
-                state_pruning: crate::node::PruningMode,
+                state_pruning: $crate::node::PruningMode,
                 /// Set execution strategies
-                execution_strategy: crate::node::ExecutionStrategy,
+                execution_strategy: $crate::node::ExecutionStrategy,
                 /// Implementation name
-                impl_name: crate::node::ImplName,
+                impl_name: $crate::node::ImplName,
                 /// Implementation version
-                impl_version: crate::node::ImplVersion,
+                impl_version: $crate::node::ImplVersion,
                 /// Rpc settings
-                rpc: crate::node::Rpc,
+                rpc: $crate::node::Rpc,
                 /// Network settings
-                network: crate::node::Network,
+                network: $crate::node::Network,
                 /// Offchain worker settings
-                offchain_worker: crate::node::OffchainWorker,
+                offchain_worker: $crate::node::OffchainWorker,
             });
         }
     }
@@ -792,7 +792,7 @@ impl Config {
             base,
             piece_cache_size,
             dsn,
-            secondary_chain,
+            system_domain,
             segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
         } = self;
         let base = base.configuration(directory.as_ref(), chain_spec.clone()).await;
@@ -964,22 +964,22 @@ impl Config {
                 .await
                 .context("Failed to build a full subspace node")?;
 
-        let secondary_node = if let Some(config) = secondary_chain {
+        let system_domain = if let Some(config) = system_domain {
             use sc_service::ChainSpecExtension;
 
-            let secondary_chain_spec = chain_spec
+            let system_domain_spec = chain_spec
                 .extensions()
                 .get_any(std::any::TypeId::of::<domains::ChainSpec>())
                 .downcast_ref()
                 .cloned()
                 .ok_or_else(|| {
-                    anyhow::anyhow!("Primary chain spec must contain secondary chain spec")
+                    anyhow::anyhow!("Primary chain spec must contain system domain chain spec")
                 })?;
 
-            SecondaryNode::new(
+            SystemDomainNode::new(
                 config,
                 directory.as_ref().join("domains"),
-                secondary_chain_spec,
+                system_domain_spec,
                 &mut full_client,
             )
             .await
@@ -1028,7 +1028,7 @@ impl Config {
 
         Ok(Node {
             client,
-            secondary_node,
+            system_domain,
             network,
             name,
             farmer_record_storage,
@@ -1076,8 +1076,7 @@ pub(crate) type NewFull = subspace_service::NewFull<
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct Node {
-    #[derivative(Debug = "ignore")]
-    secondary_node: Option<SecondaryNode>,
+    system_domain: Option<SystemDomainNode>,
     #[derivative(Debug = "ignore")]
     client: Weak<FullClient>,
     #[derivative(Debug = "ignore")]
@@ -1355,9 +1354,9 @@ impl Node {
         self.client.upgrade().ok_or_else(|| anyhow::anyhow!("The node was already closed"))
     }
 
-    /// Returns reference to secondary node
-    pub fn secondary_node(&self) -> Option<SecondaryNode> {
-        self.secondary_node.as_ref().cloned()
+    /// Returns system domain node if one was setted up
+    pub fn system_domain(&self) -> Option<SystemDomainNode> {
+        self.system_domain.as_ref().cloned()
     }
 
     /// Get node info

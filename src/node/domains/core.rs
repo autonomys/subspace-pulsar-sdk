@@ -14,7 +14,7 @@ use sp_domains::DomainId;
 
 use crate::node::{Base, BaseBuilder, BlockNotification};
 
-/// Core payments domain executor instance.
+/// Core payments domain instance.
 pub(crate) struct ExecutorDispatch;
 
 impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
@@ -88,21 +88,21 @@ pub(crate) type NewFull = domain_service::NewFullCore<
 pub type ChainSpec =
     sc_subspace_chain_specs::ExecutionChainSpec<core_payments_domain_runtime::GenesisConfig>;
 
-/// Secondary executor node
+/// Core domain node
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
-pub struct CoreNode {
+pub struct CoreDomainNode {
     #[derivative(Debug = "ignore")]
     client: Weak<FullClient>,
     _rpc_handlers: crate::utils::Rpc,
 }
 
-impl CoreNode {
+impl CoreDomainNode {
     pub(crate) async fn new(
         cfg: Config,
         directory: impl AsRef<Path>,
         primary_chain_node: &mut crate::node::NewFull,
-        secondary_node: &super::NewFull,
+        system_domain_node: &super::NewFull,
         gossip_msg_sink: domain_client_message_relayer::GossipMessageSink,
         domain_tx_pool_sinks: &mut impl Extend<(
             DomainId,
@@ -140,8 +140,8 @@ impl CoreNode {
             domain_service::new_full_core(
                 DomainId::CORE_PAYMENTS,
                 core_domain_config,
-                secondary_node.client.clone(),
-                secondary_node.network.clone(),
+                system_domain_node.client.clone(),
+                system_domain_node.network.clone(),
                 primary_chain_node.client.clone(),
                 primary_chain_node.network.clone(),
                 &primary_chain_node.select_chain,
@@ -198,7 +198,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let core = ConfigBuilder::new().build(chain_spec::core_payments::development_config());
         let node = Node::builder()
-            .secondary_chain(domains::ConfigBuilder::new().core(core))
+            .system_domain(domains::ConfigBuilder::new().core(core))
             .force_authoring(true)
             .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
@@ -215,9 +215,16 @@ mod tests {
             .await
             .unwrap();
 
-        let core = node.secondary_node().unwrap().core().unwrap();
-
-        core.subscribe_new_blocks().await.unwrap().next().await.unwrap();
+        node.system_domain()
+            .unwrap()
+            .core()
+            .unwrap()
+            .subscribe_new_blocks()
+            .await
+            .unwrap()
+            .next()
+            .await
+            .unwrap();
 
         farmer.close().await.unwrap();
         node.close().await;
