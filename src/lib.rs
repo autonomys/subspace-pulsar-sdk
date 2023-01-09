@@ -266,7 +266,7 @@ force_synced = false
 enabled = false
 indexing_enabled = false
 
-[secondary_chain]
+[system_domain]
 relayer_id = "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM"
 force_authoring = false
 role = "Full"
@@ -276,22 +276,22 @@ execution_strategy = "NativeWhenPossible"
 impl_name = "subspace-sdk"
 impl_version = "0.1.0-c88c59ab7a7cae3518b224302a3c96beb7c5afaf"
 
-[secondary_chain.rpc]
+[system_domain.rpc]
 methods = "Auto"
 max_subs_per_conn = 1024
 
-[secondary_chain.network]
+[system_domain.network]
 enable_mdns = false
 allow_private_ipv4 = false
 listen_addresses = []
 boot_nodes = []
 force_synced = false
 
-[secondary_chain.offchain_worker]
+[system_domain.offchain_worker]
 enabled = false
 indexing_enabled = false
 
-[secondary_chain.core]
+[system_domain.core]
 relayer_id = "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM"
 force_authoring = false
 role = "Full"
@@ -301,18 +301,18 @@ execution_strategy = "NativeWhenPossible"
 impl_name = "subspace-sdk"
 impl_version = "0.1.0-c88c59ab7a7cae3518b224302a3c96beb7c5afaf"
 
-[secondary_chain.core.rpc]
+[system_domain.core.rpc]
 methods = "Auto"
 max_subs_per_conn = 1024
 
-[secondary_chain.core.network]
+[system_domain.core.network]
 enable_mdns = false
 allow_private_ipv4 = false
 listen_addresses = []
 boot_nodes = []
 force_synced = false
 
-[secondary_chain.core.offchain_worker]
+[system_domain.core.offchain_worker]
 enabled = false
 indexing_enabled = false
 "#,

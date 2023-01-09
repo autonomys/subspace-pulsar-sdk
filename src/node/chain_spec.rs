@@ -127,7 +127,7 @@ pub fn gemini_3b_compiled(
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions { execution_chain_spec: secondary_chain::gemini_3b_config() },
+        ChainSpecExtensions { execution_chain_spec: system_domain::gemini_3b_config() },
     ))
 }
 
@@ -208,7 +208,7 @@ pub fn x_net_2_config_compiled(
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions { execution_chain_spec: secondary_chain::x_net_2_config() },
+        ChainSpecExtensions { execution_chain_spec: system_domain::x_net_2_config() },
     ))
 }
 
@@ -254,7 +254,7 @@ pub fn dev_config() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGene
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions { execution_chain_spec: secondary_chain::development_config() },
+        ChainSpecExtensions { execution_chain_spec: system_domain::development_config() },
     ))
 }
 
@@ -308,7 +308,7 @@ pub fn local_config() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGe
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions { execution_chain_spec: secondary_chain::local_testnet_config() },
+        ChainSpecExtensions { execution_chain_spec: system_domain::local_testnet_config() },
     ))
 }
 
@@ -345,8 +345,8 @@ pub fn subspace_genesis_config(
     }
 }
 
-pub mod secondary_chain {
-    //! Secondary chain configurations.
+pub mod system_domain {
+    //! System domain chain specs
 
     use domain_runtime_primitives::RelayerId;
     use frame_support::weights::Weight;
@@ -688,7 +688,7 @@ mod utils {
 }
 
 pub mod core_payments {
-    //! Secondary chain configurations.
+    //! Core payments domain chain specs
 
     use core_payments_domain_runtime::{
         AccountId, BalancesConfig, GenesisConfig, MessengerConfig, SudoConfig, SystemConfig,

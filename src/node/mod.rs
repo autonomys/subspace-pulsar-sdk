@@ -38,7 +38,7 @@ pub use builder::{
     Rpc, RpcBuilder,
 };
 pub(crate) use builder::{ImplName, ImplVersion};
-pub use domains::{ConfigBuilder as SecondaryNodeBuilder, SystemDomainNode};
+pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
 
 use self::builder::{ListenAddresses, SegmentPublishConcurrency};
 use crate::networking::{
