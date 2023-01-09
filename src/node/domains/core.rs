@@ -93,8 +93,8 @@ pub type ChainSpec =
 #[derivative(Debug)]
 pub struct CoreDomainNode {
     #[derivative(Debug = "ignore")]
-    client: Weak<FullClient>,
-    _rpc_handlers: crate::utils::Rpc,
+    _client: Weak<FullClient>,
+    rpc_handlers: crate::utils::Rpc,
 }
 
 impl CoreDomainNode {
@@ -158,27 +158,20 @@ impl CoreDomainNode {
         network_starter.start_network();
 
         Ok(Self {
-            client: Arc::downgrade(&client),
-            _rpc_handlers: crate::utils::Rpc::new(&rpc_handlers),
+            _client: Arc::downgrade(&client),
+            rpc_handlers: crate::utils::Rpc::new(&rpc_handlers),
         })
     }
 
-    pub(crate) fn client(&self) -> anyhow::Result<Arc<FullClient>> {
-        self.client.upgrade().ok_or_else(|| anyhow::anyhow!("The node was already closed"))
+    pub(crate) fn _client(&self) -> anyhow::Result<Arc<FullClient>> {
+        self._client.upgrade().ok_or_else(|| anyhow::anyhow!("The node was already closed"))
     }
 
     /// Subscribe to new blocks imported
     pub async fn subscribe_new_blocks(
         &self,
     ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
-        use sc_client_api::client::BlockchainEvents;
-
-        let stream = self
-            .client()
-            .context("Failed to subscribe to new blocks")?
-            .import_notification_stream()
-            .map(Into::into);
-        Ok(stream)
+        self.rpc_handlers.subscribe_new_blocks().await.context("Failed to subscribe to new blocks")
     }
 }
 

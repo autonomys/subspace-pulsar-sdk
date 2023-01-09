@@ -9,6 +9,8 @@ use jsonrpsee_core::server::rpc_module::RpcModule;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::Error;
 use serde::de::DeserializeOwned;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use subspace_runtime_primitives::opaque::Block;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Rpc {
@@ -19,6 +21,25 @@ impl Rpc {
     pub fn new(handlers: &sc_service::RpcHandlers) -> Self {
         let inner = handlers.handle();
         Self { inner }
+    }
+
+    pub(crate) async fn subscribe_new_blocks<'a: 'b, 'b>(
+        &'a self,
+    ) -> Result<
+        impl Stream<Item = crate::node::BlockNotification> + Send + Sync + Unpin + 'static,
+        Error,
+    > {
+        let stream = sc_rpc::chain::ChainApiClient::<
+            <<Block as BlockT>::Header as HeaderT>::Number,
+            <Block as BlockT>::Hash,
+            <Block as BlockT>::Header,
+            sp_runtime::generic::SignedBlock<Block>,
+        >::subscribe_new_heads(self)
+        .await?
+        .filter_map(|result| futures::future::ready(result.ok()))
+        .map(Into::into);
+
+        Ok(stream)
     }
 }
 

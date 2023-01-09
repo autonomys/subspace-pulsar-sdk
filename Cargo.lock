@@ -9523,6 +9523,7 @@ dependencies = [
  "sc-executor",
  "sc-network",
  "sc-network-common",
+ "sc-rpc",
  "sc-rpc-api",
  "sc-service",
  "sc-state-db",

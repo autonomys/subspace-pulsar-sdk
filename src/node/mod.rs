@@ -1144,22 +1144,13 @@ pub struct BlockNotification {
     pub state_root: Hash,
     /// Extrinsics root
     pub extrinsics_root: Hash,
-    /// Is it new best block?
-    pub is_new_best: bool,
 }
 
-impl<B: sp_runtime::traits::Block<Hash = Hash, Header = Header>>
-    From<sc_client_api::client::BlockImportNotification<B>> for BlockNotification
-{
-    fn from(value: sc_client_api::client::BlockImportNotification<B>) -> Self {
-        let sc_client_api::client::BlockImportNotification {
-            hash,
-            header: Header { parent_hash, number, state_root, extrinsics_root, digest: _ },
-            origin: _,
-            is_new_best,
-            tree_route: _,
-        } = value;
-        Self { hash, number, parent_hash, state_root, extrinsics_root, is_new_best }
+impl From<Header> for BlockNotification {
+    fn from(header: Header) -> Self {
+        let hash = header.hash();
+        let Header { number, parent_hash, state_root, extrinsics_root, digest: _ } = header;
+        Self { hash, number, parent_hash, state_root, extrinsics_root }
     }
 }
 
@@ -1402,14 +1393,7 @@ impl Node {
     pub async fn subscribe_new_blocks(
         &self,
     ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
-        use sc_client_api::client::BlockchainEvents;
-
-        let stream = self
-            .client()
-            .context("Failed to subscribe to new blocks")?
-            .import_notification_stream()
-            .map(Into::into);
-        Ok(stream)
+        self.rpc_handle.subscribe_new_blocks().await.context("Failed to subscribe to new blocks")
     }
 }
 
