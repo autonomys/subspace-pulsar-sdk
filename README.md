@@ -32,9 +32,10 @@ let node = subspace_sdk::Node::builder()
     .await
     .unwrap();
 
-let plots = [subspace_sdk::PlotDescription::new("plot", bytesize::ByteSize::mb(100))];
+let plots = [subspace_sdk::PlotDescription::new("plot", bytesize::ByteSize::mb(100)).unwrap()];
+let cache = subspace_sdk::farmer::CacheDescription::new("cache", bytesize::ByteSize::mb(10)).unwrap();
 let farmer = subspace_sdk::Farmer::builder()
-    .build(subspace_sdk::PublicKey::from([0; 32]), node.clone(), &plots)
+    .build(subspace_sdk::PublicKey::from([0; 32]), node.clone(), &plots, cache)
     .await
     .expect("Failed to init a farmer");
 
