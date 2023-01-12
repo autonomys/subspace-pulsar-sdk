@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use sp_consensus::SyncOracle;
 use sp_core::H256;
 use subspace_core_primitives::SolutionRange;
-use subspace_farmer::RpcClient;
+use subspace_farmer::node_client::NodeClient;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler};
 use subspace_rpc_primitives::SlotInfo;
@@ -469,6 +469,10 @@ mod builder {
                 let client_id =
                     client_id.unwrap_or_else(|| format!("{}/v{}", impl_name, impl_version));
                 let config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
+                let listen_addresses = listen_addresses
+                    .into_iter()
+                    .map(|addr| addr.to_string().parse().unwrap())
+                    .collect::<Vec<_>>();
 
                 NetworkConfiguration {
                     listen_addresses,
@@ -1404,7 +1408,7 @@ mod farmer_rpc_client {
     use sc_consensus_subspace_rpc::SubspaceRpcApiClient;
     use subspace_archiving::archiver::ArchivedSegment;
     use subspace_core_primitives::{RecordsRoot, SegmentIndex};
-    use subspace_farmer::rpc_client::{Error, RpcClient};
+    use subspace_farmer::node_client::{Error, NodeClient};
     use subspace_rpc_primitives::{
         FarmerAppInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
     };
@@ -1412,7 +1416,7 @@ mod farmer_rpc_client {
     use super::*;
 
     #[async_trait::async_trait]
-    impl RpcClient for Node {
+    impl NodeClient for Node {
         async fn farmer_app_info(&self) -> Result<FarmerAppInfo, Error> {
             Ok(self.rpc_handle.get_farmer_app_info().await?)
         }
@@ -1476,7 +1480,7 @@ mod farmer_rpc_client {
 
 #[cfg(test)]
 mod tests {
-    use subspace_farmer::RpcClient;
+    use subspace_farmer::node_client::NodeClient;
     use tempfile::TempDir;
 
     use super::*;

@@ -64,7 +64,7 @@ crate::derive_base!(crate::node::Base => ConfigBuilder);
 
 pub(crate) type FullClient =
     domain_service::FullClient<system_domain_runtime::RuntimeApi, ExecutorDispatch>;
-pub(crate) type NewFull = domain_service::NewFull<
+pub(crate) type NewFull = domain_service::NewFullSystem<
     Arc<FullClient>,
     sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
     subspace_runtime_primitives::opaque::Block,
@@ -119,14 +119,15 @@ impl SystemDomainNode {
             });
 
         let (gossip_msg_sink, gossip_msg_stream) =
-            sc_utils::mpsc::tracing_unbounded("Cross domain gossip messages");
+            sc_utils::mpsc::tracing_unbounded("Cross domain gossip messages", 100);
 
         // TODO: proper value
         let block_import_throttling_buffer_size = 10;
 
-        let system_domain_node = domain_service::new_full(
+        let system_domain_node = domain_service::new_full_system(
             system_domain_config,
             primary_new_full.client.clone(),
+            primary_new_full.backend.clone(),
             primary_new_full.network.clone(),
             &primary_new_full.select_chain,
             imported_block_notification_stream,

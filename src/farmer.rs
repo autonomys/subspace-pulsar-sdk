@@ -223,7 +223,7 @@ impl Config {
                 allocated_space,
                 directory: directory.clone(),
                 reward_address: *reward_address,
-                rpc_client: node.clone(),
+                node_client: node.clone(),
                 dsn_node: node.dsn_node.clone(),
                 concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
             };

@@ -200,7 +200,7 @@ mod parse_ss58 {
 #[cfg(test)]
 mod tests {
     use futures::StreamExt;
-    use subspace_farmer::RpcClient;
+    use subspace_farmer::node_client::NodeClient;
     use tempfile::TempDir;
 
     use super::farmer::CacheDescription;
