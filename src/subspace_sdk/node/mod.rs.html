@@ -1590,6 +1590,10 @@
 <a href="#1590" id="1590">1590</a>
 <a href="#1591" id="1591">1591</a>
 <a href="#1592" id="1592">1592</a>
+<a href="#1593" id="1593">1593</a>
+<a href="#1594" id="1594">1594</a>
+<a href="#1595" id="1595">1595</a>
+<a href="#1596" id="1596">1596</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
@@ -1613,7 +1617,7 @@
 <span class="kw">use </span>sp_consensus::SyncOracle;
 <span class="kw">use </span>sp_core::H256;
 <span class="kw">use </span>subspace_core_primitives::SolutionRange;
-<span class="kw">use </span>subspace_farmer::RpcClient;
+<span class="kw">use </span>subspace_farmer::node_client::NodeClient;
 <span class="kw">use </span>subspace_farmer_components::FarmerProtocolInfo;
 <span class="kw">use </span>subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler};
 <span class="kw">use </span>subspace_rpc_primitives::SlotInfo;
@@ -2061,6 +2065,10 @@
                 <span class="kw">let </span>client_id =
                     client_id.unwrap_or_else(|| <span class="macro">format!</span>(<span class="string">&quot;{}/v{}&quot;</span>, impl_name, impl_version));
                 <span class="kw">let </span>config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
+                <span class="kw">let </span>listen_addresses = listen_addresses
+                    .into_iter()
+                    .map(|addr| addr.to_string().parse().unwrap())
+                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
                 NetworkConfiguration {
                     listen_addresses,
@@ -2996,7 +3004,7 @@
     <span class="kw">use </span>sc_consensus_subspace_rpc::SubspaceRpcApiClient;
     <span class="kw">use </span>subspace_archiving::archiver::ArchivedSegment;
     <span class="kw">use </span>subspace_core_primitives::{RecordsRoot, SegmentIndex};
-    <span class="kw">use </span>subspace_farmer::rpc_client::{Error, RpcClient};
+    <span class="kw">use </span>subspace_farmer::node_client::{Error, NodeClient};
     <span class="kw">use </span>subspace_rpc_primitives::{
         FarmerAppInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
     };
@@ -3004,7 +3012,7 @@
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
     <span class="attr">#[async_trait::async_trait]
-    </span><span class="kw">impl </span>RpcClient <span class="kw">for </span>Node {
+    </span><span class="kw">impl </span>NodeClient <span class="kw">for </span>Node {
         <span class="kw">async fn </span>farmer_app_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;FarmerAppInfo, Error&gt; {
             <span class="prelude-val">Ok</span>(<span class="self">self</span>.rpc_handle.get_farmer_app_info().<span class="kw">await</span><span class="question-mark">?</span>)
         }
@@ -3068,7 +3076,7 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span>subspace_farmer::RpcClient;
+    <span class="kw">use </span>subspace_farmer::node_client::NodeClient;
     <span class="kw">use </span>tempfile::TempDir;
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
