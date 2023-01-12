@@ -5,10 +5,10 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use anyhow::Context;
+use derivative::Derivative;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 use libp2p_core::Multiaddr;
-use sc_client_api::client::BlockImportNotification;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
 use sc_network::network_state::NetworkState;
@@ -17,7 +17,6 @@ use sc_network_common::config::{MultiaddrWithPeerId, TransportConfig};
 use sc_rpc_api::state::StateApiClient;
 use sc_service::config::{KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig};
 use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
-use sc_subspace_chain_specs::ConsensusChainSpec;
 use serde::{Deserialize, Serialize};
 use sp_consensus::SyncOracle;
 use sp_core::H256;
@@ -26,18 +25,20 @@ use subspace_farmer::RpcClient;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler};
 use subspace_rpc_primitives::SlotInfo;
-use subspace_runtime::{GenesisConfig as ConsensusGenesisConfig, RuntimeApi};
+use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
-use subspace_service::{FullClient, SubspaceConfiguration};
-use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
+use subspace_service::SubspaceConfiguration;
 
 pub mod chain_spec;
+pub mod domains;
 
 pub use builder::{
     Base, BaseBuilder, BlocksPruning, Builder, Config, Constraints, Dsn, DsnBuilder,
     ExecutionStrategy, Network, NetworkBuilder, OffchainWorker, OffchainWorkerBuilder, PruningMode,
     Rpc, RpcBuilder,
 };
+pub(crate) use builder::{ImplName, ImplVersion};
+pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
 
 use self::builder::{ListenAddresses, SegmentPublishConcurrency};
 use crate::networking::{
@@ -255,6 +256,10 @@ mod builder {
         )]
         #[serde(flatten, skip_serializing_if = "crate::utils::is_default")]
         pub base: Base,
+        /// System domain settings
+        #[builder(setter(into, strip_option), default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub system_domain: Option<domains::Config>,
         /// DSN settings
         #[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
@@ -350,12 +355,68 @@ mod builder {
         pub offchain_worker: OffchainWorker,
     }
 
+    #[doc(hidden)]
+    #[macro_export]
+    macro_rules! derive_base {
+        (
+            $base:ty => $builder:ident {
+                $(
+                    #[doc = $doc:literal]
+                    $field:ident : $field_ty:ty
+                ),+
+                $(,)?
+            }
+        ) => {
+            impl $builder {
+                $(
+                #[doc = $doc]
+                pub fn $field(&self, $field: impl Into<$field_ty>) -> Self {
+                    let mut me = self.clone();
+                    me.base = me.base.$field($field.into());
+                    me
+                }
+                )*
+            }
+        };
+        ( $base:ty => $builder:ident ) => {
+            $crate::derive_base!($base => $builder {
+                /// Force block authoring
+                force_authoring: bool,
+                /// Set node role
+                role: $crate::node::Role,
+                /// Blocks pruning options
+                blocks_pruning: $crate::node::BlocksPruning,
+                /// State pruning options
+                state_pruning: $crate::node::PruningMode,
+                /// Set execution strategies
+                execution_strategy: $crate::node::ExecutionStrategy,
+                /// Implementation name
+                impl_name: $crate::node::ImplName,
+                /// Implementation version
+                impl_version: $crate::node::ImplVersion,
+                /// Rpc settings
+                rpc: $crate::node::Rpc,
+                /// Network settings
+                network: $crate::node::Network,
+                /// Offchain worker settings
+                offchain_worker: $crate::node::OffchainWorker,
+            });
+        }
+    }
+
     impl Base {
-        pub(crate) async fn configuration(
+        pub(crate) async fn configuration<CS>(
             self,
             directory: impl AsRef<Path>,
-            chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
-        ) -> Configuration {
+            chain_spec: CS,
+        ) -> Configuration
+        where
+            CS: sc_chain_spec::ChainSpec
+                + serde::Serialize
+                + serde::de::DeserializeOwned
+                + sp_runtime::BuildStorage
+                + 'static,
+        {
             const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
             const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
 
@@ -666,34 +727,13 @@ mod builder {
         pub async fn build(
             self,
             directory: impl AsRef<Path>,
-            chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
+            chain_spec: super::ChainSpec,
         ) -> anyhow::Result<Node> {
             self.configuration().build(directory, chain_spec).await
         }
     }
 
-    crate::derive_base!(Base => Builder {
-        /// Force block authoring
-        force_authoring: bool,
-        /// Set node role
-        role: Role,
-        /// Blocks pruning options
-        blocks_pruning: BlocksPruning,
-        /// State pruning options
-        state_pruning: PruningMode,
-        /// Set execution strategies
-        execution_strategy: ExecutionStrategy,
-        /// Implementation name
-        impl_name: ImplName,
-        /// Implementation version
-        impl_version: ImplVersion,
-        /// Rpc settings
-        rpc: Rpc,
-        /// Network settings
-        network: Network,
-        /// Offchain worker settings
-        offchain_worker: OffchainWorker,
-    });
+    crate::derive_base!(Base => Builder);
     crate::generate_builder!(Base, Rpc, Network, Dsn, OffchainWorker);
 }
 
@@ -746,15 +786,16 @@ impl Config {
     pub async fn build(
         self,
         directory: impl AsRef<Path>,
-        chain_spec: ConsensusChainSpec<ConsensusGenesisConfig, ExecutionGenesisConfig>,
+        chain_spec: ChainSpec,
     ) -> anyhow::Result<Node> {
         let Self {
             base,
             piece_cache_size,
             dsn,
+            system_domain,
             segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
         } = self;
-        let base = base.configuration(directory, chain_spec).await;
+        let base = base.configuration(directory.as_ref(), chain_spec.clone()).await;
         let name = base.network.node_name.clone();
 
         let partial_components =
@@ -918,12 +959,36 @@ impl Config {
         });
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);
-        let full_client =
+        let mut full_client =
             subspace_service::new_full(configuration, partial_components, true, slot_proportion)
                 .await
                 .context("Failed to build a full subspace node")?;
 
-        let subspace_service::NewFull {
+        let system_domain = if let Some(config) = system_domain {
+            use sc_service::ChainSpecExtension;
+
+            let system_domain_spec = chain_spec
+                .extensions()
+                .get_any(std::any::TypeId::of::<domains::ChainSpec>())
+                .downcast_ref()
+                .cloned()
+                .ok_or_else(|| {
+                    anyhow::anyhow!("Primary chain spec must contain system domain chain spec")
+                })?;
+
+            SystemDomainNode::new(
+                config,
+                directory.as_ref().join("domains"),
+                system_domain_spec,
+                &mut full_client,
+            )
+            .await
+            .map(Some)?
+        } else {
+            None
+        };
+
+        let NewFull {
             mut task_manager,
             client,
             rpc_handlers,
@@ -932,11 +997,11 @@ impl Config {
 
             select_chain: _,
             backend: _,
-            new_slot_notification_stream: _,
             reward_signing_notification_stream: _,
-            imported_block_notification_stream: _,
             archived_segment_notification_stream: _,
             transaction_pool: _,
+            imported_block_notification_stream: _,
+            new_slot_notification_stream: _,
         } = full_client;
 
         let client = Arc::downgrade(&client);
@@ -963,6 +1028,7 @@ impl Config {
 
         Ok(Node {
             client,
+            system_domain,
             network,
             name,
             farmer_record_storage,
@@ -975,7 +1041,7 @@ impl Config {
 }
 
 /// Executor dispatch for subspace runtime
-struct ExecutorDispatch;
+pub(crate) struct ExecutorDispatch;
 
 impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     // /// Only enable the benchmarking host functions when we actually want to
@@ -994,10 +1060,26 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     }
 }
 
+/// Chain spec for subspace node
+pub type ChainSpec = sc_subspace_chain_specs::ConsensusChainSpec<
+    subspace_runtime::GenesisConfig,
+    system_domain_runtime::GenesisConfig,
+>;
+pub(crate) type FullClient =
+    subspace_service::FullClient<subspace_runtime::RuntimeApi, ExecutorDispatch>;
+pub(crate) type NewFull = subspace_service::NewFull<
+    FullClient,
+    subspace_service::FraudProofVerifier<RuntimeApi, ExecutorDispatch>,
+>;
+
 /// Node structure
-#[derive(Clone)]
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub struct Node {
-    client: Weak<FullClient<RuntimeApi, ExecutorDispatch>>,
+    system_domain: Option<SystemDomainNode>,
+    #[derivative(Debug = "ignore")]
+    client: Weak<FullClient>,
+    #[derivative(Debug = "ignore")]
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     pub(crate) rpc_handle: crate::utils::Rpc,
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
@@ -1005,16 +1087,6 @@ pub struct Node {
     pub(crate) readers_and_pieces: Arc<std::sync::Mutex<Option<ReadersAndPieces>>>,
     pub(crate) dsn_node: subspace_networking::Node,
     name: String,
-}
-
-impl std::fmt::Debug for Node {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Node")
-            .field("rpc_handle", &self.rpc_handle)
-            .field("stop_sender", &self.stop_sender)
-            .field("name", &self.name)
-            .finish_non_exhaustive()
-    }
 }
 
 /// Hash type
@@ -1072,8 +1144,14 @@ pub struct BlockNotification {
     pub state_root: Hash,
     /// Extrinsics root
     pub extrinsics_root: Hash,
-    /// Is it new best block?
-    pub is_new_best: bool,
+}
+
+impl From<Header> for BlockNotification {
+    fn from(header: Header) -> Self {
+        let hash = header.hash();
+        let Header { number, parent_hash, state_root, extrinsics_root, digest: _ } = header;
+        Self { hash, number, parent_hash, state_root, extrinsics_root }
+    }
 }
 
 /// Syncing status
@@ -1263,8 +1341,13 @@ impl Node {
         tokio::fs::remove_dir_all(path).await
     }
 
-    fn client(&self) -> anyhow::Result<Arc<FullClient<RuntimeApi, ExecutorDispatch>>> {
+    fn client(&self) -> anyhow::Result<Arc<FullClient>> {
         self.client.upgrade().ok_or_else(|| anyhow::anyhow!("The node was already closed"))
+    }
+
+    /// Returns system domain node if one was setted up
+    pub fn system_domain(&self) -> Option<SystemDomainNode> {
+        self.system_domain.as_ref().cloned()
     }
 
     /// Get node info
@@ -1310,29 +1393,7 @@ impl Node {
     pub async fn subscribe_new_blocks(
         &self,
     ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
-        use sc_client_api::client::BlockchainEvents;
-
-        let stream = self
-            .client()
-            .context("Failed to subscribe to new blocks")?
-            .import_notification_stream()
-            .map(
-                |BlockImportNotification {
-                     hash,
-                     header: Header { parent_hash, number, state_root, extrinsics_root, digest: _ },
-                     origin: _,
-                     is_new_best,
-                     tree_route: _,
-                 }| BlockNotification {
-                    hash,
-                    number,
-                    parent_hash,
-                    state_root,
-                    extrinsics_root,
-                    is_new_best,
-                },
-            );
-        Ok(stream)
+        self.rpc_handle.subscribe_new_blocks().await.context("Failed to subscribe to new blocks")
     }
 }
 

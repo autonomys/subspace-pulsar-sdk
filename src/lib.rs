@@ -45,31 +45,6 @@ macro_rules! generate_builder {
     };
 }
 
-#[doc(hidden)]
-#[macro_export]
-macro_rules! derive_base {
-    (
-        $base:ty => $builder:ident {
-            $(
-                #[doc = $doc:literal]
-                $field:ident : $field_ty:ty
-            ),+
-            $(,)?
-        }
-    ) => {
-        impl $builder {
-            $(
-            #[doc = $doc]
-            pub fn $field(&self, $field: impl Into<$field_ty>) -> Self {
-                let mut me = self.clone();
-                me.base.$field = Some($field.into());
-                me
-            }
-            )*
-        }
-    };
-}
-
 /// Public key type
 #[derive(
     Debug,
@@ -290,8 +265,57 @@ force_synced = false
 [offchain_worker]
 enabled = false
 indexing_enabled = false
+
+[system_domain]
+relayer_id = "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM"
+force_authoring = false
+role = "Full"
+blocks_pruning = "KeepAll"
+state_pruning = "ArchiveAll"
+execution_strategy = "NativeWhenPossible"
+impl_name = "subspace-sdk"
+impl_version = "0.1.0-c88c59ab7a7cae3518b224302a3c96beb7c5afaf"
+
+[system_domain.rpc]
+methods = "Auto"
+max_subs_per_conn = 1024
+
+[system_domain.network]
+enable_mdns = false
+allow_private_ipv4 = false
+listen_addresses = []
+boot_nodes = []
+force_synced = false
+
+[system_domain.offchain_worker]
+enabled = false
+indexing_enabled = false
+
+[system_domain.core]
+relayer_id = "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM"
+force_authoring = false
+role = "Full"
+blocks_pruning = "KeepAll"
+state_pruning = "ArchiveAll"
+execution_strategy = "NativeWhenPossible"
+impl_name = "subspace-sdk"
+impl_version = "0.1.0-c88c59ab7a7cae3518b224302a3c96beb7c5afaf"
+
+[system_domain.core.rpc]
+methods = "Auto"
+max_subs_per_conn = 1024
+
+[system_domain.core.network]
+enable_mdns = false
+allow_private_ipv4 = false
+listen_addresses = []
+boot_nodes = []
+force_synced = false
+
+[system_domain.core.offchain_worker]
+enabled = false
+indexing_enabled = false
 "#,
-            "piece_cache_size = \"1073.7 MB\"\nsegment_publish_concurrency = 10",
             r#""#,
         ];
         const DEFAULT_FARMER_CONFIGS: &[&str] = &[
