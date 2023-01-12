@@ -826,6 +826,12 @@
 <a href="#826" id="826">826</a>
 <a href="#827" id="827">827</a>
 <a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Subspace chain configurations.
 
 </span><span class="kw">use </span>sc_service::ChainType;
@@ -955,7 +961,7 @@
         <span class="comment">// Properties
         </span><span class="prelude-val">Some</span>(utils::chain_spec_properties()),
         <span class="comment">// Extensions
-        </span>ChainSpecExtensions { execution_chain_spec: secondary_chain::gemini_3b_config() },
+        </span>ChainSpecExtensions { execution_chain_spec: system_domain::gemini_3b_config() },
     ))
 }
 
@@ -1036,7 +1042,7 @@
         <span class="comment">// Properties
         </span><span class="prelude-val">Some</span>(utils::chain_spec_properties()),
         <span class="comment">// Extensions
-        </span>ChainSpecExtensions { execution_chain_spec: secondary_chain::x_net_2_config() },
+        </span>ChainSpecExtensions { execution_chain_spec: system_domain::x_net_2_config() },
     ))
 }
 
@@ -1082,7 +1088,7 @@
         <span class="comment">// Properties
         </span><span class="prelude-val">Some</span>(utils::chain_spec_properties()),
         <span class="comment">// Extensions
-        </span>ChainSpecExtensions { execution_chain_spec: secondary_chain::development_config() },
+        </span>ChainSpecExtensions { execution_chain_spec: system_domain::development_config() },
     ))
 }
 
@@ -1136,7 +1142,7 @@
         <span class="comment">// Properties
         </span><span class="prelude-val">Some</span>(utils::chain_spec_properties()),
         <span class="comment">// Extensions
-        </span>ChainSpecExtensions { execution_chain_spec: secondary_chain::local_testnet_config() },
+        </span>ChainSpecExtensions { execution_chain_spec: system_domain::local_testnet_config() },
     ))
 }
 
@@ -1173,8 +1179,8 @@
     }
 }
 
-<span class="kw">mod </span>secondary_chain {
-    <span class="doccomment">//! Secondary chain configurations.
+<span class="kw">pub mod </span>system_domain {
+    <span class="doccomment">//! System domain chain specs
 
     </span><span class="kw">use </span>domain_runtime_primitives::RelayerId;
     <span class="kw">use </span>frame_support::weights::Weight;
@@ -1194,7 +1200,8 @@
 
     <span class="kw">type </span>DomainConfig = sp_domains::DomainConfig&lt;Hash, Balance, Weight&gt;;
 
-    <span class="kw">pub fn </span>development_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
+    <span class="doccomment">/// Development config
+    </span><span class="kw">pub fn </span>development_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
         ExecutionChainSpec::from_genesis(
             <span class="comment">// Name
             </span><span class="string">&quot;Development&quot;</span>,
@@ -1245,7 +1252,8 @@
         )
     }
 
-    <span class="kw">pub fn </span>local_testnet_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
+    <span class="doccomment">/// Local config
+    </span><span class="kw">pub fn </span>local_testnet_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
         ExecutionChainSpec::from_genesis(
             <span class="comment">// Name
             </span><span class="string">&quot;Local Testnet&quot;</span>,
@@ -1312,7 +1320,8 @@
         )
     }
 
-    <span class="kw">pub fn </span>gemini_3b_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
+    <span class="doccomment">/// Gemini 3b config
+    </span><span class="kw">pub fn </span>gemini_3b_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
         ExecutionChainSpec::from_genesis(
             <span class="comment">// Name
             </span><span class="string">&quot;Subspace Gemini 3b System Domain&quot;</span>,
@@ -1383,7 +1392,8 @@
         )
     }
 
-    <span class="kw">pub fn </span>x_net_2_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
+    <span class="doccomment">/// X net 2 config
+    </span><span class="kw">pub fn </span>x_net_2_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
         ExecutionChainSpec::from_genesis(
             <span class="comment">// Name
             </span><span class="string">&quot;Subspace X-Net 2 Execution&quot;</span>,
@@ -1511,10 +1521,8 @@
     }
 }
 
-<span class="comment">// TODO: Add secondary chain support for node
-</span><span class="attr">#[allow(unused)]
-</span><span class="kw">mod </span>core_payments {
-    <span class="doccomment">//! Secondary chain configurations.
+<span class="kw">pub mod </span>core_payments {
+    <span class="doccomment">//! Core payments domain chain specs
 
     </span><span class="kw">use </span>core_payments_domain_runtime::{
         AccountId, BalancesConfig, GenesisConfig, MessengerConfig, SudoConfig, SystemConfig,
@@ -1528,9 +1536,11 @@
 
     <span class="kw">use </span><span class="kw">super</span>::utils::{chain_spec_properties, get_account_id_from_seed};
 
-    <span class="kw">pub type </span>ChainSpec = ExecutionChainSpec&lt;GenesisConfig&gt;;
+    <span class="doccomment">/// Chain spec
+    </span><span class="kw">pub type </span>ChainSpec = ExecutionChainSpec&lt;GenesisConfig&gt;;
 
-    <span class="kw">pub fn </span>development_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
+    <span class="doccomment">/// Development config
+    </span><span class="kw">pub fn </span>development_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
         ExecutionChainSpec::from_genesis(
             <span class="comment">// Name
             </span><span class="string">&quot;Development&quot;</span>,
@@ -1558,7 +1568,8 @@
         )
     }
 
-    <span class="kw">pub fn </span>local_testnet_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
+    <span class="doccomment">/// Local test net
+    </span><span class="kw">pub fn </span>local_testnet_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
         ExecutionChainSpec::from_genesis(
             <span class="comment">// Name
             </span><span class="string">&quot;Local Testnet&quot;</span>,
@@ -1602,7 +1613,8 @@
         )
     }
 
-    <span class="kw">pub fn </span>gemini_3b_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
+    <span class="doccomment">/// Gemini 3b chain spec
+    </span><span class="kw">pub fn </span>gemini_3b_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
         ExecutionChainSpec::from_genesis(
             <span class="comment">// Name
             </span><span class="string">&quot;Subspace Gemini 3b Core Payments Domain&quot;</span>,

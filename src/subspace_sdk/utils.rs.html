@@ -92,6 +92,27 @@
 <a href="#92" id="92">92</a>
 <a href="#93" id="93">93</a>
 <a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
@@ -103,6 +124,8 @@
 <span class="kw">use </span>jsonrpsee_core::traits::ToRpcParams;
 <span class="kw">use </span>jsonrpsee_core::Error;
 <span class="kw">use </span>serde::de::DeserializeOwned;
+<span class="kw">use </span>sp_runtime::traits::{Block <span class="kw">as </span>BlockT, Header <span class="kw">as </span>HeaderT};
+<span class="kw">use </span>subspace_runtime_primitives::opaque::Block;
 
 <span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Rpc {
@@ -113,6 +136,25 @@
     <span class="kw">pub fn </span>new(handlers: <span class="kw-2">&amp;</span>sc_service::RpcHandlers) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>inner = handlers.handle();
         <span class="self">Self </span>{ inner }
+    }
+
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>subscribe_new_blocks&lt;<span class="lifetime">&#39;a</span>: <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;b</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;
+        <span class="kw">impl </span>Stream&lt;Item = <span class="kw">crate</span>::node::BlockNotification&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>,
+        Error,
+    &gt; {
+        <span class="kw">let </span>stream = sc_rpc::chain::ChainApiClient::&lt;
+            &lt;&lt;Block <span class="kw">as </span>BlockT&gt;::Header <span class="kw">as </span>HeaderT&gt;::Number,
+            &lt;Block <span class="kw">as </span>BlockT&gt;::Hash,
+            &lt;Block <span class="kw">as </span>BlockT&gt;::Header,
+            sp_runtime::generic::SignedBlock&lt;Block&gt;,
+        &gt;::subscribe_new_heads(<span class="self">self</span>)
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.filter_map(|result| futures::future::ready(result.ok()))
+        .map(Into::into);
+
+        <span class="prelude-val">Ok</span>(stream)
     }
 }
 

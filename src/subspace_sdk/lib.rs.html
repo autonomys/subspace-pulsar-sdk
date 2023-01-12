@@ -325,6 +325,30 @@
 <a href="#325" id="325">325</a>
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Subspace SDK for easy running of both Subspace node and farmer
 
 </span><span class="attr">#![deny(missing_docs)]
@@ -369,31 +393,6 @@
     ( <span class="macro-nonterminal">$name</span>:ident, $(<span class="macro-nonterminal">$rest</span>:ident),+ ) =&gt; {
         <span class="macro-nonterminal">$</span><span class="macro">crate::generate_builder!</span>(<span class="macro-nonterminal">$name</span>);
         <span class="macro-nonterminal">$</span><span class="macro">crate::generate_builder!</span>($(<span class="macro-nonterminal">$rest</span>),+);
-    };
-}
-
-<span class="attr">#[doc(hidden)]
-#[macro_export]
-</span><span class="macro">macro_rules! </span>derive_base {
-    (
-        <span class="macro-nonterminal">$base</span>:ty =&gt; <span class="macro-nonterminal">$builder</span>:ident {
-            $(
-                <span class="attr">#[doc = <span class="macro-nonterminal">$doc</span>:literal]
-                </span><span class="macro-nonterminal">$field</span>:ident : <span class="macro-nonterminal">$field_ty</span>:ty
-            ),+
-            $(,)<span class="question-mark">?
-        </span>}
-    ) =&gt; {
-        <span class="kw">impl </span><span class="macro-nonterminal">$builder </span>{
-            $(
-            <span class="attr">#[doc = <span class="macro-nonterminal">$doc</span>]
-            </span><span class="kw">pub fn </span><span class="macro-nonterminal">$field</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="macro-nonterminal">$field</span>: <span class="kw">impl </span>Into&lt;<span class="macro-nonterminal">$field_ty</span>&gt;) -&gt; <span class="self">Self </span>{
-                <span class="kw">let </span><span class="kw-2">mut </span>me = <span class="self">self</span>.clone();
-                me.base.<span class="macro-nonterminal">$field </span>= <span class="prelude-val">Some</span>(<span class="macro-nonterminal">$field</span>.into());
-                me
-            }
-            )*
-        }
     };
 }
 
@@ -617,8 +616,57 @@ force_synced = false
 [offchain_worker]
 enabled = false
 indexing_enabled = false
+
+[system_domain]
+relayer_id = &quot;5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM&quot;
+force_authoring = false
+role = &quot;Full&quot;
+blocks_pruning = &quot;KeepAll&quot;
+state_pruning = &quot;ArchiveAll&quot;
+execution_strategy = &quot;NativeWhenPossible&quot;
+impl_name = &quot;subspace-sdk&quot;
+impl_version = &quot;0.1.0-c88c59ab7a7cae3518b224302a3c96beb7c5afaf&quot;
+
+[system_domain.rpc]
+methods = &quot;Auto&quot;
+max_subs_per_conn = 1024
+
+[system_domain.network]
+enable_mdns = false
+allow_private_ipv4 = false
+listen_addresses = []
+boot_nodes = []
+force_synced = false
+
+[system_domain.offchain_worker]
+enabled = false
+indexing_enabled = false
+
+[system_domain.core]
+relayer_id = &quot;5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM&quot;
+force_authoring = false
+role = &quot;Full&quot;
+blocks_pruning = &quot;KeepAll&quot;
+state_pruning = &quot;ArchiveAll&quot;
+execution_strategy = &quot;NativeWhenPossible&quot;
+impl_name = &quot;subspace-sdk&quot;
+impl_version = &quot;0.1.0-c88c59ab7a7cae3518b224302a3c96beb7c5afaf&quot;
+
+[system_domain.core.rpc]
+methods = &quot;Auto&quot;
+max_subs_per_conn = 1024
+
+[system_domain.core.network]
+enable_mdns = false
+allow_private_ipv4 = false
+listen_addresses = []
+boot_nodes = []
+force_synced = false
+
+[system_domain.core.offchain_worker]
+enabled = false
+indexing_enabled = false
 &quot;#</span>,
-            <span class="string">&quot;piece_cache_size = \&quot;1073.7 MB\&quot;\nsegment_publish_concurrency = 10&quot;</span>,
             <span class="string">r#&quot;&quot;#</span>,
         ];
         <span class="kw">const </span>DEFAULT_FARMER_CONFIGS: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str] = <span class="kw-2">&amp;</span>[

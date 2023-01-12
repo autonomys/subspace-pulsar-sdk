@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["ConfigBuilderError","Error type for ConfigBuilder"]],"mod":[["core","Core payments domain module"]],"struct":[["Config","Node builder"],["ConfigBuilder","Builder for `Config`."],["SystemDomainNode","System domain node"]],"type":[["ChainSpec","Chain spec of the system domain"]]};

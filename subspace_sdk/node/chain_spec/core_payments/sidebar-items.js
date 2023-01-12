@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["development_config","Development config"],["gemini_3b_config","Gemini 3b chain spec"],["local_testnet_config","Local test net"]],"type":[["ChainSpec","Chain spec"]]};

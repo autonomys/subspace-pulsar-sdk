@@ -1529,6 +1529,67 @@
 <a href="#1529" id="1529">1529</a>
 <a href="#1530" id="1530">1530</a>
 <a href="#1531" id="1531">1531</a>
+<a href="#1532" id="1532">1532</a>
+<a href="#1533" id="1533">1533</a>
+<a href="#1534" id="1534">1534</a>
+<a href="#1535" id="1535">1535</a>
+<a href="#1536" id="1536">1536</a>
+<a href="#1537" id="1537">1537</a>
+<a href="#1538" id="1538">1538</a>
+<a href="#1539" id="1539">1539</a>
+<a href="#1540" id="1540">1540</a>
+<a href="#1541" id="1541">1541</a>
+<a href="#1542" id="1542">1542</a>
+<a href="#1543" id="1543">1543</a>
+<a href="#1544" id="1544">1544</a>
+<a href="#1545" id="1545">1545</a>
+<a href="#1546" id="1546">1546</a>
+<a href="#1547" id="1547">1547</a>
+<a href="#1548" id="1548">1548</a>
+<a href="#1549" id="1549">1549</a>
+<a href="#1550" id="1550">1550</a>
+<a href="#1551" id="1551">1551</a>
+<a href="#1552" id="1552">1552</a>
+<a href="#1553" id="1553">1553</a>
+<a href="#1554" id="1554">1554</a>
+<a href="#1555" id="1555">1555</a>
+<a href="#1556" id="1556">1556</a>
+<a href="#1557" id="1557">1557</a>
+<a href="#1558" id="1558">1558</a>
+<a href="#1559" id="1559">1559</a>
+<a href="#1560" id="1560">1560</a>
+<a href="#1561" id="1561">1561</a>
+<a href="#1562" id="1562">1562</a>
+<a href="#1563" id="1563">1563</a>
+<a href="#1564" id="1564">1564</a>
+<a href="#1565" id="1565">1565</a>
+<a href="#1566" id="1566">1566</a>
+<a href="#1567" id="1567">1567</a>
+<a href="#1568" id="1568">1568</a>
+<a href="#1569" id="1569">1569</a>
+<a href="#1570" id="1570">1570</a>
+<a href="#1571" id="1571">1571</a>
+<a href="#1572" id="1572">1572</a>
+<a href="#1573" id="1573">1573</a>
+<a href="#1574" id="1574">1574</a>
+<a href="#1575" id="1575">1575</a>
+<a href="#1576" id="1576">1576</a>
+<a href="#1577" id="1577">1577</a>
+<a href="#1578" id="1578">1578</a>
+<a href="#1579" id="1579">1579</a>
+<a href="#1580" id="1580">1580</a>
+<a href="#1581" id="1581">1581</a>
+<a href="#1582" id="1582">1582</a>
+<a href="#1583" id="1583">1583</a>
+<a href="#1584" id="1584">1584</a>
+<a href="#1585" id="1585">1585</a>
+<a href="#1586" id="1586">1586</a>
+<a href="#1587" id="1587">1587</a>
+<a href="#1588" id="1588">1588</a>
+<a href="#1589" id="1589">1589</a>
+<a href="#1590" id="1590">1590</a>
+<a href="#1591" id="1591">1591</a>
+<a href="#1592" id="1592">1592</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
@@ -1536,10 +1597,10 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::Context;
+<span class="kw">use </span>derivative::Derivative;
 <span class="kw">use </span>futures::channel::{mpsc, oneshot};
 <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
 <span class="kw">use </span>libp2p_core::Multiaddr;
-<span class="kw">use </span>sc_client_api::client::BlockImportNotification;
 <span class="kw">use </span>sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 <span class="kw">use </span>sc_network::config::{NodeKeyConfig, Secret};
 <span class="kw">use </span>sc_network::network_state::NetworkState;
@@ -1548,7 +1609,6 @@
 <span class="kw">use </span>sc_rpc_api::state::StateApiClient;
 <span class="kw">use </span>sc_service::config::{KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig};
 <span class="kw">use </span>sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
-<span class="kw">use </span>sc_subspace_chain_specs::ConsensusChainSpec;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>sp_consensus::SyncOracle;
 <span class="kw">use </span>sp_core::H256;
@@ -1557,18 +1617,20 @@
 <span class="kw">use </span>subspace_farmer_components::FarmerProtocolInfo;
 <span class="kw">use </span>subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler};
 <span class="kw">use </span>subspace_rpc_primitives::SlotInfo;
-<span class="kw">use </span>subspace_runtime::{GenesisConfig <span class="kw">as </span>ConsensusGenesisConfig, RuntimeApi};
+<span class="kw">use </span>subspace_runtime::RuntimeApi;
 <span class="kw">use </span>subspace_runtime_primitives::opaque::{Block <span class="kw">as </span>RuntimeBlock, Header};
-<span class="kw">use </span>subspace_service::{FullClient, SubspaceConfiguration};
-<span class="kw">use </span>system_domain_runtime::GenesisConfig <span class="kw">as </span>ExecutionGenesisConfig;
+<span class="kw">use </span>subspace_service::SubspaceConfiguration;
 
 <span class="kw">pub mod </span>chain_spec;
+<span class="kw">pub mod </span>domains;
 
 <span class="kw">pub use </span>builder::{
     Base, BaseBuilder, BlocksPruning, Builder, Config, Constraints, Dsn, DsnBuilder,
     ExecutionStrategy, Network, NetworkBuilder, OffchainWorker, OffchainWorkerBuilder, PruningMode,
     Rpc, RpcBuilder,
 };
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>builder::{ImplName, ImplVersion};
+<span class="kw">pub use </span>domains::{ConfigBuilder <span class="kw">as </span>SystemDomainBuilder, SystemDomainNode};
 
 <span class="kw">use </span><span class="self">self</span>::builder::{ListenAddresses, SegmentPublishConcurrency};
 <span class="kw">use </span><span class="kw">crate</span>::networking::{
@@ -1786,6 +1848,10 @@
         )]
         #[serde(flatten, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
         </span><span class="kw">pub </span>base: Base,
+        <span class="doccomment">/// System domain settings
+        </span><span class="attr">#[builder(setter(into, strip_option), default)]
+        #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
+        </span><span class="kw">pub </span>system_domain: <span class="prelude-ty">Option</span>&lt;domains::Config&gt;,
         <span class="doccomment">/// DSN settings
         </span><span class="attr">#[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
@@ -1881,12 +1947,68 @@
         </span><span class="kw">pub </span>offchain_worker: OffchainWorker,
     }
 
+    <span class="attr">#[doc(hidden)]
+    #[macro_export]
+    </span><span class="macro">macro_rules! </span>derive_base {
+        (
+            <span class="macro-nonterminal">$base</span>:ty =&gt; <span class="macro-nonterminal">$builder</span>:ident {
+                $(
+                    <span class="attr">#[doc = <span class="macro-nonterminal">$doc</span>:literal]
+                    </span><span class="macro-nonterminal">$field</span>:ident : <span class="macro-nonterminal">$field_ty</span>:ty
+                ),+
+                $(,)<span class="question-mark">?
+            </span>}
+        ) =&gt; {
+            <span class="kw">impl </span><span class="macro-nonterminal">$builder </span>{
+                $(
+                <span class="attr">#[doc = <span class="macro-nonterminal">$doc</span>]
+                </span><span class="kw">pub fn </span><span class="macro-nonterminal">$field</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="macro-nonterminal">$field</span>: <span class="kw">impl </span>Into&lt;<span class="macro-nonterminal">$field_ty</span>&gt;) -&gt; <span class="self">Self </span>{
+                    <span class="kw">let </span><span class="kw-2">mut </span>me = <span class="self">self</span>.clone();
+                    me.base = me.base.<span class="macro-nonterminal">$field</span>(<span class="macro-nonterminal">$field</span>.into());
+                    me
+                }
+                )*
+            }
+        };
+        ( <span class="macro-nonterminal">$base</span>:ty =&gt; <span class="macro-nonterminal">$builder</span>:ident ) =&gt; {
+            <span class="macro-nonterminal">$</span><span class="macro">crate::derive_base!</span>(<span class="macro-nonterminal">$base </span>=&gt; <span class="macro-nonterminal">$builder </span>{
+                <span class="doccomment">/// Force block authoring
+                </span>force_authoring: bool,
+                <span class="doccomment">/// Set node role
+                </span>role: <span class="macro-nonterminal">$crate::node::Role</span>,
+                <span class="doccomment">/// Blocks pruning options
+                </span>blocks_pruning: <span class="macro-nonterminal">$crate::node::BlocksPruning</span>,
+                <span class="doccomment">/// State pruning options
+                </span>state_pruning: <span class="macro-nonterminal">$crate::node::PruningMode</span>,
+                <span class="doccomment">/// Set execution strategies
+                </span>execution_strategy: <span class="macro-nonterminal">$crate::node::ExecutionStrategy</span>,
+                <span class="doccomment">/// Implementation name
+                </span>impl_name: <span class="macro-nonterminal">$crate::node::ImplName</span>,
+                <span class="doccomment">/// Implementation version
+                </span>impl_version: <span class="macro-nonterminal">$crate::node::ImplVersion</span>,
+                <span class="doccomment">/// Rpc settings
+                </span>rpc: <span class="macro-nonterminal">$crate::node::Rpc</span>,
+                <span class="doccomment">/// Network settings
+                </span>network: <span class="macro-nonterminal">$crate::node::Network</span>,
+                <span class="doccomment">/// Offchain worker settings
+                </span>offchain_worker: <span class="macro-nonterminal">$crate::node::OffchainWorker</span>,
+            });
+        }
+    }
+
     <span class="kw">impl </span>Base {
-        <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>configuration(
+        <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>configuration&lt;CS&gt;(
             <span class="self">self</span>,
             directory: <span class="kw">impl </span>AsRef&lt;Path&gt;,
-            chain_spec: ConsensusChainSpec&lt;ConsensusGenesisConfig, ExecutionGenesisConfig&gt;,
-        ) -&gt; Configuration {
+            chain_spec: CS,
+        ) -&gt; Configuration
+        <span class="kw">where
+            </span>CS: sc_chain_spec::ChainSpec
+                + serde::Serialize
+                + serde::de::DeserializeOwned
+                + sp_runtime::BuildStorage
+                + <span class="lifetime">&#39;static</span>,
+        {
             <span class="kw">const </span>NODE_KEY_ED25519_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;secret_ed25519&quot;</span>;
             <span class="kw">const </span>DEFAULT_NETWORK_CONFIG_PATH: <span class="kw-2">&amp;</span>str = <span class="string">&quot;network&quot;</span>;
 
@@ -2197,34 +2319,13 @@
         </span><span class="kw">pub async fn </span>build(
             <span class="self">self</span>,
             directory: <span class="kw">impl </span>AsRef&lt;Path&gt;,
-            chain_spec: ConsensusChainSpec&lt;ConsensusGenesisConfig, ExecutionGenesisConfig&gt;,
+            chain_spec: <span class="kw">super</span>::ChainSpec,
         ) -&gt; anyhow::Result&lt;Node&gt; {
             <span class="self">self</span>.configuration().build(directory, chain_spec).<span class="kw">await
         </span>}
     }
 
-    <span class="macro">crate::derive_base!</span>(Base =&gt; Builder {
-        <span class="doccomment">/// Force block authoring
-        </span>force_authoring: bool,
-        <span class="doccomment">/// Set node role
-        </span>role: Role,
-        <span class="doccomment">/// Blocks pruning options
-        </span>blocks_pruning: BlocksPruning,
-        <span class="doccomment">/// State pruning options
-        </span>state_pruning: PruningMode,
-        <span class="doccomment">/// Set execution strategies
-        </span>execution_strategy: ExecutionStrategy,
-        <span class="doccomment">/// Implementation name
-        </span>impl_name: ImplName,
-        <span class="doccomment">/// Implementation version
-        </span>impl_version: ImplVersion,
-        <span class="doccomment">/// Rpc settings
-        </span>rpc: Rpc,
-        <span class="doccomment">/// Network settings
-        </span>network: Network,
-        <span class="doccomment">/// Offchain worker settings
-        </span>offchain_worker: OffchainWorker,
-    });
+    <span class="macro">crate::derive_base!</span>(Base =&gt; Builder);
     <span class="macro">crate::generate_builder!</span>(Base, Rpc, Network, Dsn, OffchainWorker);
 }
 
@@ -2277,15 +2378,16 @@
     </span><span class="kw">pub async fn </span>build(
         <span class="self">self</span>,
         directory: <span class="kw">impl </span>AsRef&lt;Path&gt;,
-        chain_spec: ConsensusChainSpec&lt;ConsensusGenesisConfig, ExecutionGenesisConfig&gt;,
+        chain_spec: ChainSpec,
     ) -&gt; anyhow::Result&lt;Node&gt; {
         <span class="kw">let </span><span class="self">Self </span>{
             base,
             piece_cache_size,
             dsn,
+            system_domain,
             segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
         } = <span class="self">self</span>;
-        <span class="kw">let </span>base = base.configuration(directory, chain_spec).<span class="kw">await</span>;
+        <span class="kw">let </span>base = base.configuration(directory.as_ref(), chain_spec.clone()).<span class="kw">await</span>;
         <span class="kw">let </span>name = base.network.node_name.clone();
 
         <span class="kw">let </span>partial_components =
@@ -2449,12 +2551,36 @@
         });
 
         <span class="kw">let </span>slot_proportion = sc_consensus_slots::SlotProportion::new(<span class="number">2f32 </span>/ <span class="number">3f32</span>);
-        <span class="kw">let </span>full_client =
+        <span class="kw">let </span><span class="kw-2">mut </span>full_client =
             subspace_service::new_full(configuration, partial_components, <span class="bool-val">true</span>, slot_proportion)
                 .<span class="kw">await
                 </span>.context(<span class="string">&quot;Failed to build a full subspace node&quot;</span>)<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>subspace_service::NewFull {
+        <span class="kw">let </span>system_domain = <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = system_domain {
+            <span class="kw">use </span>sc_service::ChainSpecExtension;
+
+            <span class="kw">let </span>system_domain_spec = chain_spec
+                .extensions()
+                .get_any(std::any::TypeId::of::&lt;domains::ChainSpec&gt;())
+                .downcast_ref()
+                .cloned()
+                .ok_or_else(|| {
+                    <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Primary chain spec must contain system domain chain spec&quot;</span>)
+                })<span class="question-mark">?</span>;
+
+            SystemDomainNode::new(
+                config,
+                directory.as_ref().join(<span class="string">&quot;domains&quot;</span>),
+                system_domain_spec,
+                <span class="kw-2">&amp;mut </span>full_client,
+            )
+            .<span class="kw">await
+            </span>.map(<span class="prelude-val">Some</span>)<span class="question-mark">?
+        </span>} <span class="kw">else </span>{
+            <span class="prelude-val">None
+        </span>};
+
+        <span class="kw">let </span>NewFull {
             <span class="kw-2">mut </span>task_manager,
             client,
             rpc_handlers,
@@ -2463,11 +2589,11 @@
 
             select_chain: <span class="kw">_</span>,
             backend: <span class="kw">_</span>,
-            new_slot_notification_stream: <span class="kw">_</span>,
             reward_signing_notification_stream: <span class="kw">_</span>,
-            imported_block_notification_stream: <span class="kw">_</span>,
             archived_segment_notification_stream: <span class="kw">_</span>,
             transaction_pool: <span class="kw">_</span>,
+            imported_block_notification_stream: <span class="kw">_</span>,
+            new_slot_notification_stream: <span class="kw">_</span>,
         } = full_client;
 
         <span class="kw">let </span>client = Arc::downgrade(<span class="kw-2">&amp;</span>client);
@@ -2494,6 +2620,7 @@
 
         <span class="prelude-val">Ok</span>(Node {
             client,
+            system_domain,
             network,
             name,
             farmer_record_storage,
@@ -2506,7 +2633,7 @@
 }
 
 <span class="doccomment">/// Executor dispatch for subspace runtime
-</span><span class="kw">struct </span>ExecutorDispatch;
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ExecutorDispatch;
 
 <span class="kw">impl </span>sc_executor::NativeExecutionDispatch <span class="kw">for </span>ExecutorDispatch {
     <span class="comment">// /// Only enable the benchmarking host functions when we actually want to
@@ -2525,27 +2652,33 @@
     }
 }
 
+<span class="doccomment">/// Chain spec for subspace node
+</span><span class="kw">pub type </span>ChainSpec = sc_subspace_chain_specs::ConsensusChainSpec&lt;
+    subspace_runtime::GenesisConfig,
+    system_domain_runtime::GenesisConfig,
+&gt;;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>FullClient =
+    subspace_service::FullClient&lt;subspace_runtime::RuntimeApi, ExecutorDispatch&gt;;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>NewFull = subspace_service::NewFull&lt;
+    FullClient,
+    subspace_service::FraudProofVerifier&lt;RuntimeApi, ExecutorDispatch&gt;,
+&gt;;
+
 <span class="doccomment">/// Node structure
-</span><span class="attr">#[derive(Clone)]
+</span><span class="attr">#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 </span><span class="kw">pub struct </span>Node {
-    client: Weak&lt;FullClient&lt;RuntimeApi, ExecutorDispatch&gt;&gt;,
-    network: Arc&lt;NetworkService&lt;RuntimeBlock, Hash&gt;&gt;,
+    system_domain: <span class="prelude-ty">Option</span>&lt;SystemDomainNode&gt;,
+    <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
+    </span>client: Weak&lt;FullClient&gt;,
+    <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
+    </span>network: Arc&lt;NetworkService&lt;RuntimeBlock, Hash&gt;&gt;,
     <span class="kw">pub</span>(<span class="kw">crate</span>) rpc_handle: <span class="kw">crate</span>::utils::Rpc,
     stop_sender: mpsc::Sender&lt;oneshot::Sender&lt;()&gt;&gt;,
     <span class="kw">pub</span>(<span class="kw">crate</span>) farmer_record_storage: MaybeRecordStorage&lt;FarmerRecordStorage&gt;,
     <span class="kw">pub</span>(<span class="kw">crate</span>) readers_and_pieces: Arc&lt;std::sync::Mutex&lt;<span class="prelude-ty">Option</span>&lt;ReadersAndPieces&gt;&gt;&gt;,
     <span class="kw">pub</span>(<span class="kw">crate</span>) dsn_node: subspace_networking::Node,
     name: String,
-}
-
-<span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>Node {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        f.debug_struct(<span class="string">&quot;Node&quot;</span>)
-            .field(<span class="string">&quot;rpc_handle&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.rpc_handle)
-            .field(<span class="string">&quot;stop_sender&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.stop_sender)
-            .field(<span class="string">&quot;name&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.name)
-            .finish_non_exhaustive()
-    }
 }
 
 <span class="doccomment">/// Hash type
@@ -2603,8 +2736,14 @@
     </span><span class="kw">pub </span>state_root: Hash,
     <span class="doccomment">/// Extrinsics root
     </span><span class="kw">pub </span>extrinsics_root: Hash,
-    <span class="doccomment">/// Is it new best block?
-    </span><span class="kw">pub </span>is_new_best: bool,
+}
+
+<span class="kw">impl </span>From&lt;Header&gt; <span class="kw">for </span>BlockNotification {
+    <span class="kw">fn </span>from(header: Header) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>hash = header.hash();
+        <span class="kw">let </span>Header { number, parent_hash, state_root, extrinsics_root, digest: <span class="kw">_ </span>} = header;
+        <span class="self">Self </span>{ hash, number, parent_hash, state_root, extrinsics_root }
+    }
 }
 
 <span class="doccomment">/// Syncing status
@@ -2794,8 +2933,13 @@
         tokio::fs::remove_dir_all(path).<span class="kw">await
     </span>}
 
-    <span class="kw">fn </span>client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Arc&lt;FullClient&lt;RuntimeApi, ExecutorDispatch&gt;&gt;&gt; {
+    <span class="kw">fn </span>client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Arc&lt;FullClient&gt;&gt; {
         <span class="self">self</span>.client.upgrade().ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;The node was already closed&quot;</span>))
+    }
+
+    <span class="doccomment">/// Returns system domain node if one was setted up
+    </span><span class="kw">pub fn </span>system_domain(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;SystemDomainNode&gt; {
+        <span class="self">self</span>.system_domain.as_ref().cloned()
     }
 
     <span class="doccomment">/// Get node info
@@ -2841,29 +2985,7 @@
     </span><span class="kw">pub async fn </span>subscribe_new_blocks(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; anyhow::Result&lt;<span class="kw">impl </span>Stream&lt;Item = BlockNotification&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>&gt; {
-        <span class="kw">use </span>sc_client_api::client::BlockchainEvents;
-
-        <span class="kw">let </span>stream = <span class="self">self
-            </span>.client()
-            .context(<span class="string">&quot;Failed to subscribe to new blocks&quot;</span>)<span class="question-mark">?
-            </span>.import_notification_stream()
-            .map(
-                |BlockImportNotification {
-                     hash,
-                     header: Header { parent_hash, number, state_root, extrinsics_root, digest: <span class="kw">_ </span>},
-                     origin: <span class="kw">_</span>,
-                     is_new_best,
-                     tree_route: <span class="kw">_</span>,
-                 }| BlockNotification {
-                    hash,
-                    number,
-                    parent_hash,
-                    state_root,
-                    extrinsics_root,
-                    is_new_best,
-                },
-            );
-        <span class="prelude-val">Ok</span>(stream)
+        <span class="self">self</span>.rpc_handle.subscribe_new_blocks().<span class="kw">await</span>.context(<span class="string">&quot;Failed to subscribe to new blocks&quot;</span>)
     }
 }
 
