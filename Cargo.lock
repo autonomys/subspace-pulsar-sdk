@@ -7809,7 +7809,7 @@ dependencies = [
 [[package]]
 name = "sc-subspace-chain-specs"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=1b9431371104b156f68f3a416084b9ea8f3a812f#1b9431371104b156f68f3a416084b9ea8f3a812f"
+source = "git+https://github.com/subspace/subspace?rev=9bee3f7c1eb5505344f6cab36fcfb7083e4ee4a5#9bee3f7c1eb5505344f6cab36fcfb7083e4ee4a5"
 dependencies = [
  "sc-chain-spec",
  "sc-service",

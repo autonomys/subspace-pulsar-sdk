@@ -9,10 +9,10 @@ use derivative::Derivative;
 use derive_builder::Builder;
 use domain_service::DomainConfiguration;
 use futures::prelude::*;
+use sc_service::ChainSpecExtension;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
 use subspace_runtime::Block;
-use system_domain_runtime::GenesisConfig as ExecutionGenesisConfig;
 
 use self::core::CoreDomainNode;
 use crate::node::{Base, BaseBuilder, BlockNotification};
@@ -73,7 +73,7 @@ pub(crate) type NewFull = domain_service::NewFullSystem<
     ExecutorDispatch,
 >;
 /// Chain spec of the system domain
-pub type ChainSpec = sc_subspace_chain_specs::ExecutionChainSpec<ExecutionGenesisConfig>;
+pub type ChainSpec = crate::node::chain_spec::system_domain::ChainSpec;
 
 /// System domain node
 #[derive(Clone, Derivative)]
@@ -93,6 +93,12 @@ impl SystemDomainNode {
         primary_new_full: &mut crate::node::NewFull,
     ) -> anyhow::Result<Self> {
         let Config { base, relayer_id: maybe_relayer_id, core } = cfg;
+        let maybe_core_domain_spec = chain_spec
+            .extensions()
+            .get_any(std::any::TypeId::of::<core::ChainSpec>())
+            .downcast_ref()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("Core domain is not supported"));
         let service_config =
             base.configuration(directory.as_ref().join("system"), chain_spec).await;
 
@@ -144,6 +150,7 @@ impl SystemDomainNode {
             CoreDomainNode::new(
                 core,
                 directory.as_ref().join(format!("core-{core_domain_id}")),
+                maybe_core_domain_spec?,
                 primary_new_full,
                 &system_domain_node,
                 gossip_msg_sink.clone(),

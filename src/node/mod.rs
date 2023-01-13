@@ -1065,10 +1065,7 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 }
 
 /// Chain spec for subspace node
-pub type ChainSpec = sc_subspace_chain_specs::ConsensusChainSpec<
-    subspace_runtime::GenesisConfig,
-    system_domain_runtime::GenesisConfig,
->;
+pub type ChainSpec = chain_spec::ChainSpec;
 pub(crate) type FullClient =
     subspace_service::FullClient<subspace_runtime::RuntimeApi, ExecutorDispatch>;
 pub(crate) type NewFull = subspace_service::NewFull<

@@ -49,10 +49,6 @@ pub struct Config {
     )]
     #[serde(flatten, skip_serializing_if = "crate::utils::is_default")]
     pub base: Base,
-    #[derivative(Debug = "ignore", PartialEq = "ignore")]
-    #[builder(setter(skip), field(type = "()", build = "None"))]
-    #[serde(skip)]
-    chain_spec: Option<ChainSpec>,
 }
 
 crate::derive_base!(crate::node::Base => ConfigBuilder);
@@ -64,8 +60,8 @@ impl ConfigBuilder {
     }
 
     /// Build Config
-    pub fn build(&self, chain_spec: ChainSpec) -> Config {
-        Config { chain_spec: Some(chain_spec), ..self._build().expect("Infallible") }
+    pub fn build(&self) -> Config {
+        self._build().expect("Infallible")
     }
 }
 
@@ -85,8 +81,7 @@ pub(crate) type NewFull = domain_service::NewFullCore<
     ExecutorDispatch,
 >;
 /// Chain spec of the core domain
-pub type ChainSpec =
-    sc_subspace_chain_specs::ExecutionChainSpec<core_payments_domain_runtime::GenesisConfig>;
+pub type ChainSpec = crate::node::chain_spec::core_payments::ChainSpec;
 
 /// Core domain node
 #[derive(Clone, Derivative)]
@@ -101,6 +96,7 @@ impl CoreDomainNode {
     pub(crate) async fn new(
         cfg: Config,
         directory: impl AsRef<Path>,
+        chain_spec: ChainSpec,
         primary_chain_node: &mut crate::node::NewFull,
         system_domain_node: &super::NewFull,
         gossip_msg_sink: domain_client_message_relayer::GossipMessageSink,
@@ -109,8 +105,7 @@ impl CoreDomainNode {
             cross_domain_message_gossip::DomainTxPoolSink,
         )>,
     ) -> anyhow::Result<Self> {
-        let Config { base, relayer_id: maybe_relayer_id, chain_spec } = cfg;
-        let chain_spec = chain_spec.expect("Always set in builder");
+        let Config { base, relayer_id: maybe_relayer_id } = cfg;
         let service_config = base.configuration(directory, chain_spec).await;
         let core_domain_config = DomainConfiguration { service_config, maybe_relayer_id };
 
@@ -189,7 +184,7 @@ mod tests {
         let _ = tracing_subscriber::fmt().with_test_writer().try_init();
 
         let dir = TempDir::new().unwrap();
-        let core = ConfigBuilder::new().build(chain_spec::core_payments::development_config());
+        let core = ConfigBuilder::new().build();
         let node = Node::builder()
             .system_domain(domains::ConfigBuilder::new().core(core))
             .force_authoring(true)
