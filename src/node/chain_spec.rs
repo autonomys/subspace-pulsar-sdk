@@ -1,8 +1,7 @@
 //! Subspace chain configurations.
 
 use sc_service::ChainType;
-use sc_subspace_chain_specs::utils::SerializableChainSpec;
-use sc_subspace_chain_specs::ChainSpecExtensions;
+use sc_subspace_chain_specs::{ChainSpecExtensions, SerializableChainSpec};
 use sc_telemetry::TelemetryEndpoints;
 use sp_core::crypto::{Ss58Codec, UncheckedFrom};
 use subspace_runtime::{

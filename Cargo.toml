@@ -64,7 +64,7 @@ domain-runtime-primitives = { git = "https://github.com/subspace/subspace", rev 
 domain-service = { git = "https://github.com/subspace/subspace", rev = "1b9431371104b156f68f3a416084b9ea8f3a812f" }
 sc-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "1b9431371104b156f68f3a416084b9ea8f3a812f" }
 sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "1b9431371104b156f68f3a416084b9ea8f3a812f" }
-sc-subspace-chain-specs = { git = "https://github.com/subspace/subspace", rev = "9bee3f7c1eb5505344f6cab36fcfb7083e4ee4a5" }
+sc-subspace-chain-specs = { git = "https://github.com/subspace/subspace", rev = "a2bf9956d6093a51440a16ab72f60d4a4ef71a0a" }
 sp-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "1b9431371104b156f68f3a416084b9ea8f3a812f" }
 sp-domains = { git = "https://github.com/subspace/subspace", rev = "1b9431371104b156f68f3a416084b9ea8f3a812f" }
 sp-objects = { git = "https://github.com/subspace/subspace", rev = "1b9431371104b156f68f3a416084b9ea8f3a812f" }

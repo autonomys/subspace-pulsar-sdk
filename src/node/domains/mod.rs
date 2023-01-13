@@ -25,8 +25,7 @@ pub(crate) mod chain_spec {
     use domain_runtime_primitives::RelayerId;
     use frame_support::weights::Weight;
     use sc_service::ChainType;
-    use sc_subspace_chain_specs::utils::SerializableChainSpec;
-    use sc_subspace_chain_specs::ChainSpecExtensions;
+    use sc_subspace_chain_specs::{ChainSpecExtensions, SerializableChainSpec};
     use sp_core::crypto::Ss58Codec;
     use sp_domains::ExecutorPublicKey;
     use sp_runtime::Percent;
