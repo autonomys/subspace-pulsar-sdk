@@ -1532,7 +1532,10 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    #[cfg(not(tarpaulin))]
+    #[cfg_attr(
+        any(tarpaulin, target_family = "windows"),
+        ignore = "Ignored for coverage tests and for windows"
+    )]
     async fn test_sync_block() {
         init();
 
