@@ -244,7 +244,7 @@ pub fn local_config() -> Result<ChainSpec, String> {
 }
 
 /// Configure initial storage state for FRAME modules.
-pub fn subspace_genesis_config(
+fn subspace_genesis_config(
     wasm_binary: &[u8],
     sudo_account: AccountId,
     balances: Vec<(AccountId, Balance)>,
@@ -273,5 +273,18 @@ pub fn subspace_genesis_config(
         subspace: SubspaceConfig { enable_rewards, enable_storage_access, allow_authoring_by },
         vesting: VestingConfig { vesting },
         runtime_configs: RuntimeConfigsConfig { enable_executor },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_gemini_3b_spec() {
+        gemini_3b_compiled().unwrap();
+        gemini_3b().unwrap();
+        dev_config().unwrap();
+        local_config().unwrap();
     }
 }
