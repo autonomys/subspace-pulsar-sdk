@@ -1,7 +1,7 @@
 //! Subspace chain configurations.
 
 use sc_service::ChainType;
-use sc_subspace_chain_specs::{ChainSpecExtensions, ConsensusChainSpec};
+use sc_subspace_chain_specs::{ChainSpecExtensions, SerializableChainSpec};
 use sc_telemetry::TelemetryEndpoints;
 use sp_core::crypto::{Ss58Codec, UncheckedFrom};
 use subspace_runtime::{
@@ -9,10 +9,10 @@ use subspace_runtime::{
     SudoConfig, SystemConfig, VestingConfig, MILLISECS_PER_BLOCK, WASM_BINARY,
 };
 use subspace_runtime_primitives::{AccountId, Balance, BlockNumber, SSC};
-use system_domain_runtime::GenesisConfig as SystemDomainGenesisConfig;
+
+use crate::utils::chain_spec as utils;
 
 const SUBSPACE_TELEMETRY_URL: &str = "wss://telemetry.subspace.network/submit/";
-const X_NET_2_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-x-net-2.json");
 const GEMINI_3B_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-gemini-3b.json");
 
 /// List of accounts which should receive token grants, amounts are specified in
@@ -45,15 +45,23 @@ pub struct GenesisParams {
     enable_executor: bool,
 }
 
+/// Chain spec type for the subspace
+pub type ChainSpec = SerializableChainSpec<
+    GenesisConfig,
+    ChainSpecExtensions<
+        system_domain_runtime::GenesisConfig,
+        ChainSpecExtensions<core_payments_domain_runtime::GenesisConfig>,
+    >,
+>;
+
 /// Gemini 3b chain spec
-pub fn gemini_3b() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String> {
-    ConsensusChainSpec::from_json_bytes(GEMINI_3B_CHAIN_SPEC)
+pub fn gemini_3b() -> Result<ChainSpec, String> {
+    ChainSpec::from_json_bytes(GEMINI_3B_CHAIN_SPEC)
 }
 
 /// Gemini 3b compiled chain spec
-pub fn gemini_3b_compiled(
-) -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String> {
-    Ok(ConsensusChainSpec::from_genesis(
+pub fn gemini_3b_compiled() -> Result<ChainSpec, String> {
+    Ok(ChainSpec::from_genesis(
         // Name
         "Subspace Gemini 3b",
         // ID
@@ -127,97 +135,17 @@ pub fn gemini_3b_compiled(
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions { execution_chain_spec: system_domain::gemini_3b_config() },
-    ))
-}
-
-/// Executor net 2 chain spec
-pub fn x_net_2_config(
-) -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String> {
-    ConsensusChainSpec::from_json_bytes(X_NET_2_CHAIN_SPEC)
-}
-
-/// Executor net 2 chain spec
-pub fn x_net_2_config_compiled(
-) -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String> {
-    Ok(ConsensusChainSpec::from_genesis(
-        // Name
-        "Subspace X-Net 2",
-        // ID
-        "subspace_x_net_2a",
-        ChainType::Custom("Subspace X-Net 2".to_string()),
-        || {
-            let sudo_account =
-                AccountId::from_ss58check("5CXTmJEusve5ixyJufqHThmy4qUrrm6FyLCR7QfE4bbyMTNC")
-                    .expect("Wrong root account address");
-
-            let mut balances = vec![(sudo_account.clone(), 1_000 * SSC)];
-            let vesting_schedules = TOKEN_GRANTS
-                .iter()
-                .flat_map(|&(account_address, amount)| {
-                    let account_id = AccountId::from_ss58check(account_address)
-                        .expect("Wrong vesting account address");
-                    let amount: Balance = amount * SSC;
-
-                    // TODO: Adjust start block to real value before mainnet launch
-                    let start_block = 100_000_000;
-                    let one_month_in_blocks =
-                        u32::try_from(3600 * 24 * 30 * MILLISECS_PER_BLOCK / 1000)
-                            .expect("One month of blocks always fits in u32; qed");
-
-                    // Add balance so it can be locked
-                    balances.push((account_id.clone(), amount));
-
-                    [
-                        // 1/4 of tokens are released after 1 year.
-                        (account_id.clone(), start_block, one_month_in_blocks * 12, 1, amount / 4),
-                        // 1/48 of tokens are released every month after that for 3 more years.
-                        (
-                            account_id,
-                            start_block + one_month_in_blocks * 12,
-                            one_month_in_blocks,
-                            36,
-                            amount / 48,
-                        ),
-                    ]
-                })
-                .collect::<Vec<_>>();
-            subspace_genesis_config(
-                WASM_BINARY.expect("Wasm binary must be built for Gemini"),
-                sudo_account,
-                balances,
-                vesting_schedules,
-                GenesisParams {
-                    enable_rewards: false,
-                    enable_storage_access: false,
-                    allow_authoring_by: AllowAuthoringBy::FirstFarmer,
-                    enable_executor: true,
-                },
-            )
+        ChainSpecExtensions {
+            execution_chain_spec: super::domains::chain_spec::gemini_3b_config(),
         },
-        // Bootnodes
-        vec![],
-        // Telemetry
-        Some(
-            TelemetryEndpoints::new(vec![(SUBSPACE_TELEMETRY_URL.into(), 1)])
-                .map_err(|error| error.to_string())?,
-        ),
-        // Protocol ID
-        Some("subspace-x-net-2a"),
-        None,
-        // Properties
-        Some(utils::chain_spec_properties()),
-        // Extensions
-        ChainSpecExtensions { execution_chain_spec: system_domain::x_net_2_config() },
     ))
 }
 
 /// New dev chain spec
-pub fn dev_config() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String>
-{
+pub fn dev_config() -> Result<ChainSpec, String> {
     let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
 
-    Ok(ConsensusChainSpec::from_genesis(
+    Ok(ChainSpec::from_genesis(
         // Name
         "Subspace development",
         // ID
@@ -254,16 +182,17 @@ pub fn dev_config() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGene
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions { execution_chain_spec: system_domain::development_config() },
+        ChainSpecExtensions {
+            execution_chain_spec: super::domains::chain_spec::development_config(),
+        },
     ))
 }
 
 /// New local chain spec
-pub fn local_config() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGenesisConfig>, String>
-{
+pub fn local_config() -> Result<ChainSpec, String> {
     let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
 
-    Ok(ConsensusChainSpec::from_genesis(
+    Ok(ChainSpec::from_genesis(
         // Name
         "Subspace local",
         // ID
@@ -308,7 +237,9 @@ pub fn local_config() -> Result<ConsensusChainSpec<GenesisConfig, SystemDomainGe
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions { execution_chain_spec: system_domain::local_testnet_config() },
+        ChainSpecExtensions {
+            execution_chain_spec: super::domains::chain_spec::local_testnet_config(),
+        },
     ))
 }
 
@@ -342,493 +273,5 @@ pub fn subspace_genesis_config(
         subspace: SubspaceConfig { enable_rewards, enable_storage_access, allow_authoring_by },
         vesting: VestingConfig { vesting },
         runtime_configs: RuntimeConfigsConfig { enable_executor },
-    }
-}
-
-pub mod system_domain {
-    //! System domain chain specs
-
-    use domain_runtime_primitives::RelayerId;
-    use frame_support::weights::Weight;
-    use sc_service::ChainType;
-    use sc_subspace_chain_specs::ExecutionChainSpec;
-    use sp_core::crypto::Ss58Codec;
-    use sp_domains::ExecutorPublicKey;
-    use sp_runtime::Percent;
-    use subspace_core_primitives::crypto::blake2b_256_hash;
-    use subspace_runtime_primitives::SSC;
-    use system_domain_runtime::{
-        AccountId, Balance, BalancesConfig, DomainRegistryConfig, ExecutorRegistryConfig,
-        GenesisConfig, Hash, MessengerConfig, SudoConfig, SystemConfig, WASM_BINARY,
-    };
-
-    use super::utils::{chain_spec_properties, get_account_id_from_seed, get_public_key_from_seed};
-
-    type DomainConfig = sp_domains::DomainConfig<Hash, Balance, Weight>;
-
-    /// Development config
-    pub fn development_config() -> ExecutionChainSpec<GenesisConfig> {
-        ExecutionChainSpec::from_genesis(
-            // Name
-            "Development",
-            // ID
-            "system_domain_dev",
-            ChainType::Development,
-            move || {
-                testnet_genesis(
-                    vec![
-                        get_account_id_from_seed("Alice"),
-                        get_account_id_from_seed("Bob"),
-                        get_account_id_from_seed("Alice//stash"),
-                        get_account_id_from_seed("Bob//stash"),
-                    ],
-                    vec![(
-                        get_account_id_from_seed("Alice"),
-                        1_000 * SSC,
-                        get_account_id_from_seed("Alice"),
-                        get_public_key_from_seed::<ExecutorPublicKey>("Alice"),
-                    )],
-                    vec![(
-                        get_account_id_from_seed("Alice"),
-                        1_000 * SSC,
-                        // TODO: proper genesis domain config
-                        DomainConfig {
-                            wasm_runtime_hash: blake2b_256_hash(
-                                system_domain_runtime::CORE_PAYMENTS_WASM_BUNDLE,
-                            )
-                            .into(),
-                            max_bundle_size: 1024 * 1024,
-                            bundle_slot_probability: (1, 1),
-                            max_bundle_weight: Weight::MAX,
-                            min_operator_stake: 100 * SSC,
-                        },
-                        get_account_id_from_seed("Alice"),
-                        Percent::one(),
-                    )],
-                    Some(get_account_id_from_seed("Alice")),
-                    vec![(get_account_id_from_seed("Alice"), get_account_id_from_seed("Alice"))],
-                )
-            },
-            vec![],
-            None,
-            None,
-            None,
-            Some(chain_spec_properties()),
-            None,
-        )
-    }
-
-    /// Local config
-    pub fn local_testnet_config() -> ExecutionChainSpec<GenesisConfig> {
-        ExecutionChainSpec::from_genesis(
-            // Name
-            "Local Testnet",
-            // ID
-            "system_domain_local_testnet",
-            ChainType::Local,
-            move || {
-                testnet_genesis(
-                    vec![
-                        get_account_id_from_seed("Alice"),
-                        get_account_id_from_seed("Bob"),
-                        get_account_id_from_seed("Charlie"),
-                        get_account_id_from_seed("Dave"),
-                        get_account_id_from_seed("Eve"),
-                        get_account_id_from_seed("Ferdie"),
-                        get_account_id_from_seed("Alice//stash"),
-                        get_account_id_from_seed("Bob//stash"),
-                        get_account_id_from_seed("Charlie//stash"),
-                        get_account_id_from_seed("Dave//stash"),
-                        get_account_id_from_seed("Eve//stash"),
-                        get_account_id_from_seed("Ferdie//stash"),
-                    ],
-                    vec![(
-                        get_account_id_from_seed("Alice"),
-                        1_000 * SSC,
-                        get_account_id_from_seed("Alice"),
-                        get_public_key_from_seed::<ExecutorPublicKey>("Alice"),
-                    )],
-                    vec![(
-                        get_account_id_from_seed("Alice"),
-                        1_000 * SSC,
-                        // TODO: proper genesis domain config
-                        DomainConfig {
-                            wasm_runtime_hash: blake2b_256_hash(
-                                system_domain_runtime::CORE_PAYMENTS_WASM_BUNDLE,
-                            )
-                            .into(),
-                            max_bundle_size: 1024 * 1024,
-                            bundle_slot_probability: (1, 1),
-                            max_bundle_weight: Weight::MAX,
-                            min_operator_stake: 100 * SSC,
-                        },
-                        get_account_id_from_seed("Alice"),
-                        Percent::one(),
-                    )],
-                    Some(get_account_id_from_seed("Alice")),
-                    vec![
-                        (get_account_id_from_seed("Alice"), get_account_id_from_seed("Alice")),
-                        (get_account_id_from_seed("Bob"), get_account_id_from_seed("Bob")),
-                    ],
-                )
-            },
-            // Bootnodes
-            vec![],
-            // Telemetry
-            None,
-            // Protocol ID
-            Some("template-local"),
-            None,
-            // Properties
-            Some(chain_spec_properties()),
-            // Extensions
-            None,
-        )
-    }
-
-    /// Gemini 3b config
-    pub fn gemini_3b_config() -> ExecutionChainSpec<GenesisConfig> {
-        ExecutionChainSpec::from_genesis(
-            // Name
-            "Subspace Gemini 3b System Domain",
-            // ID
-            "subspace_gemini_3b_system_domain",
-            ChainType::Local,
-            move || {
-                testnet_genesis(
-                    vec![
-                        // Genesis executor
-                        AccountId::from_ss58check(
-                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
-                        )
-                        .expect("Wrong executor account address"),
-                    ],
-                    vec![(
-                        AccountId::from_ss58check(
-                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
-                        )
-                        .expect("Wrong executor account address"),
-                        1_000 * SSC,
-                        AccountId::from_ss58check(
-                            "5FsxcczkSUnpqhcSgugPZsSghxrcKx5UEsRKL5WyPTL6SAxB",
-                        )
-                        .expect("Wrong executor reward address"),
-                        ExecutorPublicKey::from_ss58check(
-                            "5FuuXk1TL8DKQMvg7mcqmP8t9FhxUdzTcYC9aFmebiTLmASx",
-                        )
-                        .expect("Wrong executor public key"),
-                    )],
-                    vec![(
-                        AccountId::from_ss58check(
-                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
-                        )
-                        .expect("Wrong executor account address"),
-                        1_000 * SSC,
-                        DomainConfig {
-                            wasm_runtime_hash: blake2b_256_hash(
-                                system_domain_runtime::CORE_PAYMENTS_WASM_BUNDLE,
-                            )
-                            .into(),
-                            max_bundle_size: 4 * 1024 * 1024,
-                            bundle_slot_probability: (1, 1),
-                            max_bundle_weight: Weight::MAX,
-                            min_operator_stake: 100 * SSC,
-                        },
-                        AccountId::from_ss58check(
-                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
-                        )
-                        .expect("Wrong executor account address"),
-                        Percent::one(),
-                    )],
-                    None,
-                    Default::default(),
-                )
-            },
-            // Bootnodes
-            vec![],
-            // Telemetry
-            None,
-            // Protocol ID
-            Some("subspace-gemini-3b-system-domain"),
-            None,
-            // Properties
-            Some(chain_spec_properties()),
-            // Extensions
-            None,
-        )
-    }
-
-    /// X net 2 config
-    pub fn x_net_2_config() -> ExecutionChainSpec<GenesisConfig> {
-        ExecutionChainSpec::from_genesis(
-            // Name
-            "Subspace X-Net 2 Execution",
-            // ID
-            "subspace_x_net_2a_execution",
-            ChainType::Local,
-            move || {
-                testnet_genesis(
-                    vec![
-                        // Genesis executor
-                        AccountId::from_ss58check(
-                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
-                        )
-                        .expect("Wrong executor account address"),
-                    ],
-                    vec![(
-                        AccountId::from_ss58check(
-                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
-                        )
-                        .expect("Wrong executor account address"),
-                        1_000 * SSC,
-                        AccountId::from_ss58check(
-                            "5FsxcczkSUnpqhcSgugPZsSghxrcKx5UEsRKL5WyPTL6SAxB",
-                        )
-                        .expect("Wrong executor reward address"),
-                        ExecutorPublicKey::from_ss58check(
-                            "5FuuXk1TL8DKQMvg7mcqmP8t9FhxUdzTcYC9aFmebiTLmASx",
-                        )
-                        .expect("Wrong executor public key"),
-                    )],
-                    vec![(
-                        get_account_id_from_seed("Alice"),
-                        1_000 * SSC,
-                        // TODO: proper genesis domain config
-                        DomainConfig {
-                            wasm_runtime_hash: blake2b_256_hash(
-                                system_domain_runtime::CORE_PAYMENTS_WASM_BUNDLE,
-                            )
-                            .into(),
-                            max_bundle_size: 1024 * 1024,
-                            bundle_slot_probability: (1, 1),
-                            max_bundle_weight: Weight::MAX,
-                            min_operator_stake: 100 * SSC,
-                        },
-                        get_account_id_from_seed("Alice"),
-                        Percent::one(),
-                    )],
-                    None,
-                    Default::default(),
-                )
-            },
-            // Bootnodes
-            vec![],
-            // Telemetry
-            None,
-            // Protocol ID
-            Some("subspace-x-net-2a-execution"),
-            None,
-            // Properties
-            Some(chain_spec_properties()),
-            // Extensions
-            None,
-        )
-    }
-
-    fn testnet_genesis(
-        endowed_accounts: Vec<AccountId>,
-        executors: Vec<(AccountId, Balance, AccountId, ExecutorPublicKey)>,
-        domains: Vec<(AccountId, Balance, DomainConfig, AccountId, Percent)>,
-        maybe_sudo_account: Option<AccountId>,
-        relayers: Vec<(AccountId, RelayerId)>,
-    ) -> GenesisConfig {
-        GenesisConfig {
-            system: SystemConfig {
-                code: WASM_BINARY.expect("WASM binary was not build, please build it!").to_vec(),
-            },
-            sudo: SudoConfig {
-                // Assign network admin rights.
-                key: maybe_sudo_account,
-            },
-            transaction_payment: Default::default(),
-            balances: BalancesConfig {
-                balances: endowed_accounts.iter().cloned().map(|k| (k, 1_000_000 * SSC)).collect(),
-            },
-            executor_registry: ExecutorRegistryConfig { executors, slot_probability: (1, 1) },
-            domain_registry: DomainRegistryConfig { domains },
-            messenger: MessengerConfig { relayers },
-        }
-    }
-}
-
-mod utils {
-    use frame_support::traits::Get;
-    use sc_service::Properties;
-    use sp_core::crypto::AccountId32;
-    use sp_core::{sr25519, Pair, Public};
-    use sp_runtime::traits::IdentifyAccount;
-    use sp_runtime::MultiSigner;
-    use subspace_runtime::SS58Prefix;
-    use subspace_runtime_primitives::DECIMAL_PLACES;
-
-    /// Shared chain spec properties related to the coin.
-    pub(crate) fn chain_spec_properties() -> Properties {
-        let mut properties = Properties::new();
-
-        properties.insert("ss58Format".into(), <SS58Prefix as Get<u16>>::get().into());
-        properties.insert("tokenDecimals".into(), DECIMAL_PLACES.into());
-        properties.insert("tokenSymbol".into(), "tSSC".into());
-
-        properties
-    }
-
-    /// Get public key from keypair seed.
-    pub(crate) fn get_public_key_from_seed<TPublic: Public>(
-        seed: &'static str,
-    ) -> <TPublic::Pair as Pair>::Public {
-        TPublic::Pair::from_string(&format!("//{}", seed), None)
-            .expect("Static values are valid; qed")
-            .public()
-    }
-
-    /// Generate an account ID from seed.
-    pub(crate) fn get_account_id_from_seed(seed: &'static str) -> AccountId32 {
-        MultiSigner::from(get_public_key_from_seed::<sr25519::Public>(seed)).into_account()
-    }
-}
-
-pub mod core_payments {
-    //! Core payments domain chain specs
-
-    use core_payments_domain_runtime::{
-        AccountId, BalancesConfig, GenesisConfig, MessengerConfig, SudoConfig, SystemConfig,
-        WASM_BINARY,
-    };
-    use domain_runtime_primitives::RelayerId;
-    use sc_service::ChainType;
-    use sc_subspace_chain_specs::ExecutionChainSpec;
-    use sp_core::crypto::Ss58Codec;
-    use subspace_runtime_primitives::SSC;
-
-    use super::utils::{chain_spec_properties, get_account_id_from_seed};
-
-    /// Chain spec
-    pub type ChainSpec = ExecutionChainSpec<GenesisConfig>;
-
-    /// Development config
-    pub fn development_config() -> ExecutionChainSpec<GenesisConfig> {
-        ExecutionChainSpec::from_genesis(
-            // Name
-            "Development",
-            // ID
-            "core_payments_domain_dev",
-            ChainType::Development,
-            move || {
-                testnet_genesis(
-                    vec![
-                        get_account_id_from_seed("Alice"),
-                        get_account_id_from_seed("Bob"),
-                        get_account_id_from_seed("Alice//stash"),
-                        get_account_id_from_seed("Bob//stash"),
-                    ],
-                    Some(get_account_id_from_seed("Alice")),
-                    vec![(get_account_id_from_seed("Alice"), get_account_id_from_seed("Alice"))],
-                )
-            },
-            vec![],
-            None,
-            None,
-            None,
-            Some(chain_spec_properties()),
-            None,
-        )
-    }
-
-    /// Local test net
-    pub fn local_testnet_config() -> ExecutionChainSpec<GenesisConfig> {
-        ExecutionChainSpec::from_genesis(
-            // Name
-            "Local Testnet",
-            // ID
-            "core_payments_domain_local_testnet",
-            ChainType::Local,
-            move || {
-                testnet_genesis(
-                    vec![
-                        get_account_id_from_seed("Alice"),
-                        get_account_id_from_seed("Bob"),
-                        get_account_id_from_seed("Charlie"),
-                        get_account_id_from_seed("Dave"),
-                        get_account_id_from_seed("Eve"),
-                        get_account_id_from_seed("Ferdie"),
-                        get_account_id_from_seed("Alice//stash"),
-                        get_account_id_from_seed("Bob//stash"),
-                        get_account_id_from_seed("Charlie//stash"),
-                        get_account_id_from_seed("Dave//stash"),
-                        get_account_id_from_seed("Eve//stash"),
-                        get_account_id_from_seed("Ferdie//stash"),
-                    ],
-                    Some(get_account_id_from_seed("Alice")),
-                    vec![
-                        (get_account_id_from_seed("Alice"), get_account_id_from_seed("Alice")),
-                        (get_account_id_from_seed("Bob"), get_account_id_from_seed("Bob")),
-                    ],
-                )
-            },
-            // Bootnodes
-            vec![],
-            // Telemetry
-            None,
-            // Protocol ID
-            Some("template-local"),
-            None,
-            // Properties
-            Some(chain_spec_properties()),
-            // Extensions
-            None,
-        )
-    }
-
-    /// Gemini 3b chain spec
-    pub fn gemini_3b_config() -> ExecutionChainSpec<GenesisConfig> {
-        ExecutionChainSpec::from_genesis(
-            // Name
-            "Subspace Gemini 3b Core Payments Domain",
-            // ID
-            "subspace_gemini_3b_core_payments_domain",
-            ChainType::Local,
-            move || {
-                testnet_genesis(
-                    vec![
-                        // Genesis executor
-                        AccountId::from_ss58check(
-                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
-                        )
-                        .expect("Wrong executor account address"),
-                    ],
-                    None,
-                    Default::default(),
-                )
-            },
-            // Bootnodes
-            vec![],
-            // Telemetry
-            None,
-            // Protocol ID
-            Some("subspace-gemini-3b-core-payments-domain"),
-            None,
-            // Properties
-            Some(chain_spec_properties()),
-            // Extensions
-            None,
-        )
-    }
-
-    fn testnet_genesis(
-        endowed_accounts: Vec<AccountId>,
-        maybe_sudo_account: Option<AccountId>,
-        relayers: Vec<(AccountId, RelayerId)>,
-    ) -> GenesisConfig {
-        GenesisConfig {
-            system: SystemConfig {
-                code: WASM_BINARY.expect("WASM binary was not build, please build it!").to_vec(),
-            },
-            sudo: SudoConfig { key: maybe_sudo_account },
-            transaction_payment: Default::default(),
-            balances: BalancesConfig {
-                balances: endowed_accounts.iter().cloned().map(|k| (k, 1_000_000 * SSC)).collect(),
-            },
-            messenger: MessengerConfig { relayers },
-        }
     }
 }
