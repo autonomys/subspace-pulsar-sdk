@@ -113,6 +113,42 @@
 <a href="#113" id="113">113</a>
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
@@ -227,6 +263,42 @@
 
 <span class="kw">pub fn </span>is_default&lt;T: Default + PartialEq&gt;(t: <span class="kw-2">&amp;</span>T) -&gt; bool {
     t == <span class="kw-2">&amp;</span>T::default()
+}
+
+<span class="kw">pub mod </span>chain_spec {
+    <span class="kw">use </span>frame_support::traits::Get;
+    <span class="kw">use </span>sc_service::Properties;
+    <span class="kw">use </span>sp_core::crypto::AccountId32;
+    <span class="kw">use </span>sp_core::{sr25519, Pair, Public};
+    <span class="kw">use </span>sp_runtime::traits::IdentifyAccount;
+    <span class="kw">use </span>sp_runtime::MultiSigner;
+    <span class="kw">use </span>subspace_runtime::SS58Prefix;
+    <span class="kw">use </span>subspace_runtime_primitives::DECIMAL_PLACES;
+
+    <span class="doccomment">/// Shared chain spec properties related to the coin.
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>chain_spec_properties() -&gt; Properties {
+        <span class="kw">let </span><span class="kw-2">mut </span>properties = Properties::new();
+
+        properties.insert(<span class="string">&quot;ss58Format&quot;</span>.into(), &lt;SS58Prefix <span class="kw">as </span>Get&lt;u16&gt;&gt;::get().into());
+        properties.insert(<span class="string">&quot;tokenDecimals&quot;</span>.into(), DECIMAL_PLACES.into());
+        properties.insert(<span class="string">&quot;tokenSymbol&quot;</span>.into(), <span class="string">&quot;tSSC&quot;</span>.into());
+
+        properties
+    }
+
+    <span class="doccomment">/// Get public key from keypair seed.
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_public_key_from_seed&lt;TPublic: Public&gt;(
+        seed: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str,
+    ) -&gt; &lt;TPublic::Pair <span class="kw">as </span>Pair&gt;::Public {
+        TPublic::Pair::from_string(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;//{}&quot;</span>, seed), <span class="prelude-val">None</span>)
+            .expect(<span class="string">&quot;Static values are valid; qed&quot;</span>)
+            .public()
+    }
+
+    <span class="doccomment">/// Generate an account ID from seed.
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_account_id_from_seed(seed: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) -&gt; AccountId32 {
+        MultiSigner::from(get_public_key_from_seed::&lt;sr25519::Public&gt;(seed)).into_account()
+    }
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="subspace_sdk" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (a00f8ba7f 2022-11-15)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
