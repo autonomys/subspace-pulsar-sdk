@@ -275,6 +275,19 @@
 <a href="#275" id="275">275</a>
 <a href="#276" id="276">276</a>
 <a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Subspace chain configurations.
 
 </span><span class="kw">use </span>sc_service::ChainType;
@@ -521,7 +534,7 @@
 }
 
 <span class="doccomment">/// Configure initial storage state for FRAME modules.
-</span><span class="kw">pub fn </span>subspace_genesis_config(
+</span><span class="kw">fn </span>subspace_genesis_config(
     wasm_binary: <span class="kw-2">&amp;</span>[u8],
     sudo_account: AccountId,
     balances: Vec&lt;(AccountId, Balance)&gt;,
@@ -550,6 +563,19 @@
         subspace: SubspaceConfig { enable_rewards, enable_storage_access, allow_authoring_by },
         vesting: VestingConfig { vesting },
         runtime_configs: RuntimeConfigsConfig { enable_executor },
+    }
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_gemini_3b_spec() {
+        gemini_3b_compiled().unwrap();
+        gemini_3b().unwrap();
+        dev_config().unwrap();
+        local_config().unwrap();
     }
 }
 </code></pre></div>
