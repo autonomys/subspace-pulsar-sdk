@@ -23,7 +23,8 @@ use sp_core::H256;
 use subspace_core_primitives::SolutionRange;
 use subspace_farmer::node_client::NodeClient;
 use subspace_farmer_components::FarmerProtocolInfo;
-use subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler};
+use subspace_networking::libp2p::kad::ProviderRecord;
+use subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse};
 use subspace_rpc_primitives::SlotInfo;
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
@@ -39,10 +40,12 @@ pub use builder::{
 };
 pub(crate) use builder::{ImplName, ImplVersion};
 pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
+use subspace_service::piece_cache::PieceCache;
 
 use self::builder::{ListenAddresses, SegmentPublishConcurrency};
 use crate::networking::{
-    FarmerRecordStorage, MaybeRecordStorage, NodeRecordStorage, ReadersAndPieces, RecordStorage,
+    FarmerProviderStorage, MaybeProviderStorage, NodeProviderStorage, ProviderStorage,
+    ReadersAndPieces,
 };
 
 mod builder {
@@ -806,7 +809,8 @@ impl Config {
             subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&base)
                 .context("Failed to build a partial subspace node")?;
         let readers_and_pieces = Arc::new(std::sync::Mutex::new(None::<ReadersAndPieces>));
-        let farmer_record_storage = MaybeRecordStorage::none();
+        let farmer_provider_storage = MaybeProviderStorage::none();
+        let farmer_piece_storage = Arc::new(std::sync::Mutex::new(None));
 
         let (subspace_networking, (node, mut node_runner)) = {
             let builder::Dsn {
@@ -856,15 +860,23 @@ impl Config {
                 })
                 .collect::<Vec<_>>();
 
-            let piece_cache = NodeRecordStorage::new(
+            let peer_id = subspace_networking::peer_id(&keypair);
+            let piece_cache = PieceCache::new(
                 partial_components.client.clone(),
                 piece_cache_size.as_u64(),
+                peer_id,
+            );
+
+            let node_provider_storage = NodeProviderStorage::new(
+                piece_cache.clone(),
+                // TODO: Let users choose parity db storage provider
+                either::Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id)),
             );
 
             // Start before archiver below, so we don't have potential race condition and
             // miss pieces
             tokio::spawn({
-                let piece_cache = piece_cache.clone();
+                let mut piece_cache = piece_cache.clone();
                 let mut archived_segment_notification_stream =
                     partial_components.other.1.archived_segment_notification_stream().subscribe();
 
@@ -886,12 +898,11 @@ impl Config {
                 }
             });
 
-            let record_store = subspace_networking::CustomRecordStore::new(
-                RecordStorage::new(farmer_record_storage.clone(), piece_cache.clone()),
-                subspace_networking::MemoryProviderStorage::default(),
-            );
+            let provider_storage =
+                ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
             let readers_and_pieces = Arc::downgrade(&readers_and_pieces);
 
+            let farmer_piece_storage = Arc::clone(&farmer_piece_storage);
             let config = subspace_networking::Config {
                 keypair,
                 listen_on,
@@ -901,45 +912,22 @@ impl Config {
                         bootstrap_nodes.clone(),
                     )
                     .boxed(),
-                request_response_protocols: vec![PieceByHashRequestHandler::create(
-                    move |PieceByHashRequest { key }| {
-                        let piece = match key {
-                            subspace_networking::PieceKey::PieceIndex(piece_index) =>
-                                match piece_cache.get_piece(*piece_index) {
-                                    Ok(maybe_piece) => maybe_piece,
-                                    Err(error) => {
-                                        tracing::error!(?key, %error, "Failed to get piece from cache");
-                                        None
-                                    }
-                                },
-                            subspace_networking::PieceKey::Sector(piece_index_hash) => {
-                                let Some(readers_and_pieces) = readers_and_pieces.upgrade() else {
-                                    tracing::debug!("A readers and pieces are already dropped");
-                                    return None
-                                };
-                                let readers_and_pieces = readers_and_pieces
-                                    .lock()
-                                    .expect("Readers lock is never poisoned");
-                                let Some(readers_and_pieces) = readers_and_pieces.as_ref() else {
-                                    tracing::debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
-                                    return None
-                                };
-                                readers_and_pieces.get_piece(piece_index_hash)
-                            }
-                            subspace_networking::PieceKey::PieceIndexHash(_piece_index_hash) => {
-                                tracing::debug!(
-                                    ?key,
-                                    "Incorrect piece request - unsupported key type."
-                                );
-                                return None;
-                            }
-                        };
+                request_response_protocols: vec![PieceByHashRequestHandler::create(move |req| {
+                    match get_piece_by_hash(req.clone(), &piece_cache) {
+                        Some(PieceByHashResponse { piece: None }) | None => (),
+                        result => return result,
+                    };
+                    let piece_storage = farmer_piece_storage.lock().unwrap();
+                    let Some(piece_storage) = piece_storage.as_ref() else { return None };
 
-                        Some(subspace_networking::PieceByHashResponse { piece })
-                    },
-                )],
-                record_store,
-                ..subspace_networking::Config::with_generated_keypair()
+                    crate::farmer::get_piece_by_hash(
+                        req.clone(),
+                        piece_storage,
+                        &readers_and_pieces,
+                    )
+                })],
+                provider_storage,
+                ..subspace_networking::Config::default()
             };
 
             let (node, node_runner) = subspace_networking::create(config).await?;
@@ -957,6 +945,8 @@ impl Config {
             segment_publish_concurrency,
             subspace_networking,
         };
+
+        let provider_records_receiver = node_runner.take_provider_records_receiver();
 
         tokio::spawn(async move {
             node_runner.run().await;
@@ -1035,11 +1025,13 @@ impl Config {
             system_domain,
             network,
             name,
-            farmer_record_storage,
+            farmer_provider_storage,
             rpc_handle,
             readers_and_pieces,
             dsn_node: node,
             stop_sender,
+            farmer_piece_storage,
+            provider_records_receiver: Arc::new(tokio::sync::Mutex::new(provider_records_receiver)),
         })
     }
 }
@@ -1084,7 +1076,12 @@ pub struct Node {
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     pub(crate) rpc_handle: crate::utils::Rpc,
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
-    pub(crate) farmer_record_storage: MaybeRecordStorage<FarmerRecordStorage>,
+    pub(crate) provider_records_receiver:
+        Arc<tokio::sync::Mutex<Option<mpsc::Receiver<ProviderRecord>>>>,
+    pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
+    pub(crate) farmer_piece_storage: Arc<
+        std::sync::Mutex<Option<crate::networking::farmer_piece_storage::ParityDbPieceStorage>>,
+    >,
     pub(crate) readers_and_pieces: Arc<std::sync::Mutex<Option<ReadersAndPieces>>>,
     pub(crate) dsn_node: subspace_networking::Node,
     name: String,
@@ -1396,6 +1393,21 @@ impl Node {
     ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
         self.rpc_handle.subscribe_new_blocks().await.context("Failed to subscribe to new blocks")
     }
+}
+
+pub(crate) fn get_piece_by_hash(
+    PieceByHashRequest { piece_index_hash }: PieceByHashRequest,
+    piece_cache: &subspace_service::piece_cache::PieceCache<impl sc_client_api::AuxStore>,
+) -> Option<PieceByHashResponse> {
+    let result = match piece_cache.get_piece(piece_index_hash) {
+        Ok(maybe_piece) => maybe_piece,
+        Err(error) => {
+            tracing::error!(?piece_index_hash, %error, "Failed to get piece from cache");
+            None
+        }
+    };
+
+    Some(PieceByHashResponse { piece: result })
 }
 
 mod farmer_rpc_client {

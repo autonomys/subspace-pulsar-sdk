@@ -16,11 +16,12 @@ use subspace_farmer::single_disk_plot::{
     SingleDiskPlotOptions, SingleDiskPlotSummary,
 };
 use subspace_farmer_components::plotting::PlottedSector;
-use subspace_networking::{LimitedSizeRecordStorageWrapper, ParityDbRecordStorage};
+use subspace_networking::{PieceByHashRequest, PieceByHashResponse};
 use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 
-use crate::networking::{FarmerRecordStorage, PieceDetails, ReadersAndPieces};
+use crate::networking::farmer_provider_record_processor::FarmerProviderRecordProcessor;
+use crate::networking::ReadersAndPieces;
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -32,22 +33,6 @@ pub struct CacheDescription {
     /// Space which you want to dedicate
     #[serde(with = "bytesize_serde")]
     pub space_dedicated: ByteSize,
-}
-
-impl CacheDescription {
-    fn record_storage(
-        self,
-        peer_id: subspace_networking::libp2p::PeerId,
-    ) -> parity_db::Result<FarmerRecordStorage> {
-        ParityDbRecordStorage::new(&self.directory).map(|storage| {
-            LimitedSizeRecordStorageWrapper::new(
-                storage,
-                NonZeroUsize::new(self.space_dedicated.as_u64() as _)
-                    .expect("Always more than 1Mib"),
-                peer_id,
-            )
-        })
-    }
 }
 
 /// Error type for cache description constructor
@@ -193,6 +178,47 @@ pub enum BuildError {
     ParityDbError(#[from] parity_db::Error),
 }
 
+pub(crate) fn get_piece_by_hash(
+    PieceByHashRequest { piece_index_hash }: PieceByHashRequest,
+    piece_storage: &crate::networking::farmer_piece_storage::ParityDbPieceStorage,
+    weak_readers_and_pieces: &std::sync::Weak<std::sync::Mutex<Option<ReadersAndPieces>>>,
+) -> Option<PieceByHashResponse> {
+    use subspace_networking::ToMultihash;
+    use tracing::debug;
+
+    let result = {
+        debug!(?piece_index_hash, "Piece request received. Trying cache...");
+        let multihash = piece_index_hash.to_multihash();
+
+        let piece_from_cache = piece_storage.get(&multihash.into());
+
+        if piece_from_cache.is_some() {
+            piece_from_cache
+        } else {
+            debug!(?piece_index_hash, "No piece in the cache. Trying archival storage...");
+
+            let readers_and_pieces = match weak_readers_and_pieces.upgrade() {
+                Some(readers_and_pieces) => readers_and_pieces,
+                None => {
+                    debug!("A readers and pieces are already dropped");
+                    return None;
+                }
+            };
+            let readers_and_pieces = readers_and_pieces.lock().unwrap();
+            let readers_and_pieces = match readers_and_pieces.as_ref() {
+                Some(readers_and_pieces) => readers_and_pieces,
+                None => {
+                    debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
+                    return None;
+                }
+            };
+            readers_and_pieces.get_piece(&piece_index_hash)
+        }
+    };
+
+    Some(PieceByHashResponse { piece: result })
+}
+
 impl Config {
     /// Open and start farmer
     pub async fn build(
@@ -214,7 +240,38 @@ impl Config {
         let concurrent_plotting_semaphore =
             Arc::new(tokio::sync::Semaphore::new(max_concurrent_plots.get()));
 
-        node.farmer_record_storage.swap(cache.record_storage(node.dsn_node.id())?);
+        let base_path = cache.directory;
+        let peer_id = node.dsn_node.id();
+
+        let record_cache_db_path = base_path.join("records_cache_db").into_boxed_path();
+        let record_cache_size = NonZeroUsize::new(100).unwrap();
+        let provider_cache_db_path = base_path.join("provider_cache_db").into_boxed_path();
+        let provider_cache_size =
+            record_cache_size.saturating_mul(NonZeroUsize::new(10).expect("10 > 0")); // TODO: add proper value
+        let db_provider_storage = subspace_networking::ParityDbProviderStorage::new(
+            &provider_cache_db_path,
+            provider_cache_size,
+            peer_id,
+        )?;
+
+        let farmer_provider_storage = crate::networking::FarmerProviderStorage::new(
+            peer_id,
+            node.readers_and_pieces.clone(),
+            db_provider_storage,
+        );
+
+        node.farmer_provider_storage.swap(farmer_provider_storage);
+
+        //TODO: rename CLI parameters
+        let piece_storage = crate::networking::farmer_piece_storage::ParityDbPieceStorage::new(
+            &record_cache_db_path,
+        )?;
+        let wrapped_piece_storage =
+            crate::networking::farmer_piece_storage::LimitedSizePieceStorageWrapper::new(
+                piece_storage.clone(),
+                record_cache_size,
+                peer_id,
+            );
 
         for description in plots {
             let directory = description.directory.clone();
@@ -262,7 +319,7 @@ impl Config {
             single_disk_plots.push(single_disk_plot);
         }
 
-        let readers_and_pieces = ReadersAndPieces::new(&single_disk_plots).await;
+        let readers_and_pieces = crate::networking::ReadersAndPieces::new(&single_disk_plots).await;
         node.readers_and_pieces
             .lock()
             .expect("Readers and pieces can't poison lock")
@@ -284,7 +341,7 @@ impl Config {
                             |(piece_offset, piece_index)| {
                                 (
                                     PieceIndexHash::from_index(piece_index),
-                                    PieceDetails {
+                                    crate::networking::PieceDetails {
                                         plot_offset,
                                         sector_index: plotted_sector.sector_index,
                                         piece_offset: piece_offset as u64,
@@ -302,19 +359,38 @@ impl Config {
         let (cmd_sender, cmd_receiver) = oneshot::channel::<()>();
 
         let handle = tokio::task::spawn_blocking({
-            let handle = tokio::runtime::Handle::current();
             let node = node.clone();
+            let handle = tokio::runtime::Handle::current();
+            let provider_record_processor_future = {
+                let mut provider_records_receiver = node
+                    .provider_records_receiver
+                    .lock()
+                    .await
+                    .take()
+                    .expect("Node should be used with a single farmer");
+                let provider_record_processor = FarmerProviderRecordProcessor::new(
+                    node.dsn_node.clone(),
+                    wrapped_piece_storage,
+                );
+                async move {
+                    let mut provider_record_processor = provider_record_processor;
+                    while let Some(provider_record) = provider_records_receiver.next().await {
+                        provider_record_processor.process_provider_record(provider_record).await;
+                    }
+                }
+            };
+
             move || {
-                let result_maybe_sender = handle.block_on(futures::future::select(
+                use future::Either::*;
+
+                match handle.block_on(future::select(
                     single_disk_plots_stream.next(),
-                    cmd_receiver,
-                ));
-                match result_maybe_sender {
-                    // If node is closed when we might get some random error, so just ignore it
-                    future::Either::Left((_, _)) if handle.block_on(node.is_closed()) => Ok(()),
-                    future::Either::Left((maybe_result, _)) =>
-                        maybe_result.expect("There is at least one plot"),
-                    future::Either::Right((_, _)) => Ok(()),
+                    future::select(cmd_receiver, Box::pin(provider_record_processor_future)),
+                )) {
+                    Left((_, _)) if handle.block_on(node.is_closed()) => Ok(()),
+                    Left((maybe_result, _)) =>
+                        maybe_result.expect("there is always at least one plot"),
+                    Right((_, _)) => Ok(()),
                 }
             }
         });

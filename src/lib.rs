@@ -206,8 +206,14 @@ mod tests {
     use super::farmer::CacheDescription;
     use super::*;
 
+    fn init() {
+        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn test_integration() {
+        init();
+
         let dir = TempDir::new().unwrap();
         let node = Node::builder()
             .force_authoring(true)
