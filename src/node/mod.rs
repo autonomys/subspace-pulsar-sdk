@@ -469,8 +469,7 @@ mod builder {
                         .expect("RNG is available on all supported platforms; qed")
                 });
 
-                let client_id =
-                    client_id.unwrap_or_else(|| format!("{}/v{}", impl_name, impl_version));
+                let client_id = client_id.unwrap_or_else(|| format!("{impl_name}/v{impl_version}"));
                 let config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
                 let listen_addresses = listen_addresses
                     .into_iter()

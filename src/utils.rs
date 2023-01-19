@@ -139,7 +139,7 @@ pub mod chain_spec {
     pub(crate) fn get_public_key_from_seed<TPublic: Public>(
         seed: &'static str,
     ) -> <TPublic::Pair as Pair>::Public {
-        TPublic::Pair::from_string(&format!("//{}", seed), None)
+        TPublic::Pair::from_string(&format!("//{seed}"), None)
             .expect("Static values are valid; qed")
             .public()
     }
