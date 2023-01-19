@@ -1,9 +1,32 @@
+pub(crate) mod farmer_piece_storage;
+pub(crate) mod farmer_provider_record_processor;
+pub(crate) mod farmer_provider_storage;
+pub(crate) mod node_provider_storage;
+
+use std::borrow::Cow;
+
 use derivative::Derivative;
+use either::*;
 use subspace_core_primitives::{Piece, PieceIndexHash, SectorIndex};
 use subspace_farmer::single_disk_plot::piece_reader::PieceReader;
 use subspace_farmer::single_disk_plot::SingleDiskPlot;
-use subspace_networking::{LimitedSizeRecordStorageWrapper, ParityDbRecordStorage};
+use subspace_networking::libp2p::kad::record::Key;
+use subspace_networking::libp2p::kad::ProviderRecord;
+use subspace_networking::ParityDbProviderStorage;
 use subspace_service::piece_cache::PieceCache;
+
+/// Defines persistent piece storage interface.
+pub trait PieceStorage: Sync + Send + 'static {
+    /// Check whether key should be inserted into the storage with current
+    /// storage size and key-to-peer-id distance.
+    fn should_include_in_storage(&self, key: &Key) -> bool;
+
+    /// Add piece to the storage.
+    fn add_piece(&mut self, key: Key, piece: Piece);
+
+    /// Get piece from the storage.
+    fn get_piece(&self, key: &Key) -> Option<Piece>;
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct PieceDetails {
@@ -99,18 +122,18 @@ impl Extend<(PieceIndexHash, PieceDetails)> for ReadersAndPieces {
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct MaybeRecordStorage<S> {
+pub struct MaybeProviderStorage<S> {
     #[derivative(Debug = "ignore")]
     inner: std::sync::Arc<std::sync::Mutex<Option<S>>>,
 }
 
-impl<S> Clone for MaybeRecordStorage<S> {
+impl<S> Clone for MaybeProviderStorage<S> {
     fn clone(&self) -> Self {
         Self { inner: std::sync::Arc::clone(&self.inner) }
     }
 }
 
-impl<S> MaybeRecordStorage<S> {
+impl<S> MaybeProviderStorage<S> {
     pub fn none() -> Self {
         Self { inner: std::sync::Arc::new(std::sync::Mutex::new(None)) }
     }
@@ -120,70 +143,99 @@ impl<S> MaybeRecordStorage<S> {
     }
 }
 
-impl<S: subspace_networking::RecordStorage> subspace_networking::RecordStorage
-    for MaybeRecordStorage<S>
+impl<S: subspace_networking::ProviderStorage + 'static> subspace_networking::ProviderStorage
+    for MaybeProviderStorage<S>
 {
-    fn get(
-        &'_ self,
-        k: &subspace_networking::libp2p::kad::record::Key,
-    ) -> Option<std::borrow::Cow<'_, subspace_networking::libp2p::kad::Record>> {
-        let lock = self.inner.lock().unwrap();
-        let Some(x) = &*lock else { return None };
-        x.get(k)
-            .map(std::borrow::Cow::into_owned)
-            .map(std::borrow::Cow::<'static, subspace_networking::libp2p::kad::Record>::Owned)
+    type ProvidedIter<'a> = std::iter::Empty<Cow<'a, ProviderRecord>>
+    where S: 'a;
+
+    fn provided(&self) -> Self::ProvidedIter<'_> {
+        todo!()
     }
 
-    fn put(
+    fn remove_provider(
         &mut self,
-        r: subspace_networking::libp2p::kad::Record,
-    ) -> subspace_networking::libp2p::kad::store::Result<()> {
-        self.inner.lock().unwrap().as_mut().map(|x| x.put(r)).unwrap_or(Ok(()))
+        k: &subspace_networking::libp2p::kad::record::Key,
+        p: &subspace_networking::libp2p::PeerId,
+    ) {
+        if let Some(x) = &mut *self.inner.lock().unwrap() {
+            x.remove_provider(k, p);
+        }
     }
 
-    fn remove(&mut self, k: &subspace_networking::libp2p::kad::record::Key) {
-        if let Some(x) = self.inner.lock().unwrap().as_mut() {
-            x.remove(k)
-        }
+    fn providers(
+        &self,
+        key: &subspace_networking::libp2p::kad::record::Key,
+    ) -> Vec<ProviderRecord> {
+        self.inner.lock().unwrap().as_ref().map(|x| x.providers(key)).unwrap_or_default()
+    }
+
+    fn add_provider(
+        &mut self,
+        record: ProviderRecord,
+    ) -> subspace_networking::libp2p::kad::store::Result<()> {
+        self.inner.lock().unwrap().as_mut().map(|x| x.add_provider(record)).unwrap_or(Ok(()))
     }
 }
 
-pub struct AndRecordStorage<A, B> {
+pub struct AndProviderStorage<A, B> {
     a: A,
     b: B,
 }
 
-impl<A, B> AndRecordStorage<A, B> {
+impl<A, B> AndProviderStorage<A, B> {
     pub fn new(a: A, b: B) -> Self {
         Self { a, b }
     }
 }
 
-impl<A: subspace_networking::RecordStorage, B: subspace_networking::RecordStorage>
-    subspace_networking::RecordStorage for AndRecordStorage<A, B>
+impl<A: subspace_networking::ProviderStorage, B: subspace_networking::ProviderStorage>
+    subspace_networking::ProviderStorage for AndProviderStorage<A, B>
 {
-    fn get(
-        &'_ self,
-        k: &subspace_networking::libp2p::kad::record::Key,
-    ) -> Option<std::borrow::Cow<'_, subspace_networking::libp2p::kad::Record>> {
-        self.a.get(k).or_else(|| self.b.get(k))
-    }
+    type ProvidedIter<'a> = std::iter::Chain<A::ProvidedIter<'a>, B::ProvidedIter<'a>>
+    where A: 'a, B: 'a;
 
-    fn put(
+    fn add_provider(
         &mut self,
-        r: subspace_networking::libp2p::kad::Record,
+        record: ProviderRecord,
     ) -> subspace_networking::libp2p::kad::store::Result<()> {
-        self.a.put(r.clone())?;
-        self.b.put(r)
+        self.a.add_provider(record.clone())?;
+        self.b.add_provider(record)?;
+        Ok(())
     }
 
-    fn remove(&mut self, k: &subspace_networking::libp2p::kad::record::Key) {
-        self.a.remove(k);
-        self.b.remove(k)
+    fn provided(&self) -> Self::ProvidedIter<'_> {
+        self.a.provided().chain(self.b.provided())
+    }
+
+    fn providers(
+        &self,
+        key: &subspace_networking::libp2p::kad::record::Key,
+    ) -> Vec<ProviderRecord> {
+        self.a
+            .providers(key)
+            .into_iter()
+            .chain(self.b.providers(key))
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect()
+    }
+
+    fn remove_provider(
+        &mut self,
+        k: &subspace_networking::libp2p::kad::record::Key,
+        p: &subspace_networking::libp2p::PeerId,
+    ) {
+        self.a.remove_provider(k, p);
+        self.b.remove_provider(k, p);
     }
 }
 
-pub type FarmerRecordStorage = LimitedSizeRecordStorageWrapper<ParityDbRecordStorage>;
-pub type NodeRecordStorage<C> = PieceCache<C>;
-pub type RecordStorage<C> =
-    AndRecordStorage<MaybeRecordStorage<FarmerRecordStorage>, NodeRecordStorage<C>>;
+pub(crate) type FarmerProviderStorage =
+    farmer_provider_storage::FarmerProviderStorage<ParityDbProviderStorage>;
+pub(crate) type NodeProviderStorage<C> = node_provider_storage::NodeProviderStorage<
+    PieceCache<C>,
+    Either<ParityDbProviderStorage, subspace_networking::MemoryProviderStorage>,
+>;
+pub(crate) type ProviderStorage<C> =
+    AndProviderStorage<MaybeProviderStorage<FarmerProviderStorage>, NodeProviderStorage<C>>;
