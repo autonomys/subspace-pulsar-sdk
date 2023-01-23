@@ -1,5 +1,5 @@
 use std::num::NonZeroUsize;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use event_listener_primitives::HandlerId;
 use futures::StreamExt;
@@ -14,7 +14,7 @@ use tokio::sync::Semaphore;
 use tracing::{debug, trace, warn, Instrument};
 
 use super::farmer_piece_storage::LimitedSizeParityDbStore;
-use super::PieceStorage;
+use super::{PieceStorage, ReadersAndPieces};
 
 const MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE: usize = 2000;
 const MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
@@ -24,7 +24,8 @@ const MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
 /// that will stop processing on drop.
 pub fn start_announcements_processor(
     node: Node,
-    piece_storage: LimitedSizeParityDbStore,
+    piece_storage: Arc<tokio::sync::Mutex<LimitedSizeParityDbStore>>,
+    weak_readers_and_pieces: Weak<Mutex<Option<ReadersAndPieces>>>,
 ) -> std::io::Result<HandlerId> {
     let (provider_records_sender, mut provider_records_receiver) =
         futures::channel::mpsc::channel(MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE);
@@ -53,6 +54,7 @@ pub fn start_announcements_processor(
     let mut provider_record_processor = FarmerProviderRecordProcessor::new(
         node,
         piece_storage,
+        weak_readers_and_pieces.clone(),
         MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING,
     );
 
@@ -74,6 +76,7 @@ pub fn start_announcements_processor(
 pub(crate) struct FarmerProviderRecordProcessor<PS> {
     node: Node,
     piece_storage: Arc<tokio::sync::Mutex<PS>>,
+    weak_readers_and_pieces: Weak<Mutex<Option<ReadersAndPieces>>>,
     semaphore: Arc<Semaphore>,
 }
 
@@ -81,9 +84,14 @@ impl<PS> FarmerProviderRecordProcessor<PS>
 where
     PS: PieceStorage + Send + 'static,
 {
-    pub fn new(node: Node, piece_storage: PS, max_concurrent_announcements: NonZeroUsize) -> Self {
+    pub fn new(
+        node: Node,
+        piece_storage: Arc<tokio::sync::Mutex<PS>>,
+        weak_readers_and_pieces: Weak<Mutex<Option<ReadersAndPieces>>>,
+        max_concurrent_announcements: NonZeroUsize,
+    ) -> Self {
         let semaphore = Arc::new(Semaphore::new(max_concurrent_announcements.get()));
-        Self { node, piece_storage: Arc::new(tokio::sync::Mutex::new(piece_storage)), semaphore }
+        Self { node, piece_storage, weak_readers_and_pieces, semaphore }
     }
 
     pub async fn process_provider_record(&mut self, provider_record: ProviderRecord) {
@@ -118,6 +126,18 @@ where
                 )
                 .into();
 
+        if let Some(readers_and_pieces) = self.weak_readers_and_pieces.upgrade() {
+            if let Some(readers_and_pieces) = readers_and_pieces.lock().as_ref() {
+                if readers_and_pieces.pieces.contains_key(&piece_index_hash) {
+                    // Piece is already plotted, hence it was also already announced
+                    return;
+                }
+            }
+        } else {
+            // `ReadersAndPieces` was dropped, nothing left to be done
+            return;
+        }
+
         let Ok(permit) = self.semaphore.clone().acquire_owned().await else {
             return;
         };
@@ -145,7 +165,13 @@ where
             if let Some(piece) =
                 get_piece_from_announcer(&node, piece_index_hash, provider_record.provider).await
             {
-                piece_storage.lock().await.add_piece(provider_record.key.clone(), piece);
+                {
+                    let mut piece_storage = piece_storage.lock().await;
+                    if !piece_storage.should_include_in_storage(&provider_record.key) {
+                        return;
+                    }
+                    piece_storage.add_piece(provider_record.key.clone(), piece);
+                }
                 if let Err(error) =
                     subspace_networking::utils::pieces::announce_single_piece_index_hash_with_backoff(piece_index_hash, &node).await
                 {

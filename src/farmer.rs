@@ -10,6 +10,7 @@ use bytesize::ByteSize;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
 use serde::{Deserialize, Serialize};
+use subspace_core_primitives::crypto::kzg;
 use subspace_core_primitives::{PieceIndexHash, SectorIndex, PLOT_SECTOR_SIZE};
 use subspace_farmer::single_disk_plot::{
     SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
@@ -218,6 +219,8 @@ pub(crate) fn get_piece_by_hash(
     Some(PieceByHashResponse { piece: result })
 }
 
+const RECORDS_ROOTS_CACHE_SIZE: NonZeroUsize = NonZeroUsize::new(1_000_000).expect("Not zero; qed");
+
 impl Config {
     /// Open and start farmer
     pub async fn build(
@@ -264,12 +267,39 @@ impl Config {
         //TODO: rename CLI parameters
         let piece_storage =
             crate::networking::farmer_piece_storage::ParityDbStore::new(&record_cache_db_path)?;
-        let wrapped_piece_storage =
-            crate::networking::farmer_piece_storage::LimitedSizeParityDbStore::new(
-                piece_storage.clone(),
-                record_cache_size,
-                peer_id,
-            );
+        let piece_storage = crate::networking::farmer_piece_storage::LimitedSizeParityDbStore::new(
+            piece_storage.clone(),
+            record_cache_size,
+            peer_id,
+        );
+
+        let piece_storage = Arc::new(tokio::sync::Mutex::new(piece_storage));
+        crate::networking::farmer_provider_record_processor::start_announcements_processor(
+            node.dsn_node.clone(),
+            Arc::clone(&piece_storage),
+            Arc::downgrade(&node.readers_and_pieces),
+        )
+        .expect("Add error handling")
+        .detach();
+
+        let kzg = kzg::Kzg::new(kzg::test_public_parameters());
+        let records_roots_cache =
+            parking_lot::Mutex::new(lru::LruCache::new(RECORDS_ROOTS_CACHE_SIZE));
+        let piece_provider = subspace_networking::PieceProvider::new(
+            node.dsn_node.clone(),
+            Some(subspace_farmer::utils::piece_validator::RecordsRootPieceValidator::new(
+                node.dsn_node.clone(),
+                node.clone(),
+                kzg.clone(),
+                records_roots_cache,
+            )),
+        );
+        let piece_receiver =
+            Arc::new(crate::networking::farmer_piece_receiver::FarmerPieceReceiver::new(
+                piece_provider,
+                piece_storage,
+                node.dsn_node.clone(),
+            ));
 
         for description in plots {
             let directory = description.directory.clone();
@@ -279,7 +309,8 @@ impl Config {
                 directory: directory.clone(),
                 reward_address: *reward_address,
                 node_client: node.clone(),
-                dsn_node: node.dsn_node.clone(),
+                kzg: kzg.clone(),
+                piece_receiver: piece_receiver.clone(),
                 concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
             };
             let single_disk_plot = SingleDiskPlot::new(description).await?;
@@ -416,13 +447,6 @@ impl Config {
             single_disk_plots.into_iter().map(SingleDiskPlot::run).collect::<FuturesUnordered<_>>();
 
         let (cmd_sender, cmd_receiver) = oneshot::channel::<()>();
-
-        crate::networking::farmer_provider_record_processor::start_announcements_processor(
-            node.dsn_node.clone(),
-            wrapped_piece_storage,
-        )
-        .expect("Add error handling")
-        .detach();
 
         let handle = tokio::task::spawn_blocking({
             let node = node.clone();

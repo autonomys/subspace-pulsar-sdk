@@ -1,3 +1,4 @@
+pub(crate) mod farmer_piece_receiver;
 pub(crate) mod farmer_piece_storage;
 pub(crate) mod farmer_provider_record_processor;
 pub(crate) mod farmer_provider_storage;
