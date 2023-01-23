@@ -180,7 +180,7 @@ pub enum BuildError {
 pub(crate) fn get_piece_by_hash(
     PieceByHashRequest { piece_index_hash }: PieceByHashRequest,
     piece_storage: &crate::networking::farmer_piece_storage::ParityDbStore,
-    weak_readers_and_pieces: &std::sync::Weak<std::sync::Mutex<Option<ReadersAndPieces>>>,
+    weak_readers_and_pieces: &std::sync::Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
 ) -> Option<PieceByHashResponse> {
     use subspace_networking::ToMultihash;
     use tracing::debug;
@@ -203,7 +203,7 @@ pub(crate) fn get_piece_by_hash(
                     return None;
                 }
             };
-            let readers_and_pieces = readers_and_pieces.lock().unwrap();
+            let readers_and_pieces = readers_and_pieces.lock();
             let readers_and_pieces = match readers_and_pieces.as_ref() {
                 Some(readers_and_pieces) => readers_and_pieces,
                 None => {
@@ -318,10 +318,7 @@ impl Config {
         }
 
         let readers_and_pieces = crate::networking::ReadersAndPieces::new(&single_disk_plots).await;
-        node.readers_and_pieces
-            .lock()
-            .expect("Readers and pieces can't poison lock")
-            .replace(readers_and_pieces);
+        node.readers_and_pieces.lock().replace(readers_and_pieces);
 
         for (plot_offset, single_disk_plot) in single_disk_plots.iter().enumerate() {
             let readers_and_pieces = Arc::clone(&node.readers_and_pieces);
@@ -342,7 +339,7 @@ impl Config {
                     let mut dropped_receiver = dropped_sender.subscribe();
 
                     let new_pieces = {
-                        let mut readers_and_pieces = readers_and_pieces.lock().unwrap();
+                        let mut readers_and_pieces = readers_and_pieces.lock();
                         let readers_and_pieces = readers_and_pieces
                             .as_mut()
                             .expect("Initial value was populated above; qed");

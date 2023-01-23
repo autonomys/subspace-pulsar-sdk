@@ -9545,6 +9545,7 @@ dependencies = [
  "names 0.14.0",
  "pallet-transaction-payment-rpc-runtime-api",
  "parity-db",
+ "parking_lot 0.12.1",
  "pin-project",
  "sc-chain-spec",
  "sc-client-api",

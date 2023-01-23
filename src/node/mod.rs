@@ -9,6 +9,7 @@ use derivative::Derivative;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 use libp2p_core::Multiaddr;
+use parking_lot::Mutex;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
 use sc_network::network_state::NetworkState;
@@ -806,9 +807,9 @@ impl Config {
         let partial_components =
             subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&base)
                 .context("Failed to build a partial subspace node")?;
-        let readers_and_pieces = Arc::new(std::sync::Mutex::new(None::<ReadersAndPieces>));
+        let readers_and_pieces = Arc::new(Mutex::new(None::<ReadersAndPieces>));
         let farmer_provider_storage = MaybeProviderStorage::none();
-        let farmer_piece_storage = Arc::new(std::sync::Mutex::new(None));
+        let farmer_piece_storage = Arc::new(Mutex::new(None));
 
         let (subspace_networking, (node, mut node_runner)) = {
             let builder::Dsn {
@@ -915,7 +916,7 @@ impl Config {
                         Some(PieceByHashResponse { piece: None }) | None => (),
                         result => return result,
                     };
-                    let piece_storage = farmer_piece_storage.lock().unwrap();
+                    let piece_storage = farmer_piece_storage.lock();
                     let Some(piece_storage) = piece_storage.as_ref() else { return None };
 
                     crate::farmer::get_piece_by_hash(
@@ -1073,8 +1074,8 @@ pub struct Node {
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
     pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
     pub(crate) farmer_piece_storage:
-        Arc<std::sync::Mutex<Option<crate::networking::farmer_piece_storage::ParityDbStore>>>,
-    pub(crate) readers_and_pieces: Arc<std::sync::Mutex<Option<ReadersAndPieces>>>,
+        Arc<Mutex<Option<crate::networking::farmer_piece_storage::ParityDbStore>>>,
+    pub(crate) readers_and_pieces: Arc<Mutex<Option<ReadersAndPieces>>>,
     pub(crate) dsn_node: subspace_networking::Node,
     name: String,
 }

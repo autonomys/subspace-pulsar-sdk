@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use event_listener_primitives::HandlerId;
 use futures::StreamExt;
+use parking_lot::Mutex;
 use subspace_core_primitives::{Blake2b256Hash, Piece, PieceIndexHash, BLAKE2B_256_HASH_SIZE};
 use subspace_networking::libp2p::kad::ProviderRecord;
 use subspace_networking::libp2p::multihash::Multihash;
@@ -29,10 +30,10 @@ pub fn start_announcements_processor(
         futures::channel::mpsc::channel(MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE);
 
     let handler_id = node.on_announcement(Arc::new({
-        let provider_records_sender = std::sync::Mutex::new(provider_records_sender);
+        let provider_records_sender = Mutex::new(provider_records_sender);
 
         move |record| {
-            if let Err(error) = provider_records_sender.lock().unwrap().try_send(record.clone()) {
+            if let Err(error) = provider_records_sender.lock().try_send(record.clone()) {
                 if error.is_disconnected() {
                     // Receiver exited, nothing left to be done
                     return;

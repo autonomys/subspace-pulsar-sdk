@@ -1,6 +1,7 @@
 use std::borrow::Cow;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
+use parking_lot::Mutex;
 use subspace_networking::libp2p::kad::record::Key;
 use subspace_networking::libp2p::kad::ProviderRecord;
 use subspace_networking::libp2p::PeerId;
@@ -46,7 +47,6 @@ where
         if self
             .readers_and_pieces
             .lock()
-            .unwrap()
             .as_ref()
             .expect("Should be populated at this point.")
             .pieces
@@ -66,7 +66,6 @@ where
     fn provided(&self) -> Self::ProvidedIter<'_> {
         self.readers_and_pieces
             .lock()
-            .unwrap()
             .as_ref()
             .expect("Should be populated at this point.")
             .pieces

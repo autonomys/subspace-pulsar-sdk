@@ -4,9 +4,11 @@ pub(crate) mod farmer_provider_storage;
 pub(crate) mod node_provider_storage;
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use derivative::Derivative;
 use either::*;
+use parking_lot::Mutex;
 use subspace_core_primitives::{Piece, PieceIndexHash, SectorIndex};
 use subspace_farmer::single_disk_plot::piece_reader::PieceReader;
 use subspace_farmer::single_disk_plot::SingleDiskPlot;
@@ -124,22 +126,22 @@ impl Extend<(PieceIndexHash, PieceDetails)> for ReadersAndPieces {
 #[derivative(Debug)]
 pub struct MaybeProviderStorage<S> {
     #[derivative(Debug = "ignore")]
-    inner: std::sync::Arc<std::sync::Mutex<Option<S>>>,
+    inner: Arc<Mutex<Option<S>>>,
 }
 
 impl<S> Clone for MaybeProviderStorage<S> {
     fn clone(&self) -> Self {
-        Self { inner: std::sync::Arc::clone(&self.inner) }
+        Self { inner: Arc::clone(&self.inner) }
     }
 }
 
 impl<S> MaybeProviderStorage<S> {
     pub fn none() -> Self {
-        Self { inner: std::sync::Arc::new(std::sync::Mutex::new(None)) }
+        Self { inner: Arc::new(Mutex::new(None)) }
     }
 
     pub fn swap(&self, value: S) {
-        *self.inner.lock().unwrap() = Some(value);
+        *self.inner.lock() = Some(value);
     }
 }
 
@@ -158,7 +160,7 @@ impl<S: subspace_networking::ProviderStorage + 'static> subspace_networking::Pro
         k: &subspace_networking::libp2p::kad::record::Key,
         p: &subspace_networking::libp2p::PeerId,
     ) {
-        if let Some(x) = &mut *self.inner.lock().unwrap() {
+        if let Some(x) = &mut *self.inner.lock() {
             x.remove_provider(k, p);
         }
     }
@@ -167,14 +169,14 @@ impl<S: subspace_networking::ProviderStorage + 'static> subspace_networking::Pro
         &self,
         key: &subspace_networking::libp2p::kad::record::Key,
     ) -> Vec<ProviderRecord> {
-        self.inner.lock().unwrap().as_ref().map(|x| x.providers(key)).unwrap_or_default()
+        self.inner.lock().as_ref().map(|x| x.providers(key)).unwrap_or_default()
     }
 
     fn add_provider(
         &mut self,
         record: ProviderRecord,
     ) -> subspace_networking::libp2p::kad::store::Result<()> {
-        self.inner.lock().unwrap().as_mut().map(|x| x.add_provider(record)).unwrap_or(Ok(()))
+        self.inner.lock().as_mut().map(|x| x.add_provider(record)).unwrap_or(Ok(()))
     }
 }
 
