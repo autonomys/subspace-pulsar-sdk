@@ -37,9 +37,9 @@ pub struct PieceDetails {
 
 #[derive(Debug)]
 pub struct ReadersAndPieces {
-    readers: Vec<PieceReader>,
-    pieces: std::collections::HashMap<PieceIndexHash, PieceDetails>,
-    handle: tokio::runtime::Handle,
+    pub readers: Vec<PieceReader>,
+    pub pieces: std::collections::HashMap<PieceIndexHash, PieceDetails>,
+    pub handle: tokio::runtime::Handle,
 }
 
 impl ReadersAndPieces {

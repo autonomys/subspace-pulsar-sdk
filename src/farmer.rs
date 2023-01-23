@@ -21,7 +21,7 @@ use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 
 use crate::networking::farmer_provider_record_processor::FarmerProviderRecordProcessor;
-use crate::networking::ReadersAndPieces;
+use crate::networking::{PieceDetails, ReadersAndPieces};
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -219,6 +219,9 @@ pub(crate) fn get_piece_by_hash(
     Some(PieceByHashResponse { piece: result })
 }
 
+const MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
+    NonZeroUsize::new(20).expect("Not zero; qed");
+
 impl Config {
     /// Open and start farmer
     pub async fn build(
@@ -327,28 +330,92 @@ impl Config {
 
         for (plot_offset, single_disk_plot) in single_disk_plots.iter().enumerate() {
             let readers_and_pieces = Arc::clone(&node.readers_and_pieces);
+            let node = node.clone();
+
+            // We are not going to send anything here, but dropping of sender on dropping of
+            // corresponding `SingleDiskPlot` will allow us to stop background tasks.
+            let (dropped_sender, _dropped_receiver) = tokio::sync::broadcast::channel::<()>(1);
 
             // Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
             single_disk_plot
-                .on_sector_plotted(Arc::new(move |plotted_sector| {
-                    readers_and_pieces
-                        .lock()
-                        .expect("Readers and pieces can't poison lock")
-                        .as_mut()
-                        .expect("Initial value was populated above; qed")
-                        .extend(plotted_sector.piece_indexes.iter().copied().enumerate().map(
-                            |(piece_offset, piece_index)| {
-                                (
-                                    PieceIndexHash::from_index(piece_index),
-                                    crate::networking::PieceDetails {
-                                        plot_offset,
-                                        sector_index: plotted_sector.sector_index,
-                                        piece_offset: piece_offset as u64,
-                                    },
-                                )
-                            },
-                        ));
+                .on_sector_plotted(Arc::new(move |(plotted_sector, plotting_permit)| {
+                    let plotting_permit = Arc::clone(plotting_permit);
+                    let node = node.dsn_node.clone();
+                    let sector_index = plotted_sector.sector_index;
+
+                    let mut dropped_receiver = dropped_sender.subscribe();
+
+                    let new_pieces = {
+                        let mut readers_and_pieces = readers_and_pieces.lock().unwrap();
+                        let readers_and_pieces = readers_and_pieces
+                            .as_mut()
+                            .expect("Initial value was populated above; qed");
+
+                        let new_pieces = plotted_sector
+                            .piece_indexes
+                            .iter()
+                            .filter(|&&piece_index| {
+                                // Skip pieces that are already plotted and thus were announced
+                                // before
+                                !readers_and_pieces
+                                    .pieces
+                                    .contains_key(&PieceIndexHash::from_index(piece_index))
+                            })
+                            .copied()
+                            .collect::<Vec<_>>();
+
+                        readers_and_pieces.pieces.extend(
+                            plotted_sector.piece_indexes.iter().copied().enumerate().map(
+                                |(piece_offset, piece_index)| {
+                                    (
+                                        PieceIndexHash::from_index(piece_index),
+                                        PieceDetails {
+                                            plot_offset,
+                                            sector_index,
+                                            piece_offset: piece_offset as u64,
+                                        },
+                                    )
+                                },
+                            ),
+                        );
+
+                        new_pieces
+                    };
+
+                    if new_pieces.is_empty() {
+                        // None of the pieces are new, nothing left to do here
+                        return;
+                    }
+
+                    let publish_fut = async move {
+                        let mut pieces_publishing_futures = new_pieces
+                            .into_iter()
+                            .map(|piece_index| {
+                                subspace_networking::utils::pieces::announce_single_piece_with_backoff(piece_index, &node)
+                            })
+                            .collect::<FuturesUnordered<_>>();
+
+                        while pieces_publishing_futures.next().await.is_some() {
+                            // Nothing is needed here, just driving all futures
+                            // to completion
+                        }
+
+                        tracing::info!("Piece publishing was successful.");
+
+                        // Release only after publishing is finished
+                        drop(plotting_permit);
+                    };
+
+                    tokio::spawn(async move {
+                        use futures::future::{select, Either};
+
+                        let result =
+                            select(Box::pin(publish_fut), Box::pin(dropped_receiver.recv())).await;
+                        if !matches!(result, Either::Right(_)) {
+                            tracing::debug!("Piece publishing was cancelled due to shutdown.");
+                        }
+                    });
                 }))
                 .detach();
         }
@@ -371,6 +438,7 @@ impl Config {
                 let provider_record_processor = FarmerProviderRecordProcessor::new(
                     node.dsn_node.clone(),
                     wrapped_piece_storage,
+                    MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING,
                 );
                 async move {
                     let mut provider_record_processor = provider_record_processor;
@@ -487,7 +555,7 @@ pub struct InitialPlottingProgress {
 #[derive(Debug)]
 pub struct Plot {
     directory: PathBuf,
-    progress: watch::Receiver<Option<PlottedSector>>,
+    progress: watch::Receiver<Option<(PlottedSector, Arc<tokio::sync::OwnedSemaphorePermit>)>>,
     solutions: watch::Receiver<Option<SolutionResponse>>,
     initial_plotting_progress: Arc<Mutex<InitialPlottingProgress>>,
     allocated_space: u64,

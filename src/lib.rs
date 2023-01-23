@@ -1,7 +1,7 @@
 //! Subspace SDK for easy running of both Subspace node and farmer
 
 #![deny(missing_docs)]
-#![feature(type_changing_struct_update, concat_idents)]
+#![feature(type_changing_struct_update, concat_idents, const_option)]
 
 /// Module related to the farmer
 pub mod farmer;
