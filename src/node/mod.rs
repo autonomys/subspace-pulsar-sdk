@@ -23,7 +23,6 @@ use sp_core::H256;
 use subspace_core_primitives::SolutionRange;
 use subspace_farmer::node_client::NodeClient;
 use subspace_farmer_components::FarmerProtocolInfo;
-use subspace_networking::libp2p::kad::ProviderRecord;
 use subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse};
 use subspace_rpc_primitives::SlotInfo;
 use subspace_runtime::RuntimeApi;
@@ -945,8 +944,6 @@ impl Config {
             subspace_networking,
         };
 
-        let provider_records_receiver = node_runner.take_provider_records_receiver();
-
         tokio::spawn(async move {
             node_runner.run().await;
         });
@@ -1030,7 +1027,6 @@ impl Config {
             dsn_node: node,
             stop_sender,
             farmer_piece_storage,
-            provider_records_receiver: Arc::new(tokio::sync::Mutex::new(provider_records_receiver)),
         })
     }
 }
@@ -1075,12 +1071,9 @@ pub struct Node {
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     pub(crate) rpc_handle: crate::utils::Rpc,
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
-    pub(crate) provider_records_receiver:
-        Arc<tokio::sync::Mutex<Option<mpsc::Receiver<ProviderRecord>>>>,
     pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
-    pub(crate) farmer_piece_storage: Arc<
-        std::sync::Mutex<Option<crate::networking::farmer_piece_storage::ParityDbPieceStorage>>,
-    >,
+    pub(crate) farmer_piece_storage:
+        Arc<std::sync::Mutex<Option<crate::networking::farmer_piece_storage::ParityDbStore>>>,
     pub(crate) readers_and_pieces: Arc<std::sync::Mutex<Option<ReadersAndPieces>>>,
     pub(crate) dsn_node: subspace_networking::Node,
     name: String,

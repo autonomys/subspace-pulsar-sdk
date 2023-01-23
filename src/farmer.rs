@@ -20,7 +20,6 @@ use subspace_networking::{PieceByHashRequest, PieceByHashResponse};
 use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 
-use crate::networking::farmer_provider_record_processor::FarmerProviderRecordProcessor;
 use crate::networking::{PieceDetails, ReadersAndPieces};
 use crate::{Node, PublicKey};
 
@@ -180,7 +179,7 @@ pub enum BuildError {
 
 pub(crate) fn get_piece_by_hash(
     PieceByHashRequest { piece_index_hash }: PieceByHashRequest,
-    piece_storage: &crate::networking::farmer_piece_storage::ParityDbPieceStorage,
+    piece_storage: &crate::networking::farmer_piece_storage::ParityDbStore,
     weak_readers_and_pieces: &std::sync::Weak<std::sync::Mutex<Option<ReadersAndPieces>>>,
 ) -> Option<PieceByHashResponse> {
     use subspace_networking::ToMultihash;
@@ -218,9 +217,6 @@ pub(crate) fn get_piece_by_hash(
 
     Some(PieceByHashResponse { piece: result })
 }
-
-const MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
-    NonZeroUsize::new(20).expect("Not zero; qed");
 
 impl Config {
     /// Open and start farmer
@@ -266,11 +262,10 @@ impl Config {
         node.farmer_provider_storage.swap(farmer_provider_storage);
 
         //TODO: rename CLI parameters
-        let piece_storage = crate::networking::farmer_piece_storage::ParityDbPieceStorage::new(
-            &record_cache_db_path,
-        )?;
+        let piece_storage =
+            crate::networking::farmer_piece_storage::ParityDbStore::new(&record_cache_db_path)?;
         let wrapped_piece_storage =
-            crate::networking::farmer_piece_storage::LimitedSizePieceStorageWrapper::new(
+            crate::networking::farmer_piece_storage::LimitedSizeParityDbStore::new(
                 piece_storage.clone(),
                 record_cache_size,
                 peer_id,
@@ -392,7 +387,7 @@ impl Config {
                         let mut pieces_publishing_futures = new_pieces
                             .into_iter()
                             .map(|piece_index| {
-                                subspace_networking::utils::pieces::announce_single_piece_with_backoff(piece_index, &node)
+                                subspace_networking::utils::pieces::announce_single_piece_index_with_backoff(piece_index, &node)
                             })
                             .collect::<FuturesUnordered<_>>();
 
@@ -425,36 +420,22 @@ impl Config {
 
         let (cmd_sender, cmd_receiver) = oneshot::channel::<()>();
 
+        crate::networking::farmer_provider_record_processor::start_announcements_processor(
+            node.dsn_node.clone(),
+            wrapped_piece_storage,
+        )
+        .expect("Add error handling")
+        .detach();
+
         let handle = tokio::task::spawn_blocking({
             let node = node.clone();
             let handle = tokio::runtime::Handle::current();
-            let provider_record_processor_future = {
-                let mut provider_records_receiver = node
-                    .provider_records_receiver
-                    .lock()
-                    .await
-                    .take()
-                    .expect("Node should be used with a single farmer");
-                let provider_record_processor = FarmerProviderRecordProcessor::new(
-                    node.dsn_node.clone(),
-                    wrapped_piece_storage,
-                    MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING,
-                );
-                async move {
-                    let mut provider_record_processor = provider_record_processor;
-                    while let Some(provider_record) = provider_records_receiver.next().await {
-                        provider_record_processor.process_provider_record(provider_record).await;
-                    }
-                }
-            };
 
             move || {
                 use future::Either::*;
 
-                match handle.block_on(future::select(
-                    single_disk_plots_stream.next(),
-                    future::select(cmd_receiver, Box::pin(provider_record_processor_future)),
-                )) {
+                match handle.block_on(future::select(single_disk_plots_stream.next(), cmd_receiver))
+                {
                     Left((_, _)) if handle.block_on(node.is_closed()) => Ok(()),
                     Left((maybe_result, _)) =>
                         maybe_result.expect("there is always at least one plot"),
