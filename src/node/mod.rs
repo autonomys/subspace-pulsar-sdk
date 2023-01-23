@@ -43,9 +43,9 @@ pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
 use subspace_service::piece_cache::PieceCache;
 
 use self::builder::{ListenAddresses, SegmentPublishConcurrency};
+use crate::networking::provider_storage_utils::MaybeProviderStorage;
 use crate::networking::{
-    FarmerProviderStorage, MaybeProviderStorage, NodeProviderStorage, ProviderStorage,
-    ReadersAndPieces,
+    FarmerProviderStorage, NodeProviderStorage, ProviderStorage, ReadersAndPieces,
 };
 
 mod builder {
