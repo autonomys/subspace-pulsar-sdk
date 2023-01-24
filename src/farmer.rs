@@ -16,12 +16,17 @@ use subspace_farmer::single_disk_plot::{
     SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
     SingleDiskPlotOptions, SingleDiskPlotSummary,
 };
+use subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
+use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
+use subspace_farmer::utils::node_piece_getter::NodePieceGetter;
+use subspace_farmer::utils::parity_db_store::ParityDbStore;
+use subspace_farmer::utils::readers_and_pieces::{PieceDetails, ReadersAndPieces};
 use subspace_farmer_components::plotting::PlottedSector;
+use subspace_networking::utils::multihash::ToMultihash;
 use subspace_networking::{PieceByHashRequest, PieceByHashResponse};
 use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 
-use crate::networking::{PieceDetails, ReadersAndPieces};
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -180,39 +185,44 @@ pub enum BuildError {
 
 pub(crate) fn get_piece_by_hash(
     PieceByHashRequest { piece_index_hash }: PieceByHashRequest,
-    piece_storage: &crate::networking::farmer_piece_storage::ParityDbStore,
+    piece_cache: &ParityDbStore,
     weak_readers_and_pieces: &std::sync::Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
+    handle: &tokio::runtime::Handle,
 ) -> Option<PieceByHashResponse> {
-    use subspace_networking::ToMultihash;
     use tracing::debug;
 
     let result = {
         debug!(?piece_index_hash, "Piece request received. Trying cache...");
         let multihash = piece_index_hash.to_multihash();
 
-        let piece_from_cache = piece_storage.get(&multihash.into());
+        let piece_from_cache = piece_cache.get(&multihash.into());
 
         if piece_from_cache.is_some() {
             piece_from_cache
         } else {
             debug!(?piece_index_hash, "No piece in the cache. Trying archival storage...");
 
-            let readers_and_pieces = match weak_readers_and_pieces.upgrade() {
-                Some(readers_and_pieces) => readers_and_pieces,
-                None => {
-                    debug!("A readers and pieces are already dropped");
-                    return None;
-                }
+            let read_piece_fut = {
+                let readers_and_pieces = match weak_readers_and_pieces.upgrade() {
+                    Some(readers_and_pieces) => readers_and_pieces,
+                    None => {
+                        debug!("A readers and pieces are already dropped");
+                        return None;
+                    }
+                };
+                let readers_and_pieces = readers_and_pieces.lock();
+                let readers_and_pieces = match readers_and_pieces.as_ref() {
+                    Some(readers_and_pieces) => readers_and_pieces,
+                    None => {
+                        debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
+                        return None;
+                    }
+                };
+
+                readers_and_pieces.read_piece(&piece_index_hash)?
             };
-            let readers_and_pieces = readers_and_pieces.lock();
-            let readers_and_pieces = match readers_and_pieces.as_ref() {
-                Some(readers_and_pieces) => readers_and_pieces,
-                None => {
-                    debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
-                    return None;
-                }
-            };
-            readers_and_pieces.get_piece(&piece_index_hash)
+
+            tokio::task::block_in_place(move || handle.block_on(read_piece_fut))
         }
     };
 
@@ -246,10 +256,10 @@ impl Config {
         let peer_id = node.dsn_node.id();
 
         let record_cache_db_path = base_path.join("records_cache_db").into_boxed_path();
-        let record_cache_size = NonZeroUsize::new(100).unwrap();
+        let piece_cache_size = NonZeroUsize::new(100).unwrap();
         let provider_cache_db_path = base_path.join("provider_cache_db").into_boxed_path();
         let provider_cache_size =
-            record_cache_size.saturating_mul(NonZeroUsize::new(10).expect("10 > 0")); // TODO: add proper value
+            piece_cache_size.saturating_mul(NonZeroUsize::new(10).expect("10 > 0")); // TODO: add proper value
         let db_provider_storage = subspace_networking::ParityDbProviderStorage::new(
             &provider_cache_db_path,
             provider_cache_size,
@@ -265,18 +275,13 @@ impl Config {
         node.farmer_provider_storage.swap(farmer_provider_storage);
 
         //TODO: rename CLI parameters
-        let piece_storage =
-            crate::networking::farmer_piece_storage::ParityDbStore::new(&record_cache_db_path)?;
-        let piece_storage = crate::networking::farmer_piece_storage::LimitedSizeParityDbStore::new(
-            piece_storage.clone(),
-            record_cache_size,
-            peer_id,
-        );
+        let piece_cache = ParityDbStore::new(&record_cache_db_path)?;
+        let piece_cache = FarmerPieceCache::new(piece_cache.clone(), piece_cache_size, peer_id);
 
-        let piece_storage = Arc::new(tokio::sync::Mutex::new(piece_storage));
+        let piece_cache = Arc::new(tokio::sync::Mutex::new(piece_cache));
         crate::networking::farmer_provider_record_processor::start_announcements_processor(
             node.dsn_node.clone(),
-            Arc::clone(&piece_storage),
+            Arc::clone(&piece_cache),
             Arc::downgrade(&node.readers_and_pieces),
         )
         .expect("Add error handling")
@@ -285,7 +290,7 @@ impl Config {
         let kzg = kzg::Kzg::new(kzg::test_public_parameters());
         let records_roots_cache =
             parking_lot::Mutex::new(lru::LruCache::new(RECORDS_ROOTS_CACHE_SIZE));
-        let piece_provider = subspace_networking::PieceProvider::new(
+        let piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
             node.dsn_node.clone(),
             Some(subspace_farmer::utils::piece_validator::RecordsRootPieceValidator::new(
                 node.dsn_node.clone(),
@@ -294,12 +299,11 @@ impl Config {
                 records_roots_cache,
             )),
         );
-        let piece_receiver =
-            Arc::new(crate::networking::farmer_piece_receiver::FarmerPieceReceiver::new(
-                piece_provider,
-                piece_storage,
-                node.dsn_node.clone(),
-            ));
+        let piece_getter = Arc::new(FarmerPieceGetter::new(
+            NodePieceGetter::new(piece_provider),
+            piece_cache,
+            node.dsn_node.clone(),
+        ));
 
         for description in plots {
             let directory = description.directory.clone();
@@ -310,7 +314,7 @@ impl Config {
                 reward_address: *reward_address,
                 node_client: node.clone(),
                 kzg: kzg.clone(),
-                piece_receiver: piece_receiver.clone(),
+                piece_getter: piece_getter.clone(),
                 concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
             };
             let single_disk_plot = SingleDiskPlot::new(description).await?;
@@ -396,11 +400,7 @@ impl Config {
 
             tracing::debug!("Finished collecting already plotted pieces");
 
-            crate::networking::ReadersAndPieces {
-                readers,
-                pieces,
-                handle: tokio::runtime::Handle::current(),
-            }
+            ReadersAndPieces::new(readers, pieces)
         };
         node.readers_and_pieces.lock().replace(readers_and_pieces);
 
@@ -435,13 +435,12 @@ impl Config {
                                 // Skip pieces that are already plotted and thus were announced
                                 // before
                                 !readers_and_pieces
-                                    .pieces
-                                    .contains_key(&PieceIndexHash::from_index(piece_index))
+                                    .contains_piece(&PieceIndexHash::from_index(piece_index))
                             })
                             .copied()
                             .collect::<Vec<_>>();
 
-                        readers_and_pieces.pieces.extend(
+                        readers_and_pieces.add_pieces(
                             plotted_sector.piece_indexes.iter().copied().enumerate().map(
                                 |(piece_offset, piece_index)| {
                                     (

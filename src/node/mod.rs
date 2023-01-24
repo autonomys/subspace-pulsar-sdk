@@ -23,6 +23,8 @@ use sp_consensus::SyncOracle;
 use sp_core::H256;
 use subspace_core_primitives::SolutionRange;
 use subspace_farmer::node_client::NodeClient;
+use subspace_farmer::utils::parity_db_store::ParityDbStore;
+use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse};
 use subspace_rpc_primitives::SlotInfo;
@@ -44,9 +46,7 @@ use subspace_service::piece_cache::PieceCache;
 
 use self::builder::{ListenAddresses, SegmentPublishConcurrency};
 use crate::networking::provider_storage_utils::MaybeProviderStorage;
-use crate::networking::{
-    FarmerProviderStorage, NodeProviderStorage, ProviderStorage, ReadersAndPieces,
-};
+use crate::networking::{FarmerProviderStorage, NodeProviderStorage, ProviderStorage};
 
 mod builder {
     use std::net::SocketAddr;
@@ -809,7 +809,7 @@ impl Config {
                 .context("Failed to build a partial subspace node")?;
         let readers_and_pieces = Arc::new(Mutex::new(None::<ReadersAndPieces>));
         let farmer_provider_storage = MaybeProviderStorage::none();
-        let farmer_piece_storage = Arc::new(Mutex::new(None));
+        let farmer_piece_cache = Arc::new(Mutex::new(None));
 
         let (subspace_networking, (node, mut node_runner)) = {
             let builder::Dsn {
@@ -901,7 +901,7 @@ impl Config {
                 ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
             let readers_and_pieces = Arc::downgrade(&readers_and_pieces);
 
-            let farmer_piece_storage = Arc::clone(&farmer_piece_storage);
+            let farmer_piece_cache = Arc::clone(&farmer_piece_cache);
             let config = subspace_networking::Config {
                 keypair,
                 listen_on,
@@ -911,20 +911,24 @@ impl Config {
                         bootstrap_nodes.clone(),
                     )
                     .boxed(),
-                request_response_protocols: vec![PieceByHashRequestHandler::create(move |req| {
-                    match get_piece_by_hash(req.clone(), &piece_cache) {
-                        Some(PieceByHashResponse { piece: None }) | None => (),
-                        result => return result,
-                    };
-                    let piece_storage = farmer_piece_storage.lock();
-                    let Some(piece_storage) = piece_storage.as_ref() else { return None };
+                request_response_protocols: vec![{
+                    let handle = tokio::runtime::Handle::current();
+                    PieceByHashRequestHandler::create(move |req| {
+                        match get_piece_by_hash(req.clone(), &piece_cache) {
+                            Some(PieceByHashResponse { piece: None }) | None => (),
+                            result => return result,
+                        };
+                        let piece_cache = farmer_piece_cache.lock();
+                        let Some(piece_cache) = piece_cache.as_ref() else { return None };
 
-                    crate::farmer::get_piece_by_hash(
-                        req.clone(),
-                        piece_storage,
-                        &readers_and_pieces,
-                    )
-                })],
+                        crate::farmer::get_piece_by_hash(
+                            req.clone(),
+                            piece_cache,
+                            &readers_and_pieces,
+                            &handle,
+                        )
+                    })
+                }],
                 provider_storage,
                 ..subspace_networking::Config::default()
             };
@@ -1027,7 +1031,7 @@ impl Config {
             readers_and_pieces,
             dsn_node: node,
             stop_sender,
-            farmer_piece_storage,
+            farmer_piece_cache,
         })
     }
 }
@@ -1073,8 +1077,8 @@ pub struct Node {
     pub(crate) rpc_handle: crate::utils::Rpc,
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
     pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
-    pub(crate) farmer_piece_storage:
-        Arc<Mutex<Option<crate::networking::farmer_piece_storage::ParityDbStore>>>,
+    #[derivative(Debug = "ignore")]
+    pub(crate) farmer_piece_cache: Arc<Mutex<Option<ParityDbStore>>>,
     pub(crate) readers_and_pieces: Arc<Mutex<Option<ReadersAndPieces>>>,
     pub(crate) dsn_node: subspace_networking::Node,
     name: String,

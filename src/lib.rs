@@ -333,12 +333,12 @@ reserved_nodes = []
 allow_non_global_addresses_in_dht = false
 piece_publisher_batch_size = 15
 
-piece_receiver_batch_size = 12
+piece_getter_batch_size = 12
 piece_publisher_batch_size = 12
 max_concurrent_plots = 10
 "#,
             r#"
-piece_receiver_batch_size = 12
+piece_getter_batch_size = 12
 piece_publisher_batch_size = 12
 max_concurrent_plots = 10
 "#,
