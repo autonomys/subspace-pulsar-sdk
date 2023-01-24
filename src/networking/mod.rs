@@ -1,4 +1,5 @@
 pub(crate) mod node_provider_storage;
+#[allow(unused)]
 pub(crate) mod provider_storage_utils;
 
 use std::num::NonZeroUsize;
@@ -8,7 +9,6 @@ use either::*;
 use event_listener_primitives::HandlerId;
 use futures::StreamExt;
 use parking_lot::Mutex;
-use provider_storage_utils::{AndProviderStorage, MaybeProviderStorage};
 use subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
 use subspace_farmer::utils::farmer_provider_record_processor::FarmerProviderRecordProcessor;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
@@ -21,8 +21,11 @@ pub(crate) type NodeProviderStorage<C> = node_provider_storage::NodeProviderStor
     subspace_service::piece_cache::PieceCache<C>,
     Either<ParityDbProviderStorage, subspace_networking::MemoryProviderStorage>,
 >;
-pub(crate) type ProviderStorage<C> =
-    AndProviderStorage<MaybeProviderStorage<FarmerProviderStorage>, NodeProviderStorage<C>>;
+// pub(crate) type ProviderStorage<C> =
+// provider_storage_utils::AndProviderStorage<
+//     provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage>,
+//     NodeProviderStorage<C>,
+// >;
 
 const MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE: usize = 2000;
 const MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
@@ -62,7 +65,7 @@ pub fn start_announcements_processor(
     let mut provider_record_processor = FarmerProviderRecordProcessor::new(
         node,
         piece_cache,
-        weak_readers_and_pieces.clone(),
+        weak_readers_and_pieces,
         MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING,
     );
 

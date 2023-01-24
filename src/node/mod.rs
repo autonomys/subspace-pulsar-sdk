@@ -6,10 +6,10 @@ use std::time::Duration;
 
 use anyhow::Context;
 use derivative::Derivative;
+use either::*;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 use libp2p_core::Multiaddr;
-use parking_lot::Mutex;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
 use sc_network::network_state::NetworkState;
@@ -23,14 +23,16 @@ use sp_consensus::SyncOracle;
 use sp_core::H256;
 use subspace_core_primitives::SolutionRange;
 use subspace_farmer::node_client::NodeClient;
-use subspace_farmer::utils::parity_db_store::ParityDbStore;
-use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse};
 use subspace_rpc_primitives::SlotInfo;
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
+use subspace_service::piece_cache::PieceCache;
 use subspace_service::SubspaceConfiguration;
+
+use self::builder::SegmentPublishConcurrency;
+use crate::networking::NodeProviderStorage;
 
 pub mod chain_spec;
 pub mod domains;
@@ -42,11 +44,6 @@ pub use builder::{
 };
 pub(crate) use builder::{ImplName, ImplVersion};
 pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
-use subspace_service::piece_cache::PieceCache;
-
-use self::builder::{ListenAddresses, SegmentPublishConcurrency};
-use crate::networking::provider_storage_utils::MaybeProviderStorage;
-use crate::networking::{FarmerProviderStorage, NodeProviderStorage, ProviderStorage};
 
 mod builder {
     use std::net::SocketAddr;
@@ -787,6 +784,69 @@ impl From<RpcMethods> for sc_service::RpcMethods {
 
 const NODE_NAME_MAX_LENGTH: usize = 64;
 
+async fn create_dsn_instance<AS: sc_client_api::AuxStore + Sync + Send + 'static>(
+    dsn: builder::Dsn,
+    chain_spec_boot_nodes: Vec<Multiaddr>,
+    piece_cache: PieceCache<AS>,
+    keypair: subspace_networking::libp2p::identity::Keypair,
+) -> Result<
+    (
+        subspace_networking::Node,
+        subspace_networking::NodeRunner<NodeProviderStorage<AS>>,
+        Vec<subspace_networking::libp2p::Multiaddr>,
+    ),
+    subspace_networking::CreationError,
+> {
+    tracing::trace!("Subspace networking starting.");
+
+    let builder::Dsn {
+        listen_addresses,
+        boot_nodes,
+        reserved_nodes,
+        allow_non_global_addresses_in_dht,
+    } = dsn;
+
+    let peer_id = subspace_networking::peer_id(&keypair);
+    let bootstrap_nodes = chain_spec_boot_nodes
+        .into_iter()
+        .chain(boot_nodes)
+        .map(|a| a.to_string().parse().expect("Convertion between 2 libp2p version. Never panics"))
+        .collect::<Vec<_>>();
+
+    let listen_on = listen_addresses
+        .0
+        .into_iter()
+        .map(|a| a.to_string().parse().expect("Convertion between 2 libp2p version. Never panics"))
+        .collect::<Vec<_>>();
+
+    // TODO: Let users choose parity db storage provider
+    let external_provider_storage =
+        Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id));
+
+    let provider_storage = NodeProviderStorage::new(piece_cache.clone(), external_provider_storage);
+
+    let networking_config = subspace_networking::Config {
+        keypair: keypair.clone(),
+        listen_on,
+        allow_non_global_addresses_in_dht,
+        networking_parameters_registry: subspace_networking::BootstrappedNetworkingParameters::new(
+            bootstrap_nodes.clone(),
+        )
+        .boxed(),
+        request_response_protocols: vec![PieceByHashRequestHandler::create(move |req| {
+            get_piece_by_hash(req, &piece_cache)
+        })],
+        provider_storage,
+        reserved_peers: reserved_nodes
+            .into_iter()
+            .map(|a| a.to_string().parse().unwrap())
+            .collect(),
+        ..subspace_networking::Config::default()
+    };
+
+    subspace_networking::create(networking_config).await.map(|(a, b)| (a, b, bootstrap_nodes))
+}
+
 impl Config {
     /// Start a node with supplied parameters
     pub async fn build(
@@ -807,17 +867,7 @@ impl Config {
         let partial_components =
             subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&base)
                 .context("Failed to build a partial subspace node")?;
-        let readers_and_pieces = Arc::new(Mutex::new(None::<ReadersAndPieces>));
-        let farmer_provider_storage = MaybeProviderStorage::none();
-        let farmer_piece_cache = Arc::new(Mutex::new(None));
-
         let (subspace_networking, (node, mut node_runner)) = {
-            let builder::Dsn {
-                listen_addresses: ListenAddresses(listen_addresses),
-                boot_nodes,
-                reserved_nodes: _,
-                allow_non_global_addresses_in_dht,
-            } = dsn;
             let keypair = {
                 let keypair = base
                     .network
@@ -832,44 +882,10 @@ impl Config {
                     .expect("Address is correct")
             };
 
-            let bootstrap_nodes = base
-                .chain_spec
-                .properties()
-                .get("dsnBootstrapNodes")
-                .cloned()
-                .map(serde_json::from_value::<Vec<_>>)
-                .transpose()
-                .context("Failed to decode DSN bootsrap nodes")?
-                .unwrap_or_default()
-                .into_iter()
-                .chain(boot_nodes)
-                .map(|a| {
-                    a.to_string()
-                        .parse()
-                        .expect("Convertion between 2 libp2p version. Never panics")
-                })
-                .collect::<Vec<_>>();
-
-            let listen_on = listen_addresses
-                .into_iter()
-                .map(|a| {
-                    a.to_string()
-                        .parse()
-                        .expect("Convertion between 2 libp2p version. Never panics")
-                })
-                .collect::<Vec<_>>();
-
-            let peer_id = subspace_networking::peer_id(&keypair);
             let piece_cache = PieceCache::new(
                 partial_components.client.clone(),
-                piece_cache_size.as_u64(),
-                peer_id,
-            );
-
-            let node_provider_storage = NodeProviderStorage::new(
-                piece_cache.clone(),
-                // TODO: Let users choose parity db storage provider
-                either::Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id)),
+                piece_cache_size.as_u64() / subspace_core_primitives::PIECE_SIZE as u64,
+                subspace_networking::peer_id(&keypair),
             );
 
             // Start before archiver below, so we don't have potential race condition and
@@ -891,49 +907,35 @@ impl Config {
                             segment_index * u64::from(subspace_core_primitives::PIECES_IN_SEGMENT),
                             &archived_segment_notification.archived_segment.pieces,
                         ) {
-                            tracing::error!(%segment_index, %error, "Failed to store pieces for segment in cache");
+                            tracing::error!(
+                                %segment_index,
+                                %error,
+                                "Failed to store pieces for segment in cache"
+                            );
                         }
                     }
                 }
             });
 
-            let provider_storage =
-                ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
-            let readers_and_pieces = Arc::downgrade(&readers_and_pieces);
+            let chain_spec_boot_nodes = base
+                .chain_spec
+                .properties()
+                .get("dsnBootstrapNodes")
+                .cloned()
+                .map(serde_json::from_value::<Vec<_>>)
+                .transpose()
+                .context("Failed to decode DSN bootsrap nodes")?
+                .unwrap_or_default();
 
-            let farmer_piece_cache = Arc::clone(&farmer_piece_cache);
-            let config = subspace_networking::Config {
+            let (node, node_runner, bootstrap_nodes) = create_dsn_instance(
+                dsn.clone(),
+                chain_spec_boot_nodes,
+                piece_cache.clone(),
                 keypair,
-                listen_on,
-                allow_non_global_addresses_in_dht,
-                networking_parameters_registry:
-                    subspace_networking::BootstrappedNetworkingParameters::new(
-                        bootstrap_nodes.clone(),
-                    )
-                    .boxed(),
-                request_response_protocols: vec![{
-                    let handle = tokio::runtime::Handle::current();
-                    PieceByHashRequestHandler::create(move |req| {
-                        match get_piece_by_hash(req.clone(), &piece_cache) {
-                            Some(PieceByHashResponse { piece: None }) | None => (),
-                            result => return result,
-                        };
-                        let piece_cache = farmer_piece_cache.lock();
-                        let Some(piece_cache) = piece_cache.as_ref() else { return None };
+            )
+            .await?;
 
-                        crate::farmer::get_piece_by_hash(
-                            req.clone(),
-                            piece_cache,
-                            &readers_and_pieces,
-                            &handle,
-                        )
-                    })
-                }],
-                provider_storage,
-                ..subspace_networking::Config::default()
-            };
-
-            let (node, node_runner) = subspace_networking::create(config).await?;
+            // tracing::info!("Subspace networking initialized: Node ID is {}", node.id());
 
             (
                 subspace_service::SubspaceNetworking::Reuse { node: node.clone(), bootstrap_nodes },
@@ -1026,12 +1028,10 @@ impl Config {
             system_domain,
             network,
             name,
-            farmer_provider_storage,
             rpc_handle,
-            readers_and_pieces,
             dsn_node: node,
             stop_sender,
-            farmer_piece_cache,
+            dsn_opts: dsn,
         })
     }
 }
@@ -1076,12 +1076,9 @@ pub struct Node {
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     pub(crate) rpc_handle: crate::utils::Rpc,
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
-    pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
-    #[derivative(Debug = "ignore")]
-    pub(crate) farmer_piece_cache: Arc<Mutex<Option<ParityDbStore>>>,
-    pub(crate) readers_and_pieces: Arc<Mutex<Option<ReadersAndPieces>>>,
     pub(crate) dsn_node: subspace_networking::Node,
     name: String,
+    pub(crate) dsn_opts: Dsn,
 }
 
 /// Hash type
@@ -1393,10 +1390,10 @@ impl Node {
 }
 
 pub(crate) fn get_piece_by_hash(
-    PieceByHashRequest { piece_index_hash }: PieceByHashRequest,
+    PieceByHashRequest { piece_index_hash }: &PieceByHashRequest,
     piece_cache: &subspace_service::piece_cache::PieceCache<impl sc_client_api::AuxStore>,
 ) -> Option<PieceByHashResponse> {
-    let result = match piece_cache.get_piece(piece_index_hash) {
+    let result = match piece_cache.get_piece(*piece_index_hash) {
         Ok(maybe_piece) => maybe_piece,
         Err(error) => {
             tracing::error!(?piece_index_hash, %error, "Failed to get piece from cache");
