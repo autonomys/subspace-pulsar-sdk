@@ -279,7 +279,7 @@ impl Config {
         let piece_cache = FarmerPieceCache::new(piece_cache.clone(), piece_cache_size, peer_id);
 
         let piece_cache = Arc::new(tokio::sync::Mutex::new(piece_cache));
-        crate::networking::farmer_provider_record_processor::start_announcements_processor(
+        crate::networking::start_announcements_processor(
             node.dsn_node.clone(),
             Arc::clone(&piece_cache),
             Arc::downgrade(&node.readers_and_pieces),
