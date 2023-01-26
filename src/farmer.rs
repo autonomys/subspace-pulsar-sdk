@@ -27,6 +27,7 @@ use subspace_networking::{ParityDbProviderStorage, PieceByHashRequest, PieceByHa
 use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 
+use self::builder::PieceCacheSize;
 use crate::networking::{FarmerProviderStorage, NodePieceGetter};
 use crate::{Node, PublicKey};
 
@@ -137,6 +138,27 @@ mod builder {
         pub(crate)  NonZeroUsize,
     );
 
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct PieceCacheSize(
+        #[derivative(Default(value = "bytesize::ByteSize::mib(10)"))]
+        #[serde(with = "bytesize_serde")]
+        pub(crate) bytesize::ByteSize,
+    );
+
     /// Technical type which stores all
     #[derive(Debug, Clone, Derivative, Builder, Serialize, Deserialize)]
     #[derivative(Default)]
@@ -147,6 +169,10 @@ mod builder {
         #[builder(default, setter(into))]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub max_concurrent_plots: MaxConcurrentPlots,
+        /// Number of plots that can be plotted concurrently, impacts RAM usage.
+        #[builder(default, setter(into))]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub piece_cache_size: PieceCacheSize,
     }
 
     impl Builder {
@@ -249,7 +275,12 @@ impl Config {
             return Err(BuildError::NoPlotsSupplied);
         }
 
-        let Self { max_concurrent_plots } = self;
+        let Self { max_concurrent_plots, piece_cache_size: PieceCacheSize(piece_cache_size) } =
+            self;
+        let piece_cache_size = NonZeroUsize::new(
+            piece_cache_size.as_u64() as usize / subspace_core_primitives::PIECE_SIZE,
+        )
+        .ok_or_else(|| anyhow::anyhow!("Piece cache size shouldn't be zero"))?;
 
         let mut single_disk_plots = Vec::with_capacity(plots.len());
         let mut plot_info = HashMap::with_capacity(plots.len());
@@ -259,7 +290,6 @@ impl Config {
 
         let base_path = cache.directory;
         let readers_and_pieces = Arc::clone(&node.farmer_readers_and_pieces);
-        let piece_cache_size = NonZeroUsize::new(100).expect("100 > 0. TODO: put propper value");
 
         let piece_cache = {
             let piece_cache_db_path = base_path.join("piece_cache_db");

@@ -682,7 +682,7 @@ mod builder {
     #[serde(transparent)]
     pub struct ListenAddresses(
         #[derivative(Default(
-        // TODO: get rid of it, once it won't be required by monorepo
+            // TODO: get rid of it, once it won't be required by monorepo
             value = "vec![\"/ip4/127.0.0.1/tcp/0\".parse().expect(\"Always valid\")]"
         ))]
         pub(crate) Vec<libp2p_core::Multiaddr>,
