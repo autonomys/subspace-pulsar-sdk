@@ -291,7 +291,7 @@ impl Config {
                 .map_err(|err| anyhow::anyhow!(err.to_string()))?;
             *node.farmer_piece_store.lock() = Some(piece_store.clone());
 
-            FarmerPieceCache::new(piece_store.clone(), piece_cache_size, peer_id)
+            FarmerPieceCache::new(piece_store, piece_cache_size, peer_id)
         };
 
         let piece_cache = Arc::new(tokio::sync::Mutex::new(piece_cache));
