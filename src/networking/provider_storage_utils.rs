@@ -2,7 +2,8 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use derivative::Derivative;
-use parking_lot::Mutex;
+use either::*;
+use parking_lot::{Mutex, MutexGuard};
 use subspace_networking::libp2p::kad::ProviderRecord;
 
 #[derive(Derivative)]
@@ -28,14 +29,41 @@ impl<S> MaybeProviderStorage<S> {
     }
 }
 
+#[ouroboros::self_referencing]
+pub struct MutexGuardedIterator<'a, S: subspace_networking::ProviderStorage> {
+    guard: MutexGuard<'a, Option<S>>,
+    #[borrows(guard)]
+    #[not_covariant]
+    iter: S::ProvidedIter<'this>,
+}
+
+impl<'a, S: subspace_networking::ProviderStorage> Iterator for MutexGuardedIterator<'a, S> {
+    type Item = Cow<'a, ProviderRecord>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.with_mut(|fields| fields.iter.next().map(|value| Cow::Owned(value.into_owned())))
+    }
+}
+
 impl<S: subspace_networking::ProviderStorage + 'static> subspace_networking::ProviderStorage
     for MaybeProviderStorage<S>
 {
-    type ProvidedIter<'a> = std::iter::Empty<Cow<'a, ProviderRecord>>
+    type ProvidedIter<'a> = Either<std::iter::Empty<Cow<'a, ProviderRecord>>, MutexGuardedIterator<'a, S>>
     where S: 'a;
 
     fn provided(&self) -> Self::ProvidedIter<'_> {
-        todo!()
+        let lock = self.inner.lock();
+        if lock.is_none() {
+            Either::Left(std::iter::empty())
+        } else {
+            Either::Right(
+                MutexGuardedIteratorBuilder {
+                    guard: lock,
+                    iter_builder: |guard| guard.as_ref().unwrap().provided(),
+                }
+                .build(),
+            )
+        }
     }
 
     fn remove_provider(

@@ -1,5 +1,4 @@
 pub(crate) mod node_provider_storage;
-#[allow(unused)]
 pub(crate) mod provider_storage_utils;
 
 use std::num::NonZeroUsize;
@@ -21,11 +20,10 @@ pub(crate) type NodeProviderStorage<C> = node_provider_storage::NodeProviderStor
     subspace_service::piece_cache::PieceCache<C>,
     Either<ParityDbProviderStorage, subspace_networking::MemoryProviderStorage>,
 >;
-// pub(crate) type ProviderStorage<C> =
-// provider_storage_utils::AndProviderStorage<
-//     provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage>,
-//     NodeProviderStorage<C>,
-// >;
+pub(crate) type ProviderStorage<C> = provider_storage_utils::AndProviderStorage<
+    provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage>,
+    NodeProviderStorage<C>,
+>;
 
 const MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE: usize = 2000;
 const MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
