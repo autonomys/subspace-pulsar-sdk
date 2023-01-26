@@ -200,14 +200,20 @@ mod parse_ss58 {
 #[cfg(test)]
 mod tests {
     use futures::StreamExt;
-    use subspace_farmer::node_client::NodeClient;
     use tempfile::TempDir;
 
     use super::farmer::CacheDescription;
     use super::*;
 
     fn init() {
-        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(
+                "info,subspace_sdk=trace,subspace_farmer=trace,subspace_service=trace"
+                    .parse::<tracing_subscriber::EnvFilter>()
+                    .unwrap(),
+            )
+            .with_test_writer()
+            .try_init();
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -215,18 +221,11 @@ mod tests {
         init();
 
         let dir = TempDir::new().unwrap();
-        let node = Node::builder()
-            .force_authoring(true)
-            .role(node::Role::Authority)
-            .build(dir, node::chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
-
-        let mut slot_info_sub = node.subscribe_slot_info().await.unwrap();
+        let node = Node::dev().build(dir, node::chain_spec::dev_config().unwrap()).await.unwrap();
 
         let (dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let plot_descriptions =
-            [PlotDescription::new(dir.path(), PlotDescription::MIN_SIZE).unwrap()];
+            [PlotDescription::new(dir.path(), "100m".parse().unwrap()).unwrap()];
         let _farmer = Farmer::builder()
             .build(
                 Default::default(),
@@ -237,10 +236,7 @@ mod tests {
             .await
             .unwrap();
 
-        // New slots arrive at each block. So basically we wait for 3 blocks to produce
-        for _ in 0..3 {
-            assert!(slot_info_sub.next().await.is_some());
-        }
+        node.subscribe_new_blocks().await.unwrap().take(2).for_each(|_| async move {}).await;
     }
 
     #[test]

@@ -52,6 +52,8 @@ mod builder {
     use derivative::Derivative;
     use derive_builder::Builder;
     use derive_more::{Deref, DerefMut, Display, From};
+    use sc_network::ProtocolName;
+    use sc_network_common::config::NonDefaultSetConfig;
     use serde::{Deserialize, Serialize};
 
     use super::*;
@@ -458,6 +460,7 @@ mod builder {
                     client_id,
                     enable_mdns,
                     allow_private_ipv4,
+                    allow_non_globals_in_dht,
                 } = network;
                 let name = name.unwrap_or_else(|| {
                     names::Generator::with_naming(names::Name::Numbered)
@@ -478,6 +481,11 @@ mod builder {
                     boot_nodes: chain_spec.boot_nodes().iter().cloned().chain(boot_nodes).collect(),
                     force_synced,
                     transport: TransportConfig::Normal { enable_mdns, allow_private_ipv4 },
+                    extra_sets: vec![NonDefaultSetConfig::new(
+                        ProtocolName::Static("/subspace/cross-domain-messages"),
+                        40,
+                    )],
+                    allow_non_globals_in_dht,
                     ..NetworkConfiguration::new(
                         name,
                         client_id,
@@ -610,7 +618,7 @@ mod builder {
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub max_response_size: Option<usize>,
         /// Maximum allowed subscriptions per rpc connection
-        #[builder(setter(into), default)]
+        #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub max_subs_per_conn: usize,
         /// Maximum size of the output buffer capacity for websocket
@@ -633,6 +641,10 @@ mod builder {
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub allow_private_ipv4: bool,
+        /// Allow non globals in network DHT
+        #[builder(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub allow_non_globals_in_dht: bool,
         /// Listen on some address for other nodes
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
@@ -1201,6 +1213,15 @@ impl Node {
         Builder::new()
     }
 
+    /// Development configuration
+    pub fn dev() -> Builder {
+        Self::builder()
+            .force_authoring(true)
+            .role(Role::Authority)
+            .network(NetworkBuilder::new().force_synced(true))
+            .dsn(DsnBuilder::new().allow_non_global_addresses_in_dht(true))
+    }
+
     /// Get listening addresses of the node
     pub async fn listen_addresses(&self) -> anyhow::Result<Vec<MultiaddrWithPeerId>> {
         let peer_id = self.network.local_peer_id();
@@ -1491,20 +1512,26 @@ mod tests {
     use crate::{Farmer, PlotDescription};
 
     fn init() {
-        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(
+                "info,subspace_sdk=trace,subspace_farmer=trace,subspace_service=trace"
+                    .parse::<tracing_subscriber::EnvFilter>()
+                    .unwrap(),
+            )
+            .with_test_writer()
+            .try_init();
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_start_node() {
         let dir = TempDir::new().unwrap();
-        Node::builder().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
+        Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_rpc() {
         let dir = TempDir::new().unwrap();
-        let node =
-            Node::builder().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
+        let node = Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
 
         assert!(node.farmer_app_info().await.is_ok());
     }
@@ -1514,12 +1541,7 @@ mod tests {
         init();
 
         let dir = TempDir::new().unwrap();
-        let node = Node::builder()
-            .force_authoring(true)
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
+        let node = Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let plots = [PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()];
         let farmer = Farmer::builder()
@@ -1547,12 +1569,12 @@ mod tests {
 
         let dir = TempDir::new().unwrap();
         let chain = chain_spec::dev_config().unwrap();
-        let node = Node::builder()
-            .force_authoring(true)
+        let node = Node::dev()
             .network(
                 NetworkBuilder::new()
                     .force_synced(true)
-                    .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()]),
+                    .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
+                    .allow_private_ipv4(true),
             )
             .role(Role::Authority)
             .build(dir.path(), chain.clone())
@@ -1582,10 +1604,12 @@ mod tests {
         farmer.close().await.unwrap();
 
         let dir = TempDir::new().unwrap();
-        let other_node = Node::builder()
-            .force_authoring(true)
-            .role(Role::Authority)
-            .network(NetworkBuilder::new().boot_nodes(node.listen_addresses().await.unwrap()))
+        let other_node = Node::dev()
+            .network(
+                NetworkBuilder::new()
+                    .boot_nodes(node.listen_addresses().await.unwrap())
+                    .allow_private_ipv4(true),
+            )
             .build(dir.path(), chain)
             .await
             .unwrap();

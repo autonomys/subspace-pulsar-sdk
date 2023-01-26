@@ -322,7 +322,7 @@ mod tests {
 
     use super::*;
     use crate::farmer::CacheDescription;
-    use crate::node::{chain_spec, domains, Role};
+    use crate::node::{chain_spec, domains};
     use crate::{Farmer, Node, PlotDescription};
 
     #[tokio::test(flavor = "multi_thread")]
@@ -331,10 +331,8 @@ mod tests {
 
         let dir = TempDir::new().unwrap();
         let core = ConfigBuilder::new().build();
-        let node = Node::builder()
+        let node = Node::dev()
             .system_domain(domains::ConfigBuilder::new().core(core))
-            .force_authoring(true)
-            .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .await
             .unwrap();
