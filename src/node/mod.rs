@@ -801,73 +801,6 @@ impl From<RpcMethods> for sc_service::RpcMethods {
 
 const NODE_NAME_MAX_LENGTH: usize = 64;
 
-async fn create_dsn_instance<AS: sc_client_api::AuxStore + Sync + Send + 'static>(
-    dsn: builder::Dsn,
-    chain_spec_boot_nodes: Vec<Multiaddr>,
-    piece_cache: PieceCache<AS>,
-    keypair: subspace_networking::libp2p::identity::Keypair,
-) -> Result<
-    (
-        subspace_networking::Node,
-        subspace_networking::NodeRunner<NodeProviderStorage<AS>>,
-        Vec<subspace_networking::libp2p::Multiaddr>,
-    ),
-    subspace_networking::CreationError,
-> {
-    tracing::trace!("Subspace networking starting.");
-
-    let builder::Dsn {
-        listen_addresses,
-        boot_nodes,
-        reserved_nodes,
-        allow_non_global_addresses_in_dht,
-    } = dsn;
-
-    let peer_id = subspace_networking::peer_id(&keypair);
-    let bootstrap_nodes = chain_spec_boot_nodes
-        .into_iter()
-        .chain(boot_nodes)
-        .map(|a| a.to_string().parse().expect("Convertion between 2 libp2p version. Never panics"))
-        .collect::<Vec<_>>();
-
-    let listen_on = listen_addresses
-        .0
-        .into_iter()
-        .map(|a| a.to_string().parse().expect("Convertion between 2 libp2p version. Never panics"))
-        .collect::<Vec<_>>();
-
-    // TODO: Let users choose parity db storage provider
-    let external_provider_storage =
-        Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id));
-
-    let provider_storage = NodeProviderStorage::new(piece_cache.clone(), external_provider_storage);
-
-    let networking_config = subspace_networking::Config {
-        keypair: keypair.clone(),
-        listen_on,
-        allow_non_global_addresses_in_dht,
-        networking_parameters_registry: subspace_networking::BootstrappedNetworkingParameters::new(
-            bootstrap_nodes.clone(),
-        )
-        .boxed(),
-        request_response_protocols: vec![PieceByHashRequestHandler::create(move |req| {
-            get_piece_by_hash(req, &piece_cache)
-        })],
-        provider_storage,
-        reserved_peers: reserved_nodes
-            .into_iter()
-            .map(|addr| {
-                addr.to_string()
-                    .parse()
-                    .expect("Conversion between 2 libp2p versions is always right")
-            })
-            .collect(),
-        ..subspace_networking::Config::default()
-    };
-
-    subspace_networking::create(networking_config).await.map(|(a, b)| (a, b, bootstrap_nodes))
-}
-
 impl Config {
     /// Start a node with supplied parameters
     pub async fn build(
@@ -948,15 +881,74 @@ impl Config {
                 .context("Failed to decode DSN bootsrap nodes")?
                 .unwrap_or_default();
 
-            let (node, node_runner, bootstrap_nodes) = create_dsn_instance(
-                dsn.clone(),
-                chain_spec_boot_nodes,
-                piece_cache.clone(),
-                keypair,
-            )
-            .await?;
+            let (node, node_runner, bootstrap_nodes) = {
+                tracing::trace!("Subspace networking starting.");
 
-            // tracing::info!("Subspace networking initialized: Node ID is {}", node.id());
+                let builder::Dsn {
+                    listen_addresses,
+                    boot_nodes,
+                    reserved_nodes,
+                    allow_non_global_addresses_in_dht,
+                } = dsn.clone();
+
+                let peer_id = subspace_networking::peer_id(&keypair);
+                let bootstrap_nodes = chain_spec_boot_nodes
+                    .into_iter()
+                    .chain(boot_nodes)
+                    .map(|a| {
+                        a.to_string()
+                            .parse()
+                            .expect("Convertion between 2 libp2p version. Never panics")
+                    })
+                    .collect::<Vec<_>>();
+
+                let listen_on = listen_addresses
+                    .0
+                    .into_iter()
+                    .map(|a| {
+                        a.to_string()
+                            .parse()
+                            .expect("Convertion between 2 libp2p version. Never panics")
+                    })
+                    .collect::<Vec<_>>();
+
+                // TODO: Let users choose parity db storage provider
+                let external_provider_storage =
+                    Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id));
+
+                let provider_storage =
+                    NodeProviderStorage::new(piece_cache.clone(), external_provider_storage);
+
+                let networking_config = subspace_networking::Config {
+                    keypair: keypair.clone(),
+                    listen_on,
+                    allow_non_global_addresses_in_dht,
+                    networking_parameters_registry:
+                        subspace_networking::BootstrappedNetworkingParameters::new(
+                            bootstrap_nodes.clone(),
+                        )
+                        .boxed(),
+                    request_response_protocols: vec![PieceByHashRequestHandler::create(
+                        move |req| get_piece_by_hash(req, &piece_cache),
+                    )],
+                    provider_storage,
+                    reserved_peers: reserved_nodes
+                        .into_iter()
+                        .map(|addr| {
+                            addr.to_string()
+                                .parse()
+                                .expect("Conversion between 2 libp2p versions is always right")
+                        })
+                        .collect(),
+                    ..subspace_networking::Config::default()
+                };
+
+                subspace_networking::create(networking_config)
+                    .await
+                    .map(|(a, b)| (a, b, bootstrap_nodes))?
+            };
+
+            tracing::debug!("Subspace networking initialized: Node ID is {}", node.id());
 
             (
                 subspace_service::SubspaceNetworking::Reuse { node: node.clone(), bootstrap_nodes },

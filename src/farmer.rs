@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io;
 use std::num::NonZeroUsize;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Context;
@@ -239,81 +239,6 @@ pub(crate) fn get_piece_by_hash(
 
 const RECORDS_ROOTS_CACHE_SIZE: NonZeroUsize = NonZeroUsize::new(1_000_000).expect("Not zero; qed");
 
-struct DsnArgs {
-    bootstrap_nodes: Vec<subspace_networking::libp2p::Multiaddr>,
-    listen_on: Vec<subspace_networking::libp2p::Multiaddr>,
-    piece_cache_size: NonZeroUsize,
-    allow_non_global_addresses_in_dht: bool,
-    reserved_peers: Vec<subspace_networking::libp2p::Multiaddr>,
-}
-
-async fn configure_dsn(
-    base_path: &Path,
-    keypair: subspace_networking::libp2p::identity::Keypair,
-    DsnArgs {
-        listen_on,
-        bootstrap_nodes,
-        piece_cache_size,
-        allow_non_global_addresses_in_dht,
-        reserved_peers,
-    }: DsnArgs,
-    readers_and_pieces: &Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
-) -> anyhow::Result<(
-    subspace_networking::Node,
-    subspace_networking::NodeRunner<FarmerProviderStorage>,
-    FarmerPieceCache,
-)> {
-    let piece_cache_db_path = base_path.join("piece_cache_db");
-    let provider_cache_db_path = base_path.join("provider_cache_db");
-    let provider_cache_size =
-        piece_cache_size.saturating_mul(NonZeroUsize::new(10).expect("10 > 0")); // TODO: add proper value
-
-    tracing::info!(
-        ?piece_cache_db_path,
-        ?piece_cache_size,
-        ?provider_cache_db_path,
-        ?provider_cache_size,
-        "Record cache DB configured."
-    );
-
-    let peer_id = subspace_networking::peer_id(&keypair);
-
-    let db_provider_storage =
-        ParityDbProviderStorage::new(&provider_cache_db_path, provider_cache_size, peer_id)
-            .map_err(|err| anyhow::anyhow!(err.to_string()))?;
-
-    let farmer_provider_storage =
-        FarmerProviderStorage::new(peer_id, readers_and_pieces.clone(), db_provider_storage);
-
-    let piece_store =
-        ParityDbStore::new(&piece_cache_db_path).map_err(|err| anyhow::anyhow!(err.to_string()))?;
-    let piece_cache = FarmerPieceCache::new(piece_store.clone(), piece_cache_size, peer_id);
-
-    let config = subspace_networking::Config {
-        reserved_peers,
-        keypair,
-        listen_on,
-        allow_non_global_addresses_in_dht,
-        networking_parameters_registry: BootstrappedNetworkingParameters::new(bootstrap_nodes)
-            .boxed(),
-        request_response_protocols: {
-            let handle = tokio::runtime::Handle::current();
-            let weak_readers_and_pieces = Arc::downgrade(readers_and_pieces);
-
-            vec![PieceByHashRequestHandler::create(move |req| {
-                get_piece_by_hash(req, &piece_store, &weak_readers_and_pieces, &handle)
-            })]
-        },
-        provider_storage: farmer_provider_storage,
-        ..subspace_networking::Config::default()
-    };
-
-    subspace_networking::create(config)
-        .await
-        .map(|(node, node_runner)| (node, node_runner, piece_cache))
-        .map_err(Into::into)
-}
-
 impl Config {
     /// Open and start farmer
     pub async fn build(
@@ -361,24 +286,37 @@ impl Config {
         };
 
         // TODO: reuse dsn node from the node
-        let (dsn_node, mut dsn_node_runner, piece_cache) = configure_dsn(
-            &base_path,
-            keypair,
-            DsnArgs {
-                bootstrap_nodes: node
-                    .dsn_node
-                    .listeners()
-                    .into_iter()
-                    .map(|mut addr| {
-                        addr.push(subspace_networking::libp2p::multiaddr::Protocol::P2p(
-                            node.dsn_node.id().into(),
-                        ));
-                        addr
-                    })
-                    .collect(),
-                listen_on: vec!["/ip4/127.0.0.1/tcp/0".parse().expect("Multiaddr is valid")],
-                piece_cache_size,
-                allow_non_global_addresses_in_dht: node.dsn_opts.allow_non_global_addresses_in_dht,
+        let (dsn_node, mut dsn_node_runner, piece_cache) = {
+            let piece_cache_db_path = base_path.join("piece_cache_db");
+            let provider_cache_db_path = base_path.join("provider_cache_db");
+            let provider_cache_size =
+                piece_cache_size.saturating_mul(NonZeroUsize::new(10).expect("10 > 0")); // TODO: add proper value
+
+            tracing::info!(
+                ?piece_cache_db_path,
+                ?piece_cache_size,
+                ?provider_cache_db_path,
+                ?provider_cache_size,
+                "Record cache DB configured."
+            );
+
+            let peer_id = subspace_networking::peer_id(&keypair);
+
+            let db_provider_storage =
+                ParityDbProviderStorage::new(&provider_cache_db_path, provider_cache_size, peer_id)
+                    .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+
+            let farmer_provider_storage = FarmerProviderStorage::new(
+                peer_id,
+                readers_and_pieces.clone(),
+                db_provider_storage,
+            );
+
+            let piece_store = ParityDbStore::new(&piece_cache_db_path)
+                .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+            let piece_cache = FarmerPieceCache::new(piece_store.clone(), piece_cache_size, peer_id);
+
+            let config = subspace_networking::Config {
                 reserved_peers: node
                     .dsn_opts
                     .reserved_nodes
@@ -390,10 +328,39 @@ impl Config {
                             .expect("Conversion between two libp2p version is always okay")
                     })
                     .collect(),
-            },
-            &readers_and_pieces,
-        )
-        .await?;
+                keypair: keypair.clone(),
+                listen_on: vec!["/ip4/127.0.0.1/tcp/0".parse().expect("Multiaddr is valid")],
+                allow_non_global_addresses_in_dht: node.dsn_opts.allow_non_global_addresses_in_dht,
+                networking_parameters_registry: BootstrappedNetworkingParameters::new(
+                    node.dsn_node
+                        .listeners()
+                        .into_iter()
+                        .map(|mut addr| {
+                            addr.push(subspace_networking::libp2p::multiaddr::Protocol::P2p(
+                                node.dsn_node.id().into(),
+                            ));
+                            addr
+                        })
+                        .collect(),
+                )
+                .boxed(),
+                request_response_protocols: {
+                    let handle = tokio::runtime::Handle::current();
+                    let weak_readers_and_pieces = Arc::downgrade(&readers_and_pieces);
+
+                    vec![PieceByHashRequestHandler::create(move |req| {
+                        get_piece_by_hash(req, &piece_store, &weak_readers_and_pieces, &handle)
+                    })]
+                },
+                provider_storage: farmer_provider_storage,
+                ..subspace_networking::Config::default()
+            };
+
+            subspace_networking::create(config)
+                .await
+                .map(|(node, node_runner)| (node, node_runner, piece_cache))
+                .map_err(anyhow::Error::from)?
+        };
 
         let piece_cache = Arc::new(tokio::sync::Mutex::new(piece_cache));
         crate::networking::start_announcements_processor(
