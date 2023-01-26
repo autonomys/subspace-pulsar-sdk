@@ -1,6 +1,6 @@
 //! Subspace SDK for easy running of both Subspace node and farmer
 
-#![deny(missing_docs)]
+#![deny(missing_docs, clippy::dbg_macro, clippy::unwrap_used)]
 #![feature(type_changing_struct_update, concat_idents, const_option)]
 
 /// Module related to the farmer
@@ -199,6 +199,8 @@ mod parse_ss58 {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+
     use futures::StreamExt;
     use tempfile::TempDir;
 

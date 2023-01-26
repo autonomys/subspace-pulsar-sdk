@@ -233,7 +233,8 @@ mod builder {
     #[derivative(Default)]
     #[serde(transparent)]
     pub struct SegmentPublishConcurrency(
-        #[derivative(Default(value = "NonZeroUsize::new(10).unwrap()"))] pub(crate) NonZeroUsize,
+        #[derivative(Default(value = "NonZeroUsize::new(10).expect(\"10 > 0\")"))]
+        pub(crate)  NonZeroUsize,
     );
 
     /// Node builder
@@ -473,7 +474,11 @@ mod builder {
                 let config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
                 let listen_addresses = listen_addresses
                     .into_iter()
-                    .map(|addr| addr.to_string().parse().unwrap())
+                    .map(|addr| {
+                        addr.to_string()
+                            .parse()
+                            .expect("Conversion between 2 libp2p versions is always right")
+                    })
                     .collect::<Vec<_>>();
 
                 NetworkConfiguration {
@@ -851,7 +856,11 @@ async fn create_dsn_instance<AS: sc_client_api::AuxStore + Sync + Send + 'static
         provider_storage,
         reserved_peers: reserved_nodes
             .into_iter()
-            .map(|a| a.to_string().parse().unwrap())
+            .map(|addr| {
+                addr.to_string()
+                    .parse()
+                    .expect("Conversion between 2 libp2p versions is always right")
+            })
             .collect(),
         ..subspace_networking::Config::default()
     };
@@ -1373,8 +1382,11 @@ impl Node {
             .await
             .expect("This stream never ends");
         let client = self.client().context("Failed to fetch node info")?;
-        let NetworkState { connected_peers, not_connected_peers, .. } =
-            self.network.network_state().await.unwrap();
+        let NetworkState { connected_peers, not_connected_peers, .. } = self
+            .network
+            .network_state()
+            .await
+            .map_err(|()| anyhow::anyhow!("Failed to fetch node info: node already exited"))?;
         let sp_blockchain::Info {
             best_hash,
             best_number,
@@ -1504,6 +1516,8 @@ mod farmer_rpc_client {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+
     use subspace_farmer::node_client::NodeClient;
     use tempfile::TempDir;
 

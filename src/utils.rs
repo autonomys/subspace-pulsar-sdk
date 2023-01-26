@@ -18,7 +18,7 @@ pub(crate) fn test_init() {
         .with_env_filter(
             "info,subspace_sdk=trace,subspace_farmer=trace,subspace_service=trace"
                 .parse::<tracing_subscriber::EnvFilter>()
-                .unwrap(),
+                .expect("Env filter directives are correct"),
         )
         .with_test_writer()
         .try_init();

@@ -318,6 +318,8 @@ impl CoreDomainNode {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+
     use tempfile::TempDir;
 
     use super::*;

@@ -136,7 +136,8 @@ mod builder {
     #[derivative(Default)]
     #[serde(transparent)]
     pub struct MaxConcurrentPlots(
-        #[derivative(Default(value = "NonZeroUsize::new(10).unwrap()"))] pub(crate) NonZeroUsize,
+        #[derivative(Default(value = "NonZeroUsize::new(10).expect(\"10 > 0\")"))]
+        pub(crate)  NonZeroUsize,
     );
 
     /// Technical type which stores all
@@ -336,7 +337,7 @@ impl Config {
 
         let base_path = cache.directory;
         let readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
-        let piece_cache_size = NonZeroUsize::new(100).unwrap();
+        let piece_cache_size = NonZeroUsize::new(100).expect("100 > 0. TODO: put propper value");
         let keypair = {
             // TODO: Temporary networking identity derivation from the first disk farm
             // identity.
@@ -347,6 +348,7 @@ impl Config {
                 .clone();
             // TODO: Update `Identity` to use more specific error type and remove this
             // `.unwrap()`
+            #[allow(clippy::unwrap_used)]
             let identity = subspace_farmer::Identity::open_or_create(&directory).unwrap();
 
             subspace_networking::libp2p::identity::Keypair::Ed25519(
@@ -374,7 +376,7 @@ impl Config {
                         addr
                     })
                     .collect(),
-                listen_on: vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()],
+                listen_on: vec!["/ip4/127.0.0.1/tcp/0".parse().expect("Multiaddr is valid")],
                 piece_cache_size,
                 allow_non_global_addresses_in_dht: node.dsn_opts.allow_non_global_addresses_in_dht,
                 reserved_peers: node
@@ -382,7 +384,11 @@ impl Config {
                     .reserved_nodes
                     .clone()
                     .into_iter()
-                    .map(|a| a.to_string().parse().unwrap())
+                    .map(|a| {
+                        a.to_string()
+                            .parse()
+                            .expect("Conversion between two libp2p version is always okay")
+                    })
                     .collect(),
             },
             &readers_and_pieces,
@@ -896,6 +902,8 @@ impl Farmer {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+
     use tempfile::TempDir;
 
     use super::*;
