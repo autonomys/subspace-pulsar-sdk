@@ -12,6 +12,18 @@ use serde::de::DeserializeOwned;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use subspace_runtime_primitives::opaque::Block;
 
+#[cfg(test)]
+pub(crate) fn test_init() {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            "info,subspace_sdk=trace,subspace_farmer=trace,subspace_service=trace"
+                .parse::<tracing_subscriber::EnvFilter>()
+                .unwrap(),
+        )
+        .with_test_writer()
+        .try_init();
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct Rpc {
     inner: Arc<RpcModule<()>>,

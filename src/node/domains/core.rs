@@ -327,7 +327,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_core() {
-        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
+        crate::utils::test_init();
 
         let dir = TempDir::new().unwrap();
         let core = ConfigBuilder::new().build();

@@ -1511,17 +1511,6 @@ mod tests {
     use crate::farmer::CacheDescription;
     use crate::{Farmer, PlotDescription};
 
-    fn init() {
-        let _ = tracing_subscriber::fmt()
-            .with_env_filter(
-                "info,subspace_sdk=trace,subspace_farmer=trace,subspace_service=trace"
-                    .parse::<tracing_subscriber::EnvFilter>()
-                    .unwrap(),
-            )
-            .with_test_writer()
-            .try_init();
-    }
-
     #[tokio::test(flavor = "multi_thread")]
     async fn test_start_node() {
         let dir = TempDir::new().unwrap();
@@ -1538,7 +1527,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_closing() {
-        init();
+        crate::utils::test_init();
 
         let dir = TempDir::new().unwrap();
         let node = Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
@@ -1565,7 +1554,7 @@ mod tests {
         ignore = "Ignored for coverage tests and for windows"
     )]
     async fn test_sync_block() {
-        init();
+        crate::utils::test_init();
 
         let dir = TempDir::new().unwrap();
         let chain = chain_spec::dev_config().unwrap();
