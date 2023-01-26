@@ -23,6 +23,8 @@ use sp_consensus::SyncOracle;
 use sp_core::H256;
 use subspace_core_primitives::SolutionRange;
 use subspace_farmer::node_client::NodeClient;
+use subspace_farmer::utils::parity_db_store::ParityDbStore;
+use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse};
 use subspace_rpc_primitives::SlotInfo;
@@ -32,7 +34,8 @@ use subspace_service::piece_cache::PieceCache;
 use subspace_service::SubspaceConfiguration;
 
 use self::builder::SegmentPublishConcurrency;
-use crate::networking::NodeProviderStorage;
+use crate::networking::provider_storage_utils::MaybeProviderStorage;
+use crate::networking::{FarmerProviderStorage, NodeProviderStorage, ProviderStorage};
 
 pub mod chain_spec;
 pub mod domains;
@@ -821,6 +824,10 @@ impl Config {
         let partial_components =
             subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&base)
                 .context("Failed to build a partial subspace node")?;
+        let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
+        let farmer_piece_store = Arc::new(parking_lot::Mutex::new(None));
+        let farmer_provider_storage = MaybeProviderStorage::none();
+
         let (subspace_networking, (node, mut node_runner)) = {
             let keypair = {
                 let keypair = base
@@ -889,7 +896,7 @@ impl Config {
                     boot_nodes,
                     reserved_nodes,
                     allow_non_global_addresses_in_dht,
-                } = dsn.clone();
+                } = dsn;
 
                 let peer_id = subspace_networking::peer_id(&keypair);
                 let bootstrap_nodes = chain_spec_boot_nodes
@@ -910,14 +917,16 @@ impl Config {
                             .parse()
                             .expect("Convertion between 2 libp2p version. Never panics")
                     })
-                    .collect::<Vec<_>>();
+                    .collect();
 
                 // TODO: Let users choose parity db storage provider
                 let external_provider_storage =
                     Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id));
 
-                let provider_storage =
+                let node_provider_storage =
                     NodeProviderStorage::new(piece_cache.clone(), external_provider_storage);
+                let provider_storage =
+                    ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
 
                 let networking_config = subspace_networking::Config {
                     keypair: keypair.clone(),
@@ -928,9 +937,29 @@ impl Config {
                             bootstrap_nodes.clone(),
                         )
                         .boxed(),
-                    request_response_protocols: vec![PieceByHashRequestHandler::create(
-                        move |req| get_piece_by_hash(req, &piece_cache),
-                    )],
+                    request_response_protocols: vec![PieceByHashRequestHandler::create({
+                        let handle = tokio::runtime::Handle::current();
+                        let weak_readers_and_pieces = Arc::downgrade(&farmer_readers_and_pieces);
+                        let farmer_piece_store = Arc::clone(&farmer_piece_store);
+
+                        move |req| {
+                            match get_piece_by_hash(req, &piece_cache) {
+                                Some(PieceByHashResponse { piece: None }) | None => (),
+                                result => return result,
+                            }
+
+                            if let Some(piece_store) = farmer_piece_store.lock().as_ref() {
+                                crate::farmer::get_piece_by_hash(
+                                    req,
+                                    piece_store,
+                                    &weak_readers_and_pieces,
+                                    &handle,
+                                )
+                            } else {
+                                None
+                            }
+                        }
+                    })],
                     provider_storage,
                     reserved_peers: reserved_nodes
                         .into_iter()
@@ -1044,7 +1073,9 @@ impl Config {
             rpc_handle,
             dsn_node: node,
             stop_sender,
-            dsn_opts: dsn,
+            farmer_readers_and_pieces,
+            farmer_piece_store,
+            farmer_provider_storage,
         })
     }
 }
@@ -1091,7 +1122,10 @@ pub struct Node {
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
     pub(crate) dsn_node: subspace_networking::Node,
     name: String,
-    pub(crate) dsn_opts: Dsn,
+    pub(crate) farmer_readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
+    #[derivative(Debug = "ignore")]
+    pub(crate) farmer_piece_store: Arc<parking_lot::Mutex<Option<ParityDbStore>>>,
+    pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
 }
 
 /// Hash type
