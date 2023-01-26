@@ -828,7 +828,7 @@ impl Config {
         let farmer_piece_store = Arc::new(parking_lot::Mutex::new(None));
         let farmer_provider_storage = MaybeProviderStorage::none();
 
-        let (subspace_networking, (node, mut node_runner)) = {
+        let (subspace_networking, (node, mut node_runner, piece_cache)) = {
             let keypair = {
                 let keypair = base
                     .network
@@ -941,6 +941,7 @@ impl Config {
                         let handle = tokio::runtime::Handle::current();
                         let weak_readers_and_pieces = Arc::downgrade(&farmer_readers_and_pieces);
                         let farmer_piece_store = Arc::clone(&farmer_piece_store);
+                        let piece_cache = piece_cache.clone();
 
                         move |req| {
                             match get_piece_by_hash(req, &piece_cache) {
@@ -981,7 +982,7 @@ impl Config {
 
             (
                 subspace_service::SubspaceNetworking::Reuse { node: node.clone(), bootstrap_nodes },
-                (node, node_runner),
+                (node, node_runner, piece_cache),
             )
         };
 
@@ -1076,6 +1077,7 @@ impl Config {
             farmer_readers_and_pieces,
             farmer_piece_store,
             farmer_provider_storage,
+            piece_cache,
         })
     }
 }
@@ -1126,6 +1128,8 @@ pub struct Node {
     #[derivative(Debug = "ignore")]
     pub(crate) farmer_piece_store: Arc<parking_lot::Mutex<Option<ParityDbStore>>>,
     pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
+    #[derivative(Debug = "ignore")]
+    pub(crate) piece_cache: PieceCache<FullClient>,
 }
 
 /// Hash type

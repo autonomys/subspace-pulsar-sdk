@@ -18,7 +18,7 @@ use subspace_farmer::single_disk_plot::{
 };
 use subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
 use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
-use subspace_farmer::utils::node_piece_getter::NodePieceGetter;
+use subspace_farmer::utils::node_piece_getter::NodePieceGetter as DsnPieceGetter;
 use subspace_farmer::utils::parity_db_store::ParityDbStore;
 use subspace_farmer::utils::readers_and_pieces::{PieceDetails, ReadersAndPieces};
 use subspace_farmer_components::plotting::PlottedSector;
@@ -27,7 +27,7 @@ use subspace_networking::{ParityDbProviderStorage, PieceByHashRequest, PieceByHa
 use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 
-use crate::networking::FarmerProviderStorage;
+use crate::networking::{FarmerProviderStorage, NodePieceGetter};
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -316,7 +316,7 @@ impl Config {
             )),
         );
         let piece_getter = Arc::new(FarmerPieceGetter::new(
-            NodePieceGetter::new(piece_provider),
+            NodePieceGetter::new(DsnPieceGetter::new(piece_provider), node.piece_cache.clone()),
             piece_cache,
             node.dsn_node.clone(),
         ));
