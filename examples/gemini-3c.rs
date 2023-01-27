@@ -8,7 +8,7 @@ use subspace_sdk::farmer::CacheDescription;
 use subspace_sdk::node::{self, Node};
 use subspace_sdk::{Farmer, PlotDescription, PublicKey};
 
-/// Gemini 3b test binary
+/// Gemini 3c test binary
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
 pub struct Args {
@@ -70,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
         ]))
         .execution_strategy(node::ExecutionStrategy::AlwaysWasm)
         .offchain_worker(node::OffchainWorkerBuilder::new().enabled(true))
-        .build(&node_dir, node::chain_spec::gemini_3b().unwrap())
+        .build(&node_dir, node::chain_spec::gemini_3c().unwrap())
         .await?;
 
     tokio::select! {

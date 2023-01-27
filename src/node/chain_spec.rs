@@ -13,7 +13,7 @@ use subspace_runtime_primitives::{AccountId, Balance, BlockNumber, SSC};
 use crate::utils::chain_spec as utils;
 
 const SUBSPACE_TELEMETRY_URL: &str = "wss://telemetry.subspace.network/submit/";
-const GEMINI_3B_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-gemini-3b.json");
+const GEMINI_3C_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-gemini-3c.json");
 
 /// List of accounts which should receive token grants, amounts are specified in
 /// SSC.
@@ -43,6 +43,7 @@ pub struct GenesisParams {
     enable_storage_access: bool,
     allow_authoring_by: AllowAuthoringBy,
     enable_executor: bool,
+    enable_transfer: bool,
 }
 
 /// Chain spec type for the subspace
@@ -54,19 +55,19 @@ pub type ChainSpec = SerializableChainSpec<
     >,
 >;
 
-/// Gemini 3b chain spec
-pub fn gemini_3b() -> Result<ChainSpec, String> {
-    ChainSpec::from_json_bytes(GEMINI_3B_CHAIN_SPEC)
+/// Gemini 3c chain spec
+pub fn gemini_3c() -> Result<ChainSpec, String> {
+    ChainSpec::from_json_bytes(GEMINI_3C_CHAIN_SPEC)
 }
 
-/// Gemini 3b compiled chain spec
-pub fn gemini_3b_compiled() -> Result<ChainSpec, String> {
+/// Gemini 3c compiled chain spec
+pub fn gemini_3c_compiled() -> Result<ChainSpec, String> {
     Ok(ChainSpec::from_genesis(
         // Name
-        "Subspace Gemini 3b",
+        "Subspace Gemini 3c",
         // ID
-        "subspace_gemini_3b",
-        ChainType::Custom("Subspace Gemini 3b".to_string()),
+        "subspace_gemini_3c",
+        ChainType::Custom("Subspace Gemini 3c".to_string()),
         || {
             let sudo_account =
                 AccountId::from_ss58check("5CXTmJEusve5ixyJufqHThmy4qUrrm6FyLCR7QfE4bbyMTNC")
@@ -110,6 +111,7 @@ pub fn gemini_3b_compiled() -> Result<ChainSpec, String> {
                 vesting_schedules,
                 GenesisParams {
                     enable_rewards: false,
+                    enable_transfer: false,
                     enable_storage_access: false,
                     allow_authoring_by: AllowAuthoringBy::RootFarmer(
                         sp_consensus_subspace::FarmerPublicKey::unchecked_from([
@@ -130,13 +132,13 @@ pub fn gemini_3b_compiled() -> Result<ChainSpec, String> {
                 .map_err(|error| error.to_string())?,
         ),
         // Protocol ID
-        Some("subspace-gemini-3b"),
+        Some("subspace-gemini-3c"),
         None,
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
         ChainSpecExtensions {
-            execution_chain_spec: super::domains::chain_spec::gemini_3b_config(),
+            execution_chain_spec: super::domains::chain_spec::gemini_3c_config(),
         },
     ))
 }
@@ -166,6 +168,7 @@ pub fn dev_config() -> Result<ChainSpec, String> {
                 vec![],
                 GenesisParams {
                     enable_rewards: false,
+                    enable_transfer: true,
                     enable_storage_access: false,
                     allow_authoring_by: AllowAuthoringBy::Anyone,
                     enable_executor: true,
@@ -221,6 +224,7 @@ pub fn local_config() -> Result<ChainSpec, String> {
                 vec![],
                 GenesisParams {
                     enable_rewards: false,
+                    enable_transfer: true,
                     enable_storage_access: false,
                     allow_authoring_by: AllowAuthoringBy::Anyone,
                     enable_executor: true,
@@ -257,6 +261,7 @@ fn subspace_genesis_config(
         enable_storage_access,
         allow_authoring_by,
         enable_executor,
+        enable_transfer,
     } = genesis_params;
 
     GenesisConfig {
@@ -272,18 +277,20 @@ fn subspace_genesis_config(
         },
         subspace: SubspaceConfig { enable_rewards, enable_storage_access, allow_authoring_by },
         vesting: VestingConfig { vesting },
-        runtime_configs: RuntimeConfigsConfig { enable_executor },
+        runtime_configs: RuntimeConfigsConfig { enable_executor, enable_transfer },
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+
     use super::*;
 
     #[test]
-    fn test_gemini_3b_spec() {
-        gemini_3b_compiled().unwrap();
-        gemini_3b().unwrap();
+    fn test_chain_specs() {
+        gemini_3c_compiled().unwrap();
+        gemini_3c().unwrap();
         dev_config().unwrap();
         local_config().unwrap();
     }

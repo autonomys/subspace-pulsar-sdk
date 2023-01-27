@@ -12,6 +12,18 @@ use serde::de::DeserializeOwned;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use subspace_runtime_primitives::opaque::Block;
 
+#[cfg(test)]
+pub(crate) fn test_init() {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            "info,subspace_sdk=trace,subspace_farmer=trace,subspace_service=trace"
+                .parse::<tracing_subscriber::EnvFilter>()
+                .expect("Env filter directives are correct"),
+        )
+        .with_test_writer()
+        .try_init();
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct Rpc {
     inner: Arc<RpcModule<()>>,
@@ -139,7 +151,7 @@ pub mod chain_spec {
     pub(crate) fn get_public_key_from_seed<TPublic: Public>(
         seed: &'static str,
     ) -> <TPublic::Pair as Pair>::Public {
-        TPublic::Pair::from_string(&format!("//{}", seed), None)
+        TPublic::Pair::from_string(&format!("//{seed}"), None)
             .expect("Static values are valid; qed")
             .public()
     }

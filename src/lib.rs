@@ -1,7 +1,7 @@
 //! Subspace SDK for easy running of both Subspace node and farmer
 
-#![deny(missing_docs)]
-#![feature(type_changing_struct_update, concat_idents)]
+#![deny(missing_docs, clippy::dbg_macro, clippy::unwrap_used)]
+#![feature(type_changing_struct_update, concat_idents, const_option)]
 
 /// Module related to the farmer
 pub mod farmer;
@@ -199,28 +199,23 @@ mod parse_ss58 {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+
     use futures::StreamExt;
-    use subspace_farmer::node_client::NodeClient;
     use tempfile::TempDir;
 
     use super::farmer::CacheDescription;
     use super::*;
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_integration() {
-        let dir = TempDir::new().unwrap();
-        let node = Node::builder()
-            .force_authoring(true)
-            .role(node::Role::Authority)
-            .build(dir, node::chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
+    async fn test_integration_inner() {
+        crate::utils::test_init();
 
-        let mut slot_info_sub = node.subscribe_slot_info().await.unwrap();
+        let dir = TempDir::new().unwrap();
+        let node = Node::dev().build(dir, node::chain_spec::dev_config().unwrap()).await.unwrap();
 
         let (dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let plot_descriptions =
-            [PlotDescription::new(dir.path(), PlotDescription::MIN_SIZE).unwrap()];
+            [PlotDescription::new(dir.path(), "100m".parse().unwrap()).unwrap()];
         let _farmer = Farmer::builder()
             .build(
                 Default::default(),
@@ -231,10 +226,14 @@ mod tests {
             .await
             .unwrap();
 
-        // New slots arrive at each block. So basically we wait for 3 blocks to produce
-        for _ in 0..3 {
-            assert!(slot_info_sub.next().await.is_some());
-        }
+        node.subscribe_new_blocks().await.unwrap().take(2).for_each(|_| async move {}).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[cfg(not(windows))]
+    async fn test_integration() {
+        let timeout = std::time::Duration::from_secs(30 * 60);
+        tokio::time::timeout(timeout, test_integration_inner()).await.unwrap();
     }
 
     #[test]
@@ -327,12 +326,12 @@ reserved_nodes = []
 allow_non_global_addresses_in_dht = false
 piece_publisher_batch_size = 15
 
-piece_receiver_batch_size = 12
+piece_getter_batch_size = 12
 piece_publisher_batch_size = 12
 max_concurrent_plots = 10
 "#,
             r#"
-piece_receiver_batch_size = 12
+piece_getter_batch_size = 12
 piece_publisher_batch_size = 12
 max_concurrent_plots = 10
 "#,

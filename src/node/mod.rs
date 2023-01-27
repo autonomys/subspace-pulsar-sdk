@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use derivative::Derivative;
+use either::*;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 use libp2p_core::Multiaddr;
@@ -23,11 +24,15 @@ use sp_core::H256;
 use subspace_core_primitives::SolutionRange;
 use subspace_farmer::node_client::NodeClient;
 use subspace_farmer_components::FarmerProtocolInfo;
-use subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler};
+use subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse};
 use subspace_rpc_primitives::SlotInfo;
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
+use subspace_service::piece_cache::PieceCache;
 use subspace_service::SubspaceConfiguration;
+
+use self::builder::SegmentPublishConcurrency;
+use crate::networking::NodeProviderStorage;
 
 pub mod chain_spec;
 pub mod domains;
@@ -40,11 +45,6 @@ pub use builder::{
 pub(crate) use builder::{ImplName, ImplVersion};
 pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
 
-use self::builder::{ListenAddresses, SegmentPublishConcurrency};
-use crate::networking::{
-    FarmerRecordStorage, MaybeRecordStorage, NodeRecordStorage, ReadersAndPieces, RecordStorage,
-};
-
 mod builder {
     use std::net::SocketAddr;
     use std::num::NonZeroUsize;
@@ -52,6 +52,8 @@ mod builder {
     use derivative::Derivative;
     use derive_builder::Builder;
     use derive_more::{Deref, DerefMut, Display, From};
+    use sc_network::ProtocolName;
+    use sc_network_common::config::NonDefaultSetConfig;
     use serde::{Deserialize, Serialize};
 
     use super::*;
@@ -231,7 +233,8 @@ mod builder {
     #[derivative(Default)]
     #[serde(transparent)]
     pub struct SegmentPublishConcurrency(
-        #[derivative(Default(value = "NonZeroUsize::new(10).unwrap()"))] pub(crate) NonZeroUsize,
+        #[derivative(Default(value = "NonZeroUsize::new(10).expect(\"10 > 0\")"))]
+        pub(crate)  NonZeroUsize,
     );
 
     /// Node builder
@@ -458,6 +461,7 @@ mod builder {
                     client_id,
                     enable_mdns,
                     allow_private_ipv4,
+                    allow_non_globals_in_dht,
                 } = network;
                 let name = name.unwrap_or_else(|| {
                     names::Generator::with_naming(names::Name::Numbered)
@@ -466,12 +470,15 @@ mod builder {
                         .expect("RNG is available on all supported platforms; qed")
                 });
 
-                let client_id =
-                    client_id.unwrap_or_else(|| format!("{}/v{}", impl_name, impl_version));
+                let client_id = client_id.unwrap_or_else(|| format!("{impl_name}/v{impl_version}"));
                 let config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
                 let listen_addresses = listen_addresses
                     .into_iter()
-                    .map(|addr| addr.to_string().parse().unwrap())
+                    .map(|addr| {
+                        addr.to_string()
+                            .parse()
+                            .expect("Conversion between 2 libp2p versions is always right")
+                    })
                     .collect::<Vec<_>>();
 
                 NetworkConfiguration {
@@ -479,6 +486,11 @@ mod builder {
                     boot_nodes: chain_spec.boot_nodes().iter().cloned().chain(boot_nodes).collect(),
                     force_synced,
                     transport: TransportConfig::Normal { enable_mdns, allow_private_ipv4 },
+                    extra_sets: vec![NonDefaultSetConfig::new(
+                        ProtocolName::Static("/subspace/cross-domain-messages"),
+                        40,
+                    )],
+                    allow_non_globals_in_dht,
                     ..NetworkConfiguration::new(
                         name,
                         client_id,
@@ -611,7 +623,7 @@ mod builder {
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub max_response_size: Option<usize>,
         /// Maximum allowed subscriptions per rpc connection
-        #[builder(setter(into), default)]
+        #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub max_subs_per_conn: usize,
         /// Maximum size of the output buffer capacity for websocket
@@ -634,6 +646,10 @@ mod builder {
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub allow_private_ipv4: bool,
+        /// Allow non globals in network DHT
+        #[builder(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub allow_non_globals_in_dht: bool,
         /// Listen on some address for other nodes
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
@@ -785,6 +801,73 @@ impl From<RpcMethods> for sc_service::RpcMethods {
 
 const NODE_NAME_MAX_LENGTH: usize = 64;
 
+async fn create_dsn_instance<AS: sc_client_api::AuxStore + Sync + Send + 'static>(
+    dsn: builder::Dsn,
+    chain_spec_boot_nodes: Vec<Multiaddr>,
+    piece_cache: PieceCache<AS>,
+    keypair: subspace_networking::libp2p::identity::Keypair,
+) -> Result<
+    (
+        subspace_networking::Node,
+        subspace_networking::NodeRunner<NodeProviderStorage<AS>>,
+        Vec<subspace_networking::libp2p::Multiaddr>,
+    ),
+    subspace_networking::CreationError,
+> {
+    tracing::trace!("Subspace networking starting.");
+
+    let builder::Dsn {
+        listen_addresses,
+        boot_nodes,
+        reserved_nodes,
+        allow_non_global_addresses_in_dht,
+    } = dsn;
+
+    let peer_id = subspace_networking::peer_id(&keypair);
+    let bootstrap_nodes = chain_spec_boot_nodes
+        .into_iter()
+        .chain(boot_nodes)
+        .map(|a| a.to_string().parse().expect("Convertion between 2 libp2p version. Never panics"))
+        .collect::<Vec<_>>();
+
+    let listen_on = listen_addresses
+        .0
+        .into_iter()
+        .map(|a| a.to_string().parse().expect("Convertion between 2 libp2p version. Never panics"))
+        .collect::<Vec<_>>();
+
+    // TODO: Let users choose parity db storage provider
+    let external_provider_storage =
+        Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id));
+
+    let provider_storage = NodeProviderStorage::new(piece_cache.clone(), external_provider_storage);
+
+    let networking_config = subspace_networking::Config {
+        keypair: keypair.clone(),
+        listen_on,
+        allow_non_global_addresses_in_dht,
+        networking_parameters_registry: subspace_networking::BootstrappedNetworkingParameters::new(
+            bootstrap_nodes.clone(),
+        )
+        .boxed(),
+        request_response_protocols: vec![PieceByHashRequestHandler::create(move |req| {
+            get_piece_by_hash(req, &piece_cache)
+        })],
+        provider_storage,
+        reserved_peers: reserved_nodes
+            .into_iter()
+            .map(|addr| {
+                addr.to_string()
+                    .parse()
+                    .expect("Conversion between 2 libp2p versions is always right")
+            })
+            .collect(),
+        ..subspace_networking::Config::default()
+    };
+
+    subspace_networking::create(networking_config).await.map(|(a, b)| (a, b, bootstrap_nodes))
+}
+
 impl Config {
     /// Start a node with supplied parameters
     pub async fn build(
@@ -805,16 +888,7 @@ impl Config {
         let partial_components =
             subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&base)
                 .context("Failed to build a partial subspace node")?;
-        let readers_and_pieces = Arc::new(std::sync::Mutex::new(None::<ReadersAndPieces>));
-        let farmer_record_storage = MaybeRecordStorage::none();
-
         let (subspace_networking, (node, mut node_runner)) = {
-            let builder::Dsn {
-                listen_addresses: ListenAddresses(listen_addresses),
-                boot_nodes,
-                reserved_nodes: _,
-                allow_non_global_addresses_in_dht,
-            } = dsn;
             let keypair = {
                 let keypair = base
                     .network
@@ -829,42 +903,16 @@ impl Config {
                     .expect("Address is correct")
             };
 
-            let bootstrap_nodes = base
-                .chain_spec
-                .properties()
-                .get("dsnBootstrapNodes")
-                .cloned()
-                .map(serde_json::from_value::<Vec<_>>)
-                .transpose()
-                .context("Failed to decode DSN bootsrap nodes")?
-                .unwrap_or_default()
-                .into_iter()
-                .chain(boot_nodes)
-                .map(|a| {
-                    a.to_string()
-                        .parse()
-                        .expect("Convertion between 2 libp2p version. Never panics")
-                })
-                .collect::<Vec<_>>();
-
-            let listen_on = listen_addresses
-                .into_iter()
-                .map(|a| {
-                    a.to_string()
-                        .parse()
-                        .expect("Convertion between 2 libp2p version. Never panics")
-                })
-                .collect::<Vec<_>>();
-
-            let piece_cache = NodeRecordStorage::new(
+            let piece_cache = PieceCache::new(
                 partial_components.client.clone(),
-                piece_cache_size.as_u64(),
+                piece_cache_size.as_u64() / subspace_core_primitives::PIECE_SIZE as u64,
+                subspace_networking::peer_id(&keypair),
             );
 
             // Start before archiver below, so we don't have potential race condition and
             // miss pieces
             tokio::spawn({
-                let piece_cache = piece_cache.clone();
+                let mut piece_cache = piece_cache.clone();
                 let mut archived_segment_notification_stream =
                     partial_components.other.1.archived_segment_notification_stream().subscribe();
 
@@ -880,69 +928,35 @@ impl Config {
                             segment_index * u64::from(subspace_core_primitives::PIECES_IN_SEGMENT),
                             &archived_segment_notification.archived_segment.pieces,
                         ) {
-                            tracing::error!(%segment_index, %error, "Failed to store pieces for segment in cache");
+                            tracing::error!(
+                                %segment_index,
+                                %error,
+                                "Failed to store pieces for segment in cache"
+                            );
                         }
                     }
                 }
             });
 
-            let record_store = subspace_networking::CustomRecordStore::new(
-                RecordStorage::new(farmer_record_storage.clone(), piece_cache.clone()),
-                subspace_networking::MemoryProviderStorage::default(),
-            );
-            let readers_and_pieces = Arc::downgrade(&readers_and_pieces);
+            let chain_spec_boot_nodes = base
+                .chain_spec
+                .properties()
+                .get("dsnBootstrapNodes")
+                .cloned()
+                .map(serde_json::from_value::<Vec<_>>)
+                .transpose()
+                .context("Failed to decode DSN bootsrap nodes")?
+                .unwrap_or_default();
 
-            let config = subspace_networking::Config {
+            let (node, node_runner, bootstrap_nodes) = create_dsn_instance(
+                dsn.clone(),
+                chain_spec_boot_nodes,
+                piece_cache.clone(),
                 keypair,
-                listen_on,
-                allow_non_global_addresses_in_dht,
-                networking_parameters_registry:
-                    subspace_networking::BootstrappedNetworkingParameters::new(
-                        bootstrap_nodes.clone(),
-                    )
-                    .boxed(),
-                request_response_protocols: vec![PieceByHashRequestHandler::create(
-                    move |PieceByHashRequest { key }| {
-                        let piece = match key {
-                            subspace_networking::PieceKey::PieceIndex(piece_index) =>
-                                match piece_cache.get_piece(*piece_index) {
-                                    Ok(maybe_piece) => maybe_piece,
-                                    Err(error) => {
-                                        tracing::error!(?key, %error, "Failed to get piece from cache");
-                                        None
-                                    }
-                                },
-                            subspace_networking::PieceKey::Sector(piece_index_hash) => {
-                                let Some(readers_and_pieces) = readers_and_pieces.upgrade() else {
-                                    tracing::debug!("A readers and pieces are already dropped");
-                                    return None
-                                };
-                                let readers_and_pieces = readers_and_pieces
-                                    .lock()
-                                    .expect("Readers lock is never poisoned");
-                                let Some(readers_and_pieces) = readers_and_pieces.as_ref() else {
-                                    tracing::debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
-                                    return None
-                                };
-                                readers_and_pieces.get_piece(piece_index_hash)
-                            }
-                            subspace_networking::PieceKey::PieceIndexHash(_piece_index_hash) => {
-                                tracing::debug!(
-                                    ?key,
-                                    "Incorrect piece request - unsupported key type."
-                                );
-                                return None;
-                            }
-                        };
+            )
+            .await?;
 
-                        Some(subspace_networking::PieceByHashResponse { piece })
-                    },
-                )],
-                record_store,
-                ..subspace_networking::Config::with_generated_keypair()
-            };
-
-            let (node, node_runner) = subspace_networking::create(config).await?;
+            // tracing::info!("Subspace networking initialized: Node ID is {}", node.id());
 
             (
                 subspace_service::SubspaceNetworking::Reuse { node: node.clone(), bootstrap_nodes },
@@ -1035,11 +1049,10 @@ impl Config {
             system_domain,
             network,
             name,
-            farmer_record_storage,
             rpc_handle,
-            readers_and_pieces,
             dsn_node: node,
             stop_sender,
+            dsn_opts: dsn,
         })
     }
 }
@@ -1084,10 +1097,9 @@ pub struct Node {
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     pub(crate) rpc_handle: crate::utils::Rpc,
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
-    pub(crate) farmer_record_storage: MaybeRecordStorage<FarmerRecordStorage>,
-    pub(crate) readers_and_pieces: Arc<std::sync::Mutex<Option<ReadersAndPieces>>>,
     pub(crate) dsn_node: subspace_networking::Node,
     name: String,
+    pub(crate) dsn_opts: Dsn,
 }
 
 /// Hash type
@@ -1208,6 +1220,15 @@ impl Node {
     /// New node builder
     pub fn builder() -> Builder {
         Builder::new()
+    }
+
+    /// Development configuration
+    pub fn dev() -> Builder {
+        Self::builder()
+            .force_authoring(true)
+            .role(Role::Authority)
+            .network(NetworkBuilder::new().force_synced(true))
+            .dsn(DsnBuilder::new().allow_non_global_addresses_in_dht(true))
     }
 
     /// Get listening addresses of the node
@@ -1361,8 +1382,11 @@ impl Node {
             .await
             .expect("This stream never ends");
         let client = self.client().context("Failed to fetch node info")?;
-        let NetworkState { connected_peers, not_connected_peers, .. } =
-            self.network.network_state().await.unwrap();
+        let NetworkState { connected_peers, not_connected_peers, .. } = self
+            .network
+            .network_state()
+            .await
+            .map_err(|()| anyhow::anyhow!("Failed to fetch node info: node already exited"))?;
         let sp_blockchain::Info {
             best_hash,
             best_number,
@@ -1396,6 +1420,21 @@ impl Node {
     ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
         self.rpc_handle.subscribe_new_blocks().await.context("Failed to subscribe to new blocks")
     }
+}
+
+pub(crate) fn get_piece_by_hash(
+    PieceByHashRequest { piece_index_hash }: &PieceByHashRequest,
+    piece_cache: &subspace_service::piece_cache::PieceCache<impl sc_client_api::AuxStore>,
+) -> Option<PieceByHashResponse> {
+    let result = match piece_cache.get_piece(*piece_index_hash) {
+        Ok(maybe_piece) => maybe_piece,
+        Err(error) => {
+            tracing::error!(?piece_index_hash, %error, "Failed to get piece from cache");
+            None
+        }
+    };
+
+    Some(PieceByHashResponse { piece: result })
 }
 
 mod farmer_rpc_client {
@@ -1477,6 +1516,8 @@ mod farmer_rpc_client {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+
     use subspace_farmer::node_client::NodeClient;
     use tempfile::TempDir;
 
@@ -1484,36 +1525,26 @@ mod tests {
     use crate::farmer::CacheDescription;
     use crate::{Farmer, PlotDescription};
 
-    fn init() {
-        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
-    }
-
     #[tokio::test(flavor = "multi_thread")]
     async fn test_start_node() {
         let dir = TempDir::new().unwrap();
-        Node::builder().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
+        Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_rpc() {
         let dir = TempDir::new().unwrap();
-        let node =
-            Node::builder().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
+        let node = Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
 
         assert!(node.farmer_app_info().await.is_ok());
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_closing() {
-        init();
+        crate::utils::test_init();
 
         let dir = TempDir::new().unwrap();
-        let node = Node::builder()
-            .force_authoring(true)
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
+        let node = Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let plots = [PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()];
         let farmer = Farmer::builder()
@@ -1537,16 +1568,16 @@ mod tests {
         ignore = "Ignored for coverage tests and for windows"
     )]
     async fn test_sync_block() {
-        init();
+        crate::utils::test_init();
 
         let dir = TempDir::new().unwrap();
         let chain = chain_spec::dev_config().unwrap();
-        let node = Node::builder()
-            .force_authoring(true)
+        let node = Node::dev()
             .network(
                 NetworkBuilder::new()
                     .force_synced(true)
-                    .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()]),
+                    .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
+                    .allow_private_ipv4(true),
             )
             .role(Role::Authority)
             .build(dir.path(), chain.clone())
@@ -1576,10 +1607,12 @@ mod tests {
         farmer.close().await.unwrap();
 
         let dir = TempDir::new().unwrap();
-        let other_node = Node::builder()
-            .force_authoring(true)
-            .role(Role::Authority)
-            .network(NetworkBuilder::new().boot_nodes(node.listen_addresses().await.unwrap()))
+        let other_node = Node::dev()
+            .network(
+                NetworkBuilder::new()
+                    .boot_nodes(node.listen_addresses().await.unwrap())
+                    .allow_private_ipv4(true),
+            )
             .build(dir.path(), chain)
             .await
             .unwrap();

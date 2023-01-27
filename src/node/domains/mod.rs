@@ -172,13 +172,13 @@ pub(crate) mod chain_spec {
         )
     }
 
-    /// Gemini 3b config
-    pub fn gemini_3b_config() -> ChainSpec {
+    /// Gemini 3c config
+    pub fn gemini_3c_config() -> ChainSpec {
         ChainSpec::from_genesis(
             // Name
-            "Subspace Gemini 3b System Domain",
+            "Subspace Gemini 3c System Domain",
             // ID
-            "subspace_gemini_3b_system_domain",
+            "subspace_gemini_3c_system_domain",
             ChainType::Local,
             move || {
                 testnet_genesis(
@@ -235,13 +235,13 @@ pub(crate) mod chain_spec {
             // Telemetry
             None,
             // Protocol ID
-            Some("subspace-gemini-3b-system-domain"),
+            Some("subspace-gemini-3c-system-domain"),
             None,
             // Properties
             Some(chain_spec_properties()),
             // Extensions
             ChainSpecExtensions {
-                execution_chain_spec: super::core::chain_spec::gemini_3b_config(),
+                execution_chain_spec: super::core::chain_spec::gemini_3c_config(),
             },
         )
     }

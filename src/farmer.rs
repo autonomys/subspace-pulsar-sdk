@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io;
 use std::num::NonZeroUsize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::Context;
@@ -10,17 +10,27 @@ use bytesize::ByteSize;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
 use serde::{Deserialize, Serialize};
+use subspace_core_primitives::crypto::kzg;
 use subspace_core_primitives::{PieceIndexHash, SectorIndex, PLOT_SECTOR_SIZE};
 use subspace_farmer::single_disk_plot::{
     SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
     SingleDiskPlotOptions, SingleDiskPlotSummary,
 };
+use subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
+use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
+use subspace_farmer::utils::node_piece_getter::NodePieceGetter;
+use subspace_farmer::utils::parity_db_store::ParityDbStore;
+use subspace_farmer::utils::readers_and_pieces::{PieceDetails, ReadersAndPieces};
 use subspace_farmer_components::plotting::PlottedSector;
-use subspace_networking::{LimitedSizeRecordStorageWrapper, ParityDbRecordStorage};
+use subspace_networking::utils::multihash::ToMultihash;
+use subspace_networking::{
+    BootstrappedNetworkingParameters, ParityDbProviderStorage, PieceByHashRequest,
+    PieceByHashRequestHandler, PieceByHashResponse,
+};
 use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 
-use crate::networking::{FarmerRecordStorage, PieceDetails, ReadersAndPieces};
+use crate::networking::FarmerProviderStorage;
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -32,22 +42,6 @@ pub struct CacheDescription {
     /// Space which you want to dedicate
     #[serde(with = "bytesize_serde")]
     pub space_dedicated: ByteSize,
-}
-
-impl CacheDescription {
-    fn record_storage(
-        self,
-        peer_id: subspace_networking::libp2p::PeerId,
-    ) -> parity_db::Result<FarmerRecordStorage> {
-        ParityDbRecordStorage::new(&self.directory).map(|storage| {
-            LimitedSizeRecordStorageWrapper::new(
-                storage,
-                NonZeroUsize::new(self.space_dedicated.as_u64() as _)
-                    .expect("Always more than 1Mib"),
-                peer_id,
-            )
-        })
-    }
 }
 
 /// Error type for cache description constructor
@@ -142,7 +136,8 @@ mod builder {
     #[derivative(Default)]
     #[serde(transparent)]
     pub struct MaxConcurrentPlots(
-        #[derivative(Default(value = "NonZeroUsize::new(10).unwrap()"))] pub(crate) NonZeroUsize,
+        #[derivative(Default(value = "NonZeroUsize::new(10).expect(\"10 > 0\")"))]
+        pub(crate)  NonZeroUsize,
     );
 
     /// Technical type which stores all
@@ -191,6 +186,132 @@ pub enum BuildError {
     /// Failed to create parity db record storage
     #[error("Failed to create parity db record storage: {0}")]
     ParityDbError(#[from] parity_db::Error),
+    /// Other error
+    #[error("{0}")]
+    Other(#[from] anyhow::Error),
+}
+
+pub(crate) fn get_piece_by_hash(
+    PieceByHashRequest { piece_index_hash }: &PieceByHashRequest,
+    piece_cache: &ParityDbStore,
+    weak_readers_and_pieces: &std::sync::Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
+    handle: &tokio::runtime::Handle,
+) -> Option<PieceByHashResponse> {
+    use tracing::debug;
+
+    let result = {
+        debug!(?piece_index_hash, "Piece request received. Trying cache...");
+        let multihash = piece_index_hash.to_multihash();
+
+        let piece_from_cache = piece_cache.get(&multihash.into());
+
+        if piece_from_cache.is_some() {
+            piece_from_cache
+        } else {
+            debug!(?piece_index_hash, "No piece in the cache. Trying archival storage...");
+
+            let read_piece_fut = {
+                let readers_and_pieces = match weak_readers_and_pieces.upgrade() {
+                    Some(readers_and_pieces) => readers_and_pieces,
+                    None => {
+                        debug!("A readers and pieces are already dropped");
+                        return None;
+                    }
+                };
+                let readers_and_pieces = readers_and_pieces.lock();
+                let readers_and_pieces = match readers_and_pieces.as_ref() {
+                    Some(readers_and_pieces) => readers_and_pieces,
+                    None => {
+                        debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
+                        return None;
+                    }
+                };
+
+                readers_and_pieces.read_piece(piece_index_hash)?
+            };
+
+            tokio::task::block_in_place(move || handle.block_on(read_piece_fut))
+        }
+    };
+
+    Some(PieceByHashResponse { piece: result })
+}
+
+const RECORDS_ROOTS_CACHE_SIZE: NonZeroUsize = NonZeroUsize::new(1_000_000).expect("Not zero; qed");
+
+struct DsnArgs {
+    bootstrap_nodes: Vec<subspace_networking::libp2p::Multiaddr>,
+    listen_on: Vec<subspace_networking::libp2p::Multiaddr>,
+    piece_cache_size: NonZeroUsize,
+    allow_non_global_addresses_in_dht: bool,
+    reserved_peers: Vec<subspace_networking::libp2p::Multiaddr>,
+}
+
+async fn configure_dsn(
+    base_path: &Path,
+    keypair: subspace_networking::libp2p::identity::Keypair,
+    DsnArgs {
+        listen_on,
+        bootstrap_nodes,
+        piece_cache_size,
+        allow_non_global_addresses_in_dht,
+        reserved_peers,
+    }: DsnArgs,
+    readers_and_pieces: &Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
+) -> anyhow::Result<(
+    subspace_networking::Node,
+    subspace_networking::NodeRunner<FarmerProviderStorage>,
+    FarmerPieceCache,
+)> {
+    let piece_cache_db_path = base_path.join("piece_cache_db");
+    let provider_cache_db_path = base_path.join("provider_cache_db");
+    let provider_cache_size =
+        piece_cache_size.saturating_mul(NonZeroUsize::new(10).expect("10 > 0")); // TODO: add proper value
+
+    tracing::info!(
+        ?piece_cache_db_path,
+        ?piece_cache_size,
+        ?provider_cache_db_path,
+        ?provider_cache_size,
+        "Record cache DB configured."
+    );
+
+    let peer_id = subspace_networking::peer_id(&keypair);
+
+    let db_provider_storage =
+        ParityDbProviderStorage::new(&provider_cache_db_path, provider_cache_size, peer_id)
+            .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+
+    let farmer_provider_storage =
+        FarmerProviderStorage::new(peer_id, readers_and_pieces.clone(), db_provider_storage);
+
+    let piece_store =
+        ParityDbStore::new(&piece_cache_db_path).map_err(|err| anyhow::anyhow!(err.to_string()))?;
+    let piece_cache = FarmerPieceCache::new(piece_store.clone(), piece_cache_size, peer_id);
+
+    let config = subspace_networking::Config {
+        reserved_peers,
+        keypair,
+        listen_on,
+        allow_non_global_addresses_in_dht,
+        networking_parameters_registry: BootstrappedNetworkingParameters::new(bootstrap_nodes)
+            .boxed(),
+        request_response_protocols: {
+            let handle = tokio::runtime::Handle::current();
+            let weak_readers_and_pieces = Arc::downgrade(readers_and_pieces);
+
+            vec![PieceByHashRequestHandler::create(move |req| {
+                get_piece_by_hash(req, &piece_store, &weak_readers_and_pieces, &handle)
+            })]
+        },
+        provider_storage: farmer_provider_storage,
+        ..subspace_networking::Config::default()
+    };
+
+    subspace_networking::create(config)
+        .await
+        .map(|(node, node_runner)| (node, node_runner, piece_cache))
+        .map_err(Into::into)
 }
 
 impl Config {
@@ -214,7 +335,92 @@ impl Config {
         let concurrent_plotting_semaphore =
             Arc::new(tokio::sync::Semaphore::new(max_concurrent_plots.get()));
 
-        node.farmer_record_storage.swap(cache.record_storage(node.dsn_node.id())?);
+        let base_path = cache.directory;
+        let readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
+        let piece_cache_size = NonZeroUsize::new(100).expect("100 > 0. TODO: put propper value");
+        let keypair = {
+            // TODO: Temporary networking identity derivation from the first disk farm
+            // identity.
+            let directory = plots
+                .first()
+                .expect("Disk farm collection should not be empty at this point.")
+                .directory
+                .clone();
+            // TODO: Update `Identity` to use more specific error type and remove this
+            // `.unwrap()`
+            #[allow(clippy::unwrap_used)]
+            let identity = subspace_farmer::Identity::open_or_create(&directory).unwrap();
+
+            subspace_networking::libp2p::identity::Keypair::Ed25519(
+                subspace_networking::libp2p::identity::ed25519::SecretKey::from_bytes(
+                    &mut identity.secret_key().to_ed25519_bytes().as_mut()[..32],
+                )
+                .expect("Secret key is exactly 32 bytes in size; qed")
+                .into(),
+            )
+        };
+
+        // TODO: reuse dsn node from the node
+        let (dsn_node, mut dsn_node_runner, piece_cache) = configure_dsn(
+            &base_path,
+            keypair,
+            DsnArgs {
+                bootstrap_nodes: node
+                    .dsn_node
+                    .listeners()
+                    .into_iter()
+                    .map(|mut addr| {
+                        addr.push(subspace_networking::libp2p::multiaddr::Protocol::P2p(
+                            node.dsn_node.id().into(),
+                        ));
+                        addr
+                    })
+                    .collect(),
+                listen_on: vec!["/ip4/127.0.0.1/tcp/0".parse().expect("Multiaddr is valid")],
+                piece_cache_size,
+                allow_non_global_addresses_in_dht: node.dsn_opts.allow_non_global_addresses_in_dht,
+                reserved_peers: node
+                    .dsn_opts
+                    .reserved_nodes
+                    .clone()
+                    .into_iter()
+                    .map(|a| {
+                        a.to_string()
+                            .parse()
+                            .expect("Conversion between two libp2p version is always okay")
+                    })
+                    .collect(),
+            },
+            &readers_and_pieces,
+        )
+        .await?;
+
+        let piece_cache = Arc::new(tokio::sync::Mutex::new(piece_cache));
+        crate::networking::start_announcements_processor(
+            dsn_node.clone(),
+            Arc::clone(&piece_cache),
+            Arc::downgrade(&readers_and_pieces),
+        )
+        .expect("Add error handling")
+        .detach();
+
+        let kzg = kzg::Kzg::new(kzg::test_public_parameters());
+        let records_roots_cache =
+            parking_lot::Mutex::new(lru::LruCache::new(RECORDS_ROOTS_CACHE_SIZE));
+        let piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
+            dsn_node.clone(),
+            Some(subspace_farmer::utils::piece_validator::RecordsRootPieceValidator::new(
+                dsn_node.clone(),
+                node.clone(),
+                kzg.clone(),
+                records_roots_cache,
+            )),
+        );
+        let piece_getter = Arc::new(FarmerPieceGetter::new(
+            NodePieceGetter::new(piece_provider),
+            piece_cache,
+            dsn_node.clone(),
+        ));
 
         for description in plots {
             let directory = description.directory.clone();
@@ -224,7 +430,8 @@ impl Config {
                 directory: directory.clone(),
                 reward_address: *reward_address,
                 node_client: node.clone(),
-                dsn_node: node.dsn_node.clone(),
+                kzg: kzg.clone(),
+                piece_getter: piece_getter.clone(),
                 concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
             };
             let single_disk_plot = SingleDiskPlot::new(description).await?;
@@ -262,36 +469,144 @@ impl Config {
             single_disk_plots.push(single_disk_plot);
         }
 
-        let readers_and_pieces = ReadersAndPieces::new(&single_disk_plots).await;
-        node.readers_and_pieces
-            .lock()
-            .expect("Readers and pieces can't poison lock")
-            .replace(readers_and_pieces);
+        let new_readers_and_pieces = {
+            // Store piece readers so we can reference them later
+            let readers = single_disk_plots.iter().map(SingleDiskPlot::piece_reader).collect();
+
+            tracing::debug!("Collecting already plotted pieces");
+
+            // Collect already plotted pieces
+            let plotted_pieces: HashMap<PieceIndexHash, PieceDetails> = single_disk_plots
+                .iter()
+                .enumerate()
+                .flat_map(|(plot_offset, single_disk_plot)| {
+                    single_disk_plot
+                        .plotted_sectors()
+                        .enumerate()
+                        .filter_map(move |(sector_offset, plotted_sector_result)| {
+                            match plotted_sector_result {
+                                Ok(plotted_sector) => Some(plotted_sector),
+                                Err(error) => {
+                                    tracing::error!(
+                                        %error,
+                                        %plot_offset,
+                                        %sector_offset,
+                                        "Failed reading plotted sector on startup, skipping"
+                                    );
+                                    None
+                                }
+                            }
+                        })
+                        .flat_map(move |plotted_sector| {
+                            plotted_sector.piece_indexes.into_iter().enumerate().map(
+                                move |(piece_offset, piece_index)| {
+                                    (
+                                        PieceIndexHash::from_index(piece_index),
+                                        PieceDetails {
+                                            plot_offset,
+                                            sector_index: plotted_sector.sector_index,
+                                            piece_offset: piece_offset as u64,
+                                        },
+                                    )
+                                },
+                            )
+                        })
+                })
+                // We implicitly ignore duplicates here, reading just from one of the plots
+                .collect();
+            tracing::debug!("Finished collecting already plotted pieces");
+
+            ReadersAndPieces::new(readers, plotted_pieces)
+        };
+        readers_and_pieces.lock().replace(new_readers_and_pieces);
 
         for (plot_offset, single_disk_plot) in single_disk_plots.iter().enumerate() {
-            let readers_and_pieces = Arc::clone(&node.readers_and_pieces);
+            let readers_and_pieces = Arc::clone(&readers_and_pieces);
 
+            // We are not going to send anything here, but dropping of sender on dropping of
+            // corresponding `SingleDiskPlot` will allow us to stop background tasks.
+            let (dropped_sender, _dropped_receiver) = tokio::sync::broadcast::channel::<()>(1);
+
+            let node = dsn_node.clone();
             // Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
             single_disk_plot
-                .on_sector_plotted(Arc::new(move |plotted_sector| {
-                    readers_and_pieces
-                        .lock()
-                        .expect("Readers and pieces can't poison lock")
-                        .as_mut()
-                        .expect("Initial value was populated above; qed")
-                        .extend(plotted_sector.piece_indexes.iter().copied().enumerate().map(
-                            |(piece_offset, piece_index)| {
-                                (
-                                    PieceIndexHash::from_index(piece_index),
-                                    PieceDetails {
-                                        plot_offset,
-                                        sector_index: plotted_sector.sector_index,
-                                        piece_offset: piece_offset as u64,
-                                    },
-                                )
-                            },
-                        ));
+                .on_sector_plotted(Arc::new(move |(plotted_sector, plotting_permit)| {
+                    let plotting_permit = Arc::clone(plotting_permit);
+                    let sector_index = plotted_sector.sector_index;
+
+                    let mut dropped_receiver = dropped_sender.subscribe();
+
+                    let new_pieces = {
+                        let mut readers_and_pieces = readers_and_pieces.lock();
+                        let readers_and_pieces = readers_and_pieces
+                            .as_mut()
+                            .expect("Initial value was populated above; qed");
+
+                        let new_pieces = plotted_sector
+                            .piece_indexes
+                            .iter()
+                            .filter(|&&piece_index| {
+                                // Skip pieces that are already plotted and thus were announced
+                                // before
+                                !readers_and_pieces
+                                    .contains_piece(&PieceIndexHash::from_index(piece_index))
+                            })
+                            .copied()
+                            .collect::<Vec<_>>();
+
+                        readers_and_pieces.add_pieces(
+                            plotted_sector.piece_indexes.iter().copied().enumerate().map(
+                                |(piece_offset, piece_index)| {
+                                    (
+                                        PieceIndexHash::from_index(piece_index),
+                                        PieceDetails {
+                                            plot_offset,
+                                            sector_index,
+                                            piece_offset: piece_offset as u64,
+                                        },
+                                    )
+                                },
+                            ),
+                        );
+
+                        new_pieces
+                    };
+
+                    if new_pieces.is_empty() {
+                        // None of the pieces are new, nothing left to do here
+                        return;
+                    }
+
+                    let node = node.clone();
+                    let publish_fut = async move {
+                        let mut pieces_publishing_futures = new_pieces
+                            .into_iter()
+                            .map(|piece_index| {
+                                subspace_networking::utils::pieces::announce_single_piece_index_with_backoff(piece_index, &node)
+                            })
+                            .collect::<FuturesUnordered<_>>();
+
+                        while pieces_publishing_futures.next().await.is_some() {
+                            // Nothing is needed here, just driving all futures
+                            // to completion
+                        }
+
+                        tracing::info!("Piece publishing was successful.");
+
+                        // Release only after publishing is finished
+                        drop(plotting_permit);
+                    };
+
+                    tokio::spawn(async move {
+                        use futures::future::{select, Either};
+
+                        let result =
+                            select(Box::pin(publish_fut), Box::pin(dropped_receiver.recv())).await;
+                        if !matches!(result, Either::Right(_)) {
+                            tracing::debug!("Piece publishing was cancelled due to shutdown.");
+                        }
+                    });
                 }))
                 .detach();
         }
@@ -301,20 +616,23 @@ impl Config {
 
         let (cmd_sender, cmd_receiver) = oneshot::channel::<()>();
 
+        tokio::spawn(async move {
+            dsn_node_runner.run().await;
+        });
+
         let handle = tokio::task::spawn_blocking({
-            let handle = tokio::runtime::Handle::current();
             let node = node.clone();
+            let handle = tokio::runtime::Handle::current();
+
             move || {
-                let result_maybe_sender = handle.block_on(futures::future::select(
-                    single_disk_plots_stream.next(),
-                    cmd_receiver,
-                ));
-                match result_maybe_sender {
-                    // If node is closed when we might get some random error, so just ignore it
-                    future::Either::Left((_, _)) if handle.block_on(node.is_closed()) => Ok(()),
-                    future::Either::Left((maybe_result, _)) =>
-                        maybe_result.expect("There is at least one plot"),
-                    future::Either::Right((_, _)) => Ok(()),
+                use future::Either::*;
+
+                match handle.block_on(future::select(single_disk_plots_stream.next(), cmd_receiver))
+                {
+                    Left((_, _)) if handle.block_on(node.is_closed()) => Ok(()),
+                    Left((maybe_result, _)) =>
+                        maybe_result.expect("there is always at least one plot"),
+                    Right((_, _)) => Ok(()),
                 }
             }
         });
@@ -411,7 +729,7 @@ pub struct InitialPlottingProgress {
 #[derive(Debug)]
 pub struct Plot {
     directory: PathBuf,
-    progress: watch::Receiver<Option<PlottedSector>>,
+    progress: watch::Receiver<Option<(PlottedSector, Arc<tokio::sync::OwnedSemaphorePermit>)>>,
     solutions: watch::Receiver<Option<SolutionResponse>>,
     initial_plotting_progress: Arc<Mutex<InitialPlottingProgress>>,
     allocated_space: u64,
@@ -584,20 +902,17 @@ impl Farmer {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+
     use tempfile::TempDir;
 
     use super::*;
-    use crate::node::{chain_spec, Node, Role};
+    use crate::node::{chain_spec, Node};
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_get_info() {
         let dir = TempDir::new().unwrap();
-        let node = Node::builder()
-            .force_authoring(true)
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
+        let node = Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
         let plot_dir = TempDir::new().unwrap();
         let plots = [PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()];
         let cache_dir = TempDir::new().unwrap();
@@ -624,12 +939,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_track_progress() {
         let dir = TempDir::new().unwrap();
-        let node = Node::builder()
-            .force_authoring(true)
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
+        let node = Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let n_sectors = 1;
         let farmer = Farmer::builder()
@@ -665,12 +975,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_new_solution() {
         let dir = TempDir::new().unwrap();
-        let node = Node::builder()
-            .force_authoring(true)
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
+        let node = Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let farmer = Farmer::builder()
             .build(
@@ -700,12 +1005,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_progress_restart() {
         let dir = TempDir::new().unwrap();
-        let node = Node::builder()
-            .force_authoring(true)
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
+        let node = Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let farmer = Farmer::builder()
             .build(
