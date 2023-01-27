@@ -23,6 +23,8 @@ use sp_consensus::SyncOracle;
 use sp_core::H256;
 use subspace_core_primitives::SolutionRange;
 use subspace_farmer::node_client::NodeClient;
+use subspace_farmer::utils::parity_db_store::ParityDbStore;
+use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse};
 use subspace_rpc_primitives::SlotInfo;
@@ -32,7 +34,8 @@ use subspace_service::piece_cache::PieceCache;
 use subspace_service::SubspaceConfiguration;
 
 use self::builder::SegmentPublishConcurrency;
-use crate::networking::NodeProviderStorage;
+use crate::networking::provider_storage_utils::MaybeProviderStorage;
+use crate::networking::{FarmerProviderStorage, NodeProviderStorage, ProviderStorage};
 
 pub mod chain_spec;
 pub mod domains;
@@ -679,7 +682,7 @@ mod builder {
     #[serde(transparent)]
     pub struct ListenAddresses(
         #[derivative(Default(
-        // TODO: get rid of it, once it won't be required by monorepo
+            // TODO: get rid of it, once it won't be required by monorepo
             value = "vec![\"/ip4/127.0.0.1/tcp/0\".parse().expect(\"Always valid\")]"
         ))]
         pub(crate) Vec<libp2p_core::Multiaddr>,
@@ -801,73 +804,6 @@ impl From<RpcMethods> for sc_service::RpcMethods {
 
 const NODE_NAME_MAX_LENGTH: usize = 64;
 
-async fn create_dsn_instance<AS: sc_client_api::AuxStore + Sync + Send + 'static>(
-    dsn: builder::Dsn,
-    chain_spec_boot_nodes: Vec<Multiaddr>,
-    piece_cache: PieceCache<AS>,
-    keypair: subspace_networking::libp2p::identity::Keypair,
-) -> Result<
-    (
-        subspace_networking::Node,
-        subspace_networking::NodeRunner<NodeProviderStorage<AS>>,
-        Vec<subspace_networking::libp2p::Multiaddr>,
-    ),
-    subspace_networking::CreationError,
-> {
-    tracing::trace!("Subspace networking starting.");
-
-    let builder::Dsn {
-        listen_addresses,
-        boot_nodes,
-        reserved_nodes,
-        allow_non_global_addresses_in_dht,
-    } = dsn;
-
-    let peer_id = subspace_networking::peer_id(&keypair);
-    let bootstrap_nodes = chain_spec_boot_nodes
-        .into_iter()
-        .chain(boot_nodes)
-        .map(|a| a.to_string().parse().expect("Convertion between 2 libp2p version. Never panics"))
-        .collect::<Vec<_>>();
-
-    let listen_on = listen_addresses
-        .0
-        .into_iter()
-        .map(|a| a.to_string().parse().expect("Convertion between 2 libp2p version. Never panics"))
-        .collect::<Vec<_>>();
-
-    // TODO: Let users choose parity db storage provider
-    let external_provider_storage =
-        Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id));
-
-    let provider_storage = NodeProviderStorage::new(piece_cache.clone(), external_provider_storage);
-
-    let networking_config = subspace_networking::Config {
-        keypair: keypair.clone(),
-        listen_on,
-        allow_non_global_addresses_in_dht,
-        networking_parameters_registry: subspace_networking::BootstrappedNetworkingParameters::new(
-            bootstrap_nodes.clone(),
-        )
-        .boxed(),
-        request_response_protocols: vec![PieceByHashRequestHandler::create(move |req| {
-            get_piece_by_hash(req, &piece_cache)
-        })],
-        provider_storage,
-        reserved_peers: reserved_nodes
-            .into_iter()
-            .map(|addr| {
-                addr.to_string()
-                    .parse()
-                    .expect("Conversion between 2 libp2p versions is always right")
-            })
-            .collect(),
-        ..subspace_networking::Config::default()
-    };
-
-    subspace_networking::create(networking_config).await.map(|(a, b)| (a, b, bootstrap_nodes))
-}
-
 impl Config {
     /// Start a node with supplied parameters
     pub async fn build(
@@ -888,7 +824,11 @@ impl Config {
         let partial_components =
             subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&base)
                 .context("Failed to build a partial subspace node")?;
-        let (subspace_networking, (node, mut node_runner)) = {
+        let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
+        let farmer_piece_store = Arc::new(parking_lot::Mutex::new(None));
+        let farmer_provider_storage = MaybeProviderStorage::none();
+
+        let (subspace_networking, (node, mut node_runner, piece_cache)) = {
             let keypair = {
                 let keypair = base
                     .network
@@ -948,19 +888,101 @@ impl Config {
                 .context("Failed to decode DSN bootsrap nodes")?
                 .unwrap_or_default();
 
-            let (node, node_runner, bootstrap_nodes) = create_dsn_instance(
-                dsn.clone(),
-                chain_spec_boot_nodes,
-                piece_cache.clone(),
-                keypair,
-            )
-            .await?;
+            let (node, node_runner, bootstrap_nodes) = {
+                tracing::trace!("Subspace networking starting.");
 
-            // tracing::info!("Subspace networking initialized: Node ID is {}", node.id());
+                let builder::Dsn {
+                    listen_addresses,
+                    boot_nodes,
+                    reserved_nodes,
+                    allow_non_global_addresses_in_dht,
+                } = dsn;
+
+                let peer_id = subspace_networking::peer_id(&keypair);
+                let bootstrap_nodes = chain_spec_boot_nodes
+                    .into_iter()
+                    .chain(boot_nodes)
+                    .map(|a| {
+                        a.to_string()
+                            .parse()
+                            .expect("Convertion between 2 libp2p version. Never panics")
+                    })
+                    .collect::<Vec<_>>();
+
+                let listen_on = listen_addresses
+                    .0
+                    .into_iter()
+                    .map(|a| {
+                        a.to_string()
+                            .parse()
+                            .expect("Convertion between 2 libp2p version. Never panics")
+                    })
+                    .collect();
+
+                // TODO: Let users choose parity db storage provider
+                let external_provider_storage =
+                    Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id));
+
+                let node_provider_storage =
+                    NodeProviderStorage::new(piece_cache.clone(), external_provider_storage);
+                let provider_storage =
+                    ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
+
+                let networking_config = subspace_networking::Config {
+                    keypair: keypair.clone(),
+                    listen_on,
+                    allow_non_global_addresses_in_dht,
+                    networking_parameters_registry:
+                        subspace_networking::BootstrappedNetworkingParameters::new(
+                            bootstrap_nodes.clone(),
+                        )
+                        .boxed(),
+                    request_response_protocols: vec![PieceByHashRequestHandler::create({
+                        let handle = tokio::runtime::Handle::current();
+                        let weak_readers_and_pieces = Arc::downgrade(&farmer_readers_and_pieces);
+                        let farmer_piece_store = Arc::clone(&farmer_piece_store);
+                        let piece_cache = piece_cache.clone();
+
+                        move |req| {
+                            match get_piece_by_hash(req, &piece_cache) {
+                                Some(PieceByHashResponse { piece: None }) | None => (),
+                                result => return result,
+                            }
+
+                            if let Some(piece_store) = farmer_piece_store.lock().as_ref() {
+                                crate::farmer::get_piece_by_hash(
+                                    req,
+                                    piece_store,
+                                    &weak_readers_and_pieces,
+                                    &handle,
+                                )
+                            } else {
+                                None
+                            }
+                        }
+                    })],
+                    provider_storage,
+                    reserved_peers: reserved_nodes
+                        .into_iter()
+                        .map(|addr| {
+                            addr.to_string()
+                                .parse()
+                                .expect("Conversion between 2 libp2p versions is always right")
+                        })
+                        .collect(),
+                    ..subspace_networking::Config::default()
+                };
+
+                subspace_networking::create(networking_config)
+                    .await
+                    .map(|(a, b)| (a, b, bootstrap_nodes))?
+            };
+
+            tracing::debug!("Subspace networking initialized: Node ID is {}", node.id());
 
             (
                 subspace_service::SubspaceNetworking::Reuse { node: node.clone(), bootstrap_nodes },
-                (node, node_runner),
+                (node, node_runner, piece_cache),
             )
         };
 
@@ -1052,7 +1074,10 @@ impl Config {
             rpc_handle,
             dsn_node: node,
             stop_sender,
-            dsn_opts: dsn,
+            farmer_readers_and_pieces,
+            farmer_piece_store,
+            farmer_provider_storage,
+            piece_cache,
         })
     }
 }
@@ -1099,7 +1124,12 @@ pub struct Node {
     stop_sender: mpsc::Sender<oneshot::Sender<()>>,
     pub(crate) dsn_node: subspace_networking::Node,
     name: String,
-    pub(crate) dsn_opts: Dsn,
+    pub(crate) farmer_readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
+    #[derivative(Debug = "ignore")]
+    pub(crate) farmer_piece_store: Arc<parking_lot::Mutex<Option<ParityDbStore>>>,
+    pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
+    #[derivative(Debug = "ignore")]
+    pub(crate) piece_cache: PieceCache<FullClient>,
 }
 
 /// Hash type

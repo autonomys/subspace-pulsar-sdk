@@ -1,5 +1,4 @@
 pub(crate) mod node_provider_storage;
-#[allow(unused)]
 pub(crate) mod provider_storage_utils;
 
 use std::num::NonZeroUsize;
@@ -9,10 +8,15 @@ use either::*;
 use event_listener_primitives::HandlerId;
 use futures::StreamExt;
 use parking_lot::Mutex;
+use sc_client_api::AuxStore;
+use subspace_core_primitives::PieceIndexHash;
 use subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
 use subspace_farmer::utils::farmer_provider_record_processor::FarmerProviderRecordProcessor;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
+use subspace_farmer_components::plotting::PieceGetter;
+use subspace_networking::utils::piece_provider::PieceValidator;
 use subspace_networking::{Node, ParityDbProviderStorage};
+use subspace_service::piece_cache::PieceCache;
 use tracing::{warn, Instrument};
 
 pub(crate) type FarmerProviderStorage =
@@ -21,11 +25,10 @@ pub(crate) type NodeProviderStorage<C> = node_provider_storage::NodeProviderStor
     subspace_service::piece_cache::PieceCache<C>,
     Either<ParityDbProviderStorage, subspace_networking::MemoryProviderStorage>,
 >;
-// pub(crate) type ProviderStorage<C> =
-// provider_storage_utils::AndProviderStorage<
-//     provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage>,
-//     NodeProviderStorage<C>,
-// >;
+pub(crate) type ProviderStorage<C> = provider_storage_utils::AndProviderStorage<
+    provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage>,
+    NodeProviderStorage<C>,
+>;
 
 const MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE: usize = 2000;
 const MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
@@ -81,4 +84,39 @@ pub fn start_announcements_processor(
     })?;
 
     Ok(handler_id)
+}
+
+pub struct NodePieceGetter<PV, C> {
+    piece_getter: subspace_farmer::utils::node_piece_getter::NodePieceGetter<PV>,
+    node_cache: PieceCache<C>,
+}
+
+impl<PV, C> NodePieceGetter<PV, C> {
+    pub fn new(
+        dsn_piece_getter: subspace_farmer::utils::node_piece_getter::NodePieceGetter<PV>,
+        node_cache: PieceCache<C>,
+    ) -> Self {
+        Self { piece_getter: dsn_piece_getter, node_cache }
+    }
+}
+
+#[async_trait::async_trait()]
+impl<PV: PieceValidator, C: AuxStore + Send + Sync> PieceGetter for NodePieceGetter<PV, C> {
+    async fn get_piece(
+        &self,
+        piece_index: subspace_core_primitives::PieceIndex,
+    ) -> Result<
+        Option<subspace_core_primitives::Piece>,
+        Box<dyn std::error::Error + Send + Sync + 'static>,
+    > {
+        let piece = self
+            .node_cache
+            .get_piece(PieceIndexHash::from_index(piece_index))
+            .map_err(|x| x.to_string())?;
+        if piece.is_some() {
+            return Ok(piece);
+        }
+
+        self.piece_getter.get_piece(piece_index).await
+    }
 }
