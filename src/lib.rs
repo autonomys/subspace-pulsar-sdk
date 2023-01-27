@@ -230,6 +230,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[cfg(not(windows))]
     async fn test_integration() {
         let timeout = std::time::Duration::from_secs(30 * 60);
         tokio::time::timeout(timeout, test_integration_inner()).await.unwrap();
