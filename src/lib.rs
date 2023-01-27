@@ -207,8 +207,7 @@ mod tests {
     use super::farmer::CacheDescription;
     use super::*;
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_integration() {
+    async fn test_integration_inner() {
         crate::utils::test_init();
 
         let dir = TempDir::new().unwrap();
@@ -228,6 +227,12 @@ mod tests {
             .unwrap();
 
         node.subscribe_new_blocks().await.unwrap().take(2).for_each(|_| async move {}).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_integration() {
+        let timeout = std::time::Duration::from_secs(30 * 60);
+        tokio::time::timeout(timeout, test_integration_inner()).await.unwrap();
     }
 
     #[test]
