@@ -255,6 +255,10 @@ mod builder {
         #[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub segment_publish_concurrency: SegmentPublishConcurrency,
+        /// Should we sync blocks from the DSN?
+        #[builder(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub sync_from_dsn: bool,
         #[doc(hidden)]
         #[builder(
             setter(into, strip_option),
@@ -817,6 +821,7 @@ impl Config {
             dsn,
             system_domain,
             segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
+            sync_from_dsn,
         } = self;
         let base = base.configuration(directory.as_ref(), chain_spec.clone()).await;
         let name = base.network.node_name.clone();
@@ -992,6 +997,7 @@ impl Config {
             force_new_slot_notifications: false,
             segment_publish_concurrency,
             subspace_networking,
+            sync_from_dsn,
         };
 
         tokio::spawn(async move {
