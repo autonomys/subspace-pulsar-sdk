@@ -957,6 +957,7 @@
 <a href="#957" id="957">957</a>
 <a href="#958" id="958">958</a>
 <a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1303,6 +1304,7 @@
                 kzg.clone(),
                 records_roots_cache,
             )),
+            <span class="bool-val">true</span>,
         );
         <span class="kw">let </span>piece_getter = Arc::new(FarmerPieceGetter::new(
             NodePieceGetter::new(DsnPieceGetter::new(piece_provider), node.piece_cache.clone()),

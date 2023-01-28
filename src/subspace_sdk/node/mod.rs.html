@@ -1654,6 +1654,12 @@
 <a href="#1654" id="1654">1654</a>
 <a href="#1655" id="1655">1655</a>
 <a href="#1656" id="1656">1656</a>
+<a href="#1657" id="1657">1657</a>
+<a href="#1658" id="1658">1658</a>
+<a href="#1659" id="1659">1659</a>
+<a href="#1660" id="1660">1660</a>
+<a href="#1661" id="1661">1661</a>
+<a href="#1662" id="1662">1662</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
@@ -1911,6 +1917,10 @@
         </span><span class="attr">#[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
         </span><span class="kw">pub </span>segment_publish_concurrency: SegmentPublishConcurrency,
+        <span class="doccomment">/// Should we sync blocks from the DSN?
+        </span><span class="attr">#[builder(default)]
+        #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
+        </span><span class="kw">pub </span>sync_from_dsn: bool,
         <span class="attr">#[doc(hidden)]
         #[builder(
             setter(into, strip_option),
@@ -2473,6 +2483,7 @@
             dsn,
             system_domain,
             segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
+            sync_from_dsn,
         } = <span class="self">self</span>;
         <span class="kw">let </span>base = base.configuration(directory.as_ref(), chain_spec.clone()).<span class="kw">await</span>;
         <span class="kw">let </span>name = base.network.node_name.clone();
@@ -2648,6 +2659,7 @@
             force_new_slot_notifications: <span class="bool-val">false</span>,
             segment_publish_concurrency,
             subspace_networking,
+            sync_from_dsn,
         };
 
         tokio::spawn(<span class="kw">async move </span>{
