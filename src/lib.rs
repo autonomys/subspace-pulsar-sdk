@@ -230,7 +230,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    #[cfg(not(windows))]
+    #[cfg_attr(any(tarpaulin), ignore = "Ignored for coverage tests")]
     async fn test_integration() {
         let timeout = std::time::Duration::from_secs(30 * 60);
         tokio::time::timeout(timeout, test_integration_inner()).await.unwrap();
