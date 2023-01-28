@@ -246,6 +246,88 @@ pub(crate) mod chain_spec {
         )
     }
 
+    pub fn devnet_config() -> ChainSpec {
+        ChainSpec::from_genesis(
+            // Name
+            "Subspace Devnet System domain",
+            // ID
+            "subspace_devnet_system_domain",
+            ChainType::Custom("Testnet".to_string()),
+            move || {
+                let sudo_account =
+                    AccountId::from_ss58check("5CXTmJEusve5ixyJufqHThmy4qUrrm6FyLCR7QfE4bbyMTNC")
+                        .expect("Invalid Sudo account");
+                testnet_genesis(
+                    vec![
+                        // Genesis executor
+                        AccountId::from_ss58check(
+                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
+                        )
+                        .expect("Wrong executor account address"),
+                        // Sudo account
+                        sudo_account.clone(),
+                    ],
+                    vec![(
+                        AccountId::from_ss58check(
+                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
+                        )
+                        .expect("Wrong executor account address"),
+                        1_000 * SSC,
+                        AccountId::from_ss58check(
+                            "5FsxcczkSUnpqhcSgugPZsSghxrcKx5UEsRKL5WyPTL6SAxB",
+                        )
+                        .expect("Wrong executor reward address"),
+                        ExecutorPublicKey::from_ss58check(
+                            "5FuuXk1TL8DKQMvg7mcqmP8t9FhxUdzTcYC9aFmebiTLmASx",
+                        )
+                        .expect("Wrong executor public key"),
+                    )],
+                    vec![(
+                        AccountId::from_ss58check(
+                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
+                        )
+                        .expect("Wrong executor account address"),
+                        1_000 * SSC,
+                        DomainConfig {
+                            wasm_runtime_hash: blake2b_256_hash(
+                                system_domain_runtime::CORE_PAYMENTS_WASM_BUNDLE,
+                            )
+                            .into(),
+                            max_bundle_size: 4 * 1024 * 1024,
+                            bundle_slot_probability: (1, 1),
+                            max_bundle_weight: Weight::MAX,
+                            min_operator_stake: 100 * SSC,
+                        },
+                        AccountId::from_ss58check(
+                            "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
+                        )
+                        .expect("Wrong executor account address"),
+                        Percent::one(),
+                    )],
+                    Some(sudo_account.clone()),
+                    vec![(
+                        sudo_account,
+                        RelayerId::from_ss58check(
+                            "5D7kgfacBsP6pkMB628221HG98mz2euaytthdoeZPGceQusS",
+                        )
+                        .expect("Invalid relayer id account"),
+                    )],
+                )
+            },
+            // Bootnodes
+            vec![],
+            // Telemetry
+            None,
+            // Protocol ID
+            Some("subspace-devnet-execution"),
+            None,
+            // Properties
+            Some(chain_spec_properties()),
+            // Extensions
+            ChainSpecExtensions { execution_chain_spec: super::core::chain_spec::devnet_config() },
+        )
+    }
+
     fn testnet_genesis(
         endowed_accounts: Vec<AccountId>,
         executors: Vec<(AccountId, Balance, AccountId, ExecutorPublicKey)>,
