@@ -205,13 +205,18 @@ mod tests {
     use tempfile::TempDir;
 
     use super::farmer::CacheDescription;
+    use super::node::Role;
     use super::*;
 
     async fn test_integration_inner() {
         crate::utils::test_init();
 
         let dir = TempDir::new().unwrap();
-        let node = Node::dev().build(dir, node::chain_spec::dev_config().unwrap()).await.unwrap();
+        let node = Node::dev()
+            .role(Role::Authority)
+            .build(dir, node::chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
 
         let (dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let plot_descriptions =

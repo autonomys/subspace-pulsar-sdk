@@ -832,12 +832,16 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::node::{chain_spec, Node};
+    use crate::node::{chain_spec, Node, Role};
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_get_info() {
         let dir = TempDir::new().unwrap();
-        let node = Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
+        let node = Node::dev()
+            .role(Role::Authority)
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
         let plot_dir = TempDir::new().unwrap();
         let plots = [PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()];
         let cache_dir = TempDir::new().unwrap();
@@ -864,7 +868,11 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_track_progress() {
         let dir = TempDir::new().unwrap();
-        let node = Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
+        let node = Node::dev()
+            .role(Role::Authority)
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let n_sectors = 1;
         let farmer = Farmer::builder()
@@ -900,7 +908,11 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_new_solution() {
         let dir = TempDir::new().unwrap();
-        let node = Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
+        let node = Node::dev()
+            .role(Role::Authority)
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let farmer = Farmer::builder()
             .build(
@@ -930,7 +942,11 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_progress_restart() {
         let dir = TempDir::new().unwrap();
-        let node = Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
+        let node = Node::dev()
+            .role(Role::Authority)
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let farmer = Farmer::builder()
             .build(
