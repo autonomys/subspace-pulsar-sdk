@@ -1624,6 +1624,36 @@
 <a href="#1624" id="1624">1624</a>
 <a href="#1625" id="1625">1625</a>
 <a href="#1626" id="1626">1626</a>
+<a href="#1627" id="1627">1627</a>
+<a href="#1628" id="1628">1628</a>
+<a href="#1629" id="1629">1629</a>
+<a href="#1630" id="1630">1630</a>
+<a href="#1631" id="1631">1631</a>
+<a href="#1632" id="1632">1632</a>
+<a href="#1633" id="1633">1633</a>
+<a href="#1634" id="1634">1634</a>
+<a href="#1635" id="1635">1635</a>
+<a href="#1636" id="1636">1636</a>
+<a href="#1637" id="1637">1637</a>
+<a href="#1638" id="1638">1638</a>
+<a href="#1639" id="1639">1639</a>
+<a href="#1640" id="1640">1640</a>
+<a href="#1641" id="1641">1641</a>
+<a href="#1642" id="1642">1642</a>
+<a href="#1643" id="1643">1643</a>
+<a href="#1644" id="1644">1644</a>
+<a href="#1645" id="1645">1645</a>
+<a href="#1646" id="1646">1646</a>
+<a href="#1647" id="1647">1647</a>
+<a href="#1648" id="1648">1648</a>
+<a href="#1649" id="1649">1649</a>
+<a href="#1650" id="1650">1650</a>
+<a href="#1651" id="1651">1651</a>
+<a href="#1652" id="1652">1652</a>
+<a href="#1653" id="1653">1653</a>
+<a href="#1654" id="1654">1654</a>
+<a href="#1655" id="1655">1655</a>
+<a href="#1656" id="1656">1656</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
@@ -1649,6 +1679,8 @@
 <span class="kw">use </span>sp_core::H256;
 <span class="kw">use </span>subspace_core_primitives::SolutionRange;
 <span class="kw">use </span>subspace_farmer::node_client::NodeClient;
+<span class="kw">use </span>subspace_farmer::utils::parity_db_store::ParityDbStore;
+<span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 <span class="kw">use </span>subspace_farmer_components::FarmerProtocolInfo;
 <span class="kw">use </span>subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse};
 <span class="kw">use </span>subspace_rpc_primitives::SlotInfo;
@@ -1658,7 +1690,8 @@
 <span class="kw">use </span>subspace_service::SubspaceConfiguration;
 
 <span class="kw">use </span><span class="self">self</span>::builder::SegmentPublishConcurrency;
-<span class="kw">use </span><span class="kw">crate</span>::networking::NodeProviderStorage;
+<span class="kw">use </span><span class="kw">crate</span>::networking::provider_storage_utils::MaybeProviderStorage;
+<span class="kw">use </span><span class="kw">crate</span>::networking::{FarmerProviderStorage, NodeProviderStorage, ProviderStorage};
 
 <span class="kw">pub mod </span>chain_spec;
 <span class="kw">pub mod </span>domains;
@@ -2305,7 +2338,7 @@
     #[serde(transparent)]
     </span><span class="kw">pub struct </span>ListenAddresses(
         <span class="attr">#[derivative(Default(
-        <span class="comment">// TODO: get rid of it, once it won&#39;t be required by monorepo
+            <span class="comment">// TODO: get rid of it, once it won&#39;t be required by monorepo
             </span>value = <span class="string">&quot;vec![\&quot;/ip4/127.0.0.1/tcp/0\&quot;.parse().expect(\&quot;Always valid\&quot;)]&quot;
         </span>))]
         </span><span class="kw">pub</span>(<span class="kw">crate</span>) Vec&lt;libp2p_core::Multiaddr&gt;,
@@ -2427,73 +2460,6 @@
 
 <span class="kw">const </span>NODE_NAME_MAX_LENGTH: usize = <span class="number">64</span>;
 
-<span class="kw">async fn </span>create_dsn_instance&lt;AS: sc_client_api::AuxStore + Sync + Send + <span class="lifetime">&#39;static</span>&gt;(
-    dsn: builder::Dsn,
-    chain_spec_boot_nodes: Vec&lt;Multiaddr&gt;,
-    piece_cache: PieceCache&lt;AS&gt;,
-    keypair: subspace_networking::libp2p::identity::Keypair,
-) -&gt; <span class="prelude-ty">Result</span>&lt;
-    (
-        subspace_networking::Node,
-        subspace_networking::NodeRunner&lt;NodeProviderStorage&lt;AS&gt;&gt;,
-        Vec&lt;subspace_networking::libp2p::Multiaddr&gt;,
-    ),
-    subspace_networking::CreationError,
-&gt; {
-    <span class="macro">tracing::trace!</span>(<span class="string">&quot;Subspace networking starting.&quot;</span>);
-
-    <span class="kw">let </span>builder::Dsn {
-        listen_addresses,
-        boot_nodes,
-        reserved_nodes,
-        allow_non_global_addresses_in_dht,
-    } = dsn;
-
-    <span class="kw">let </span>peer_id = subspace_networking::peer_id(<span class="kw-2">&amp;</span>keypair);
-    <span class="kw">let </span>bootstrap_nodes = chain_spec_boot_nodes
-        .into_iter()
-        .chain(boot_nodes)
-        .map(|a| a.to_string().parse().expect(<span class="string">&quot;Convertion between 2 libp2p version. Never panics&quot;</span>))
-        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-
-    <span class="kw">let </span>listen_on = listen_addresses
-        .<span class="number">0
-        </span>.into_iter()
-        .map(|a| a.to_string().parse().expect(<span class="string">&quot;Convertion between 2 libp2p version. Never panics&quot;</span>))
-        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-
-    <span class="comment">// TODO: Let users choose parity db storage provider
-    </span><span class="kw">let </span>external_provider_storage =
-        Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id));
-
-    <span class="kw">let </span>provider_storage = NodeProviderStorage::new(piece_cache.clone(), external_provider_storage);
-
-    <span class="kw">let </span>networking_config = subspace_networking::Config {
-        keypair: keypair.clone(),
-        listen_on,
-        allow_non_global_addresses_in_dht,
-        networking_parameters_registry: subspace_networking::BootstrappedNetworkingParameters::new(
-            bootstrap_nodes.clone(),
-        )
-        .boxed(),
-        request_response_protocols: <span class="macro">vec!</span>[PieceByHashRequestHandler::create(<span class="kw">move </span>|req| {
-            get_piece_by_hash(req, <span class="kw-2">&amp;</span>piece_cache)
-        })],
-        provider_storage,
-        reserved_peers: reserved_nodes
-            .into_iter()
-            .map(|addr| {
-                addr.to_string()
-                    .parse()
-                    .expect(<span class="string">&quot;Conversion between 2 libp2p versions is always right&quot;</span>)
-            })
-            .collect(),
-        ..subspace_networking::Config::default()
-    };
-
-    subspace_networking::create(networking_config).<span class="kw">await</span>.map(|(a, b)| (a, b, bootstrap_nodes))
-}
-
 <span class="kw">impl </span>Config {
     <span class="doccomment">/// Start a node with supplied parameters
     </span><span class="kw">pub async fn </span>build(
@@ -2514,7 +2480,11 @@
         <span class="kw">let </span>partial_components =
             subspace_service::new_partial::&lt;RuntimeApi, ExecutorDispatch&gt;(<span class="kw-2">&amp;</span>base)
                 .context(<span class="string">&quot;Failed to build a partial subspace node&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>(subspace_networking, (node, <span class="kw-2">mut </span>node_runner)) = {
+        <span class="kw">let </span>farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(<span class="prelude-val">None</span>));
+        <span class="kw">let </span>farmer_piece_store = Arc::new(parking_lot::Mutex::new(<span class="prelude-val">None</span>));
+        <span class="kw">let </span>farmer_provider_storage = MaybeProviderStorage::none();
+
+        <span class="kw">let </span>(subspace_networking, (node, <span class="kw-2">mut </span>node_runner, piece_cache)) = {
             <span class="kw">let </span>keypair = {
                 <span class="kw">let </span>keypair = base
                     .network
@@ -2574,19 +2544,101 @@
                 .context(<span class="string">&quot;Failed to decode DSN bootsrap nodes&quot;</span>)<span class="question-mark">?
                 </span>.unwrap_or_default();
 
-            <span class="kw">let </span>(node, node_runner, bootstrap_nodes) = create_dsn_instance(
-                dsn.clone(),
-                chain_spec_boot_nodes,
-                piece_cache.clone(),
-                keypair,
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>(node, node_runner, bootstrap_nodes) = {
+                <span class="macro">tracing::trace!</span>(<span class="string">&quot;Subspace networking starting.&quot;</span>);
 
-            <span class="comment">// tracing::info!(&quot;Subspace networking initialized: Node ID is {}&quot;, node.id());
+                <span class="kw">let </span>builder::Dsn {
+                    listen_addresses,
+                    boot_nodes,
+                    reserved_nodes,
+                    allow_non_global_addresses_in_dht,
+                } = dsn;
 
-            </span>(
+                <span class="kw">let </span>peer_id = subspace_networking::peer_id(<span class="kw-2">&amp;</span>keypair);
+                <span class="kw">let </span>bootstrap_nodes = chain_spec_boot_nodes
+                    .into_iter()
+                    .chain(boot_nodes)
+                    .map(|a| {
+                        a.to_string()
+                            .parse()
+                            .expect(<span class="string">&quot;Convertion between 2 libp2p version. Never panics&quot;</span>)
+                    })
+                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
+                <span class="kw">let </span>listen_on = listen_addresses
+                    .<span class="number">0
+                    </span>.into_iter()
+                    .map(|a| {
+                        a.to_string()
+                            .parse()
+                            .expect(<span class="string">&quot;Convertion between 2 libp2p version. Never panics&quot;</span>)
+                    })
+                    .collect();
+
+                <span class="comment">// TODO: Let users choose parity db storage provider
+                </span><span class="kw">let </span>external_provider_storage =
+                    Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id));
+
+                <span class="kw">let </span>node_provider_storage =
+                    NodeProviderStorage::new(piece_cache.clone(), external_provider_storage);
+                <span class="kw">let </span>provider_storage =
+                    ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
+
+                <span class="kw">let </span>networking_config = subspace_networking::Config {
+                    keypair: keypair.clone(),
+                    listen_on,
+                    allow_non_global_addresses_in_dht,
+                    networking_parameters_registry:
+                        subspace_networking::BootstrappedNetworkingParameters::new(
+                            bootstrap_nodes.clone(),
+                        )
+                        .boxed(),
+                    request_response_protocols: <span class="macro">vec!</span>[PieceByHashRequestHandler::create({
+                        <span class="kw">let </span>handle = tokio::runtime::Handle::current();
+                        <span class="kw">let </span>weak_readers_and_pieces = Arc::downgrade(<span class="kw-2">&amp;</span>farmer_readers_and_pieces);
+                        <span class="kw">let </span>farmer_piece_store = Arc::clone(<span class="kw-2">&amp;</span>farmer_piece_store);
+                        <span class="kw">let </span>piece_cache = piece_cache.clone();
+
+                        <span class="kw">move </span>|req| {
+                            <span class="kw">match </span>get_piece_by_hash(req, <span class="kw-2">&amp;</span>piece_cache) {
+                                <span class="prelude-val">Some</span>(PieceByHashResponse { piece: <span class="prelude-val">None </span>}) | <span class="prelude-val">None </span>=&gt; (),
+                                result =&gt; <span class="kw">return </span>result,
+                            }
+
+                            <span class="kw">if let </span><span class="prelude-val">Some</span>(piece_store) = farmer_piece_store.lock().as_ref() {
+                                <span class="kw">crate</span>::farmer::get_piece_by_hash(
+                                    req,
+                                    piece_store,
+                                    <span class="kw-2">&amp;</span>weak_readers_and_pieces,
+                                    <span class="kw-2">&amp;</span>handle,
+                                )
+                            } <span class="kw">else </span>{
+                                <span class="prelude-val">None
+                            </span>}
+                        }
+                    })],
+                    provider_storage,
+                    reserved_peers: reserved_nodes
+                        .into_iter()
+                        .map(|addr| {
+                            addr.to_string()
+                                .parse()
+                                .expect(<span class="string">&quot;Conversion between 2 libp2p versions is always right&quot;</span>)
+                        })
+                        .collect(),
+                    ..subspace_networking::Config::default()
+                };
+
+                subspace_networking::create(networking_config)
+                    .<span class="kw">await
+                    </span>.map(|(a, b)| (a, b, bootstrap_nodes))<span class="question-mark">?
+            </span>};
+
+            <span class="macro">tracing::debug!</span>(<span class="string">&quot;Subspace networking initialized: Node ID is {}&quot;</span>, node.id());
+
+            (
                 subspace_service::SubspaceNetworking::Reuse { node: node.clone(), bootstrap_nodes },
-                (node, node_runner),
+                (node, node_runner, piece_cache),
             )
         };
 
@@ -2678,7 +2730,10 @@
             rpc_handle,
             dsn_node: node,
             stop_sender,
-            dsn_opts: dsn,
+            farmer_readers_and_pieces,
+            farmer_piece_store,
+            farmer_provider_storage,
+            piece_cache,
         })
     }
 }
@@ -2725,7 +2780,12 @@
     stop_sender: mpsc::Sender&lt;oneshot::Sender&lt;()&gt;&gt;,
     <span class="kw">pub</span>(<span class="kw">crate</span>) dsn_node: subspace_networking::Node,
     name: String,
-    <span class="kw">pub</span>(<span class="kw">crate</span>) dsn_opts: Dsn,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) farmer_readers_and_pieces: Arc&lt;parking_lot::Mutex&lt;<span class="prelude-ty">Option</span>&lt;ReadersAndPieces&gt;&gt;&gt;,
+    <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) farmer_piece_store: Arc&lt;parking_lot::Mutex&lt;<span class="prelude-ty">Option</span>&lt;ParityDbStore&gt;&gt;&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) farmer_provider_storage: MaybeProviderStorage&lt;FarmerProviderStorage&gt;,
+    <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) piece_cache: PieceCache&lt;FullClient&gt;,
 }
 
 <span class="doccomment">/// Hash type

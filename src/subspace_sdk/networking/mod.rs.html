@@ -82,9 +82,46 @@
 <a href="#82" id="82">82</a>
 <a href="#83" id="83">83</a>
 <a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>node_provider_storage;
-<span class="attr">#[allow(unused)]
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>provider_storage_utils;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>provider_storage_utils;
 
 <span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::sync::{Arc, Weak};
@@ -93,10 +130,15 @@
 <span class="kw">use </span>event_listener_primitives::HandlerId;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>parking_lot::Mutex;
+<span class="kw">use </span>sc_client_api::AuxStore;
+<span class="kw">use </span>subspace_core_primitives::PieceIndexHash;
 <span class="kw">use </span>subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
 <span class="kw">use </span>subspace_farmer::utils::farmer_provider_record_processor::FarmerProviderRecordProcessor;
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
+<span class="kw">use </span>subspace_farmer_components::plotting::PieceGetter;
+<span class="kw">use </span>subspace_networking::utils::piece_provider::PieceValidator;
 <span class="kw">use </span>subspace_networking::{Node, ParityDbProviderStorage};
+<span class="kw">use </span>subspace_service::piece_cache::PieceCache;
 <span class="kw">use </span>tracing::{warn, Instrument};
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>FarmerProviderStorage =
@@ -105,13 +147,12 @@
     subspace_service::piece_cache::PieceCache&lt;C&gt;,
     Either&lt;ParityDbProviderStorage, subspace_networking::MemoryProviderStorage&gt;,
 &gt;;
-<span class="comment">// pub(crate) type ProviderStorage&lt;C&gt; =
-// provider_storage_utils::AndProviderStorage&lt;
-//     provider_storage_utils::MaybeProviderStorage&lt;FarmerProviderStorage&gt;,
-//     NodeProviderStorage&lt;C&gt;,
-// &gt;;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>ProviderStorage&lt;C&gt; = provider_storage_utils::AndProviderStorage&lt;
+    provider_storage_utils::MaybeProviderStorage&lt;FarmerProviderStorage&gt;,
+    NodeProviderStorage&lt;C&gt;,
+&gt;;
 
-</span><span class="kw">const </span>MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE: usize = <span class="number">2000</span>;
+<span class="kw">const </span>MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE: usize = <span class="number">2000</span>;
 <span class="kw">const </span>MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
     NonZeroUsize::new(<span class="number">20</span>).expect(<span class="string">&quot;Not zero; qed&quot;</span>);
 
@@ -165,6 +206,41 @@
     })<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(handler_id)
+}
+
+<span class="kw">pub struct </span>NodePieceGetter&lt;PV, C&gt; {
+    piece_getter: subspace_farmer::utils::node_piece_getter::NodePieceGetter&lt;PV&gt;,
+    node_cache: PieceCache&lt;C&gt;,
+}
+
+<span class="kw">impl</span>&lt;PV, C&gt; NodePieceGetter&lt;PV, C&gt; {
+    <span class="kw">pub fn </span>new(
+        dsn_piece_getter: subspace_farmer::utils::node_piece_getter::NodePieceGetter&lt;PV&gt;,
+        node_cache: PieceCache&lt;C&gt;,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ piece_getter: dsn_piece_getter, node_cache }
+    }
+}
+
+<span class="attr">#[async_trait::async_trait()]
+</span><span class="kw">impl</span>&lt;PV: PieceValidator, C: AuxStore + Send + Sync&gt; PieceGetter <span class="kw">for </span>NodePieceGetter&lt;PV, C&gt; {
+    <span class="kw">async fn </span>get_piece(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        piece_index: subspace_core_primitives::PieceIndex,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;
+        <span class="prelude-ty">Option</span>&lt;subspace_core_primitives::Piece&gt;,
+        Box&lt;<span class="kw">dyn </span>std::error::Error + Send + Sync + <span class="lifetime">&#39;static</span>&gt;,
+    &gt; {
+        <span class="kw">let </span>piece = <span class="self">self
+            </span>.node_cache
+            .get_piece(PieceIndexHash::from_index(piece_index))
+            .map_err(|x| x.to_string())<span class="question-mark">?</span>;
+        <span class="kw">if </span>piece.is_some() {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(piece);
+        }
+
+        <span class="self">self</span>.piece_getter.get_piece(piece_index).<span class="kw">await
+    </span>}
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="subspace_sdk" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (afaf3e07a 2023-01-14)" data-search-js="search-181581080540673f.js" data-settings-js="settings-a2afdefbb7c817f1.js" data-settings-css="settings-84508a86fe805444.css" ></div></body></html>
