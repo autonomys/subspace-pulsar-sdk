@@ -3262,8 +3262,8 @@
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     #[cfg_attr(
-        any(tarpaulin, target_family = <span class="string">&quot;windows&quot;</span>),
-        ignore = <span class="string">&quot;Ignored for coverage tests and for windows&quot;
+        any(tarpaulin, not(target_os = <span class="string">&quot;linux&quot;</span>)),
+        ignore = <span class="string">&quot;Ignored for coverage tests and not linux platforms&quot;
     </span>)]
     </span><span class="kw">async fn </span>test_sync_block() {
         <span class="kw">crate</span>::utils::test_init();
