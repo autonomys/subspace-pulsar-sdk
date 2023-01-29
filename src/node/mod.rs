@@ -1767,8 +1767,8 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     #[cfg_attr(
-        any(tarpaulin, target_family = "windows"),
-        ignore = "Ignored for coverage tests and for windows"
+        any(tarpaulin, not(target_os = "linux")),
+        ignore = "Ignored for coverage tests and not linux platforms"
     )]
     async fn test_sync_block() {
         crate::utils::test_init();
