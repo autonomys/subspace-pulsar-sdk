@@ -344,6 +344,7 @@ impl Config {
                 kzg.clone(),
                 records_roots_cache,
             )),
+            true,
         );
         let piece_getter = Arc::new(FarmerPieceGetter::new(
             NodePieceGetter::new(DsnPieceGetter::new(piece_provider), node.piece_cache.clone()),
