@@ -1829,8 +1829,19 @@
 <a href="#1829" id="1829">1829</a>
 <a href="#1830" id="1830">1830</a>
 <a href="#1831" id="1831">1831</a>
+<a href="#1832" id="1832">1832</a>
+<a href="#1833" id="1833">1833</a>
+<a href="#1834" id="1834">1834</a>
+<a href="#1835" id="1835">1835</a>
+<a href="#1836" id="1836">1836</a>
+<a href="#1837" id="1837">1837</a>
+<a href="#1838" id="1838">1838</a>
+<a href="#1839" id="1839">1839</a>
+<a href="#1840" id="1840">1840</a>
+<a href="#1841" id="1841">1841</a>
+<a href="#1842" id="1842">1842</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
-<span class="kw">use </span>std::num::NonZeroU64;
+<span class="kw">use </span>std::num::{NonZeroU64, NonZeroUsize};
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::sync::{Arc, Weak};
 <span class="kw">use </span>std::time::Duration;
@@ -2609,6 +2620,10 @@
     #[non_exhaustive]
     </span><span class="kw">pub struct </span>Dsn {
         <span class="doccomment">/// Listen on some address for other nodes
+        </span><span class="attr">#[builder(default, setter(into, strip_option))]
+        #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
+        </span><span class="kw">pub </span>provider_storage_path: <span class="prelude-ty">Option</span>&lt;std::path::PathBuf&gt;,
+        <span class="doccomment">/// Listen on some address for other nodes
         </span><span class="attr">#[builder(default, setter(into))]
         #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
         </span><span class="kw">pub </span>listen_addresses: ListenAddresses,
@@ -2787,8 +2802,9 @@
 }
 
 <span class="kw">const </span>NODE_NAME_MAX_LENGTH: usize = <span class="number">64</span>;
+<span class="kw">const </span>MAX_PROVIDER_RECORDS_LIMIT: NonZeroUsize = NonZeroUsize::new(<span class="number">100000</span>).expect(<span class="string">&quot;100000 &gt; 0&quot;</span>); <span class="comment">// ~ 10 MB
 
-<span class="kw">impl </span>Config {
+</span><span class="kw">impl </span>Config {
     <span class="doccomment">/// Start a node with supplied parameters
     </span><span class="kw">pub async fn </span>build(
         <span class="self">self</span>,
@@ -2881,6 +2897,7 @@
                     boot_nodes,
                     reserved_nodes,
                     allow_non_global_addresses_in_dht,
+                    provider_storage_path,
                 } = dsn;
 
                 <span class="kw">let </span>peer_id = subspace_networking::peer_id(<span class="kw-2">&amp;</span>keypair);
@@ -2904,9 +2921,14 @@
                     })
                     .collect();
 
-                <span class="comment">// TODO: Let users choose parity db storage provider
-                </span><span class="kw">let </span>external_provider_storage =
-                    Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id));
+                <span class="kw">let </span>external_provider_storage = <span class="kw">match </span>provider_storage_path {
+                    <span class="prelude-val">Some</span>(path) =&gt; Either::Left(subspace_networking::ParityDbProviderStorage::new(
+                        <span class="kw-2">&amp;</span>path,
+                        MAX_PROVIDER_RECORDS_LIMIT,
+                        peer_id,
+                    )<span class="question-mark">?</span>),
+                    <span class="prelude-val">None </span>=&gt; Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id)),
+                };
 
                 <span class="kw">let </span>node_provider_storage =
                     NodeProviderStorage::new(piece_cache.clone(), external_provider_storage);
