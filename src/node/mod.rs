@@ -1,5 +1,5 @@
 use std::io;
-use std::num::NonZeroU64;
+use std::num::{NonZeroU64, NonZeroUsize};
 use std::path::Path;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -699,6 +699,10 @@ mod builder {
     #[non_exhaustive]
     pub struct Dsn {
         /// Listen on some address for other nodes
+        #[builder(default, setter(into, strip_option))]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub provider_storage_path: Option<std::path::PathBuf>,
+        /// Listen on some address for other nodes
         #[builder(default, setter(into))]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub listen_addresses: ListenAddresses,
@@ -807,6 +811,7 @@ impl From<RpcMethods> for sc_service::RpcMethods {
 }
 
 const NODE_NAME_MAX_LENGTH: usize = 64;
+const MAX_PROVIDER_RECORDS_LIMIT: NonZeroUsize = NonZeroUsize::new(100000).expect("100000 > 0"); // ~ 10 MB
 
 impl Config {
     /// Start a node with supplied parameters
@@ -901,6 +906,7 @@ impl Config {
                     boot_nodes,
                     reserved_nodes,
                     allow_non_global_addresses_in_dht,
+                    provider_storage_path,
                 } = dsn;
 
                 let peer_id = subspace_networking::peer_id(&keypair);
@@ -924,9 +930,14 @@ impl Config {
                     })
                     .collect();
 
-                // TODO: Let users choose parity db storage provider
-                let external_provider_storage =
-                    Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id));
+                let external_provider_storage = match provider_storage_path {
+                    Some(path) => Either::Left(subspace_networking::ParityDbProviderStorage::new(
+                        &path,
+                        MAX_PROVIDER_RECORDS_LIMIT,
+                        peer_id,
+                    )?),
+                    None => Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id)),
+                };
 
                 let node_provider_storage =
                     NodeProviderStorage::new(piece_cache.clone(), external_provider_storage);
