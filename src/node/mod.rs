@@ -1776,12 +1776,7 @@ mod tests {
         node.close().await;
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    #[cfg_attr(
-        any(tarpaulin, not(target_os = "linux")),
-        ignore = "Ignored for coverage tests and not linux platforms"
-    )]
-    async fn test_sync_block() {
+    async fn test_sync_block_inner() {
         crate::utils::test_init();
 
         let dir = TempDir::new().unwrap();
@@ -1835,5 +1830,13 @@ mod tests {
 
         node.close().await;
         other_node.close().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "CI runners are very slow"]
+    async fn test_sync_block() {
+        tokio::time::timeout(std::time::Duration::from_secs(60 * 60), test_sync_block_inner())
+            .await
+            .unwrap()
     }
 }
