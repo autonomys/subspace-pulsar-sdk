@@ -1826,6 +1826,9 @@
 <a href="#1826" id="1826">1826</a>
 <a href="#1827" id="1827">1827</a>
 <a href="#1828" id="1828">1828</a>
+<a href="#1829" id="1829">1829</a>
+<a href="#1830" id="1830">1830</a>
+<a href="#1831" id="1831">1831</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
@@ -3593,12 +3596,7 @@
         node.close().<span class="kw">await</span>;
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
-    #[cfg_attr(
-        any(tarpaulin, not(target_os = <span class="string">&quot;linux&quot;</span>)),
-        ignore = <span class="string">&quot;Ignored for coverage tests and not linux platforms&quot;
-    </span>)]
-    </span><span class="kw">async fn </span>test_sync_block() {
+    <span class="kw">async fn </span>test_sync_block_inner() {
         <span class="kw">crate</span>::utils::test_init();
 
         <span class="kw">let </span>dir = TempDir::new().unwrap();
@@ -3652,6 +3650,14 @@
 
         node.close().<span class="kw">await</span>;
         other_node.close().<span class="kw">await</span>;
+    }
+
+    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    #[ignore = <span class="string">&quot;CI runners are very slow&quot;</span>]
+    </span><span class="kw">async fn </span>test_sync_block() {
+        tokio::time::timeout(std::time::Duration::from_secs(<span class="number">60 </span>* <span class="number">60</span>), test_sync_block_inner())
+            .<span class="kw">await
+            </span>.unwrap()
     }
 }
 </code></pre></div>
