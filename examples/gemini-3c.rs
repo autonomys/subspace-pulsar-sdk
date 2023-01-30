@@ -42,34 +42,8 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let node_dir = base_path.join("node");
-    let node = Node::builder()
+    let node = Node::gemini_3c()
         .role(node::Role::Authority)
-        .network(
-            node::NetworkBuilder::new()
-                .listen_addresses(vec![
-                    "/ip6/::/tcp/30333".parse().unwrap(),
-                    "/ip4/0.0.0.0/tcp/30333".parse().unwrap(),
-                ])
-                .enable_mdns(true),
-        )
-        .rpc(
-            node::RpcBuilder::new()
-                .http("127.0.0.1:9933".parse().unwrap())
-                .ws("127.0.0.1:9944".parse().unwrap())
-                .cors(vec![
-                    "http://localhost:*".to_owned(),
-                    "http://127.0.0.1:*".to_owned(),
-                    "https://localhost:*".to_owned(),
-                    "https://127.0.0.1:*".to_owned(),
-                    "https://polkadot.js.org".to_owned(),
-                ]),
-        )
-        .dsn(node::DsnBuilder::new().listen_addresses(vec![
-            "/ip6/::/tcp/30433".parse().unwrap(),
-            "/ip4/0.0.0.0/tcp/30433".parse().unwrap(),
-        ]))
-        .execution_strategy(node::ExecutionStrategy::AlwaysWasm)
-        .offchain_worker(node::OffchainWorkerBuilder::new().enabled(true))
         .build(&node_dir, node::chain_spec::gemini_3c().unwrap())
         .await?;
 

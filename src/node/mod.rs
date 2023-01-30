@@ -276,6 +276,23 @@ mod builder {
         pub dsn: Dsn,
     }
 
+    impl Config {
+        /// Dev configuraiton
+        pub fn dev() -> Builder {
+            Builder::dev()
+        }
+
+        /// Gemini 3c configuraiton
+        pub fn gemini_3c() -> Builder {
+            Builder::gemini_3c()
+        }
+
+        /// Devnet configuraiton
+        pub fn devnet() -> Builder {
+            Builder::devnet()
+        }
+    }
+
     #[derive(
         Debug,
         Clone,
@@ -640,6 +657,41 @@ mod builder {
         pub ws_max_out_buffer_capacity: Option<usize>,
     }
 
+    impl RpcBuilder {
+        /// Dev configuration
+        pub fn dev() -> Self {
+            Self::default()
+        }
+
+        /// Gemini 3c configuration
+        pub fn gemini_3c() -> Self {
+            Self::new()
+                .http("127.0.0.1:9933".parse().expect("hardcoded value is true"))
+                .ws("127.0.0.1:9944".parse().expect("hardcoded value is true"))
+                .cors(vec![
+                    "http://localhost:*".to_owned(),
+                    "http://127.0.0.1:*".to_owned(),
+                    "https://localhost:*".to_owned(),
+                    "https://127.0.0.1:*".to_owned(),
+                    "https://polkadot.js.org".to_owned(),
+                ])
+        }
+
+        /// Devnet configuration
+        pub fn devnet() -> Self {
+            Self::new()
+                .http("127.0.0.1:9933".parse().expect("hardcoded value is true"))
+                .ws("127.0.0.1:9944".parse().expect("hardcoded value is true"))
+                .cors(vec![
+                    "http://localhost:*".to_owned(),
+                    "http://127.0.0.1:*".to_owned(),
+                    "https://localhost:*".to_owned(),
+                    "https://127.0.0.1:*".to_owned(),
+                    "https://polkadot.js.org".to_owned(),
+                ])
+        }
+    }
+
     /// Node network builder
     #[derive(Debug, Default, Clone, Builder, Deserialize, Serialize, PartialEq)]
     #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "NetworkBuilder")]
@@ -677,6 +729,33 @@ mod builder {
         #[builder(setter(into, strip_option), default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub client_id: Option<String>,
+    }
+
+    impl NetworkBuilder {
+        /// Dev chain configuration
+        pub fn dev() -> Self {
+            Self::default().force_synced(true).allow_private_ipv4(true)
+        }
+
+        /// Gemini 3c configuration
+        pub fn gemini_3c() -> Self {
+            Self::default()
+                .listen_addresses(vec![
+                    "/ip6/::/tcp/30333".parse().expect("hardcoded value is true"),
+                    "/ip4/0.0.0.0/tcp/30333".parse().expect("hardcoded value is true"),
+                ])
+                .enable_mdns(true)
+        }
+
+        /// Gemini 3c configuration
+        pub fn devnet() -> Self {
+            Self::default()
+                .listen_addresses(vec![
+                    "/ip6/::/tcp/30333".parse().expect("hardcoded value is true"),
+                    "/ip4/0.0.0.0/tcp/30333".parse().expect("hardcoded value is true"),
+                ])
+                .enable_mdns(true)
+        }
     }
 
     #[derive(
@@ -717,6 +796,29 @@ mod builder {
         pub allow_non_global_addresses_in_dht: bool,
     }
 
+    impl DsnBuilder {
+        /// Dev chain configuration
+        pub fn dev() -> Self {
+            Self::new().allow_non_global_addresses_in_dht(true)
+        }
+
+        /// Gemini 3c configuration
+        pub fn gemini_3c() -> Self {
+            Self::new().listen_addresses(vec![
+                "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
+                "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
+            ])
+        }
+
+        /// Gemini 3c configuration
+        pub fn devnet() -> Self {
+            Self::new().listen_addresses(vec![
+                "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
+                "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
+            ])
+        }
+    }
+
     /// Offchain worker config
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq, Eq)]
     #[derivative(Default)]
@@ -733,6 +835,23 @@ mod builder {
         pub indexing_enabled: bool,
     }
 
+    impl OffchainWorkerBuilder {
+        /// Dev chain configuration
+        pub fn dev() -> Self {
+            Self::default()
+        }
+
+        /// Gemini 3c configuration
+        pub fn gemini_3c() -> Self {
+            Self::default().enabled(true)
+        }
+
+        /// Devnet configuration
+        pub fn devnet() -> Self {
+            Self::default().enabled(true)
+        }
+    }
+
     impl From<OffchainWorker> for OffchainWorkerConfig {
         fn from(OffchainWorker { enabled, indexing_enabled }: OffchainWorker) -> Self {
             Self { enabled, indexing_enabled }
@@ -740,6 +859,36 @@ mod builder {
     }
 
     impl Builder {
+        /// Dev chain configuration
+        pub fn dev() -> Self {
+            Self::new()
+                .force_authoring(true)
+                .network(NetworkBuilder::dev())
+                .dsn(DsnBuilder::dev())
+                .rpc(RpcBuilder::dev())
+                .offchain_worker(OffchainWorkerBuilder::dev())
+        }
+
+        /// Gemini 3c configuration
+        pub fn gemini_3c() -> Self {
+            Self::new()
+                .execution_strategy(ExecutionStrategy::AlwaysWasm)
+                .network(NetworkBuilder::gemini_3c())
+                .dsn(DsnBuilder::gemini_3c())
+                .rpc(RpcBuilder::gemini_3c())
+                .offchain_worker(OffchainWorkerBuilder::gemini_3c())
+        }
+
+        /// Devnet chain configuration
+        pub fn devnet() -> Self {
+            Self::new()
+                .execution_strategy(ExecutionStrategy::AlwaysWasm)
+                .network(NetworkBuilder::devnet())
+                .dsn(DsnBuilder::devnet())
+                .rpc(RpcBuilder::devnet())
+                .offchain_worker(OffchainWorkerBuilder::devnet())
+        }
+
         /// Get configuration for saving on disk
         pub fn configuration(&self) -> Config {
             self._build().expect("Build is infallible")
@@ -1260,11 +1409,17 @@ impl Node {
 
     /// Development configuration
     pub fn dev() -> Builder {
-        Self::builder()
-            .force_authoring(true)
-            .role(Role::Authority)
-            .network(NetworkBuilder::new().force_synced(true))
-            .dsn(DsnBuilder::new().allow_non_global_addresses_in_dht(true))
+        Builder::dev()
+    }
+
+    /// Gemini 3c configuration
+    pub fn gemini_3c() -> Builder {
+        Builder::gemini_3c()
+    }
+
+    /// Devnet configuration
+    pub fn devnet() -> Builder {
+        Builder::devnet()
     }
 
     /// Get listening addresses of the node
@@ -1564,13 +1719,21 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_start_node() {
         let dir = TempDir::new().unwrap();
-        Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
+        Node::dev()
+            .role(Role::Authority)
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_rpc() {
         let dir = TempDir::new().unwrap();
-        let node = Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
+        let node = Node::dev()
+            .role(Role::Authority)
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
 
         assert!(node.farmer_app_info().await.is_ok());
     }
@@ -1580,7 +1743,11 @@ mod tests {
         crate::utils::test_init();
 
         let dir = TempDir::new().unwrap();
-        let node = Node::dev().build(dir.path(), chain_spec::dev_config().unwrap()).await.unwrap();
+        let node = Node::dev()
+            .role(Role::Authority)
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let plots = [PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()];
         let farmer = Farmer::builder()
@@ -1609,11 +1776,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let chain = chain_spec::dev_config().unwrap();
         let node = Node::dev()
+            .role(Role::Authority)
             .network(
-                NetworkBuilder::new()
-                    .force_synced(true)
-                    .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
-                    .allow_private_ipv4(true),
+                NetworkBuilder::dev()
+                    .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()]),
             )
             .role(Role::Authority)
             .build(dir.path(), chain.clone())
@@ -1645,9 +1811,9 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let other_node = Node::dev()
             .network(
-                NetworkBuilder::new()
-                    .boot_nodes(node.listen_addresses().await.unwrap())
-                    .allow_private_ipv4(true),
+                NetworkBuilder::dev()
+                    .force_synced(false)
+                    .boot_nodes(node.listen_addresses().await.unwrap()),
             )
             .build(dir.path(), chain)
             .await
