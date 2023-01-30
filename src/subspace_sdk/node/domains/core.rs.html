@@ -409,6 +409,7 @@
 <a href="#409" id="409">409</a>
 <a href="#410" id="410">410</a>
 <a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Core payments domain module
 
 </span><span class="kw">use </span>std::path::Path;
@@ -780,7 +781,7 @@
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
     <span class="kw">use </span><span class="kw">crate</span>::farmer::CacheDescription;
-    <span class="kw">use </span><span class="kw">crate</span>::node::{chain_spec, domains};
+    <span class="kw">use </span><span class="kw">crate</span>::node::{chain_spec, domains, Role};
     <span class="kw">use crate</span>::{Farmer, Node, PlotDescription};
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
@@ -790,6 +791,7 @@
         <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>core = ConfigBuilder::new().build();
         <span class="kw">let </span>node = Node::dev()
+            .role(Role::Authority)
             .system_domain(domains::ConfigBuilder::new().core(core))
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await

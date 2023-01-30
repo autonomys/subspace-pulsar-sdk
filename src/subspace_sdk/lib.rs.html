@@ -351,6 +351,11 @@
 <a href="#351" id="351">351</a>
 <a href="#352" id="352">352</a>
 <a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Subspace SDK for easy running of both Subspace node and farmer
 
 </span><span class="attr">#![deny(missing_docs, clippy::dbg_macro, clippy::unwrap_used)]
@@ -558,13 +563,18 @@
     <span class="kw">use </span>tempfile::TempDir;
 
     <span class="kw">use </span><span class="kw">super</span>::farmer::CacheDescription;
+    <span class="kw">use </span><span class="kw">super</span>::node::Role;
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
     <span class="kw">async fn </span>test_integration_inner() {
         <span class="kw">crate</span>::utils::test_init();
 
         <span class="kw">let </span>dir = TempDir::new().unwrap();
-        <span class="kw">let </span>node = Node::dev().build(dir, node::chain_spec::dev_config().unwrap()).<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span>node = Node::dev()
+            .role(Role::Authority)
+            .build(dir, node::chain_spec::dev_config().unwrap())
+            .<span class="kw">await
+            </span>.unwrap();
 
         <span class="kw">let </span>(dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         <span class="kw">let </span>plot_descriptions =
