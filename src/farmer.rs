@@ -16,7 +16,6 @@ use subspace_farmer::single_disk_plot::{
     SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
     SingleDiskPlotOptions, SingleDiskPlotSummary,
 };
-use subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
 use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 use subspace_farmer::utils::node_piece_getter::NodePieceGetter as DsnPieceGetter;
 use subspace_farmer::utils::parity_db_store::ParityDbStore;
@@ -28,7 +27,7 @@ use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 
 use self::builder::PieceCacheSize;
-use crate::networking::{FarmerProviderStorage, NodePieceGetter};
+use crate::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter, PieceCache};
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -216,7 +215,10 @@ pub enum BuildError {
 
 pub(crate) fn get_piece_by_hash(
     PieceByHashRequest { piece_index_hash }: &PieceByHashRequest,
-    piece_cache: &ParityDbStore,
+    piece_cache: &ParityDbStore<
+        subspace_networking::libp2p::kad::record::Key,
+        subspace_core_primitives::Piece,
+    >,
     weak_readers_and_pieces: &std::sync::Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
     handle: &tokio::runtime::Handle,
 ) -> Option<PieceByHashResponse> {
@@ -311,17 +313,19 @@ impl Config {
                 ParityDbProviderStorage::new(&provider_cache_db_path, provider_cache_size, peer_id)
                     .map_err(|err| anyhow::anyhow!(err.to_string()))?;
 
-            node.farmer_provider_storage.swap(FarmerProviderStorage::new(
-                peer_id,
-                readers_and_pieces.clone(),
-                db_provider_storage,
-            ));
-
             let piece_store = ParityDbStore::new(&piece_cache_db_path)
                 .map_err(|err| anyhow::anyhow!(err.to_string()))?;
             *node.farmer_piece_store.lock() = Some(piece_store.clone());
 
-            FarmerPieceCache::new(piece_store, piece_cache_size, peer_id)
+            let piece_cache = FarmerPieceCache::new(piece_store, piece_cache_size, peer_id);
+            node.farmer_provider_storage.swap(FarmerProviderStorage::new(
+                peer_id,
+                readers_and_pieces.clone(),
+                db_provider_storage,
+                PieceCache::new(node.piece_cache.clone(), piece_cache.clone()),
+            ));
+
+            piece_cache
         };
 
         let piece_cache = Arc::new(tokio::sync::Mutex::new(piece_cache));

@@ -1,4 +1,6 @@
+pub(crate) mod node_piece_cache;
 pub(crate) mod node_provider_storage;
+pub(crate) mod piece_cache_utils;
 pub(crate) mod provider_storage_utils;
 
 use std::num::NonZeroUsize;
@@ -7,32 +9,39 @@ use std::sync::{Arc, Weak};
 use either::*;
 use event_listener_primitives::HandlerId;
 use futures::StreamExt;
+pub(crate) use node_piece_cache::NodePieceCache;
 use parking_lot::Mutex;
 use sc_client_api::AuxStore;
 use subspace_core_primitives::PieceIndexHash;
-use subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
 use subspace_farmer::utils::farmer_provider_record_processor::FarmerProviderRecordProcessor;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::plotting::PieceGetter;
 use subspace_networking::utils::piece_provider::PieceValidator;
 use subspace_networking::{Node, ParityDbProviderStorage};
-use subspace_service::piece_cache::PieceCache;
 use tracing::{warn, Instrument};
 
-pub(crate) type FarmerProviderStorage =
-    subspace_farmer::utils::farmer_provider_storage::FarmerProviderStorage<ParityDbProviderStorage>;
+pub(crate) type FarmerPieceCache = subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
+pub(crate) type PieceCache<C> = piece_cache_utils::And<NodePieceCache<C>, FarmerPieceCache>;
+pub(crate) type FarmerProviderStorage<C> =
+    subspace_farmer::utils::farmer_provider_storage::FarmerProviderStorage<
+        ParityDbProviderStorage,
+        PieceCache<C>,
+    >;
 pub(crate) type NodeProviderStorage<C> = node_provider_storage::NodeProviderStorage<
-    subspace_service::piece_cache::PieceCache<C>,
+    NodePieceCache<C>,
     Either<ParityDbProviderStorage, subspace_networking::MemoryProviderStorage>,
 >;
 pub(crate) type ProviderStorage<C> = provider_storage_utils::AndProviderStorage<
-    provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage>,
+    provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage<C>>,
     NodeProviderStorage<C>,
 >;
 
-const MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE: usize = 2000;
+const MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE: NonZeroUsize =
+    NonZeroUsize::new(2000).expect("Not zero; qed");
 const MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
     NonZeroUsize::new(20).expect("Not zero; qed");
+const MAX_CONCURRENT_RE_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
+    NonZeroUsize::new(100).expect("Not zero; qed");
 
 /// Start processing announcements received by the network node, returns handle
 /// that will stop processing on drop.
@@ -42,7 +51,7 @@ pub fn start_announcements_processor(
     weak_readers_and_pieces: Weak<Mutex<Option<ReadersAndPieces>>>,
 ) -> std::io::Result<HandlerId> {
     let (provider_records_sender, mut provider_records_receiver) =
-        futures::channel::mpsc::channel(MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE);
+        futures::channel::mpsc::channel(MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE.get());
 
     let handler_id = node.on_announcement(Arc::new({
         let provider_records_sender = Mutex::new(provider_records_sender);
@@ -70,6 +79,7 @@ pub fn start_announcements_processor(
         piece_cache,
         weak_readers_and_pieces,
         MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING,
+        MAX_CONCURRENT_RE_ANNOUNCEMENTS_PROCESSING,
     );
 
     // We are working with database internally, better to run in a separate thread
@@ -86,15 +96,15 @@ pub fn start_announcements_processor(
     Ok(handler_id)
 }
 
-pub struct NodePieceGetter<PV, C> {
+pub(crate) struct NodePieceGetter<PV, C> {
     piece_getter: subspace_farmer::utils::node_piece_getter::NodePieceGetter<PV>,
-    node_cache: PieceCache<C>,
+    node_cache: NodePieceCache<C>,
 }
 
 impl<PV, C> NodePieceGetter<PV, C> {
     pub fn new(
         dsn_piece_getter: subspace_farmer::utils::node_piece_getter::NodePieceGetter<PV>,
-        node_cache: PieceCache<C>,
+        node_cache: NodePieceCache<C>,
     ) -> Self {
         Self { piece_getter: dsn_piece_getter, node_cache }
     }

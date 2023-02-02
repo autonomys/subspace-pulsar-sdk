@@ -10,6 +10,7 @@ use either::*;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 use libp2p_core::Multiaddr;
+use sc_consensus_subspace_rpc::RootBlockProvider;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
 use sc_network::network_state::NetworkState;
@@ -26,16 +27,21 @@ use subspace_farmer::node_client::NodeClient;
 use subspace_farmer::utils::parity_db_store::ParityDbStore;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::FarmerProtocolInfo;
-use subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse};
+use subspace_networking::{
+    PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
+    RootBlockBySegmentIndexesRequestHandler, RootBlockRequest, RootBlockResponse,
+};
 use subspace_rpc_primitives::SlotInfo;
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
-use subspace_service::piece_cache::PieceCache;
+use subspace_service::root_blocks::RootBlockCache;
 use subspace_service::SubspaceConfiguration;
 
 use self::builder::SegmentPublishConcurrency;
 use crate::networking::provider_storage_utils::MaybeProviderStorage;
-use crate::networking::{FarmerProviderStorage, NodeProviderStorage, ProviderStorage};
+use crate::networking::{
+    FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage,
+};
 
 pub mod chain_spec;
 pub mod domains;
@@ -1002,7 +1008,7 @@ impl Config {
                     .expect("Address is correct")
             };
 
-            let piece_cache = PieceCache::new(
+            let piece_cache = NodePieceCache::new(
                 partial_components.client.clone(),
                 piece_cache_size.as_u64() / subspace_core_primitives::PIECE_SIZE as u64,
                 subspace_networking::peer_id(&keypair),
@@ -1088,8 +1094,11 @@ impl Config {
                     None => Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id)),
                 };
 
-                let node_provider_storage =
-                    NodeProviderStorage::new(piece_cache.clone(), external_provider_storage);
+                let node_provider_storage = NodeProviderStorage::new(
+                    peer_id,
+                    piece_cache.clone(),
+                    external_provider_storage,
+                );
                 let provider_storage =
                     ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
 
@@ -1102,30 +1111,38 @@ impl Config {
                             bootstrap_nodes.clone(),
                         )
                         .boxed(),
-                    request_response_protocols: vec![PieceByHashRequestHandler::create({
-                        let handle = tokio::runtime::Handle::current();
-                        let weak_readers_and_pieces = Arc::downgrade(&farmer_readers_and_pieces);
-                        let farmer_piece_store = Arc::clone(&farmer_piece_store);
-                        let piece_cache = piece_cache.clone();
+                    request_response_protocols: vec![
+                        PieceByHashRequestHandler::create({
+                            let handle = tokio::runtime::Handle::current();
+                            let weak_readers_and_pieces =
+                                Arc::downgrade(&farmer_readers_and_pieces);
+                            let farmer_piece_store = Arc::clone(&farmer_piece_store);
+                            let piece_cache = piece_cache.clone();
 
-                        move |req| {
-                            match get_piece_by_hash(req, &piece_cache) {
-                                Some(PieceByHashResponse { piece: None }) | None => (),
-                                result => return result,
-                            }
+                            move |req| {
+                                match get_piece_by_hash(req, &piece_cache) {
+                                    Some(PieceByHashResponse { piece: None }) | None => (),
+                                    result => return result,
+                                }
 
-                            if let Some(piece_store) = farmer_piece_store.lock().as_ref() {
-                                crate::farmer::get_piece_by_hash(
-                                    req,
-                                    piece_store,
-                                    &weak_readers_and_pieces,
-                                    &handle,
-                                )
-                            } else {
-                                None
+                                if let Some(piece_store) = farmer_piece_store.lock().as_ref() {
+                                    crate::farmer::get_piece_by_hash(
+                                        req,
+                                        piece_store,
+                                        &weak_readers_and_pieces,
+                                        &handle,
+                                    )
+                                } else {
+                                    None
+                                }
                             }
-                        }
-                    })],
+                        }),
+                        RootBlockBySegmentIndexesRequestHandler::create({
+                            let root_block_cache =
+                                RootBlockCache::new(partial_components.client.clone());
+                            move |req| get_root_block_by_segment_indexes(req, &root_block_cache)
+                        }),
+                    ],
                     provider_storage,
                     reserved_peers: reserved_nodes
                         .into_iter()
@@ -1292,10 +1309,19 @@ pub struct Node {
     name: String,
     pub(crate) farmer_readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
     #[derivative(Debug = "ignore")]
-    pub(crate) farmer_piece_store: Arc<parking_lot::Mutex<Option<ParityDbStore>>>,
-    pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
+    pub(crate) farmer_piece_store: Arc<
+        parking_lot::Mutex<
+            Option<
+                ParityDbStore<
+                    subspace_networking::libp2p::kad::record::Key,
+                    subspace_core_primitives::Piece,
+                >,
+            >,
+        >,
+    >,
+    pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage<FullClient>>,
     #[derivative(Debug = "ignore")]
-    pub(crate) piece_cache: PieceCache<FullClient>,
+    pub(crate) piece_cache: NodePieceCache<FullClient>,
 }
 
 /// Hash type
@@ -1624,9 +1650,28 @@ impl Node {
     }
 }
 
+pub(crate) fn get_root_block_by_segment_indexes(
+    RootBlockRequest { segment_indexes }: &RootBlockRequest,
+    root_block_cache: &RootBlockCache<impl sc_client_api::AuxStore>,
+) -> Option<RootBlockResponse> {
+    let internal_result = segment_indexes
+        .iter()
+        .map(|segment_index| root_block_cache.get_root_block(*segment_index))
+        .collect::<Result<Vec<Option<subspace_core_primitives::RootBlock>>, _>>();
+
+    match internal_result {
+        Ok(root_blocks) => Some(RootBlockResponse { root_blocks }),
+        Err(error) => {
+            tracing::error!(%error, "Failed to get root blocks from cache");
+
+            None
+        }
+    }
+}
+
 pub(crate) fn get_piece_by_hash(
     PieceByHashRequest { piece_index_hash }: &PieceByHashRequest,
-    piece_cache: &subspace_service::piece_cache::PieceCache<impl sc_client_api::AuxStore>,
+    piece_cache: &NodePieceCache<impl sc_client_api::AuxStore>,
 ) -> Option<PieceByHashResponse> {
     let result = match piece_cache.get_piece(*piece_index_hash) {
         Ok(maybe_piece) => maybe_piece,
@@ -1645,7 +1690,7 @@ mod farmer_rpc_client {
     use futures::Stream;
     use sc_consensus_subspace_rpc::SubspaceRpcApiClient;
     use subspace_archiving::archiver::ArchivedSegment;
-    use subspace_core_primitives::{RecordsRoot, SegmentIndex};
+    use subspace_core_primitives::{RecordsRoot, RootBlock, SegmentIndex};
     use subspace_farmer::node_client::{Error, NodeClient};
     use subspace_rpc_primitives::{
         FarmerAppInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
@@ -1712,6 +1757,13 @@ mod farmer_rpc_client {
             segment_indexes: Vec<SegmentIndex>,
         ) -> Result<Vec<Option<RecordsRoot>>, Error> {
             Ok(self.rpc_handle.records_roots(segment_indexes).await?)
+        }
+
+        async fn root_blocks(
+            &self,
+            segment_indexes: Vec<SegmentIndex>,
+        ) -> Result<Vec<Option<RootBlock>>, Error> {
+            Ok(self.rpc_handle.root_blocks(segment_indexes).await?)
         }
     }
 }
