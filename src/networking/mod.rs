@@ -30,9 +30,12 @@ pub(crate) type ProviderStorage<C> = provider_storage_utils::AndProviderStorage<
     NodeProviderStorage<C>,
 >;
 
-const MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE: usize = 2000;
+const MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE: NonZeroUsize =
+    NonZeroUsize::new(2000).expect("Not zero; qed");
 const MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
     NonZeroUsize::new(20).expect("Not zero; qed");
+const MAX_CONCURRENT_RE_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
+    NonZeroUsize::new(100).expect("Not zero; qed");
 
 /// Start processing announcements received by the network node, returns handle
 /// that will stop processing on drop.
@@ -42,7 +45,7 @@ pub fn start_announcements_processor(
     weak_readers_and_pieces: Weak<Mutex<Option<ReadersAndPieces>>>,
 ) -> std::io::Result<HandlerId> {
     let (provider_records_sender, mut provider_records_receiver) =
-        futures::channel::mpsc::channel(MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE);
+        futures::channel::mpsc::channel(MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE.get());
 
     let handler_id = node.on_announcement(Arc::new({
         let provider_records_sender = Mutex::new(provider_records_sender);
@@ -70,6 +73,7 @@ pub fn start_announcements_processor(
         piece_cache,
         weak_readers_and_pieces,
         MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING,
+        MAX_CONCURRENT_RE_ANNOUNCEMENTS_PROCESSING,
     );
 
     // We are working with database internally, better to run in a separate thread

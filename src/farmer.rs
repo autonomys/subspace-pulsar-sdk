@@ -216,7 +216,10 @@ pub enum BuildError {
 
 pub(crate) fn get_piece_by_hash(
     PieceByHashRequest { piece_index_hash }: &PieceByHashRequest,
-    piece_cache: &ParityDbStore,
+    piece_cache: &ParityDbStore<
+        subspace_networking::libp2p::kad::record::Key,
+        subspace_core_primitives::Piece,
+    >,
     weak_readers_and_pieces: &std::sync::Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
     handle: &tokio::runtime::Handle,
 ) -> Option<PieceByHashResponse> {
