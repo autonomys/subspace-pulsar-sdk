@@ -34,13 +34,14 @@ use subspace_networking::{
 use subspace_rpc_primitives::SlotInfo;
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
-use subspace_service::piece_cache::PieceCache;
 use subspace_service::root_blocks::RootBlockCache;
 use subspace_service::SubspaceConfiguration;
 
 use self::builder::SegmentPublishConcurrency;
 use crate::networking::provider_storage_utils::MaybeProviderStorage;
-use crate::networking::{FarmerProviderStorage, NodeProviderStorage, ProviderStorage};
+use crate::networking::{
+    FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage,
+};
 
 pub mod chain_spec;
 pub mod domains;
@@ -1007,7 +1008,7 @@ impl Config {
                     .expect("Address is correct")
             };
 
-            let piece_cache = PieceCache::new(
+            let piece_cache = NodePieceCache::new(
                 partial_components.client.clone(),
                 piece_cache_size.as_u64() / subspace_core_primitives::PIECE_SIZE as u64,
                 subspace_networking::peer_id(&keypair),
@@ -1315,9 +1316,9 @@ pub struct Node {
             >,
         >,
     >,
-    pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
+    pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage<FullClient>>,
     #[derivative(Debug = "ignore")]
-    pub(crate) piece_cache: PieceCache<FullClient>,
+    pub(crate) piece_cache: NodePieceCache<FullClient>,
 }
 
 /// Hash type
@@ -1667,7 +1668,7 @@ pub(crate) fn get_root_block_by_segment_indexes(
 
 pub(crate) fn get_piece_by_hash(
     PieceByHashRequest { piece_index_hash }: &PieceByHashRequest,
-    piece_cache: &subspace_service::piece_cache::PieceCache<impl sc_client_api::AuxStore>,
+    piece_cache: &NodePieceCache<impl sc_client_api::AuxStore>,
 ) -> Option<PieceByHashResponse> {
     let result = match piece_cache.get_piece(*piece_index_hash) {
         Ok(maybe_piece) => maybe_piece,
