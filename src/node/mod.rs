@@ -1094,8 +1094,11 @@ impl Config {
                     None => Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id)),
                 };
 
-                let node_provider_storage =
-                    NodeProviderStorage::new(piece_cache.clone(), external_provider_storage);
+                let node_provider_storage = NodeProviderStorage::new(
+                    peer_id,
+                    piece_cache.clone(),
+                    external_provider_storage,
+                );
                 let provider_storage =
                     ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
 
