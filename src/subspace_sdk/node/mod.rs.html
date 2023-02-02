@@ -1840,6 +1840,58 @@
 <a href="#1840" id="1840">1840</a>
 <a href="#1841" id="1841">1841</a>
 <a href="#1842" id="1842">1842</a>
+<a href="#1843" id="1843">1843</a>
+<a href="#1844" id="1844">1844</a>
+<a href="#1845" id="1845">1845</a>
+<a href="#1846" id="1846">1846</a>
+<a href="#1847" id="1847">1847</a>
+<a href="#1848" id="1848">1848</a>
+<a href="#1849" id="1849">1849</a>
+<a href="#1850" id="1850">1850</a>
+<a href="#1851" id="1851">1851</a>
+<a href="#1852" id="1852">1852</a>
+<a href="#1853" id="1853">1853</a>
+<a href="#1854" id="1854">1854</a>
+<a href="#1855" id="1855">1855</a>
+<a href="#1856" id="1856">1856</a>
+<a href="#1857" id="1857">1857</a>
+<a href="#1858" id="1858">1858</a>
+<a href="#1859" id="1859">1859</a>
+<a href="#1860" id="1860">1860</a>
+<a href="#1861" id="1861">1861</a>
+<a href="#1862" id="1862">1862</a>
+<a href="#1863" id="1863">1863</a>
+<a href="#1864" id="1864">1864</a>
+<a href="#1865" id="1865">1865</a>
+<a href="#1866" id="1866">1866</a>
+<a href="#1867" id="1867">1867</a>
+<a href="#1868" id="1868">1868</a>
+<a href="#1869" id="1869">1869</a>
+<a href="#1870" id="1870">1870</a>
+<a href="#1871" id="1871">1871</a>
+<a href="#1872" id="1872">1872</a>
+<a href="#1873" id="1873">1873</a>
+<a href="#1874" id="1874">1874</a>
+<a href="#1875" id="1875">1875</a>
+<a href="#1876" id="1876">1876</a>
+<a href="#1877" id="1877">1877</a>
+<a href="#1878" id="1878">1878</a>
+<a href="#1879" id="1879">1879</a>
+<a href="#1880" id="1880">1880</a>
+<a href="#1881" id="1881">1881</a>
+<a href="#1882" id="1882">1882</a>
+<a href="#1883" id="1883">1883</a>
+<a href="#1884" id="1884">1884</a>
+<a href="#1885" id="1885">1885</a>
+<a href="#1886" id="1886">1886</a>
+<a href="#1887" id="1887">1887</a>
+<a href="#1888" id="1888">1888</a>
+<a href="#1889" id="1889">1889</a>
+<a href="#1890" id="1890">1890</a>
+<a href="#1891" id="1891">1891</a>
+<a href="#1892" id="1892">1892</a>
+<a href="#1893" id="1893">1893</a>
+<a href="#1894" id="1894">1894</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::{NonZeroU64, NonZeroUsize};
 <span class="kw">use </span>std::path::Path;
@@ -1852,6 +1904,7 @@
 <span class="kw">use </span>futures::channel::{mpsc, oneshot};
 <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
 <span class="kw">use </span>libp2p_core::Multiaddr;
+<span class="kw">use </span>sc_consensus_subspace_rpc::RootBlockProvider;
 <span class="kw">use </span>sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 <span class="kw">use </span>sc_network::config::{NodeKeyConfig, Secret};
 <span class="kw">use </span>sc_network::network_state::NetworkState;
@@ -1868,16 +1921,21 @@
 <span class="kw">use </span>subspace_farmer::utils::parity_db_store::ParityDbStore;
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 <span class="kw">use </span>subspace_farmer_components::FarmerProtocolInfo;
-<span class="kw">use </span>subspace_networking::{PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse};
+<span class="kw">use </span>subspace_networking::{
+    PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
+    RootBlockBySegmentIndexesRequestHandler, RootBlockRequest, RootBlockResponse,
+};
 <span class="kw">use </span>subspace_rpc_primitives::SlotInfo;
 <span class="kw">use </span>subspace_runtime::RuntimeApi;
 <span class="kw">use </span>subspace_runtime_primitives::opaque::{Block <span class="kw">as </span>RuntimeBlock, Header};
-<span class="kw">use </span>subspace_service::piece_cache::PieceCache;
+<span class="kw">use </span>subspace_service::root_blocks::RootBlockCache;
 <span class="kw">use </span>subspace_service::SubspaceConfiguration;
 
 <span class="kw">use </span><span class="self">self</span>::builder::SegmentPublishConcurrency;
 <span class="kw">use </span><span class="kw">crate</span>::networking::provider_storage_utils::MaybeProviderStorage;
-<span class="kw">use </span><span class="kw">crate</span>::networking::{FarmerProviderStorage, NodeProviderStorage, ProviderStorage};
+<span class="kw">use </span><span class="kw">crate</span>::networking::{
+    FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage,
+};
 
 <span class="kw">pub mod </span>chain_spec;
 <span class="kw">pub mod </span>domains;
@@ -2844,7 +2902,7 @@
                     .expect(<span class="string">&quot;Address is correct&quot;</span>)
             };
 
-            <span class="kw">let </span>piece_cache = PieceCache::new(
+            <span class="kw">let </span>piece_cache = NodePieceCache::new(
                 partial_components.client.clone(),
                 piece_cache_size.as_u64() / subspace_core_primitives::PIECE_SIZE <span class="kw">as </span>u64,
                 subspace_networking::peer_id(<span class="kw-2">&amp;</span>keypair),
@@ -2930,8 +2988,11 @@
                     <span class="prelude-val">None </span>=&gt; Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id)),
                 };
 
-                <span class="kw">let </span>node_provider_storage =
-                    NodeProviderStorage::new(piece_cache.clone(), external_provider_storage);
+                <span class="kw">let </span>node_provider_storage = NodeProviderStorage::new(
+                    peer_id,
+                    piece_cache.clone(),
+                    external_provider_storage,
+                );
                 <span class="kw">let </span>provider_storage =
                     ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
 
@@ -2944,30 +3005,38 @@
                             bootstrap_nodes.clone(),
                         )
                         .boxed(),
-                    request_response_protocols: <span class="macro">vec!</span>[PieceByHashRequestHandler::create({
-                        <span class="kw">let </span>handle = tokio::runtime::Handle::current();
-                        <span class="kw">let </span>weak_readers_and_pieces = Arc::downgrade(<span class="kw-2">&amp;</span>farmer_readers_and_pieces);
-                        <span class="kw">let </span>farmer_piece_store = Arc::clone(<span class="kw-2">&amp;</span>farmer_piece_store);
-                        <span class="kw">let </span>piece_cache = piece_cache.clone();
+                    request_response_protocols: <span class="macro">vec!</span>[
+                        PieceByHashRequestHandler::create({
+                            <span class="kw">let </span>handle = tokio::runtime::Handle::current();
+                            <span class="kw">let </span>weak_readers_and_pieces =
+                                Arc::downgrade(<span class="kw-2">&amp;</span>farmer_readers_and_pieces);
+                            <span class="kw">let </span>farmer_piece_store = Arc::clone(<span class="kw-2">&amp;</span>farmer_piece_store);
+                            <span class="kw">let </span>piece_cache = piece_cache.clone();
 
-                        <span class="kw">move </span>|req| {
-                            <span class="kw">match </span>get_piece_by_hash(req, <span class="kw-2">&amp;</span>piece_cache) {
-                                <span class="prelude-val">Some</span>(PieceByHashResponse { piece: <span class="prelude-val">None </span>}) | <span class="prelude-val">None </span>=&gt; (),
-                                result =&gt; <span class="kw">return </span>result,
+                            <span class="kw">move </span>|req| {
+                                <span class="kw">match </span>get_piece_by_hash(req, <span class="kw-2">&amp;</span>piece_cache) {
+                                    <span class="prelude-val">Some</span>(PieceByHashResponse { piece: <span class="prelude-val">None </span>}) | <span class="prelude-val">None </span>=&gt; (),
+                                    result =&gt; <span class="kw">return </span>result,
+                                }
+
+                                <span class="kw">if let </span><span class="prelude-val">Some</span>(piece_store) = farmer_piece_store.lock().as_ref() {
+                                    <span class="kw">crate</span>::farmer::get_piece_by_hash(
+                                        req,
+                                        piece_store,
+                                        <span class="kw-2">&amp;</span>weak_readers_and_pieces,
+                                        <span class="kw-2">&amp;</span>handle,
+                                    )
+                                } <span class="kw">else </span>{
+                                    <span class="prelude-val">None
+                                </span>}
                             }
-
-                            <span class="kw">if let </span><span class="prelude-val">Some</span>(piece_store) = farmer_piece_store.lock().as_ref() {
-                                <span class="kw">crate</span>::farmer::get_piece_by_hash(
-                                    req,
-                                    piece_store,
-                                    <span class="kw-2">&amp;</span>weak_readers_and_pieces,
-                                    <span class="kw-2">&amp;</span>handle,
-                                )
-                            } <span class="kw">else </span>{
-                                <span class="prelude-val">None
-                            </span>}
-                        }
-                    })],
+                        }),
+                        RootBlockBySegmentIndexesRequestHandler::create({
+                            <span class="kw">let </span>root_block_cache =
+                                RootBlockCache::new(partial_components.client.clone());
+                            <span class="kw">move </span>|req| get_root_block_by_segment_indexes(req, <span class="kw-2">&amp;</span>root_block_cache)
+                        }),
+                    ],
                     provider_storage,
                     reserved_peers: reserved_nodes
                         .into_iter()
@@ -3134,10 +3203,19 @@
     name: String,
     <span class="kw">pub</span>(<span class="kw">crate</span>) farmer_readers_and_pieces: Arc&lt;parking_lot::Mutex&lt;<span class="prelude-ty">Option</span>&lt;ReadersAndPieces&gt;&gt;&gt;,
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
-    </span><span class="kw">pub</span>(<span class="kw">crate</span>) farmer_piece_store: Arc&lt;parking_lot::Mutex&lt;<span class="prelude-ty">Option</span>&lt;ParityDbStore&gt;&gt;&gt;,
-    <span class="kw">pub</span>(<span class="kw">crate</span>) farmer_provider_storage: MaybeProviderStorage&lt;FarmerProviderStorage&gt;,
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) farmer_piece_store: Arc&lt;
+        parking_lot::Mutex&lt;
+            <span class="prelude-ty">Option</span>&lt;
+                ParityDbStore&lt;
+                    subspace_networking::libp2p::kad::record::Key,
+                    subspace_core_primitives::Piece,
+                &gt;,
+            &gt;,
+        &gt;,
+    &gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) farmer_provider_storage: MaybeProviderStorage&lt;FarmerProviderStorage&lt;FullClient&gt;&gt;,
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
-    </span><span class="kw">pub</span>(<span class="kw">crate</span>) piece_cache: PieceCache&lt;FullClient&gt;,
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) piece_cache: NodePieceCache&lt;FullClient&gt;,
 }
 
 <span class="doccomment">/// Hash type
@@ -3466,9 +3544,28 @@
     }
 }
 
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_root_block_by_segment_indexes(
+    RootBlockRequest { segment_indexes }: <span class="kw-2">&amp;</span>RootBlockRequest,
+    root_block_cache: <span class="kw-2">&amp;</span>RootBlockCache&lt;<span class="kw">impl </span>sc_client_api::AuxStore&gt;,
+) -&gt; <span class="prelude-ty">Option</span>&lt;RootBlockResponse&gt; {
+    <span class="kw">let </span>internal_result = segment_indexes
+        .iter()
+        .map(|segment_index| root_block_cache.get_root_block(<span class="kw-2">*</span>segment_index))
+        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="prelude-ty">Option</span>&lt;subspace_core_primitives::RootBlock&gt;&gt;, <span class="kw">_</span>&gt;&gt;();
+
+    <span class="kw">match </span>internal_result {
+        <span class="prelude-val">Ok</span>(root_blocks) =&gt; <span class="prelude-val">Some</span>(RootBlockResponse { root_blocks }),
+        <span class="prelude-val">Err</span>(error) =&gt; {
+            <span class="macro">tracing::error!</span>(%error, <span class="string">&quot;Failed to get root blocks from cache&quot;</span>);
+
+            <span class="prelude-val">None
+        </span>}
+    }
+}
+
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_piece_by_hash(
     PieceByHashRequest { piece_index_hash }: <span class="kw-2">&amp;</span>PieceByHashRequest,
-    piece_cache: <span class="kw-2">&amp;</span>subspace_service::piece_cache::PieceCache&lt;<span class="kw">impl </span>sc_client_api::AuxStore&gt;,
+    piece_cache: <span class="kw-2">&amp;</span>NodePieceCache&lt;<span class="kw">impl </span>sc_client_api::AuxStore&gt;,
 ) -&gt; <span class="prelude-ty">Option</span>&lt;PieceByHashResponse&gt; {
     <span class="kw">let </span>result = <span class="kw">match </span>piece_cache.get_piece(<span class="kw-2">*</span>piece_index_hash) {
         <span class="prelude-val">Ok</span>(maybe_piece) =&gt; maybe_piece,
@@ -3487,7 +3584,7 @@
     <span class="kw">use </span>futures::Stream;
     <span class="kw">use </span>sc_consensus_subspace_rpc::SubspaceRpcApiClient;
     <span class="kw">use </span>subspace_archiving::archiver::ArchivedSegment;
-    <span class="kw">use </span>subspace_core_primitives::{RecordsRoot, SegmentIndex};
+    <span class="kw">use </span>subspace_core_primitives::{RecordsRoot, RootBlock, SegmentIndex};
     <span class="kw">use </span>subspace_farmer::node_client::{Error, NodeClient};
     <span class="kw">use </span>subspace_rpc_primitives::{
         FarmerAppInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
@@ -3554,6 +3651,13 @@
             segment_indexes: Vec&lt;SegmentIndex&gt;,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="prelude-ty">Option</span>&lt;RecordsRoot&gt;&gt;, Error&gt; {
             <span class="prelude-val">Ok</span>(<span class="self">self</span>.rpc_handle.records_roots(segment_indexes).<span class="kw">await</span><span class="question-mark">?</span>)
+        }
+
+        <span class="kw">async fn </span>root_blocks(
+            <span class="kw-2">&amp;</span><span class="self">self</span>,
+            segment_indexes: Vec&lt;SegmentIndex&gt;,
+        ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="prelude-ty">Option</span>&lt;RootBlock&gt;&gt;, Error&gt; {
+            <span class="prelude-val">Ok</span>(<span class="self">self</span>.rpc_handle.root_blocks(segment_indexes).<span class="kw">await</span><span class="question-mark">?</span>)
         }
     }
 }

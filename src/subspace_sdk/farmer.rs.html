@@ -974,6 +974,10 @@
 <a href="#974" id="974">974</a>
 <a href="#975" id="975">975</a>
 <a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -992,7 +996,6 @@
     SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
     SingleDiskPlotOptions, SingleDiskPlotSummary,
 };
-<span class="kw">use </span>subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
 <span class="kw">use </span>subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 <span class="kw">use </span>subspace_farmer::utils::node_piece_getter::NodePieceGetter <span class="kw">as </span>DsnPieceGetter;
 <span class="kw">use </span>subspace_farmer::utils::parity_db_store::ParityDbStore;
@@ -1004,7 +1007,7 @@
 <span class="kw">use </span>tokio::sync::{oneshot, watch, Mutex};
 
 <span class="kw">use </span><span class="self">self</span>::builder::PieceCacheSize;
-<span class="kw">use </span><span class="kw">crate</span>::networking::{FarmerProviderStorage, NodePieceGetter};
+<span class="kw">use </span><span class="kw">crate</span>::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter, PieceCache};
 <span class="kw">use crate</span>::{Node, PublicKey};
 
 <span class="doccomment">/// Description of the cache
@@ -1192,7 +1195,10 @@
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_piece_by_hash(
     PieceByHashRequest { piece_index_hash }: <span class="kw-2">&amp;</span>PieceByHashRequest,
-    piece_cache: <span class="kw-2">&amp;</span>ParityDbStore,
+    piece_cache: <span class="kw-2">&amp;</span>ParityDbStore&lt;
+        subspace_networking::libp2p::kad::record::Key,
+        subspace_core_primitives::Piece,
+    &gt;,
     weak_readers_and_pieces: <span class="kw-2">&amp;</span>std::sync::Weak&lt;parking_lot::Mutex&lt;<span class="prelude-ty">Option</span>&lt;ReadersAndPieces&gt;&gt;&gt;,
     handle: <span class="kw-2">&amp;</span>tokio::runtime::Handle,
 ) -&gt; <span class="prelude-ty">Option</span>&lt;PieceByHashResponse&gt; {
@@ -1287,17 +1293,19 @@
                 ParityDbProviderStorage::new(<span class="kw-2">&amp;</span>provider_cache_db_path, provider_cache_size, peer_id)
                     .map_err(|err| <span class="macro">anyhow::anyhow!</span>(err.to_string()))<span class="question-mark">?</span>;
 
-            node.farmer_provider_storage.swap(FarmerProviderStorage::new(
-                peer_id,
-                readers_and_pieces.clone(),
-                db_provider_storage,
-            ));
-
             <span class="kw">let </span>piece_store = ParityDbStore::new(<span class="kw-2">&amp;</span>piece_cache_db_path)
                 .map_err(|err| <span class="macro">anyhow::anyhow!</span>(err.to_string()))<span class="question-mark">?</span>;
             <span class="kw-2">*</span>node.farmer_piece_store.lock() = <span class="prelude-val">Some</span>(piece_store.clone());
 
-            FarmerPieceCache::new(piece_store, piece_cache_size, peer_id)
+            <span class="kw">let </span>piece_cache = FarmerPieceCache::new(piece_store, piece_cache_size, peer_id);
+            node.farmer_provider_storage.swap(FarmerProviderStorage::new(
+                peer_id,
+                readers_and_pieces.clone(),
+                db_provider_storage,
+                PieceCache::new(node.piece_cache.clone(), piece_cache.clone()),
+            ));
+
+            piece_cache
         };
 
         <span class="kw">let </span>piece_cache = Arc::new(tokio::sync::Mutex::new(piece_cache));
