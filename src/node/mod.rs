@@ -772,11 +772,11 @@ mod builder {
             // TODO: get rid of it, once it won't be required by monorepo
             value = "vec![\"/ip4/127.0.0.1/tcp/0\".parse().expect(\"Always valid\")]"
         ))]
-        pub(crate) Vec<libp2p_core::Multiaddr>,
+        pub(crate) Vec<Multiaddr>,
     );
 
     /// Node DSN builder
-    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq, Eq)]
+    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
     #[derivative(Default)]
     #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "DsnBuilder")]
     #[non_exhaustive]
@@ -791,12 +791,12 @@ mod builder {
         pub listen_addresses: ListenAddresses,
         /// Boot nodes
         #[builder(default)]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub boot_nodes: Vec<libp2p_core::Multiaddr>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        pub boot_nodes: Vec<MultiaddrWithPeerId>,
         /// Reserved nodes
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub reserved_nodes: Vec<libp2p_core::Multiaddr>,
+        pub reserved_nodes: Vec<Multiaddr>,
         /// Determines whether we allow keeping non-global (private, shared,
         /// loopback..) addresses in Kademlia DHT.
         #[builder(default)]
