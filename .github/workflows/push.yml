@@ -12,6 +12,9 @@ on:
         default: false
         type: boolean
 
+concurrency:
+  group: push-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   # Not needed in CI, should make things a bit faster

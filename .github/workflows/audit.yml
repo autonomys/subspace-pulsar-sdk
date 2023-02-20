@@ -4,6 +4,10 @@ on:
   schedule:
     - cron: '0 0 * * *'
 
+concurrency:
+  group: audit-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   security-audit:
     runs-on: ubuntu-latest
