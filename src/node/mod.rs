@@ -22,7 +22,6 @@ use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use serde::{Deserialize, Serialize};
 use sp_consensus::SyncOracle;
 use sp_core::H256;
-use subspace_core_primitives::SolutionRange;
 use subspace_farmer::node_client::NodeClient;
 use subspace_farmer::utils::parity_db_store::ParityDbStore;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
@@ -31,7 +30,6 @@ use subspace_networking::{
     PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
     RootBlockBySegmentIndexesRequestHandler, RootBlockRequest, RootBlockResponse,
 };
-use subspace_rpc_primitives::SlotInfo;
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::root_blocks::RootBlockCache;
@@ -1359,10 +1357,6 @@ pub struct Info {
     pub not_connected_peers: u64,
     /// Total number of pieces stored on chain
     pub total_pieces: NonZeroU64,
-    /// Range for solution
-    pub solution_range: SolutionRange,
-    /// Range for voting solutions
-    pub voting_solution_range: SolutionRange,
 }
 
 /// New block notification
@@ -1602,13 +1596,6 @@ impl Node {
 
     /// Get node info
     pub async fn get_info(&self) -> anyhow::Result<Info> {
-        let SlotInfo { solution_range, voting_solution_range, .. } = self
-            .subscribe_slot_info()
-            .await
-            .map_err(anyhow::Error::msg)?
-            .next()
-            .await
-            .expect("This stream never ends");
         let client = self.client().context("Failed to fetch node info")?;
         let NetworkState { connected_peers, not_connected_peers, .. } = self
             .network
@@ -1637,8 +1624,6 @@ impl Node {
             connected_peers: connected_peers.len() as u64,
             not_connected_peers: not_connected_peers.len() as u64,
             total_pieces,
-            solution_range,
-            voting_solution_range,
         })
     }
 
@@ -1885,7 +1870,6 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    #[ignore = "CI runners are very slow"]
     async fn test_sync_block() {
         tokio::time::timeout(std::time::Duration::from_secs(60 * 60), test_sync_block_inner())
             .await

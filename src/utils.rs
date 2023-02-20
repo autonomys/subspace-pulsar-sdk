@@ -16,7 +16,8 @@ use subspace_runtime_primitives::opaque::Block;
 pub(crate) fn test_init() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
-            "info,subspace_sdk=trace,subspace_farmer=trace,subspace_service=trace"
+            "info,subspace_sdk=trace,subspace_farmer=trace,subspace_service=trace,\
+             subspace_farmer::utils::parity_db_store=debug"
                 .parse::<tracing_subscriber::EnvFilter>()
                 .expect("Env filter directives are correct"),
         )
