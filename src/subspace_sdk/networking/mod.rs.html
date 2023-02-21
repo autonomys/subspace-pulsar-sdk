@@ -130,6 +130,8 @@
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>node_piece_cache;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>node_provider_storage;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>piece_cache_utils;
@@ -188,13 +190,15 @@
     <span class="kw">let </span>handler_id = node.on_announcement(Arc::new({
         <span class="kw">let </span>provider_records_sender = Mutex::new(provider_records_sender);
 
-        <span class="kw">move </span>|record| {
-            <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = provider_records_sender.lock().try_send(record.clone()) {
+        <span class="kw">move </span>|record, guard| {
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(error) =
+                provider_records_sender.lock().try_send((record.clone(), Arc::clone(guard)))
+            {
                 <span class="kw">if </span>error.is_disconnected() {
                     <span class="comment">// Receiver exited, nothing left to be done
                     </span><span class="kw">return</span>;
                 }
-                <span class="kw">let </span>record = error.into_inner();
+                <span class="kw">let </span>(record, _guard) = error.into_inner();
                 <span class="macro">warn!</span>(
                     <span class="question-mark">?</span>record.key,
                     <span class="question-mark">?</span>record.provider,
@@ -217,7 +221,7 @@
     <span class="comment">// We are working with database internally, better to run in a separate thread
     </span>std::thread::Builder::new().name(<span class="string">&quot;ann-processor&quot;</span>.to_string()).spawn(<span class="kw">move </span>|| {
         <span class="kw">let </span>processor_fut = <span class="kw">async </span>{
-            <span class="kw">while let </span><span class="prelude-val">Some</span>(provider_record) = provider_records_receiver.next().<span class="kw">await </span>{
+            <span class="kw">while let </span><span class="prelude-val">Some</span>((provider_record, _guard)) = provider_records_receiver.next().<span class="kw">await </span>{
                 provider_record_processor.process_provider_record(provider_record).<span class="kw">await</span>;
             }
         };
