@@ -1907,7 +1907,6 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let chain = chain_spec::dev_config().unwrap();
         let node = Node::dev()
-            .role(Role::Authority)
             .dsn(DsnBuilder::dev().listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()]))
             .network(
                 NetworkBuilder::dev()
@@ -1923,7 +1922,7 @@ mod tests {
             .build(
                 Default::default(),
                 node.clone(),
-                &[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::mib(40)).unwrap()],
+                &[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
                 CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .instrument(node_span.clone())
@@ -1965,7 +1964,7 @@ mod tests {
             .build(
                 Default::default(),
                 node.clone(),
-                &[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::mib(40)).unwrap()],
+                &[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
                 CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
             .instrument(other_node_span.clone())
