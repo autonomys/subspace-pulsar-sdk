@@ -290,7 +290,7 @@ impl CoreDomainNode {
         chain_spec: ChainSpec,
         primary_chain_node: &mut crate::node::NewFull,
         system_domain_node: &super::NewFull,
-        gossip_msg_sink: domain_client_message_relayer::GossipMessageSink,
+        gossip_message_sink: domain_client_message_relayer::GossipMessageSink,
         domain_tx_pool_sinks: &mut impl Extend<(
             DomainId,
             cross_domain_message_gossip::DomainTxPoolSink,
@@ -322,21 +322,22 @@ impl CoreDomainNode {
                 )
             });
 
+        let core_domain_params = domain_service::CoreDomainParams {
+            domain_id: DomainId::CORE_PAYMENTS,
+            core_domain_config,
+            system_domain_client: system_domain_node.client.clone(),
+            system_domain_network: system_domain_node.network.clone(),
+            primary_chain_client: primary_chain_node.client.clone(),
+            primary_network: primary_chain_node.network.clone(),
+            select_chain: primary_chain_node.select_chain.clone(),
+            imported_block_notification_stream,
+            new_slot_notification_stream,
+            block_import_throttling_buffer_size,
+            gossip_message_sink,
+        };
+
         let NewFull { client, rpc_handlers, tx_pool_sink, task_manager, network_starter, .. } =
-            domain_service::new_full_core(
-                DomainId::CORE_PAYMENTS,
-                core_domain_config,
-                system_domain_node.client.clone(),
-                system_domain_node.network.clone(),
-                primary_chain_node.client.clone(),
-                primary_chain_node.network.clone(),
-                &primary_chain_node.select_chain,
-                imported_block_notification_stream,
-                new_slot_notification_stream,
-                block_import_throttling_buffer_size,
-                gossip_msg_sink,
-            )
-            .await?;
+            domain_service::new_full_core(core_domain_params).await?;
 
         domain_tx_pool_sinks.extend([(DomainId::CORE_PAYMENTS, tx_pool_sink)]);
         primary_chain_node.task_manager.add_child(task_manager);

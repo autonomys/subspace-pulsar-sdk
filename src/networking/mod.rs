@@ -56,13 +56,15 @@ pub fn start_announcements_processor(
     let handler_id = node.on_announcement(Arc::new({
         let provider_records_sender = Mutex::new(provider_records_sender);
 
-        move |record| {
-            if let Err(error) = provider_records_sender.lock().try_send(record.clone()) {
+        move |record, guard| {
+            if let Err(error) =
+                provider_records_sender.lock().try_send((record.clone(), Arc::clone(guard)))
+            {
                 if error.is_disconnected() {
                     // Receiver exited, nothing left to be done
                     return;
                 }
-                let record = error.into_inner();
+                let (record, _guard) = error.into_inner();
                 warn!(
                     ?record.key,
                     ?record.provider,
@@ -85,7 +87,7 @@ pub fn start_announcements_processor(
     // We are working with database internally, better to run in a separate thread
     std::thread::Builder::new().name("ann-processor".to_string()).spawn(move || {
         let processor_fut = async {
-            while let Some(provider_record) = provider_records_receiver.next().await {
+            while let Some((provider_record, _guard)) = provider_records_receiver.next().await {
                 provider_record_processor.process_provider_record(provider_record).await;
             }
         };
