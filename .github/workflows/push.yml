@@ -98,9 +98,10 @@ jobs:
       - name: Configure cache
         uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
 
-      - run: cargo test --locked
-        env:
-          RUST_FLAGS: '-C debuginfo=0'
+      - name: Build tests
+        run: cargo build --locked --lib --tests --release
+      - name: Run tests
+        run: cargo test --locked --lib --tests --release -- --test-threads=1
 
   docs:
     runs-on: ubuntu-22.04
