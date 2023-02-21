@@ -1870,6 +1870,10 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[cfg_attr(
+        any(tarpaulin, not(target_os = "linux")),
+        ignore = "Slow tests are run only on linux"
+    )]
     async fn test_sync_block() {
         tokio::time::timeout(std::time::Duration::from_secs(60 * 60), test_sync_block_inner())
             .await
