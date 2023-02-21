@@ -9567,6 +9567,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "tracing-futures",
  "tracing-subscriber 0.3.16",
 ]
 
