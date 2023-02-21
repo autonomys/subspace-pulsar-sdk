@@ -772,11 +772,11 @@ mod builder {
             // TODO: get rid of it, once it won't be required by monorepo
             value = "vec![\"/ip4/127.0.0.1/tcp/0\".parse().expect(\"Always valid\")]"
         ))]
-        pub(crate) Vec<libp2p_core::Multiaddr>,
+        pub(crate) Vec<Multiaddr>,
     );
 
     /// Node DSN builder
-    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq, Eq)]
+    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
     #[derivative(Default)]
     #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "DsnBuilder")]
     #[non_exhaustive]
@@ -791,12 +791,12 @@ mod builder {
         pub listen_addresses: ListenAddresses,
         /// Boot nodes
         #[builder(default)]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub boot_nodes: Vec<libp2p_core::Multiaddr>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        pub boot_nodes: Vec<MultiaddrWithPeerId>,
         /// Reserved nodes
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub reserved_nodes: Vec<libp2p_core::Multiaddr>,
+        pub reserved_nodes: Vec<Multiaddr>,
         /// Determines whether we allow keeping non-global (private, shared,
         /// loopback..) addresses in Kademlia DHT.
         #[builder(default)]
@@ -1469,6 +1469,24 @@ impl Node {
             .map_err(|()| anyhow::anyhow!("Network worker exited"))
     }
 
+    /// Get listening addresses of the node
+    pub async fn dsn_listen_addresses(&self) -> anyhow::Result<Vec<MultiaddrWithPeerId>> {
+        let peer_id = self.dsn_node.id();
+        Ok(self
+            .dsn_node
+            .listeners()
+            .into_iter()
+            .map(|mut multiaddr| {
+                multiaddr
+                    .push(subspace_networking::libp2p::multiaddr::Protocol::P2p(peer_id.into()));
+                multiaddr
+                    .to_string()
+                    .parse()
+                    .expect("Convertion between 2 libp2p version. Never panics")
+            })
+            .collect())
+    }
+
     /// Subscribe for node syncing progress
     pub async fn subscribe_syncing_progress(
         &self,
@@ -1759,6 +1777,7 @@ mod tests {
 
     use subspace_farmer::node_client::NodeClient;
     use tempfile::TempDir;
+    use tracing_futures::Instrument;
 
     use super::*;
     use crate::farmer::CacheDescription;
@@ -1876,6 +1895,99 @@ mod tests {
     )]
     async fn test_sync_block() {
         tokio::time::timeout(std::time::Duration::from_secs(60 * 60), test_sync_block_inner())
+            .await
+            .unwrap()
+    }
+
+    async fn test_sync_plot_inner() {
+        crate::utils::test_init();
+
+        let node_span = tracing::trace_span!("node 1");
+        let dir = TempDir::new().unwrap();
+        let chain = chain_spec::dev_config().unwrap();
+        let node = Node::dev()
+            .dsn(DsnBuilder::dev().listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()]))
+            .network(
+                NetworkBuilder::dev()
+                    .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()]),
+            )
+            .role(Role::Authority)
+            .build(dir.path(), chain.clone())
+            .instrument(node_span.clone())
+            .await
+            .unwrap();
+        let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
+        let farmer = Farmer::builder()
+            .build(
+                Default::default(),
+                node.clone(),
+                &[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+            )
+            .instrument(node_span.clone())
+            .await
+            .unwrap();
+
+        let farm_blocks = 4;
+
+        node.subscribe_new_blocks()
+            .await
+            .unwrap()
+            .skip_while(|notification| futures::future::ready(notification.number < farm_blocks))
+            .next()
+            .await
+            .unwrap();
+
+        let other_node_span = tracing::trace_span!("node 2");
+        let dir = TempDir::new().unwrap();
+        let other_node = Node::dev()
+            .dsn(DsnBuilder::dev().boot_nodes(node.dsn_listen_addresses().await.unwrap()))
+            .network(
+                NetworkBuilder::dev()
+                    .force_synced(false)
+                    .boot_nodes(node.listen_addresses().await.unwrap()),
+            )
+            .build(dir.path(), chain)
+            .instrument(other_node_span.clone())
+            .await
+            .unwrap();
+
+        while other_node.get_info().await.unwrap().best_block.1
+            < node.get_info().await.unwrap().best_block.1
+        {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+
+        let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
+        let other_farmer = Farmer::builder()
+            .build(
+                Default::default(),
+                node.clone(),
+                &[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
+                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+            )
+            .instrument(other_node_span.clone())
+            .await
+            .unwrap();
+
+        let plot = other_farmer.iter_plots().await.next().unwrap();
+        plot.subscribe_initial_plotting_progress().await.for_each(|_| async {}).await;
+        farmer.close().await.unwrap();
+
+        plot.subscribe_new_solutions().await.next().await.expect("Solution stream never ends");
+
+        node.close().await;
+        other_node.close().await;
+        other_farmer.close().await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[cfg_attr(
+        any(tarpaulin, not(target_os = "linux")),
+        ignore = "Slow tests are run only on linux"
+    )]
+    async fn test_sync_plot() {
+        tokio::time::timeout(std::time::Duration::from_secs(60 * 60), test_sync_plot_inner())
             .await
             .unwrap()
     }
