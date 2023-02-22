@@ -89,7 +89,7 @@ system-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "1
 [dev-dependencies]
 clap = { version = "4", features = ["derive"] }
 tempfile = "3.3"
-tokio = { version = "1.21", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.25", features = ["rt-multi-thread", "macros"] }
 tracing-subscriber = "0.3"
 
 [patch.crates-io]
