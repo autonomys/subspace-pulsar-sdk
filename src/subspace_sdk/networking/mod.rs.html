@@ -221,8 +221,8 @@
     <span class="comment">// We are working with database internally, better to run in a separate thread
     </span>std::thread::Builder::new().name(<span class="string">&quot;ann-processor&quot;</span>.to_string()).spawn(<span class="kw">move </span>|| {
         <span class="kw">let </span>processor_fut = <span class="kw">async </span>{
-            <span class="kw">while let </span><span class="prelude-val">Some</span>((provider_record, _guard)) = provider_records_receiver.next().<span class="kw">await </span>{
-                provider_record_processor.process_provider_record(provider_record).<span class="kw">await</span>;
+            <span class="kw">while let </span><span class="prelude-val">Some</span>((provider_record, guard)) = provider_records_receiver.next().<span class="kw">await </span>{
+                provider_record_processor.process_provider_record(provider_record, guard).<span class="kw">await</span>;
             }
         };
 
