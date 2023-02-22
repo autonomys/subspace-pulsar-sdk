@@ -1318,7 +1318,7 @@ pub struct Node {
             >,
         >,
     >,
-    pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage<FullClient>>,
+    pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
     #[derivative(Debug = "ignore")]
     pub(crate) piece_cache: NodePieceCache<FullClient>,
 }

@@ -27,7 +27,7 @@ use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 
 use self::builder::PieceCacheSize;
-use crate::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter, PieceCache};
+use crate::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -322,7 +322,7 @@ impl Config {
                 peer_id,
                 readers_and_pieces.clone(),
                 db_provider_storage,
-                PieceCache::new(node.piece_cache.clone(), piece_cache.clone()),
+                piece_cache.clone(),
             ));
 
             piece_cache
