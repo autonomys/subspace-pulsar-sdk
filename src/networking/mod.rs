@@ -87,8 +87,8 @@ pub fn start_announcements_processor(
     // We are working with database internally, better to run in a separate thread
     std::thread::Builder::new().name("ann-processor".to_string()).spawn(move || {
         let processor_fut = async {
-            while let Some((provider_record, _guard)) = provider_records_receiver.next().await {
-                provider_record_processor.process_provider_record(provider_record).await;
+            while let Some((provider_record, guard)) = provider_records_receiver.next().await {
+                provider_record_processor.process_provider_record(provider_record, guard).await;
             }
         };
 
