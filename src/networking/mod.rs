@@ -1,6 +1,3 @@
-pub(crate) mod node_piece_cache;
-pub(crate) mod node_provider_storage;
-pub(crate) mod piece_cache_utils;
 pub(crate) mod provider_storage_utils;
 
 use std::num::NonZeroUsize;
@@ -9,7 +6,6 @@ use std::sync::{Arc, Weak};
 use either::*;
 use event_listener_primitives::HandlerId;
 use futures::StreamExt;
-pub(crate) use node_piece_cache::NodePieceCache;
 use parking_lot::Mutex;
 use sc_client_api::AuxStore;
 use subspace_core_primitives::PieceIndexHash;
@@ -21,18 +17,20 @@ use subspace_networking::{Node, ParityDbProviderStorage};
 use tracing::{warn, Instrument};
 
 pub(crate) type FarmerPieceCache = subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
-pub(crate) type PieceCache<C> = piece_cache_utils::And<NodePieceCache<C>, FarmerPieceCache>;
-pub(crate) type FarmerProviderStorage<C> =
+pub(crate) type NodePieceCache<C> = subspace_service::piece_cache::PieceCache<C>;
+pub(crate) type PieceCache = FarmerPieceCache;
+pub(crate) type FarmerProviderStorage =
     subspace_farmer::utils::farmer_provider_storage::FarmerProviderStorage<
         ParityDbProviderStorage,
-        PieceCache<C>,
+        PieceCache,
     >;
-pub(crate) type NodeProviderStorage<C> = node_provider_storage::NodeProviderStorage<
-    NodePieceCache<C>,
-    Either<ParityDbProviderStorage, subspace_networking::MemoryProviderStorage>,
->;
+pub(crate) type NodeProviderStorage<C> =
+    subspace_service::dsn::node_provider_storage::NodeProviderStorage<
+        NodePieceCache<C>,
+        Either<ParityDbProviderStorage, subspace_networking::MemoryProviderStorage>,
+    >;
 pub(crate) type ProviderStorage<C> = provider_storage_utils::AndProviderStorage<
-    provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage<C>>,
+    provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage>,
     NodeProviderStorage<C>,
 >;
 

@@ -20,14 +20,16 @@ use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 use subspace_farmer::utils::node_piece_getter::NodePieceGetter as DsnPieceGetter;
 use subspace_farmer::utils::parity_db_store::ParityDbStore;
 use subspace_farmer::utils::readers_and_pieces::{PieceDetails, ReadersAndPieces};
+use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_farmer_components::plotting::PlottedSector;
 use subspace_networking::utils::multihash::ToMultihash;
-use subspace_networking::{ParityDbProviderStorage, PieceByHashRequest, PieceByHashResponse};
+use subspace_networking::{ParityDbProviderStorage, PieceByHashResponse};
 use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
+use tracing_futures::Instrument;
 
 use self::builder::PieceCacheSize;
-use crate::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter, PieceCache};
+use crate::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -214,52 +216,53 @@ pub enum BuildError {
 }
 
 pub(crate) fn get_piece_by_hash(
-    PieceByHashRequest { piece_index_hash }: &PieceByHashRequest,
+    piece_index_hash: PieceIndexHash,
     piece_cache: &ParityDbStore<
         subspace_networking::libp2p::kad::record::Key,
         subspace_core_primitives::Piece,
     >,
     weak_readers_and_pieces: &std::sync::Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
-    handle: &tokio::runtime::Handle,
-) -> Option<PieceByHashResponse> {
+    piece_memory_cache: &PieceMemoryCache,
+) -> impl std::future::Future<Output = Option<PieceByHashResponse>> + Send + Sync + 'static {
+    use futures::future::{ready, Either};
     use tracing::debug;
 
-    let result = {
-        debug!(?piece_index_hash, "Piece request received. Trying cache...");
-        let multihash = piece_index_hash.to_multihash();
+    if let Some(piece) = piece_memory_cache.get_piece(&piece_index_hash) {
+        return Either::Left(ready(Some(PieceByHashResponse { piece: Some(piece) })));
+    }
 
-        let piece_from_cache = piece_cache.get(&multihash.into());
+    if let Some(piece) = piece_cache.get(&piece_index_hash.to_multihash().into()) {
+        return Either::Left(ready(Some(PieceByHashResponse { piece: Some(piece) })));
+    }
 
-        if piece_from_cache.is_some() {
-            piece_from_cache
-        } else {
-            debug!(?piece_index_hash, "No piece in the cache. Trying archival storage...");
+    let weak_readers_and_pieces = weak_readers_and_pieces.clone();
 
-            let read_piece_fut = {
-                let readers_and_pieces = match weak_readers_and_pieces.upgrade() {
-                    Some(readers_and_pieces) => readers_and_pieces,
-                    None => {
-                        debug!("A readers and pieces are already dropped");
-                        return None;
-                    }
-                };
-                let readers_and_pieces = readers_and_pieces.lock();
-                let readers_and_pieces = match readers_and_pieces.as_ref() {
-                    Some(readers_and_pieces) => readers_and_pieces,
-                    None => {
-                        debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
-                        return None;
-                    }
-                };
+    debug!(?piece_index_hash, "No piece in the cache. Trying archival storage...");
 
-                readers_and_pieces.read_piece(piece_index_hash)?
-            };
+    let read_piece_fut = {
+        let readers_and_pieces = match weak_readers_and_pieces.upgrade() {
+            Some(readers_and_pieces) => readers_and_pieces,
+            None => {
+                debug!("A readers and pieces are already dropped");
+                return Either::Left(ready(None));
+            }
+        };
+        let readers_and_pieces = readers_and_pieces.lock();
+        let readers_and_pieces = match readers_and_pieces.as_ref() {
+            Some(readers_and_pieces) => readers_and_pieces,
+            None => {
+                debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
+                return Either::Left(ready(None));
+            }
+        };
 
-            tokio::task::block_in_place(move || handle.block_on(read_piece_fut))
+        match readers_and_pieces.read_piece(&piece_index_hash) {
+            Some(fut) => fut.instrument(tracing::Span::current()),
+            None => return Either::Left(ready(None)),
         }
     };
 
-    Some(PieceByHashResponse { piece: result })
+    Either::Right(read_piece_fut.map(|piece| Some(PieceByHashResponse { piece })))
 }
 
 const RECORDS_ROOTS_CACHE_SIZE: NonZeroUsize = NonZeroUsize::new(1_000_000).expect("Not zero; qed");
@@ -315,14 +318,14 @@ impl Config {
 
             let piece_store = ParityDbStore::new(&piece_cache_db_path)
                 .map_err(|err| anyhow::anyhow!(err.to_string()))?;
-            *node.farmer_piece_store.lock() = Some(piece_store.clone());
+            *node.farmer_piece_store.lock().await = Some(piece_store.clone());
 
             let piece_cache = FarmerPieceCache::new(piece_store, piece_cache_size, peer_id);
             node.farmer_provider_storage.swap(FarmerProviderStorage::new(
                 peer_id,
                 readers_and_pieces.clone(),
                 db_provider_storage,
-                PieceCache::new(node.piece_cache.clone(), piece_cache.clone()),
+                piece_cache.clone(),
             ));
 
             piece_cache
@@ -367,6 +370,7 @@ impl Config {
                 kzg: kzg.clone(),
                 piece_getter: piece_getter.clone(),
                 concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
+                piece_memory_cache: node.piece_memory_cache.clone(),
             };
             let single_disk_plot = SingleDiskPlot::new(description).await?;
 
@@ -513,6 +517,7 @@ impl Config {
                     }
 
                     let node = node.clone();
+                    // TODO: Skip those that were already announced (because they cached)
                     let publish_fut = async move {
                         let mut pieces_publishing_futures = new_pieces
                             .into_iter()
@@ -526,7 +531,7 @@ impl Config {
                             // to completion
                         }
 
-                        tracing::info!("Piece publishing was successful.");
+                        tracing::info!(sector_index, "Sector publishing was successful.");
 
                         // Release only after publishing is finished
                         drop(plotting_permit);

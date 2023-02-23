@@ -1,0 +1,1 @@
+disallowed-types = ["std::sync::Mutex", "std::sync::RwLock", "std::sync::Once", "std::sync::Condvar"]
