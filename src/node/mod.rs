@@ -26,6 +26,7 @@ use subspace_core_primitives::PieceIndexHash;
 use subspace_farmer::node_client::NodeClient;
 use subspace_farmer::utils::parity_db_store::ParityDbStore;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
+use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{
     PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
@@ -991,6 +992,7 @@ impl Config {
         let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
         let farmer_piece_store = Arc::new(tokio::sync::Mutex::new(None));
         let farmer_provider_storage = MaybeProviderStorage::none();
+        let piece_memory_cache = PieceMemoryCache::default();
 
         let (subspace_networking, (node, mut node_runner, piece_cache)) = {
             let keypair = {
@@ -1116,6 +1118,7 @@ impl Config {
                                 Arc::downgrade(&farmer_readers_and_pieces);
                             let farmer_piece_store = Arc::clone(&farmer_piece_store);
                             let piece_cache = piece_cache.clone();
+                            let piece_memory_cache = piece_memory_cache.clone();
 
                             move |&PieceByHashRequest { piece_index_hash }| {
                                 let weak_readers_and_pieces = weak_readers_and_pieces.clone();
@@ -1123,6 +1126,7 @@ impl Config {
                                 let piece_cache = piece_cache.clone();
                                 let node_piece_by_hash =
                                     get_piece_by_hash(piece_index_hash, &piece_cache);
+                                let piece_memory_cache = piece_memory_cache.clone();
 
                                 async move {
                                     match node_piece_by_hash {
@@ -1137,6 +1141,7 @@ impl Config {
                                             piece_index_hash,
                                             piece_store,
                                             &weak_readers_and_pieces,
+                                            &piece_memory_cache,
                                         )
                                         .await
                                     } else {
@@ -1274,6 +1279,7 @@ impl Config {
             farmer_piece_store,
             farmer_provider_storage,
             piece_cache,
+            piece_memory_cache,
         })
     }
 }
@@ -1336,6 +1342,8 @@ pub struct Node {
     pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
     #[derivative(Debug = "ignore")]
     pub(crate) piece_cache: NodePieceCache<FullClient>,
+    #[derivative(Debug = "ignore")]
+    pub(crate) piece_memory_cache: PieceMemoryCache,
 }
 
 /// Hash type

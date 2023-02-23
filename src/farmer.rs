@@ -20,6 +20,7 @@ use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 use subspace_farmer::utils::node_piece_getter::NodePieceGetter as DsnPieceGetter;
 use subspace_farmer::utils::parity_db_store::ParityDbStore;
 use subspace_farmer::utils::readers_and_pieces::{PieceDetails, ReadersAndPieces};
+use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_farmer_components::plotting::PlottedSector;
 use subspace_networking::utils::multihash::ToMultihash;
 use subspace_networking::{ParityDbProviderStorage, PieceByHashResponse};
@@ -221,9 +222,14 @@ pub(crate) fn get_piece_by_hash(
         subspace_core_primitives::Piece,
     >,
     weak_readers_and_pieces: &std::sync::Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
+    piece_memory_cache: &PieceMemoryCache,
 ) -> impl std::future::Future<Output = Option<PieceByHashResponse>> + Send + Sync + 'static {
     use futures::future::{ready, Either};
     use tracing::debug;
+
+    if let Some(piece) = piece_memory_cache.get_piece(&piece_index_hash) {
+        return Either::Left(ready(Some(PieceByHashResponse { piece: Some(piece) })));
+    }
 
     if let Some(piece) = piece_cache.get(&piece_index_hash.to_multihash().into()) {
         return Either::Left(ready(Some(PieceByHashResponse { piece: Some(piece) })));
@@ -364,6 +370,7 @@ impl Config {
                 kzg: kzg.clone(),
                 piece_getter: piece_getter.clone(),
                 concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
+                piece_memory_cache: node.piece_memory_cache.clone(),
             };
             let single_disk_plot = SingleDiskPlot::new(description).await?;
 
