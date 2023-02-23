@@ -22,6 +22,7 @@ use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use serde::{Deserialize, Serialize};
 use sp_consensus::SyncOracle;
 use sp_core::H256;
+use subspace_core_primitives::PieceIndexHash;
 use subspace_farmer::node_client::NodeClient;
 use subspace_farmer::utils::parity_db_store::ParityDbStore;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
@@ -988,7 +989,7 @@ impl Config {
             subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&base)
                 .context("Failed to build a partial subspace node")?;
         let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
-        let farmer_piece_store = Arc::new(parking_lot::Mutex::new(None));
+        let farmer_piece_store = Arc::new(tokio::sync::Mutex::new(None));
         let farmer_provider_storage = MaybeProviderStorage::none();
 
         let (subspace_networking, (node, mut node_runner, piece_cache)) = {
@@ -1111,34 +1112,48 @@ impl Config {
                         .boxed(),
                     request_response_protocols: vec![
                         PieceByHashRequestHandler::create({
-                            let handle = tokio::runtime::Handle::current();
                             let weak_readers_and_pieces =
                                 Arc::downgrade(&farmer_readers_and_pieces);
                             let farmer_piece_store = Arc::clone(&farmer_piece_store);
                             let piece_cache = piece_cache.clone();
 
-                            move |req| {
-                                match get_piece_by_hash(req, &piece_cache) {
-                                    Some(PieceByHashResponse { piece: None }) | None => (),
-                                    result => return result,
-                                }
+                            move |&PieceByHashRequest { piece_index_hash }| {
+                                let weak_readers_and_pieces = weak_readers_and_pieces.clone();
+                                let farmer_piece_store = Arc::clone(&farmer_piece_store);
+                                let piece_cache = piece_cache.clone();
+                                let node_piece_by_hash =
+                                    get_piece_by_hash(piece_index_hash, &piece_cache);
 
-                                if let Some(piece_store) = farmer_piece_store.lock().as_ref() {
-                                    crate::farmer::get_piece_by_hash(
-                                        req,
-                                        piece_store,
-                                        &weak_readers_and_pieces,
-                                        &handle,
-                                    )
-                                } else {
-                                    None
+                                async move {
+                                    match node_piece_by_hash {
+                                        Some(PieceByHashResponse { piece: None }) | None => (),
+                                        result => return result,
+                                    }
+
+                                    if let Some(piece_store) =
+                                        farmer_piece_store.lock().await.as_ref()
+                                    {
+                                        crate::farmer::get_piece_by_hash(
+                                            piece_index_hash,
+                                            piece_store,
+                                            &weak_readers_and_pieces,
+                                        )
+                                        .await
+                                    } else {
+                                        None
+                                    }
                                 }
                             }
                         }),
                         RootBlockBySegmentIndexesRequestHandler::create({
                             let root_block_cache =
                                 RootBlockCache::new(partial_components.client.clone());
-                            move |req| get_root_block_by_segment_indexes(req, &root_block_cache)
+                            move |req| {
+                                futures::future::ready(get_root_block_by_segment_indexes(
+                                    req,
+                                    &root_block_cache,
+                                ))
+                            }
                         }),
                     ],
                     provider_storage,
@@ -1309,7 +1324,7 @@ pub struct Node {
     pub(crate) farmer_readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
     #[derivative(Debug = "ignore")]
     pub(crate) farmer_piece_store: Arc<
-        parking_lot::Mutex<
+        tokio::sync::Mutex<
             Option<
                 ParityDbStore<
                     subspace_networking::libp2p::kad::record::Key,
@@ -1674,10 +1689,10 @@ pub(crate) fn get_root_block_by_segment_indexes(
 }
 
 pub(crate) fn get_piece_by_hash(
-    PieceByHashRequest { piece_index_hash }: &PieceByHashRequest,
+    piece_index_hash: PieceIndexHash,
     piece_cache: &NodePieceCache<impl sc_client_api::AuxStore>,
 ) -> Option<PieceByHashResponse> {
-    let result = match piece_cache.get_piece(*piece_index_hash) {
+    let result = match piece_cache.get_piece(piece_index_hash) {
         Ok(maybe_piece) => maybe_piece,
         Err(error) => {
             tracing::error!(?piece_index_hash, %error, "Failed to get piece from cache");
