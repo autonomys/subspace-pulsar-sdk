@@ -1993,6 +1993,29 @@
 <a href="#1993" id="1993">1993</a>
 <a href="#1994" id="1994">1994</a>
 <a href="#1995" id="1995">1995</a>
+<a href="#1996" id="1996">1996</a>
+<a href="#1997" id="1997">1997</a>
+<a href="#1998" id="1998">1998</a>
+<a href="#1999" id="1999">1999</a>
+<a href="#2000" id="2000">2000</a>
+<a href="#2001" id="2001">2001</a>
+<a href="#2002" id="2002">2002</a>
+<a href="#2003" id="2003">2003</a>
+<a href="#2004" id="2004">2004</a>
+<a href="#2005" id="2005">2005</a>
+<a href="#2006" id="2006">2006</a>
+<a href="#2007" id="2007">2007</a>
+<a href="#2008" id="2008">2008</a>
+<a href="#2009" id="2009">2009</a>
+<a href="#2010" id="2010">2010</a>
+<a href="#2011" id="2011">2011</a>
+<a href="#2012" id="2012">2012</a>
+<a href="#2013" id="2013">2013</a>
+<a href="#2014" id="2014">2014</a>
+<a href="#2015" id="2015">2015</a>
+<a href="#2016" id="2016">2016</a>
+<a href="#2017" id="2017">2017</a>
+<a href="#2018" id="2018">2018</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::{NonZeroU64, NonZeroUsize};
 <span class="kw">use </span>std::path::Path;
@@ -2017,9 +2040,11 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>sp_consensus::SyncOracle;
 <span class="kw">use </span>sp_core::H256;
+<span class="kw">use </span>subspace_core_primitives::PieceIndexHash;
 <span class="kw">use </span>subspace_farmer::node_client::NodeClient;
 <span class="kw">use </span>subspace_farmer::utils::parity_db_store::ParityDbStore;
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
+<span class="kw">use </span>subspace_farmer_components::piece_caching::PieceMemoryCache;
 <span class="kw">use </span>subspace_farmer_components::FarmerProtocolInfo;
 <span class="kw">use </span>subspace_networking::{
     PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
@@ -2983,8 +3008,9 @@
             subspace_service::new_partial::&lt;RuntimeApi, ExecutorDispatch&gt;(<span class="kw-2">&amp;</span>base)
                 .context(<span class="string">&quot;Failed to build a partial subspace node&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(<span class="prelude-val">None</span>));
-        <span class="kw">let </span>farmer_piece_store = Arc::new(parking_lot::Mutex::new(<span class="prelude-val">None</span>));
+        <span class="kw">let </span>farmer_piece_store = Arc::new(tokio::sync::Mutex::new(<span class="prelude-val">None</span>));
         <span class="kw">let </span>farmer_provider_storage = MaybeProviderStorage::none();
+        <span class="kw">let </span>piece_memory_cache = PieceMemoryCache::default();
 
         <span class="kw">let </span>(subspace_networking, (node, <span class="kw-2">mut </span>node_runner, piece_cache)) = {
             <span class="kw">let </span>keypair = {
@@ -3106,34 +3132,51 @@
                         .boxed(),
                     request_response_protocols: <span class="macro">vec!</span>[
                         PieceByHashRequestHandler::create({
-                            <span class="kw">let </span>handle = tokio::runtime::Handle::current();
                             <span class="kw">let </span>weak_readers_and_pieces =
                                 Arc::downgrade(<span class="kw-2">&amp;</span>farmer_readers_and_pieces);
                             <span class="kw">let </span>farmer_piece_store = Arc::clone(<span class="kw-2">&amp;</span>farmer_piece_store);
                             <span class="kw">let </span>piece_cache = piece_cache.clone();
+                            <span class="kw">let </span>piece_memory_cache = piece_memory_cache.clone();
 
-                            <span class="kw">move </span>|req| {
-                                <span class="kw">match </span>get_piece_by_hash(req, <span class="kw-2">&amp;</span>piece_cache) {
-                                    <span class="prelude-val">Some</span>(PieceByHashResponse { piece: <span class="prelude-val">None </span>}) | <span class="prelude-val">None </span>=&gt; (),
-                                    result =&gt; <span class="kw">return </span>result,
+                            <span class="kw">move </span>|<span class="kw-2">&amp;</span>PieceByHashRequest { piece_index_hash }| {
+                                <span class="kw">let </span>weak_readers_and_pieces = weak_readers_and_pieces.clone();
+                                <span class="kw">let </span>farmer_piece_store = Arc::clone(<span class="kw-2">&amp;</span>farmer_piece_store);
+                                <span class="kw">let </span>piece_cache = piece_cache.clone();
+                                <span class="kw">let </span>node_piece_by_hash =
+                                    get_piece_by_hash(piece_index_hash, <span class="kw-2">&amp;</span>piece_cache);
+                                <span class="kw">let </span>piece_memory_cache = piece_memory_cache.clone();
+
+                                <span class="kw">async move </span>{
+                                    <span class="kw">match </span>node_piece_by_hash {
+                                        <span class="prelude-val">Some</span>(PieceByHashResponse { piece: <span class="prelude-val">None </span>}) | <span class="prelude-val">None </span>=&gt; (),
+                                        result =&gt; <span class="kw">return </span>result,
+                                    }
+
+                                    <span class="kw">if let </span><span class="prelude-val">Some</span>(piece_store) =
+                                        farmer_piece_store.lock().<span class="kw">await</span>.as_ref()
+                                    {
+                                        <span class="kw">crate</span>::farmer::get_piece_by_hash(
+                                            piece_index_hash,
+                                            piece_store,
+                                            <span class="kw-2">&amp;</span>weak_readers_and_pieces,
+                                            <span class="kw-2">&amp;</span>piece_memory_cache,
+                                        )
+                                        .<span class="kw">await
+                                    </span>} <span class="kw">else </span>{
+                                        <span class="prelude-val">None
+                                    </span>}
                                 }
-
-                                <span class="kw">if let </span><span class="prelude-val">Some</span>(piece_store) = farmer_piece_store.lock().as_ref() {
-                                    <span class="kw">crate</span>::farmer::get_piece_by_hash(
-                                        req,
-                                        piece_store,
-                                        <span class="kw-2">&amp;</span>weak_readers_and_pieces,
-                                        <span class="kw-2">&amp;</span>handle,
-                                    )
-                                } <span class="kw">else </span>{
-                                    <span class="prelude-val">None
-                                </span>}
                             }
                         }),
                         RootBlockBySegmentIndexesRequestHandler::create({
                             <span class="kw">let </span>root_block_cache =
                                 RootBlockCache::new(partial_components.client.clone());
-                            <span class="kw">move </span>|req| get_root_block_by_segment_indexes(req, <span class="kw-2">&amp;</span>root_block_cache)
+                            <span class="kw">move </span>|req| {
+                                futures::future::ready(get_root_block_by_segment_indexes(
+                                    req,
+                                    <span class="kw-2">&amp;</span>root_block_cache,
+                                ))
+                            }
                         }),
                     ],
                     provider_storage,
@@ -3254,6 +3297,7 @@
             farmer_piece_store,
             farmer_provider_storage,
             piece_cache,
+            piece_memory_cache,
         })
     }
 }
@@ -3304,7 +3348,7 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) farmer_readers_and_pieces: Arc&lt;parking_lot::Mutex&lt;<span class="prelude-ty">Option</span>&lt;ReadersAndPieces&gt;&gt;&gt;,
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) farmer_piece_store: Arc&lt;
-        parking_lot::Mutex&lt;
+        tokio::sync::Mutex&lt;
             <span class="prelude-ty">Option</span>&lt;
                 ParityDbStore&lt;
                     subspace_networking::libp2p::kad::record::Key,
@@ -3313,9 +3357,11 @@
             &gt;,
         &gt;,
     &gt;,
-    <span class="kw">pub</span>(<span class="kw">crate</span>) farmer_provider_storage: MaybeProviderStorage&lt;FarmerProviderStorage&lt;FullClient&gt;&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) farmer_provider_storage: MaybeProviderStorage&lt;FarmerProviderStorage&gt;,
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) piece_cache: NodePieceCache&lt;FullClient&gt;,
+    <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) piece_memory_cache: PieceMemoryCache,
 }
 
 <span class="doccomment">/// Hash type
@@ -3669,10 +3715,10 @@
 }
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_piece_by_hash(
-    PieceByHashRequest { piece_index_hash }: <span class="kw-2">&amp;</span>PieceByHashRequest,
+    piece_index_hash: PieceIndexHash,
     piece_cache: <span class="kw-2">&amp;</span>NodePieceCache&lt;<span class="kw">impl </span>sc_client_api::AuxStore&gt;,
 ) -&gt; <span class="prelude-ty">Option</span>&lt;PieceByHashResponse&gt; {
-    <span class="kw">let </span>result = <span class="kw">match </span>piece_cache.get_piece(<span class="kw-2">*</span>piece_index_hash) {
+    <span class="kw">let </span>result = <span class="kw">match </span>piece_cache.get_piece(piece_index_hash) {
         <span class="prelude-val">Ok</span>(maybe_piece) =&gt; maybe_piece,
         <span class="prelude-val">Err</span>(error) =&gt; {
             <span class="macro">tracing::error!</span>(<span class="question-mark">?</span>piece_index_hash, %error, <span class="string">&quot;Failed to get piece from cache&quot;</span>);

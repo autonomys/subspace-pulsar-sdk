@@ -130,12 +130,7 @@
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-</pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>node_piece_cache;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>node_provider_storage;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>piece_cache_utils;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>provider_storage_utils;
+</pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>provider_storage_utils;
 
 <span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::sync::{Arc, Weak};
@@ -143,7 +138,6 @@
 <span class="kw">use </span>either::<span class="kw-2">*</span>;
 <span class="kw">use </span>event_listener_primitives::HandlerId;
 <span class="kw">use </span>futures::StreamExt;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>node_piece_cache::NodePieceCache;
 <span class="kw">use </span>parking_lot::Mutex;
 <span class="kw">use </span>sc_client_api::AuxStore;
 <span class="kw">use </span>subspace_core_primitives::PieceIndexHash;
@@ -155,18 +149,20 @@
 <span class="kw">use </span>tracing::{warn, Instrument};
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>FarmerPieceCache = subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>PieceCache&lt;C&gt; = piece_cache_utils::And&lt;NodePieceCache&lt;C&gt;, FarmerPieceCache&gt;;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>FarmerProviderStorage&lt;C&gt; =
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>NodePieceCache&lt;C&gt; = subspace_service::piece_cache::PieceCache&lt;C&gt;;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>PieceCache = FarmerPieceCache;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>FarmerProviderStorage =
     subspace_farmer::utils::farmer_provider_storage::FarmerProviderStorage&lt;
         ParityDbProviderStorage,
-        PieceCache&lt;C&gt;,
+        PieceCache,
     &gt;;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>NodeProviderStorage&lt;C&gt; = node_provider_storage::NodeProviderStorage&lt;
-    NodePieceCache&lt;C&gt;,
-    Either&lt;ParityDbProviderStorage, subspace_networking::MemoryProviderStorage&gt;,
-&gt;;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>NodeProviderStorage&lt;C&gt; =
+    subspace_service::dsn::node_provider_storage::NodeProviderStorage&lt;
+        NodePieceCache&lt;C&gt;,
+        Either&lt;ParityDbProviderStorage, subspace_networking::MemoryProviderStorage&gt;,
+    &gt;;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>ProviderStorage&lt;C&gt; = provider_storage_utils::AndProviderStorage&lt;
-    provider_storage_utils::MaybeProviderStorage&lt;FarmerProviderStorage&lt;C&gt;&gt;,
+    provider_storage_utils::MaybeProviderStorage&lt;FarmerProviderStorage&gt;,
     NodeProviderStorage&lt;C&gt;,
 &gt;;
 
