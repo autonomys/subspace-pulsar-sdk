@@ -510,6 +510,7 @@ impl Config {
                     }
 
                     let node = node.clone();
+                    // TODO: Skip those that were already announced (because they cached)
                     let publish_fut = async move {
                         let mut pieces_publishing_futures = new_pieces
                             .into_iter()
@@ -523,7 +524,7 @@ impl Config {
                             // to completion
                         }
 
-                        tracing::info!("Piece publishing was successful.");
+                        tracing::info!(sector_index, "Sector publishing was successful.");
 
                         // Release only after publishing is finished
                         drop(plotting_permit);
