@@ -1,4 +1,3 @@
-pub(crate) mod node_provider_storage;
 pub(crate) mod provider_storage_utils;
 
 use std::num::NonZeroUsize;
@@ -25,10 +24,11 @@ pub(crate) type FarmerProviderStorage =
         ParityDbProviderStorage,
         PieceCache,
     >;
-pub(crate) type NodeProviderStorage<C> = node_provider_storage::NodeProviderStorage<
-    NodePieceCache<C>,
-    Either<ParityDbProviderStorage, subspace_networking::MemoryProviderStorage>,
->;
+pub(crate) type NodeProviderStorage<C> =
+    subspace_service::dsn::node_provider_storage::NodeProviderStorage<
+        NodePieceCache<C>,
+        Either<ParityDbProviderStorage, subspace_networking::MemoryProviderStorage>,
+    >;
 pub(crate) type ProviderStorage<C> = provider_storage_utils::AndProviderStorage<
     provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage>,
     NodeProviderStorage<C>,
