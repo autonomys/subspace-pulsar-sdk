@@ -45,6 +45,7 @@ pub struct GenesisParams {
     allow_authoring_by: AllowAuthoringBy,
     enable_executor: bool,
     enable_transfer: bool,
+    confirmation_depth_k: u32,
 }
 
 /// Chain spec type for the subspace
@@ -122,6 +123,7 @@ pub fn gemini_3c_compiled() -> Result<ChainSpec, String> {
                         ]),
                     ),
                     enable_executor: true,
+                    confirmation_depth_k: 100, // TODO: Proper value here
                 },
             )
         },
@@ -204,6 +206,7 @@ pub fn devnet_config_compiled() -> Result<ChainSpec, String> {
                     allow_authoring_by: AllowAuthoringBy::FirstFarmer,
                     enable_executor: true,
                     enable_transfer: true,
+                    confirmation_depth_k: 100, // TODO: Proper value here
                 },
             )
         },
@@ -253,6 +256,7 @@ pub fn dev_config() -> Result<ChainSpec, String> {
                     enable_storage_access: false,
                     allow_authoring_by: AllowAuthoringBy::Anyone,
                     enable_executor: true,
+                    confirmation_depth_k: 1,
                 },
             )
         },
@@ -309,6 +313,7 @@ pub fn local_config() -> Result<ChainSpec, String> {
                     enable_storage_access: false,
                     allow_authoring_by: AllowAuthoringBy::Anyone,
                     enable_executor: true,
+                    confirmation_depth_k: 1,
                 },
             )
         },
@@ -343,6 +348,7 @@ fn subspace_genesis_config(
         allow_authoring_by,
         enable_executor,
         enable_transfer,
+        confirmation_depth_k,
     } = genesis_params;
 
     GenesisConfig {
@@ -358,7 +364,11 @@ fn subspace_genesis_config(
         },
         subspace: SubspaceConfig { enable_rewards, enable_storage_access, allow_authoring_by },
         vesting: VestingConfig { vesting },
-        runtime_configs: RuntimeConfigsConfig { enable_executor, enable_transfer },
+        runtime_configs: RuntimeConfigsConfig {
+            enable_executor,
+            enable_transfer,
+            confirmation_depth_k,
+        },
     }
 }
 
