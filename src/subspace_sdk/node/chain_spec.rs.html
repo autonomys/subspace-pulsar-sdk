@@ -378,6 +378,16 @@
 <a href="#378" id="378">378</a>
 <a href="#379" id="379">379</a>
 <a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Subspace chain configurations.
 
 </span><span class="kw">use </span>sc_service::ChainType;
@@ -425,6 +435,7 @@
     allow_authoring_by: AllowAuthoringBy,
     enable_executor: bool,
     enable_transfer: bool,
+    confirmation_depth_k: u32,
 }
 
 <span class="doccomment">/// Chain spec type for the subspace
@@ -502,7 +513,8 @@
                         ]),
                     ),
                     enable_executor: <span class="bool-val">true</span>,
-                },
+                    confirmation_depth_k: <span class="number">100</span>, <span class="comment">// TODO: Proper value here
+                </span>},
             )
         },
         <span class="comment">// Bootnodes
@@ -584,7 +596,8 @@
                     allow_authoring_by: AllowAuthoringBy::FirstFarmer,
                     enable_executor: <span class="bool-val">true</span>,
                     enable_transfer: <span class="bool-val">true</span>,
-                },
+                    confirmation_depth_k: <span class="number">100</span>, <span class="comment">// TODO: Proper value here
+                </span>},
             )
         },
         <span class="comment">// Bootnodes
@@ -633,6 +646,7 @@
                     enable_storage_access: <span class="bool-val">false</span>,
                     allow_authoring_by: AllowAuthoringBy::Anyone,
                     enable_executor: <span class="bool-val">true</span>,
+                    confirmation_depth_k: <span class="number">1</span>,
                 },
             )
         },
@@ -689,6 +703,7 @@
                     enable_storage_access: <span class="bool-val">false</span>,
                     allow_authoring_by: AllowAuthoringBy::Anyone,
                     enable_executor: <span class="bool-val">true</span>,
+                    confirmation_depth_k: <span class="number">1</span>,
                 },
             )
         },
@@ -723,6 +738,7 @@
         allow_authoring_by,
         enable_executor,
         enable_transfer,
+        confirmation_depth_k,
     } = genesis_params;
 
     GenesisConfig {
@@ -738,7 +754,11 @@
         },
         subspace: SubspaceConfig { enable_rewards, enable_storage_access, allow_authoring_by },
         vesting: VestingConfig { vesting },
-        runtime_configs: RuntimeConfigsConfig { enable_executor, enable_transfer },
+        runtime_configs: RuntimeConfigsConfig {
+            enable_executor,
+            enable_transfer,
+            confirmation_depth_k,
+        },
     }
 }
 
