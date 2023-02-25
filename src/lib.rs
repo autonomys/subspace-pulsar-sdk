@@ -221,17 +221,20 @@ mod tests {
         let (dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let plot_descriptions =
             [PlotDescription::new(dir.path(), "100m".parse().unwrap()).unwrap()];
-        let _farmer = Farmer::builder()
+        let farmer = Farmer::builder()
             .build(
                 Default::default(),
                 node.clone(),
                 &plot_descriptions,
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .await
             .unwrap();
 
         node.subscribe_new_blocks().await.unwrap().take(2).for_each(|_| async move {}).await;
+
+        farmer.close().await.unwrap();
+        node.close().await;
     }
 
     #[tokio::test(flavor = "multi_thread")]

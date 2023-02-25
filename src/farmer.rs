@@ -52,7 +52,7 @@ impl CacheDescription {
     /// Minimal cache size
     pub const MIN_SIZE: ByteSize = ByteSize::mib(1);
 
-    /// Construct Plot description
+    /// Construct cache description
     pub fn new(
         directory: impl Into<PathBuf>,
         space_dedicated: ByteSize,
@@ -61,6 +61,11 @@ impl CacheDescription {
             return Err(CacheTooSmall);
         }
         Ok(Self { directory: directory.into(), space_dedicated })
+    }
+
+    /// Creates minimal cache description
+    pub fn minimal(directory: impl Into<PathBuf>) -> Self {
+        Self { directory: directory.into(), space_dedicated: Self::MIN_SIZE }
     }
 
     /// Wipe all the data from the plot
@@ -100,6 +105,11 @@ impl PlotDescription {
             return Err(PlotConstructionError);
         }
         Ok(Self { directory: directory.into(), space_pledged })
+    }
+
+    /// Creates a minimal plot at specified path
+    pub fn minimal(directory: impl Into<PathBuf>) -> Self {
+        Self { directory: directory.into(), space_pledged: Self::MIN_SIZE }
     }
 
     /// Wipe all the data from the plot
@@ -853,14 +863,14 @@ mod tests {
             .await
             .unwrap();
         let plot_dir = TempDir::new().unwrap();
-        let plots = [PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()];
+        let plots = [PlotDescription::minimal(plot_dir.as_ref())];
         let cache_dir = TempDir::new().unwrap();
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
                 node.clone(),
                 &plots,
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .await
             .unwrap();
@@ -884,7 +894,7 @@ mod tests {
             .await
             .unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let n_sectors = 1;
+        let n_sectors = 4;
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
@@ -894,7 +904,7 @@ mod tests {
                     ByteSize::b(PlotDescription::MIN_SIZE.as_u64() * n_sectors),
                 )
                 .unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .await
             .unwrap();
@@ -928,8 +938,8 @@ mod tests {
             .build(
                 Default::default(),
                 node.clone(),
-                &[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                &[PlotDescription::minimal(plot_dir.as_ref())],
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .await
             .unwrap();
@@ -962,8 +972,8 @@ mod tests {
             .build(
                 Default::default(),
                 node.clone(),
-                &[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                &[PlotDescription::minimal(plot_dir.as_ref())],
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .await
             .unwrap();
