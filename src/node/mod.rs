@@ -1174,7 +1174,6 @@ impl Config {
                 };
 
                 subspace_networking::create(networking_config)
-                    .await
                     .map(|(a, b)| (a, b, bootstrap_nodes))?
             };
 
