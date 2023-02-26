@@ -1104,7 +1104,7 @@ impl Config {
                     ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
 
                 let networking_config = subspace_networking::Config {
-                    keypair: keypair.clone(),
+                    keypair,
                     listen_on,
                     allow_non_global_addresses_in_dht,
                     networking_parameters_registry:
