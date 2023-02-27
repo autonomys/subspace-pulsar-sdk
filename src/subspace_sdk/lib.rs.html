@@ -244,6 +244,9 @@
 <a href="#244" id="244">244</a>
 <a href="#245" id="245">245</a>
 <a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Subspace SDK for easy running of both Subspace node and farmer
 
 </span><span class="attr">#![deny(missing_docs, clippy::dbg_macro, clippy::unwrap_used, clippy::disallowed_types)]
@@ -467,17 +470,20 @@
         <span class="kw">let </span>(dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         <span class="kw">let </span>plot_descriptions =
             [PlotDescription::new(dir.path(), <span class="string">&quot;100m&quot;</span>.parse().unwrap()).unwrap()];
-        <span class="kw">let </span>_farmer = Farmer::builder()
+        <span class="kw">let </span>farmer = Farmer::builder()
             .build(
                 Default::default(),
                 node.clone(),
                 <span class="kw-2">&amp;</span>plot_descriptions,
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .<span class="kw">await
             </span>.unwrap();
 
         node.subscribe_new_blocks().<span class="kw">await</span>.unwrap().take(<span class="number">2</span>).for_each(|<span class="kw">_</span>| <span class="kw">async move </span>{}).<span class="kw">await</span>;
+
+        farmer.close().<span class="kw">await</span>.unwrap();
+        node.close().<span class="kw">await</span>;
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]

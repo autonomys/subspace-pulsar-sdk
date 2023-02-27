@@ -2015,7 +2015,6 @@
 <a href="#2015" id="2015">2015</a>
 <a href="#2016" id="2016">2016</a>
 <a href="#2017" id="2017">2017</a>
-<a href="#2018" id="2018">2018</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::{NonZeroU64, NonZeroUsize};
 <span class="kw">use </span>std::path::Path;
@@ -3122,7 +3121,7 @@
                     ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
 
                 <span class="kw">let </span>networking_config = subspace_networking::Config {
-                    keypair: keypair.clone(),
+                    keypair,
                     listen_on,
                     allow_non_global_addresses_in_dht,
                     networking_parameters_registry:
@@ -3192,8 +3191,7 @@
                 };
 
                 subspace_networking::create(networking_config)
-                    .<span class="kw">await
-                    </span>.map(|(a, b)| (a, b, bootstrap_nodes))<span class="question-mark">?
+                    .map(|(a, b)| (a, b, bootstrap_nodes))<span class="question-mark">?
             </span>};
 
             <span class="macro">tracing::debug!</span>(<span class="string">&quot;Subspace networking initialized: Node ID is {}&quot;</span>, node.id());
@@ -3858,13 +3856,13 @@
             .<span class="kw">await
             </span>.unwrap();
         <span class="kw">let </span>(plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        <span class="kw">let </span>plots = [PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()];
+        <span class="kw">let </span>plots = [PlotDescription::minimal(plot_dir.as_ref())];
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
                 Default::default(),
                 node.clone(),
                 <span class="kw-2">&amp;</span>plots,
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .<span class="kw">await
             </span>.unwrap();
@@ -3895,7 +3893,7 @@
                 Default::default(),
                 node.clone(),
                 <span class="kw-2">&amp;</span>[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::gb(<span class="number">1</span>)).unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .<span class="kw">await
             </span>.unwrap();
@@ -3963,8 +3961,8 @@
             .build(
                 Default::default(),
                 node.clone(),
-                <span class="kw-2">&amp;</span>[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                <span class="kw-2">&amp;</span>[PlotDescription::minimal(plot_dir.as_ref())],
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .instrument(node_span.clone())
             .<span class="kw">await
@@ -4005,8 +4003,8 @@
             .build(
                 Default::default(),
                 node.clone(),
-                <span class="kw-2">&amp;</span>[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                <span class="kw-2">&amp;</span>[PlotDescription::minimal(plot_dir.as_ref())],
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .instrument(other_node_span.clone())
             .<span class="kw">await

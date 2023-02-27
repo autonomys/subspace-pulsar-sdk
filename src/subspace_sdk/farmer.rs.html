@@ -983,6 +983,62 @@
 <a href="#983" id="983">983</a>
 <a href="#984" id="984">984</a>
 <a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
+<a href="#1005" id="1005">1005</a>
+<a href="#1006" id="1006">1006</a>
+<a href="#1007" id="1007">1007</a>
+<a href="#1008" id="1008">1008</a>
+<a href="#1009" id="1009">1009</a>
+<a href="#1010" id="1010">1010</a>
+<a href="#1011" id="1011">1011</a>
+<a href="#1012" id="1012">1012</a>
+<a href="#1013" id="1013">1013</a>
+<a href="#1014" id="1014">1014</a>
+<a href="#1015" id="1015">1015</a>
+<a href="#1016" id="1016">1016</a>
+<a href="#1017" id="1017">1017</a>
+<a href="#1018" id="1018">1018</a>
+<a href="#1019" id="1019">1019</a>
+<a href="#1020" id="1020">1020</a>
+<a href="#1021" id="1021">1021</a>
+<a href="#1022" id="1022">1022</a>
+<a href="#1023" id="1023">1023</a>
+<a href="#1024" id="1024">1024</a>
+<a href="#1025" id="1025">1025</a>
+<a href="#1026" id="1026">1026</a>
+<a href="#1027" id="1027">1027</a>
+<a href="#1028" id="1028">1028</a>
+<a href="#1029" id="1029">1029</a>
+<a href="#1030" id="1030">1030</a>
+<a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
+<a href="#1039" id="1039">1039</a>
+<a href="#1040" id="1040">1040</a>
+<a href="#1041" id="1041">1041</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1013,7 +1069,7 @@
 <span class="kw">use </span>tokio::sync::{oneshot, watch, Mutex};
 <span class="kw">use </span>tracing_futures::Instrument;
 
-<span class="kw">use </span><span class="self">self</span>::builder::PieceCacheSize;
+<span class="kw">use </span><span class="self">self</span>::builder::{PieceCacheSize, ProvidedKeysLimit};
 <span class="kw">use </span><span class="kw">crate</span>::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
 <span class="kw">use crate</span>::{Node, PublicKey};
 
@@ -1037,7 +1093,7 @@
     <span class="doccomment">/// Minimal cache size
     </span><span class="kw">pub const </span>MIN_SIZE: ByteSize = ByteSize::mib(<span class="number">1</span>);
 
-    <span class="doccomment">/// Construct Plot description
+    <span class="doccomment">/// Construct cache description
     </span><span class="kw">pub fn </span>new(
         directory: <span class="kw">impl </span>Into&lt;PathBuf&gt;,
         space_dedicated: ByteSize,
@@ -1046,6 +1102,11 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(CacheTooSmall);
         }
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ directory: directory.into(), space_dedicated })
+    }
+
+    <span class="doccomment">/// Creates minimal cache description
+    </span><span class="kw">pub fn </span>minimal(directory: <span class="kw">impl </span>Into&lt;PathBuf&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ directory: directory.into(), space_dedicated: <span class="self">Self</span>::MIN_SIZE }
     }
 
     <span class="doccomment">/// Wipe all the data from the plot
@@ -1085,6 +1146,11 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(PlotConstructionError);
         }
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ directory: directory.into(), space_pledged })
+    }
+
+    <span class="doccomment">/// Creates a minimal plot at specified path
+    </span><span class="kw">pub fn </span>minimal(directory: <span class="kw">impl </span>Into&lt;PathBuf&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ directory: directory.into(), space_pledged: <span class="self">Self</span>::MIN_SIZE }
     }
 
     <span class="doccomment">/// Wipe all the data from the plot
@@ -1145,6 +1211,26 @@
         </span><span class="kw">pub</span>(<span class="kw">crate</span>) bytesize::ByteSize,
     );
 
+    <span class="attr">#[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    </span><span class="kw">pub struct </span>ProvidedKeysLimit(
+        <span class="attr">#[derivative(Default(value = <span class="string">&quot;NonZeroUsize::new(655360).expect(\&quot;655360 &gt; 0\&quot;)&quot;</span>))]
+        </span><span class="kw">pub</span>(<span class="kw">crate</span>) NonZeroUsize,
+    );
+
     <span class="doccomment">/// Technical type which stores all
     </span><span class="attr">#[derive(Debug, Clone, Derivative, Builder, Serialize, Deserialize)]
     #[derivative(Default)]
@@ -1159,6 +1245,10 @@
         </span><span class="attr">#[builder(default, setter(into))]
         #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
         </span><span class="kw">pub </span>piece_cache_size: PieceCacheSize,
+        <span class="doccomment">/// Number of plots that can be plotted concurrently, impacts RAM usage.
+        </span><span class="attr">#[builder(default, setter(into))]
+        #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
+        </span><span class="kw">pub </span>provided_keys_limit: ProvidedKeysLimit,
     }
 
     <span class="kw">impl </span>Builder {
@@ -1265,8 +1355,12 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(BuildError::NoPlotsSupplied);
         }
 
-        <span class="kw">let </span><span class="self">Self </span>{ max_concurrent_plots, piece_cache_size: PieceCacheSize(piece_cache_size) } =
-            <span class="self">self</span>;
+        <span class="kw">let </span><span class="self">Self </span>{
+            max_concurrent_plots,
+            piece_cache_size: PieceCacheSize(piece_cache_size),
+            provided_keys_limit: ProvidedKeysLimit(provided_keys_limit),
+        } = <span class="self">self</span>;
+
         <span class="kw">let </span>piece_cache_size = NonZeroUsize::new(
             piece_cache_size.as_u64() <span class="kw">as </span>usize / subspace_core_primitives::PIECE_SIZE,
         )
@@ -1283,22 +1377,33 @@
 
         <span class="kw">let </span>piece_cache = {
             <span class="kw">let </span>piece_cache_db_path = base_path.join(<span class="string">&quot;piece_cache_db&quot;</span>);
-            <span class="kw">let </span>provider_cache_db_path = base_path.join(<span class="string">&quot;provider_cache_db&quot;</span>);
-            <span class="kw">let </span>provider_cache_size =
-                piece_cache_size.saturating_mul(NonZeroUsize::new(<span class="number">10</span>).expect(<span class="string">&quot;10 &gt; 0&quot;</span>)); <span class="comment">// TODO: add proper value
+            <span class="kw">let </span>provider_db_path = base_path.join(<span class="string">&quot;providers_db&quot;</span>);
+            <span class="comment">// TODO: Remove this migration code in the future
+            </span>{
+                <span class="kw">let </span>provider_cache_db_path = base_path.join(<span class="string">&quot;provider_cache_db&quot;</span>);
+                <span class="kw">if </span>provider_cache_db_path.exists() {
+                    tokio::fs::rename(<span class="kw-2">&amp;</span>provider_cache_db_path, <span class="kw-2">&amp;</span>provider_db_path)
+                        .<span class="kw">await
+                        </span>.context(<span class="string">&quot;Migration of provider db failed&quot;</span>)<span class="question-mark">?</span>;
+                }
+            }
 
-            </span><span class="macro">tracing::info!</span>(
-                <span class="question-mark">?</span>piece_cache_db_path,
-                <span class="question-mark">?</span>piece_cache_size,
-                <span class="question-mark">?</span>provider_cache_db_path,
-                <span class="question-mark">?</span>provider_cache_size,
-                <span class="string">&quot;Record cache DB configured.&quot;
+            <span class="macro">tracing::info!</span>(
+                db_path = <span class="question-mark">?</span>provider_db_path,
+                keys_limit = <span class="question-mark">?</span>provided_keys_limit,
+                <span class="string">&quot;Initializing provider storage...&quot;
+            </span>);
+
+            <span class="macro">tracing::info!</span>(
+                db_path = <span class="question-mark">?</span>piece_cache_db_path,
+                size = <span class="question-mark">?</span>piece_cache_size,
+                <span class="string">&quot;Initializing piece cache...&quot;
             </span>);
 
             <span class="kw">let </span>peer_id = node.dsn_node.id();
 
             <span class="kw">let </span>db_provider_storage =
-                ParityDbProviderStorage::new(<span class="kw-2">&amp;</span>provider_cache_db_path, provider_cache_size, peer_id)
+                ParityDbProviderStorage::new(<span class="kw-2">&amp;</span>provider_db_path, provided_keys_limit, peer_id)
                     .map_err(|err| <span class="macro">anyhow::anyhow!</span>(err.to_string()))<span class="question-mark">?</span>;
 
             <span class="kw">let </span>piece_store = ParityDbStore::new(<span class="kw-2">&amp;</span>piece_cache_db_path)
@@ -1306,6 +1411,11 @@
             <span class="kw-2">*</span>node.farmer_piece_store.lock().<span class="kw">await </span>= <span class="prelude-val">Some</span>(piece_store.clone());
 
             <span class="kw">let </span>piece_cache = FarmerPieceCache::new(piece_store, piece_cache_size, peer_id);
+
+            <span class="macro">tracing::info!</span>(
+                current_size = <span class="question-mark">?</span>piece_cache.size(),
+                <span class="string">&quot;Piece cache initialized successfully&quot;
+            </span>);
             node.farmer_provider_storage.swap(FarmerProviderStorage::new(
                 peer_id,
                 readers_and_pieces.clone(),
@@ -1344,7 +1454,7 @@
             node.dsn_node.clone(),
         ));
 
-        <span class="kw">for </span>description <span class="kw">in </span>plots {
+        <span class="kw">for </span>(disk_farm_idx, description) <span class="kw">in </span>plots.iter().enumerate() {
             <span class="kw">let </span>directory = description.directory.clone();
             <span class="kw">let </span>allocated_space = description.space_pledged.as_u64();
             <span class="kw">let </span>description = SingleDiskPlotOptions {
@@ -1357,7 +1467,7 @@
                 concurrent_plotting_semaphore: Arc::clone(<span class="kw-2">&amp;</span>concurrent_plotting_semaphore),
                 piece_memory_cache: node.piece_memory_cache.clone(),
             };
-            <span class="kw">let </span>single_disk_plot = SingleDiskPlot::new(description).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>single_disk_plot = SingleDiskPlot::new(description, disk_farm_idx).<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">let </span><span class="kw-2">mut </span>handlers = Vec::new();
             <span class="kw">let </span>progress = {
@@ -1454,7 +1564,7 @@
             <span class="comment">// Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
             </span>single_disk_plot
-                .on_sector_plotted(Arc::new(<span class="kw">move </span>|(plotted_sector, plotting_permit)| {
+                .on_sector_plotted(Arc::new(<span class="kw">move </span>|(sector_offset, plotted_sector, plotting_permit)| {
                     <span class="kw">let </span>plotting_permit = Arc::clone(plotting_permit);
                     <span class="kw">let </span>sector_index = plotted_sector.sector_index;
 
@@ -1502,6 +1612,7 @@
                     }
 
                     <span class="kw">let </span>node = node.clone();
+                    <span class="kw">let </span>sector_offset = <span class="kw-2">*</span>sector_offset;
                     <span class="comment">// TODO: Skip those that were already announced (because they cached)
                     </span><span class="kw">let </span>publish_fut = <span class="kw">async move </span>{
                         <span class="kw">let </span><span class="kw-2">mut </span>pieces_publishing_futures = new_pieces
@@ -1516,7 +1627,7 @@
                             // to completion
                         </span>}
 
-                        <span class="macro">tracing::info!</span>(sector_index, <span class="string">&quot;Sector publishing was successful.&quot;</span>);
+                        <span class="macro">tracing::info!</span>(sector_offset, sector_index, <span class="string">&quot;Sector publishing was successful.&quot;</span>);
 
                         <span class="comment">// Release only after publishing is finished
                         </span>drop(plotting_permit);
@@ -1649,7 +1760,8 @@
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>Plot {
     directory: PathBuf,
-    progress: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;(PlottedSector, Arc&lt;tokio::sync::OwnedSemaphorePermit&gt;)&gt;&gt;,
+    progress:
+        watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;(usize, PlottedSector, Arc&lt;tokio::sync::OwnedSemaphorePermit&gt;)&gt;&gt;,
     solutions: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;SolutionResponse&gt;&gt;,
     initial_plotting_progress: Arc&lt;Mutex&lt;InitialPlottingProgress&gt;&gt;,
     allocated_space: u64,
@@ -1838,14 +1950,14 @@
             .<span class="kw">await
             </span>.unwrap();
         <span class="kw">let </span>plot_dir = TempDir::new().unwrap();
-        <span class="kw">let </span>plots = [PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()];
+        <span class="kw">let </span>plots = [PlotDescription::minimal(plot_dir.as_ref())];
         <span class="kw">let </span>cache_dir = TempDir::new().unwrap();
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
                 Default::default(),
                 node.clone(),
                 <span class="kw-2">&amp;</span>plots,
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .<span class="kw">await
             </span>.unwrap();
@@ -1869,7 +1981,7 @@
             .<span class="kw">await
             </span>.unwrap();
         <span class="kw">let </span>(plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        <span class="kw">let </span>n_sectors = <span class="number">1</span>;
+        <span class="kw">let </span>n_sectors = <span class="number">4</span>;
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
                 Default::default(),
@@ -1879,7 +1991,7 @@
                     ByteSize::b(PlotDescription::MIN_SIZE.as_u64() * n_sectors),
                 )
                 .unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .<span class="kw">await
             </span>.unwrap();
@@ -1913,8 +2025,8 @@
             .build(
                 Default::default(),
                 node.clone(),
-                <span class="kw-2">&amp;</span>[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                <span class="kw-2">&amp;</span>[PlotDescription::minimal(plot_dir.as_ref())],
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .<span class="kw">await
             </span>.unwrap();
@@ -1947,8 +2059,8 @@
             .build(
                 Default::default(),
                 node.clone(),
-                <span class="kw-2">&amp;</span>[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                <span class="kw-2">&amp;</span>[PlotDescription::minimal(plot_dir.as_ref())],
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .<span class="kw">await
             </span>.unwrap();
