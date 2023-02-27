@@ -28,7 +28,7 @@ use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 use tracing_futures::Instrument;
 
-use self::builder::PieceCacheSize;
+use self::builder::{PieceCacheSize, ProvidedKeysLimit};
 use crate::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
 use crate::{Node, PublicKey};
 
@@ -170,6 +170,26 @@ mod builder {
         pub(crate) bytesize::ByteSize,
     );
 
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct ProvidedKeysLimit(
+        #[derivative(Default(value = "NonZeroUsize::new(655360).expect(\"655360 > 0\")"))]
+        pub(crate) NonZeroUsize,
+    );
+
     /// Technical type which stores all
     #[derive(Debug, Clone, Derivative, Builder, Serialize, Deserialize)]
     #[derivative(Default)]
@@ -184,6 +204,10 @@ mod builder {
         #[builder(default, setter(into))]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub piece_cache_size: PieceCacheSize,
+        /// Number of plots that can be plotted concurrently, impacts RAM usage.
+        #[builder(default, setter(into))]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub provided_keys_limit: ProvidedKeysLimit,
     }
 
     impl Builder {
@@ -290,8 +314,12 @@ impl Config {
             return Err(BuildError::NoPlotsSupplied);
         }
 
-        let Self { max_concurrent_plots, piece_cache_size: PieceCacheSize(piece_cache_size) } =
-            self;
+        let Self {
+            max_concurrent_plots,
+            piece_cache_size: PieceCacheSize(piece_cache_size),
+            provided_keys_limit: ProvidedKeysLimit(provided_keys_limit),
+        } = self;
+
         let piece_cache_size = NonZeroUsize::new(
             piece_cache_size.as_u64() as usize / subspace_core_primitives::PIECE_SIZE,
         )
@@ -308,22 +336,33 @@ impl Config {
 
         let piece_cache = {
             let piece_cache_db_path = base_path.join("piece_cache_db");
-            let provider_cache_db_path = base_path.join("provider_cache_db");
-            let provider_cache_size =
-                piece_cache_size.saturating_mul(NonZeroUsize::new(10).expect("10 > 0")); // TODO: add proper value
+            let provider_db_path = base_path.join("providers_db");
+            // TODO: Remove this migration code in the future
+            {
+                let provider_cache_db_path = base_path.join("provider_cache_db");
+                if provider_cache_db_path.exists() {
+                    tokio::fs::rename(&provider_cache_db_path, &provider_db_path)
+                        .await
+                        .context("Migration of provider db failed")?;
+                }
+            }
 
             tracing::info!(
-                ?piece_cache_db_path,
-                ?piece_cache_size,
-                ?provider_cache_db_path,
-                ?provider_cache_size,
-                "Record cache DB configured."
+                db_path = ?provider_db_path,
+                keys_limit = ?provided_keys_limit,
+                "Initializing provider storage..."
+            );
+
+            tracing::info!(
+                db_path = ?piece_cache_db_path,
+                size = ?piece_cache_size,
+                "Initializing piece cache..."
             );
 
             let peer_id = node.dsn_node.id();
 
             let db_provider_storage =
-                ParityDbProviderStorage::new(&provider_cache_db_path, provider_cache_size, peer_id)
+                ParityDbProviderStorage::new(&provider_db_path, provided_keys_limit, peer_id)
                     .map_err(|err| anyhow::anyhow!(err.to_string()))?;
 
             let piece_store = ParityDbStore::new(&piece_cache_db_path)
@@ -331,6 +370,11 @@ impl Config {
             *node.farmer_piece_store.lock().await = Some(piece_store.clone());
 
             let piece_cache = FarmerPieceCache::new(piece_store, piece_cache_size, peer_id);
+
+            tracing::info!(
+                current_size = ?piece_cache.size(),
+                "Piece cache initialized successfully"
+            );
             node.farmer_provider_storage.swap(FarmerProviderStorage::new(
                 peer_id,
                 readers_and_pieces.clone(),
@@ -369,7 +413,7 @@ impl Config {
             node.dsn_node.clone(),
         ));
 
-        for description in plots {
+        for (disk_farm_idx, description) in plots.iter().enumerate() {
             let directory = description.directory.clone();
             let allocated_space = description.space_pledged.as_u64();
             let description = SingleDiskPlotOptions {
@@ -382,7 +426,7 @@ impl Config {
                 concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
                 piece_memory_cache: node.piece_memory_cache.clone(),
             };
-            let single_disk_plot = SingleDiskPlot::new(description).await?;
+            let single_disk_plot = SingleDiskPlot::new(description, disk_farm_idx).await?;
 
             let mut handlers = Vec::new();
             let progress = {
@@ -479,7 +523,7 @@ impl Config {
             // Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
             single_disk_plot
-                .on_sector_plotted(Arc::new(move |(plotted_sector, plotting_permit)| {
+                .on_sector_plotted(Arc::new(move |(sector_offset, plotted_sector, plotting_permit)| {
                     let plotting_permit = Arc::clone(plotting_permit);
                     let sector_index = plotted_sector.sector_index;
 
@@ -527,6 +571,7 @@ impl Config {
                     }
 
                     let node = node.clone();
+                    let sector_offset = *sector_offset;
                     // TODO: Skip those that were already announced (because they cached)
                     let publish_fut = async move {
                         let mut pieces_publishing_futures = new_pieces
@@ -541,7 +586,7 @@ impl Config {
                             // to completion
                         }
 
-                        tracing::info!(sector_index, "Sector publishing was successful.");
+                        tracing::info!(sector_offset, sector_index, "Sector publishing was successful.");
 
                         // Release only after publishing is finished
                         drop(plotting_permit);
@@ -674,7 +719,8 @@ pub struct InitialPlottingProgress {
 #[derive(Debug)]
 pub struct Plot {
     directory: PathBuf,
-    progress: watch::Receiver<Option<(PlottedSector, Arc<tokio::sync::OwnedSemaphorePermit>)>>,
+    progress:
+        watch::Receiver<Option<(usize, PlottedSector, Arc<tokio::sync::OwnedSemaphorePermit>)>>,
     solutions: watch::Receiver<Option<SolutionResponse>>,
     initial_plotting_progress: Arc<Mutex<InitialPlottingProgress>>,
     allocated_space: u64,
