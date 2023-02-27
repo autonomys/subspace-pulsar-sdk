@@ -1104,7 +1104,7 @@ impl Config {
                     ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
 
                 let networking_config = subspace_networking::Config {
-                    keypair: keypair.clone(),
+                    keypair,
                     listen_on,
                     allow_non_global_addresses_in_dht,
                     networking_parameters_registry:
@@ -1174,7 +1174,6 @@ impl Config {
                 };
 
                 subspace_networking::create(networking_config)
-                    .await
                     .map(|(a, b)| (a, b, bootstrap_nodes))?
             };
 
@@ -1840,13 +1839,13 @@ mod tests {
             .await
             .unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let plots = [PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()];
+        let plots = [PlotDescription::minimal(plot_dir.as_ref())];
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
                 node.clone(),
                 &plots,
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .await
             .unwrap();
@@ -1877,7 +1876,7 @@ mod tests {
                 Default::default(),
                 node.clone(),
                 &[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::gb(1)).unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .await
             .unwrap();
@@ -1945,8 +1944,8 @@ mod tests {
             .build(
                 Default::default(),
                 node.clone(),
-                &[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                &[PlotDescription::minimal(plot_dir.as_ref())],
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .instrument(node_span.clone())
             .await
@@ -1987,8 +1986,8 @@ mod tests {
             .build(
                 Default::default(),
                 node.clone(),
-                &[PlotDescription::new(plot_dir.as_ref(), PlotDescription::MIN_SIZE).unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                &[PlotDescription::minimal(plot_dir.as_ref())],
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .instrument(other_node_span.clone())
             .await
