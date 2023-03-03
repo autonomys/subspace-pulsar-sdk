@@ -16,7 +16,7 @@ async fn main() {
     let cache =
         subspace_sdk::farmer::CacheDescription::new("cache", bytesize::ByteSize::mb(10)).unwrap();
     let farmer = subspace_sdk::Farmer::builder()
-        .build(subspace_sdk::PublicKey::from([0; 32]), node.clone(), &plots, cache)
+        .build(subspace_sdk::PublicKey::from([0; 32]), &node, &plots, cache)
         .await
         .expect("Failed to init a farmer");
 

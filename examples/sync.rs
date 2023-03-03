@@ -76,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
             let _farmer: Farmer = Farmer::builder()
                 .build(
                     PublicKey::from([13; 32]),
-                    node.clone(),
+                    &node,
                     &plots,
                     CacheDescription::new(plot.join("cache"), cache_size)?,
                 )

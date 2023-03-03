@@ -1317,7 +1317,7 @@ pub(crate) type NewFull = subspace_service::NewFull<
 >;
 
 /// Node structure
-#[derive(Clone, Derivative)]
+#[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Node {
     system_domain: Option<SystemDomainNode>,
@@ -1326,7 +1326,7 @@ pub struct Node {
     #[derivative(Debug = "ignore")]
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     pub(crate) rpc_handle: crate::utils::Rpc,
-    stop_sender: mpsc::Sender<oneshot::Sender<()>>,
+    pub(crate) stop_sender: mpsc::Sender<oneshot::Sender<()>>,
     pub(crate) dsn_node: subspace_networking::Node,
     name: String,
     pub(crate) farmer_readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
@@ -1671,7 +1671,7 @@ impl Node {
         } = client.chain_info();
         let version = self.rpc_handle.runtime_version(Some(best_hash)).await?;
         let FarmerProtocolInfo { total_pieces, .. } =
-            self.farmer_app_info().await.map_err(anyhow::Error::msg)?.protocol_info;
+            self.rpc_handle.farmer_app_info().await.map_err(anyhow::Error::msg)?.protocol_info;
         Ok(Info {
             chain: ChainInfo { genesis_hash },
             best_block: (best_hash, best_number),
@@ -1742,17 +1742,16 @@ mod farmer_rpc_client {
     use super::*;
 
     #[async_trait::async_trait]
-    impl NodeClient for Node {
+    impl NodeClient for crate::utils::Rpc {
         async fn farmer_app_info(&self) -> Result<FarmerAppInfo, Error> {
-            Ok(self.rpc_handle.get_farmer_app_info().await?)
+            Ok(self.get_farmer_app_info().await?)
         }
 
         async fn subscribe_slot_info(
             &self,
         ) -> Result<Pin<Box<dyn Stream<Item = SlotInfo> + Send + 'static>>, Error> {
             Ok(Box::pin(
-                self.rpc_handle
-                    .subscribe_slot_info()
+                SubspaceRpcApiClient::subscribe_slot_info(self)
                     .await?
                     .filter_map(|result| futures::future::ready(result.ok())),
             ))
@@ -1762,7 +1761,7 @@ mod farmer_rpc_client {
             &self,
             solution_response: SolutionResponse,
         ) -> Result<(), Error> {
-            Ok(self.rpc_handle.submit_solution_response(solution_response).await?)
+            Ok(SubspaceRpcApiClient::submit_solution_response(self, solution_response).await?)
         }
 
         async fn subscribe_reward_signing(
@@ -1770,8 +1769,7 @@ mod farmer_rpc_client {
         ) -> Result<Pin<Box<dyn Stream<Item = RewardSigningInfo> + Send + 'static>>, Error>
         {
             Ok(Box::pin(
-                self.rpc_handle
-                    .subscribe_reward_signing()
+                SubspaceRpcApiClient::subscribe_reward_signing(self)
                     .await?
                     .filter_map(|result| futures::future::ready(result.ok())),
             ))
@@ -1781,15 +1779,14 @@ mod farmer_rpc_client {
             &self,
             reward_signature: RewardSignatureResponse,
         ) -> Result<(), Error> {
-            Ok(self.rpc_handle.submit_reward_signature(reward_signature).await?)
+            Ok(SubspaceRpcApiClient::submit_reward_signature(self, reward_signature).await?)
         }
 
         async fn subscribe_archived_segments(
             &self,
         ) -> Result<Pin<Box<dyn Stream<Item = ArchivedSegment> + Send + 'static>>, Error> {
             Ok(Box::pin(
-                self.rpc_handle
-                    .subscribe_archived_segment()
+                SubspaceRpcApiClient::subscribe_archived_segment(self)
                     .await?
                     .filter_map(|result| futures::future::ready(result.ok())),
             ))
@@ -1799,14 +1796,14 @@ mod farmer_rpc_client {
             &self,
             segment_indexes: Vec<SegmentIndex>,
         ) -> Result<Vec<Option<RecordsRoot>>, Error> {
-            Ok(self.rpc_handle.records_roots(segment_indexes).await?)
+            Ok(SubspaceRpcApiClient::records_roots(self, segment_indexes).await?)
         }
 
         async fn root_blocks(
             &self,
             segment_indexes: Vec<SegmentIndex>,
         ) -> Result<Vec<Option<RootBlock>>, Error> {
-            Ok(self.rpc_handle.root_blocks(segment_indexes).await?)
+            Ok(SubspaceRpcApiClient::root_blocks(self, segment_indexes).await?)
         }
     }
 }
@@ -1842,7 +1839,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(node.farmer_app_info().await.is_ok());
+        assert!(node.rpc_handle.farmer_app_info().await.is_ok());
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1858,12 +1855,7 @@ mod tests {
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let plots = [PlotDescription::minimal(plot_dir.as_ref())];
         let farmer = Farmer::builder()
-            .build(
-                Default::default(),
-                node.clone(),
-                &plots,
-                CacheDescription::minimal(cache_dir.as_ref()),
-            )
+            .build(Default::default(), &node, &plots, CacheDescription::minimal(cache_dir.as_ref()))
             .await
             .unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -1891,7 +1883,7 @@ mod tests {
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                &node,
                 &[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::gb(1)).unwrap()],
                 CacheDescription::minimal(cache_dir.as_ref()),
             )
@@ -1960,7 +1952,7 @@ mod tests {
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                &node,
                 &[PlotDescription::minimal(plot_dir.as_ref())],
                 CacheDescription::minimal(cache_dir.as_ref()),
             )
@@ -2002,7 +1994,7 @@ mod tests {
         let other_farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                &node,
                 &[PlotDescription::minimal(plot_dir.as_ref())],
                 CacheDescription::minimal(cache_dir.as_ref()),
             )

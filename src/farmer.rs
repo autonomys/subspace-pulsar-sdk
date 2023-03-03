@@ -220,7 +220,7 @@ mod builder {
         pub async fn build(
             self,
             reward_address: PublicKey,
-            node: Node,
+            node: &Node,
             plots: &[PlotDescription],
             cache: CacheDescription,
         ) -> Result<Farmer, BuildError> {
@@ -306,7 +306,7 @@ impl Config {
     pub async fn build(
         self,
         reward_address: PublicKey,
-        node: Node,
+        node: &Node,
         plots: &[PlotDescription],
         cache: CacheDescription,
     ) -> Result<Farmer, BuildError> {
@@ -401,7 +401,7 @@ impl Config {
             node.dsn_node.clone(),
             Some(subspace_farmer::utils::piece_validator::RecordsRootPieceValidator::new(
                 node.dsn_node.clone(),
-                node.clone(),
+                node.rpc_handle.clone(),
                 kzg.clone(),
                 records_roots_cache,
             )),
@@ -420,7 +420,7 @@ impl Config {
                 allocated_space,
                 directory: directory.clone(),
                 reward_address: *reward_address,
-                node_client: node.clone(),
+                node_client: node.rpc_handle.clone(),
                 kzg: kzg.clone(),
                 piece_getter: piece_getter.clone(),
                 concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
@@ -611,15 +611,18 @@ impl Config {
         let (cmd_sender, cmd_receiver) = oneshot::channel::<()>();
 
         let handle = tokio::task::spawn_blocking({
-            let node = node.clone();
             let handle = tokio::runtime::Handle::current();
+            let is_node_closed = {
+                let stop_sender = node.stop_sender.clone();
+                move || stop_sender.is_closed()
+            };
 
             move || {
                 use future::Either::*;
 
                 match handle.block_on(future::select(single_disk_plots_stream.next(), cmd_receiver))
                 {
-                    Left((_, _)) if handle.block_on(node.is_closed()) => Ok(()),
+                    Left((_, _)) if is_node_closed() => Ok(()),
                     Left((maybe_result, _)) =>
                         maybe_result.expect("there is always at least one plot"),
                     Right((_, _)) => Ok(()),
@@ -631,7 +634,6 @@ impl Config {
             cmd_sender: Arc::new(Mutex::new(Some(cmd_sender))),
             reward_address,
             plot_info: Arc::new(plot_info),
-            _node: node,
             handle: Arc::new(Mutex::new(handle)),
         })
     }
@@ -643,7 +645,6 @@ pub struct Farmer {
     cmd_sender: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     reward_address: PublicKey,
     plot_info: Arc<HashMap<PathBuf, Plot>>,
-    _node: Node,
     handle: Arc<Mutex<tokio::task::JoinHandle<anyhow::Result<()>>>>,
 }
 
@@ -912,12 +913,7 @@ mod tests {
         let plots = [PlotDescription::minimal(plot_dir.as_ref())];
         let cache_dir = TempDir::new().unwrap();
         let farmer = Farmer::builder()
-            .build(
-                Default::default(),
-                node.clone(),
-                &plots,
-                CacheDescription::minimal(cache_dir.as_ref()),
-            )
+            .build(Default::default(), &node, &plots, CacheDescription::minimal(cache_dir.as_ref()))
             .await
             .unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -944,7 +940,7 @@ mod tests {
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                &node,
                 &[PlotDescription::new(
                     plot_dir.as_ref(),
                     ByteSize::b(PlotDescription::MIN_SIZE.as_u64() * n_sectors),
@@ -983,7 +979,7 @@ mod tests {
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                &node,
                 &[PlotDescription::minimal(plot_dir.as_ref())],
                 CacheDescription::minimal(cache_dir.as_ref()),
             )
@@ -1017,7 +1013,7 @@ mod tests {
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                &node,
                 &[PlotDescription::minimal(plot_dir.as_ref())],
                 CacheDescription::minimal(cache_dir.as_ref()),
             )

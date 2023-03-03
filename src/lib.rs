@@ -224,7 +224,7 @@ mod tests {
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                &node,
                 &plot_descriptions,
                 CacheDescription::minimal(cache_dir.as_ref()),
             )

@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
     let farmer = Farmer::builder()
         .build(
             reward_address,
-            node.clone(),
+            &node,
             &[PlotDescription::new(base_path.join("plot"), plot_size)
                 .context("Failed to create a plot")?],
             CacheDescription::new(base_path.join("cache"), cache_size).unwrap(),
