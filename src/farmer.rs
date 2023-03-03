@@ -928,7 +928,7 @@ mod tests {
         assert_eq!(plots_info[plot_dir.as_ref()].allocated_space, PlotDescription::MIN_SIZE);
 
         farmer.close().await.unwrap();
-        node.close().await;
+        node.close().await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -968,7 +968,7 @@ mod tests {
         assert_eq!(progress.len(), n_sectors as usize);
 
         farmer.close().await.unwrap();
-        node.close().await;
+        node.close().await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1002,7 +1002,7 @@ mod tests {
             .expect("Farmer should send new solutions");
 
         farmer.close().await.unwrap();
-        node.close().await;
+        node.close().await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1036,6 +1036,6 @@ mod tests {
         .unwrap();
 
         farmer.close().await.unwrap();
-        node.close().await;
+        node.close().await.unwrap();
     }
 }

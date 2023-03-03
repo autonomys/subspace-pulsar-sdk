@@ -408,6 +408,6 @@ mod tests {
             .unwrap();
 
         farmer.close().await.unwrap();
-        node.close().await;
+        node.close().await.unwrap();
     }
 }

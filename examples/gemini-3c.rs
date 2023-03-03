@@ -90,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    node.close().await;
+    node.close().await.context("Failed to close node")?;
     farmer.close().await.context("Failed to close farmer")?;
 
     Ok(())

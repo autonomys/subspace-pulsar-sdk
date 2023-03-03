@@ -52,7 +52,7 @@ async fn main() {
     dbg!(farmer.get_info().await.unwrap());
 
     farmer.close().await.unwrap();
-    node.close().await;
+    node.close().await.unwrap();
 
     // Restarting
     let node = Node::builder()
@@ -74,7 +74,7 @@ async fn main() {
         .expect("Failed to init a farmer");
 
     farmer.close().await.unwrap();
-    node.close().await;
+    node.close().await.unwrap();
 
     // Delete everything
     for plot in plots {

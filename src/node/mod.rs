@@ -1194,9 +1194,14 @@ impl Config {
             sync_from_dsn,
         };
 
-        tokio::spawn(async move {
-            node_runner.run().await;
-        });
+        let node_runner_future = subspace_farmer::utils::run_future_in_dedicated_thread(
+            Box::pin(async move {
+                node_runner.run().await;
+                tracing::error!("Exited from node runner future");
+            }),
+            // TODO: Add propper thread name or remove in favour of `tokio::task::Builder`
+            "subspace-sdk-networking".to_owned(),
+        )?;
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);
         let mut full_client =
@@ -1250,20 +1255,18 @@ impl Config {
         let (stop_sender, mut stop_receiver) = mpsc::channel::<oneshot::Sender<()>>(1);
 
         tokio::spawn(async move {
-            let stop_sender = futures::select! {
-                opt_sender = stop_receiver.next() => {
-                    match opt_sender {
-                        Some(sender) => sender,
-                        None => return,
+            let opt_stop_sender = async move {
+                futures::select! {
+                    opt_sender = stop_receiver.next() => opt_sender,
+                    result = task_manager.future().fuse() => {
+                        result.expect("Task from manager paniced");
+                        None
                     }
+                    _ = node_runner_future.fuse() => None,
                 }
-                result = task_manager.future().fuse() => {
-                    result.expect("Task from manager paniced");
-                    return;
-                }
-            };
-            drop(task_manager);
-            let _ = stop_sender.send(());
+            }
+            .await;
+            opt_stop_sender.map(|stop_sender| stop_sender.send(()));
         });
 
         Ok(Node {
@@ -1610,10 +1613,24 @@ impl Node {
     }
 
     /// Leaves the network and gracefully shuts down
-    pub async fn close(mut self) {
+    pub async fn close(mut self) -> anyhow::Result<()> {
+        const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
+
         let (stop_sender, stop_receiver) = oneshot::channel();
-        drop(self.stop_sender.send(stop_sender).await);
-        let _ = stop_receiver.await;
+        let _ = match self.stop_sender.send(stop_sender).await {
+            Err(_) => return Err(anyhow::anyhow!("Node was already closed")),
+            Ok(()) => stop_receiver.await,
+        };
+        let client = self.client.clone();
+        drop(self);
+
+        // Busy wait till client exits
+        // TODO: is it the only wait to check that substrate node exited?
+        while client.upgrade().is_some() {
+            tokio::time::sleep(BUSY_WAIT_INTERVAL).await;
+        }
+
+        Ok(())
     }
 
     /// Tells if the node was closed
@@ -1852,7 +1869,7 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
         farmer.close().await.unwrap();
-        node.close().await;
+        node.close().await.unwrap();
     }
 
     async fn test_sync_block_inner() {
@@ -1907,8 +1924,8 @@ mod tests {
         other_node.subscribe_syncing_progress().await.unwrap().for_each(|_| async {}).await;
         assert_eq!(other_node.get_info().await.unwrap().best_block.1, farm_blocks);
 
-        node.close().await;
-        other_node.close().await;
+        node.close().await.unwrap();
+        other_node.close().await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1999,8 +2016,8 @@ mod tests {
 
         plot.subscribe_new_solutions().await.next().await.expect("Solution stream never ends");
 
-        node.close().await;
-        other_node.close().await;
+        node.close().await.unwrap();
+        other_node.close().await.unwrap();
         other_farmer.close().await.unwrap();
     }
 
@@ -2013,5 +2030,22 @@ mod tests {
         tokio::time::timeout(std::time::Duration::from_secs(60 * 60), test_sync_plot_inner())
             .await
             .unwrap()
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_node_restart() {
+        crate::utils::test_init();
+        let dir = TempDir::new().unwrap();
+
+        for i in 0..4 {
+            tracing::error!(i, "Running new node");
+            Node::dev()
+                .build(dir.path(), chain_spec::dev_config().unwrap())
+                .await
+                .unwrap()
+                .close()
+                .await
+                .unwrap();
+        }
     }
 }
