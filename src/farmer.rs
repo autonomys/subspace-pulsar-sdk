@@ -644,6 +644,7 @@ impl Config {
 /// Farmer structure
 #[derive(Derivative)]
 #[derivative(Debug)]
+#[must_use = "Farmer should be closed"]
 pub struct Farmer {
     cmd_sender: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     reward_address: PublicKey,

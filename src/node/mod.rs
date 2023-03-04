@@ -1319,6 +1319,7 @@ pub(crate) type NewFull = subspace_service::NewFull<
 /// Node structure
 #[derive(Derivative)]
 #[derivative(Debug)]
+#[must_use = "Node should be closed"]
 pub struct Node {
     system_domain: Option<SystemDomainNode>,
     #[derivative(Debug = "ignore")]
@@ -1826,6 +1827,9 @@ mod tests {
         Node::dev()
             .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap()
+            .close()
             .await
             .unwrap();
     }
