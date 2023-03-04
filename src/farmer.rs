@@ -2,11 +2,12 @@ use std::collections::HashMap;
 use std::io;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use anyhow::Context;
 pub use builder::{Builder, Config};
 use bytesize::ByteSize;
+use derivative::Derivative;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
 use serde::{Deserialize, Serialize};
@@ -241,9 +242,6 @@ pub enum BuildError {
     /// Failed to fetch data from the node
     #[error("Failed to fetch data from node: {0}")]
     RPCError(#[source] subspace_farmer::RpcClientError),
-    /// Failed to create parity db record storage
-    #[error("Failed to create parity db record storage: {0}")]
-    ParityDbError(#[from] parity_db::Error),
     /// Other error
     #[error("{0}")]
     Other(#[from] anyhow::Error),
@@ -363,10 +361,10 @@ impl Config {
 
             let db_provider_storage =
                 ParityDbProviderStorage::new(&provider_db_path, provided_keys_limit, peer_id)
-                    .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+                    .context("Failed to create parity db provider storage")?;
 
             let piece_store = ParityDbStore::new(&piece_cache_db_path)
-                .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+                .context("Failed to create parity db piece store")?;
             *node.farmer_piece_store.lock().await = Some(piece_store.clone());
 
             let piece_cache = FarmerPieceCache::new(piece_store, piece_cache_size, peer_id);
@@ -375,24 +373,23 @@ impl Config {
                 current_size = ?piece_cache.size(),
                 "Piece cache initialized successfully"
             );
-            node.farmer_provider_storage.swap(FarmerProviderStorage::new(
+            node.farmer_provider_storage.swap(Some(FarmerProviderStorage::new(
                 peer_id,
-                readers_and_pieces.clone(),
+                Arc::clone(&readers_and_pieces),
                 db_provider_storage,
                 piece_cache.clone(),
-            ));
+            )));
 
             piece_cache
         };
 
         let piece_cache = Arc::new(tokio::sync::Mutex::new(piece_cache));
-        crate::networking::start_announcements_processor(
+        let announcement_processor = crate::networking::start_announcements_processor(
             node.dsn_node.clone(),
             Arc::clone(&piece_cache),
             Arc::downgrade(&readers_and_pieces),
         )
-        .expect("Add error handling")
-        .detach();
+        .context("Failed to start announcement processor")?;
 
         let kzg = kzg::Kzg::new(kzg::test_public_parameters());
         let records_roots_cache =
@@ -409,7 +406,7 @@ impl Config {
         );
         let piece_getter = Arc::new(FarmerPieceGetter::new(
             NodePieceGetter::new(DsnPieceGetter::new(piece_provider), node.piece_cache.clone()),
-            piece_cache,
+            Arc::clone(&piece_cache),
             node.dsn_node.clone(),
         ));
 
@@ -512,17 +509,18 @@ impl Config {
         };
         readers_and_pieces.lock().replace(new_readers_and_pieces);
 
-        for (plot_offset, single_disk_plot) in single_disk_plots.iter().enumerate() {
+        let drop_at_exit = single_disk_plots.iter().enumerate().map(|(plot_offset, single_disk_plot)| {
             let readers_and_pieces = Arc::clone(&readers_and_pieces);
 
             // We are not going to send anything here, but dropping of sender on dropping of
             // corresponding `SingleDiskPlot` will allow us to stop background tasks.
             let (dropped_sender, _dropped_receiver) = tokio::sync::broadcast::channel::<()>(1);
+            let another_dropped_sender = dropped_sender.clone();
 
             let node = node.dsn_node.clone();
             // Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
-            single_disk_plot
+            let handler_id = single_disk_plot
                 .on_sector_plotted(Arc::new(move |(sector_offset, plotted_sector, plotting_permit)| {
                     let plotting_permit = Arc::clone(plotting_permit);
                     let sector_index = plotted_sector.sector_index;
@@ -574,17 +572,15 @@ impl Config {
                     let sector_offset = *sector_offset;
                     // TODO: Skip those that were already announced (because they cached)
                     let publish_fut = async move {
-                        let mut pieces_publishing_futures = new_pieces
+                        new_pieces
                             .into_iter()
                             .map(|piece_index| {
                                 subspace_networking::utils::pieces::announce_single_piece_index_with_backoff(piece_index, &node)
                             })
-                            .collect::<FuturesUnordered<_>>();
-
-                        while pieces_publishing_futures.next().await.is_some() {
-                            // Nothing is needed here, just driving all futures
-                            // to completion
-                        }
+                            .collect::<FuturesUnordered<_>>()
+                            .map(drop)
+                            .collect::<Vec<()>>()
+                            .await;
 
                         tracing::info!(sector_offset, sector_index, "Sector publishing was successful.");
 
@@ -601,9 +597,11 @@ impl Config {
                             tracing::debug!("Piece publishing was cancelled due to shutdown.");
                         }
                     });
-                }))
-                .detach();
-        }
+                }));
+            Box::new((handler_id, another_dropped_sender)) as Box<dyn std::any::Any>
+        })
+        .chain(Some(Box::new(announcement_processor) as Box<dyn std::any::Any>))
+        .collect();
 
         let mut single_disk_plots_stream =
             single_disk_plots.into_iter().map(SingleDiskPlot::run).collect::<FuturesUnordered<_>>();
@@ -635,17 +633,37 @@ impl Config {
             reward_address,
             plot_info: Arc::new(plot_info),
             handle: Arc::new(Mutex::new(handle)),
+            provider_storage: node.farmer_provider_storage.clone(),
+            piece_store: Arc::clone(&node.farmer_piece_store),
+            piece_cache: Arc::downgrade(&piece_cache),
+            _drop_at_exit: drop_at_exit,
         })
     }
 }
 
 /// Farmer structure
-#[derive(Clone, Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Farmer {
     cmd_sender: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     reward_address: PublicKey,
     plot_info: Arc<HashMap<PathBuf, Plot>>,
     handle: Arc<Mutex<tokio::task::JoinHandle<anyhow::Result<()>>>>,
+    provider_storage:
+        crate::networking::provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage>,
+    #[derivative(Debug = "ignore")]
+    piece_store: Arc<
+        Mutex<
+            Option<
+                ParityDbStore<
+                    subspace_networking::libp2p::kad::record::Key,
+                    subspace_core_primitives::Piece,
+                >,
+            >,
+        >,
+    >,
+    piece_cache: Weak<Mutex<FarmerPieceCache>>,
+    _drop_at_exit: Vec<Box<dyn std::any::Any>>,
 }
 
 /// Info about some plot
@@ -883,12 +901,26 @@ impl Farmer {
 
     /// Stops farming, closes plots, and sends signal to the node
     pub async fn close(self) -> anyhow::Result<()> {
-        let mut maybe_cmd_sender = self.cmd_sender.lock().await;
-        let Some(cmd_sender) = maybe_cmd_sender.take() else {
-            return Ok(());
-        };
-        let _ = cmd_sender.send(());
-        (&mut *self.handle.lock().await).await?
+        {
+            let mut maybe_cmd_sender = self.cmd_sender.lock().await;
+            let Some(cmd_sender) = maybe_cmd_sender.take() else {
+                return Ok(());
+            };
+            let _ = cmd_sender.send(());
+        }
+
+        self.provider_storage.swap(None);
+        *self.piece_store.lock().await = None;
+        (&mut *self.handle.lock().await).await??;
+
+        let piece_cache = self.piece_cache.clone();
+        drop(self);
+
+        while piece_cache.upgrade().is_some() {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+
+        Ok(())
     }
 }
 
@@ -1032,6 +1064,35 @@ mod tests {
         .unwrap();
 
         farmer.close().await.unwrap();
+        node.close().await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_farmer_restart() {
+        crate::utils::test_init();
+
+        let dir = TempDir::new().unwrap();
+        let node = Node::dev()
+            .role(Role::Authority)
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
+
+        for _ in 0..10 {
+            Farmer::builder()
+                .build(
+                    Default::default(),
+                    &node,
+                    &[PlotDescription::minimal(dir.path().join("plot"))],
+                    CacheDescription::minimal(dir.path().join("cache")),
+                )
+                .await
+                .unwrap()
+                .close()
+                .await
+                .unwrap();
+        }
+
         node.close().await.unwrap();
     }
 }
