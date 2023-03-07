@@ -2585,7 +2585,7 @@
                 rpc_max_request_size,
                 rpc_max_response_size,
                 rpc_id_provider: <span class="prelude-val">None</span>,
-                rpc_max_subs_per_conn: <span class="prelude-val">Some</span>(rpc_max_subs_per_conn),
+                rpc_max_subs_per_conn,
                 ws_max_out_buffer_capacity,
                 prometheus_config: <span class="prelude-val">None</span>,
                 telemetry_endpoints,
@@ -2672,7 +2672,7 @@
         <span class="doccomment">/// Maximum allowed subscriptions per rpc connection
         </span><span class="attr">#[builder(default)]
         #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
-        </span><span class="kw">pub </span>max_subs_per_conn: usize,
+        </span><span class="kw">pub </span>max_subs_per_conn: <span class="prelude-ty">Option</span>&lt;usize&gt;,
         <span class="doccomment">/// Maximum size of the output buffer capacity for websocket
         /// connections.
         </span><span class="attr">#[builder(setter(strip_option), default)]
