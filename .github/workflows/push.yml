@@ -18,13 +18,7 @@ concurrency:
 
 env:
   # Not needed in CI, should make things a bit faster
-  CARGO_INCREMENTAL: 0
   CARGO_TERM_COLOR: always
-  # Build smaller artifacts to avoid running out of space in CI
-  # TODO: Try to remove once https://github.com/paritytech/substrate/issues/11538 is resolved
-  RUSTFLAGS: -C strip=symbols -C opt-level=s
-  # Remove unnecessary WASM build artefacts
-  WASM_BUILD_CLEAN_TARGET: 1
 
 jobs:
   fmt:
@@ -69,7 +63,7 @@ jobs:
           - ubuntu-22.04
           - macos-12
           - windows-2022
-        run-all: 
+        run-all:
           - ${{ inputs.test-macos || github.ref == 'refs/heads/master' }}
         exclude:  # exclude macos-12 when the condition is false
           - run-all: false
