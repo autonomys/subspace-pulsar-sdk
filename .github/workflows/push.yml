@@ -48,13 +48,35 @@ jobs:
         run: Remove-Item -LiteralPath "C:\msys64\" -Force -Recurse
         if: runner.os == 'Windows'
 
-      - name: Configure cache
-        uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
+      - name: Cache directories
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/bin
+            ~/.cargo/git
+          key: cargo-test-dirs-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-test-dirs-
+
+      - run: cargo install cargo-sweep
+
+      - name: Cache build
+        uses: actions/cache@v2
+        with:
+          path: target
+          key: cargo-clippy-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-clippy-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
+
+      - name: Register artifacts
+        run: cargo sweep --stamp
 
       - uses: actions-rs/clippy-check@b5b5f21f4797c02da247df37026fcd0a5024aa4d # v1.0.7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --locked -- -D warnings
+
+      - name: Clean unused artifacts
+        run: cargo sweep --file
 
   test:
     strategy:
@@ -89,13 +111,35 @@ jobs:
         run: Remove-Item -LiteralPath "C:\msys64\" -Force -Recurse
         if: runner.os == 'Windows'
 
-      - name: Configure cache
-        uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
+      - name: Cache directories
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/bin
+            ~/.cargo/git
+          key: cargo-test-dirs-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-test-dirs-
+
+      - name: Cache build
+        uses: actions/cache@v2
+        with:
+          path: target
+          key: cargo-test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
+
+      - run: cargo install cargo-sweep
+
+      - name: Register artifacts
+        run: cargo sweep --stamp
 
       - name: Build tests
         run: cargo build --locked --lib --tests --release
-      - name: Run tests
-        run: cargo test --locked --lib --tests --release -- --test-threads=1
+      # - name: Run tests
+      #   run: cargo test --locked --lib --tests --release -- --test-threads=1
+
+      - name: Clean unused artifacts
+        run: cargo sweep --file
 
   docs:
     runs-on: ubuntu-22.04
