@@ -48,22 +48,16 @@ jobs:
         run: Remove-Item -LiteralPath "C:\msys64\" -Force -Recurse
         if: runner.os == 'Windows'
 
-      - name: Cache directories
+      - name: Add cache
         uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/bin
             ~/.cargo/git
-          key: cargo-test-dirs-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-test-dirs-
-
-      - name: Cache build
-        uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
-        with:
-          path: target
-          key: cargo-clippy-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-clippy-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
+            target
+          key: clippy-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: clippy-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
 
       - name: Install utils for caching
         run: |
@@ -119,22 +113,16 @@ jobs:
         run: Remove-Item -LiteralPath "C:\msys64\" -Force -Recurse
         if: runner.os == 'Windows'
 
-      - name: Cache directories
+      - name: Add cache
         uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/bin
             ~/.cargo/git
-          key: cargo-test-dirs-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-test-dirs-
-
-      - name: Cache build
-        uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
-        with:
-          path: target
-          key: cargo-test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
+            target
+          key: test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
 
       - name: Install utils for caching
         run: |
@@ -188,22 +176,16 @@ jobs:
         with:
           version: "14.0"
 
-      - name: Cache directories
+      - name: Add cache
         uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/bin
             ~/.cargo/git
-          key: cargo-test-dirs-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-test-dirs-
-
-      - name: Cache build
-        uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
-        with:
-          path: target
-          key: cargo-test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
+            target
+          key: udeps-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: udeps-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
 
       - name: Install utils for caching
         run: |
