@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use anyhow::Context;
 pub use builder::{Builder, Config};
@@ -20,6 +20,7 @@ use subspace_farmer::single_disk_plot::{
 use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 use subspace_farmer::utils::node_piece_getter::NodePieceGetter as DsnPieceGetter;
 use subspace_farmer::utils::parity_db_store::ParityDbStore;
+use subspace_farmer::utils::piece_validator::RecordsRootPieceValidator;
 use subspace_farmer::utils::readers_and_pieces::{PieceDetails, ReadersAndPieces};
 use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_farmer_components::plotting::PlottedSector;
@@ -396,7 +397,7 @@ impl Config {
             parking_lot::Mutex::new(lru::LruCache::new(RECORDS_ROOTS_CACHE_SIZE));
         let piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
             node.dsn_node.clone(),
-            Some(subspace_farmer::utils::piece_validator::RecordsRootPieceValidator::new(
+            Some(RecordsRootPieceValidator::new(
                 node.dsn_node.clone(),
                 node.rpc_handle.clone(),
                 kzg.clone(),
@@ -635,7 +636,7 @@ impl Config {
             handle: Arc::new(Mutex::new(handle)),
             provider_storage: node.farmer_provider_storage.clone(),
             piece_store: Arc::clone(&node.farmer_piece_store),
-            piece_cache: Arc::downgrade(&piece_cache),
+            base_path,
             _drop_at_exit: drop_at_exit,
         })
     }
@@ -663,7 +664,7 @@ pub struct Farmer {
             >,
         >,
     >,
-    piece_cache: Weak<Mutex<FarmerPieceCache>>,
+    base_path: PathBuf,
     _drop_at_exit: Vec<Box<dyn std::any::Any>>,
 }
 
@@ -911,17 +912,25 @@ impl Farmer {
         }
 
         self.provider_storage.swap(None);
-        *self.piece_store.lock().await = None;
         (&mut *self.handle.lock().await).await??;
-
-        let piece_cache = self.piece_cache.clone();
+        self.piece_store.lock().await.take();
+        let piece_cache_db_path = self.base_path.join("piece_cache_db");
         drop(self);
 
-        while piece_cache.upgrade().is_some() {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        }
+        // HACK: Poll on piece store creation
+        loop {
+            let result = ParityDbStore::<
+                subspace_networking::libp2p::kad::record::Key,
+                subspace_core_primitives::Piece,
+            >::new(&piece_cache_db_path);
 
-        Ok(())
+            match result.map(drop) {
+                // If parity db is still locked wait on it
+                Err(parity_db::Error::Locked(_)) =>
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await,
+                result => return result.context("Parity db store failure"),
+            }
+        }
     }
 }
 
