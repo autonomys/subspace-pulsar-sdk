@@ -1,7 +1,7 @@
 use std::io;
 use std::num::{NonZeroU64, NonZeroUsize};
 use std::path::Path;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -1249,7 +1249,6 @@ impl Config {
             new_slot_notification_stream: _,
         } = full_client;
 
-        let client = Arc::downgrade(&client);
         let rpc_handle = crate::utils::Rpc::new(&rpc_handlers);
         network_starter.start_network();
         let (stop_sender, mut stop_receiver) = mpsc::channel::<oneshot::Sender<()>>(1);
@@ -1324,7 +1323,7 @@ pub(crate) type NewFull = subspace_service::NewFull<
 pub struct Node {
     system_domain: Option<SystemDomainNode>,
     #[derivative(Debug = "ignore")]
-    client: Weak<FullClient>,
+    client: Arc<FullClient>,
     #[derivative(Debug = "ignore")]
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     pub(crate) rpc_handle: crate::utils::Rpc,
@@ -1541,7 +1540,6 @@ impl Node {
         .map_err(|_| anyhow::anyhow!("Failed to connect to the network"))?;
 
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
-        let client = self.client().context("Failed to fetch best block")?;
         let inner = tokio_stream::wrappers::ReceiverStream::new(receiver);
 
         let result = backoff::future::retry(check_synced_backoff.clone(), || {
@@ -1563,7 +1561,7 @@ impl Node {
             Err(None) => return Ok(SyncingProgressStream { inner, at: 0, target: 0 }),
         };
 
-        let at = client.chain_info().best_number;
+        let at = self.client.chain_info().best_number;
         sender
             .send(Ok(SyncingProgress { target, at, status }))
             .await
@@ -1571,6 +1569,7 @@ impl Node {
 
         tokio::spawn({
             let network = Arc::clone(&self.network);
+            let client = Arc::clone(&self.client);
             async move {
                 loop {
                     tokio::time::sleep(CHECK_SYNCED_EVERY).await;
@@ -1647,10 +1646,6 @@ impl Node {
         tokio::fs::remove_dir_all(path).await
     }
 
-    fn client(&self) -> anyhow::Result<Arc<FullClient>> {
-        self.client.upgrade().ok_or_else(|| anyhow::anyhow!("The node was already closed"))
-    }
-
     /// Returns system domain node if one was setted up
     pub fn system_domain(&self) -> Option<SystemDomainNode> {
         self.system_domain.as_ref().cloned()
@@ -1658,7 +1653,6 @@ impl Node {
 
     /// Get node info
     pub async fn get_info(&self) -> anyhow::Result<Info> {
-        let client = self.client().context("Failed to fetch node info")?;
         let NetworkState { connected_peers, not_connected_peers, .. } = self
             .network
             .network_state()
@@ -1672,7 +1666,7 @@ impl Node {
             finalized_number,
             block_gap,
             ..
-        } = client.chain_info();
+        } = self.client.chain_info();
         let version = self.rpc_handle.runtime_version(Some(best_hash)).await?;
         let FarmerProtocolInfo { total_pieces, .. } =
             self.rpc_handle.farmer_app_info().await.map_err(anyhow::Error::msg)?.protocol_info;

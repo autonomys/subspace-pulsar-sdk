@@ -630,10 +630,10 @@ impl Config {
         });
 
         Ok(Farmer {
-            cmd_sender: Arc::new(Mutex::new(Some(cmd_sender))),
+            cmd_sender: Some(cmd_sender),
             reward_address,
-            plot_info: Arc::new(plot_info),
-            handle: Arc::new(Mutex::new(handle)),
+            plot_info,
+            handle,
             provider_storage: node.farmer_provider_storage.clone(),
             piece_store: Arc::clone(&node.farmer_piece_store),
             base_path,
@@ -647,10 +647,10 @@ impl Config {
 #[derivative(Debug)]
 #[must_use = "Farmer should be closed"]
 pub struct Farmer {
-    cmd_sender: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+    cmd_sender: Option<oneshot::Sender<()>>,
     reward_address: PublicKey,
-    plot_info: Arc<HashMap<PathBuf, Plot>>,
-    handle: Arc<Mutex<tokio::task::JoinHandle<anyhow::Result<()>>>>,
+    plot_info: HashMap<PathBuf, Plot>,
+    handle: tokio::task::JoinHandle<anyhow::Result<()>>,
     provider_storage:
         crate::networking::provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage>,
     #[derivative(Debug = "ignore")]
@@ -902,17 +902,14 @@ impl Farmer {
     }
 
     /// Stops farming, closes plots, and sends signal to the node
-    pub async fn close(self) -> anyhow::Result<()> {
-        {
-            let mut maybe_cmd_sender = self.cmd_sender.lock().await;
-            let Some(cmd_sender) = maybe_cmd_sender.take() else {
-                return Ok(());
-            };
-            let _ = cmd_sender.send(());
-        }
+    pub async fn close(mut self) -> anyhow::Result<()> {
+        let Some(cmd_sender) = self.cmd_sender.take() else {
+            return Ok(());
+        };
+        let _ = cmd_sender.send(());
 
         self.provider_storage.swap(None);
-        (&mut *self.handle.lock().await).await??;
+        (&mut self.handle).await??;
         self.piece_store.lock().await.take();
         let piece_cache_db_path = self.base_path.join("piece_cache_db");
         drop(self);
