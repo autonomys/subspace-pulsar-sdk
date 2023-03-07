@@ -58,7 +58,7 @@ jobs:
           key: cargo-test-dirs-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: cargo-test-dirs-
 
-      - run: cargo install cargo-sweep
+      - run: test -x ~/.cargo/bin/cargo-sweep || cargo install cargo-sweep
 
       - name: Cache build
         uses: actions/cache@v2
@@ -128,7 +128,7 @@ jobs:
           key: cargo-test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: cargo-test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
 
-      - run: cargo install cargo-sweep
+      - run: test -x ~/.cargo/bin/cargo-sweep || cargo install cargo-sweep
 
       - name: Register artifacts
         run: cargo sweep --stamp
