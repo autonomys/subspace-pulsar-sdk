@@ -49,7 +49,7 @@ jobs:
         if: runner.os == 'Windows'
 
       - name: Cache directories
-        uses: actions/cache@v2
+        uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
         with:
           path: |
             ~/.cargo/registry
@@ -59,7 +59,7 @@ jobs:
           restore-keys: cargo-test-dirs-
 
       - name: Cache build
-        uses: actions/cache@v2
+        uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
         with:
           path: target
           key: cargo-clippy-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
@@ -120,7 +120,7 @@ jobs:
         if: runner.os == 'Windows'
 
       - name: Cache directories
-        uses: actions/cache@v2
+        uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
         with:
           path: |
             ~/.cargo/registry
@@ -130,7 +130,7 @@ jobs:
           restore-keys: cargo-test-dirs-
 
       - name: Cache build
-        uses: actions/cache@v2
+        uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
         with:
           path: target
           key: cargo-test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
