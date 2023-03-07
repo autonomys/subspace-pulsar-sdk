@@ -1239,9 +1239,9 @@ impl Config {
             rpc_handlers,
             network_starter,
             network,
+            backend,
 
             select_chain: _,
-            backend: _,
             reward_signing_notification_stream: _,
             archived_segment_notification_stream: _,
             transaction_pool: _,
@@ -1282,6 +1282,7 @@ impl Config {
             farmer_provider_storage,
             piece_cache,
             piece_memory_cache,
+            backend,
         })
     }
 }
@@ -1347,6 +1348,8 @@ pub struct Node {
     pub(crate) piece_cache: NodePieceCache<FullClient>,
     #[derivative(Debug = "ignore")]
     pub(crate) piece_memory_cache: PieceMemoryCache,
+    #[derivative(Debug = "ignore")]
+    backend: Arc<subspace_service::FullBackend>,
 }
 
 /// Hash type
@@ -1615,19 +1618,19 @@ impl Node {
 
     /// Leaves the network and gracefully shuts down
     pub async fn close(mut self) -> anyhow::Result<()> {
-        const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
+        const BUSY_WAIT_INTERVAL: Duration = Duration::from_nanos(1);
 
         let (stop_sender, stop_receiver) = oneshot::channel();
         let _ = match self.stop_sender.send(stop_sender).await {
             Err(_) => return Err(anyhow::anyhow!("Node was already closed")),
             Ok(()) => stop_receiver.await,
         };
-        let client = self.client.clone();
+        let backend = Arc::clone(&self.backend);
         drop(self);
 
-        // Busy wait till client exits
+        // Busy wait till backend exits
         // TODO: is it the only wait to check that substrate node exited?
-        while client.upgrade().is_some() {
+        while Arc::strong_count(&backend) != 1 {
             tokio::time::sleep(BUSY_WAIT_INTERVAL).await;
         }
 
