@@ -188,14 +188,40 @@ jobs:
         with:
           version: "14.0"
 
+      - name: Cache directories
+        uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/bin
+            ~/.cargo/git
+          key: cargo-test-dirs-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-test-dirs-
 
-      - name: Configure cache
-        uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
+      - name: Cache build
+        uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
+        with:
+          path: target
+          key: cargo-test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
 
-      - run: cargo install cargo-udeps
+      - name: Install utils for caching
+        run: |
+          test -x ~/.cargo/bin/cargo-sweep || cargo install cargo-sweep
+          test -x ~/.cargo/bin/cargo-cache || cargo install cargo-cache --no-default-features --features ci-autoclean cargo-cache
 
-      # This is a hack to make `cargo udeps` work with substrate
-      - run: cargo check
-      - run: cargo udeps
-        env:
-          SKIP_WASM_BUILD: 1
+      - name: Register artifacts
+        run: cargo sweep --stamp
+
+      - name: Clean unused crate source checkouts and git repo checkouts
+        run: cargo cache
+
+      - name: cargo install cargo-udeps
+        run: test -x ~/.cargo/bin/cargo-udeps || cargo install cargo-udeps
+
+      - name: cargo udeps
+        # This is a hack to make `cargo udeps` work with substrate
+        run: cargo check && SKIP_WASM_BUILD=1 cargo udeps
+
+      - name: Clean unused artifacts
+        run: cargo sweep --file
