@@ -58,8 +58,6 @@ jobs:
           key: cargo-test-dirs-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: cargo-test-dirs-
 
-      - run: test -x ~/.cargo/bin/cargo-sweep || cargo install cargo-sweep
-
       - name: Cache build
         uses: actions/cache@v2
         with:
@@ -67,8 +65,16 @@ jobs:
           key: cargo-clippy-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: cargo-clippy-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
 
+      - name: Install utils for caching
+        run: |
+          test -x ~/.cargo/bin/cargo-sweep || cargo install cargo-sweep
+          test -x ~/.cargo/bin/cargo-cache || cargo install cargo-cache --no-default-features --features ci-autoclean cargo-cache
+
       - name: Register artifacts
         run: cargo sweep --stamp
+
+      - name: Clean unused crate source checkouts and git repo checkouts
+        run: cargo cache
 
       - uses: actions-rs/clippy-check@b5b5f21f4797c02da247df37026fcd0a5024aa4d # v1.0.7
         with:
@@ -128,10 +134,16 @@ jobs:
           key: cargo-test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: cargo-test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
 
-      - run: test -x ~/.cargo/bin/cargo-sweep || cargo install cargo-sweep
+      - name: Install utils for caching
+        run: |
+          test -x ~/.cargo/bin/cargo-sweep || cargo install cargo-sweep
+          test -x ~/.cargo/bin/cargo-cache || cargo install cargo-cache --no-default-features --features ci-autoclean cargo-cache
 
       - name: Register artifacts
         run: cargo sweep --stamp
+
+      - name: Clean unused crate source checkouts and git repo checkouts
+        run: cargo cache
 
       - name: Build tests
         run: cargo build --locked --lib --tests --release
