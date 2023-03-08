@@ -7,6 +7,9 @@ on:
       - '**.md'
       - '.gitignore'
 
+env:
+  RUSTFLAGS: --cfg tokio_unstable
+
 jobs:
   code-coverage:
     runs-on: ubuntu-latest
