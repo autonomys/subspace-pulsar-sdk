@@ -598,12 +598,9 @@ impl Config {
         let mut single_disk_plots_stream =
             single_disk_plots.into_iter().map(SingleDiskPlot::run).collect::<FuturesUnordered<_>>();
 
-        let (cmd_sender, cmd_receiver) = oneshot::channel::<()>();
-        drop_at_exit.push(Defer::new(move || {
-            let _ = cmd_sender.send(());
-        }));
-
-        let handle = tokio::task::spawn_blocking({
+        let (drop_sender, drop_receiver) = oneshot::channel::<()>();
+        let (result_sender, result_receiver) = oneshot::channel::<_>();
+        tokio::task::spawn_blocking({
             let handle = tokio::runtime::Handle::current();
             let is_node_closed = {
                 let stop_sender = node.stop_sender.clone();
@@ -613,26 +610,24 @@ impl Config {
             move || {
                 use future::Either::*;
 
-                match handle.block_on(future::select(single_disk_plots_stream.next(), cmd_receiver))
+                let result = match handle
+                    .block_on(future::select(single_disk_plots_stream.next(), drop_receiver))
                 {
                     Left((_, _)) if is_node_closed() => Ok(()),
                     Left((maybe_result, _)) =>
                         maybe_result.expect("there is always at least one plot"),
                     Right((_, _)) => Ok(()),
-                }
+                };
+                let _ = result_sender.send(result);
             }
         });
 
         drop_at_exit.push(Defer::new({
+            let piece_store = Arc::clone(&node.farmer_piece_store);
             let provider_storage = node.farmer_provider_storage.clone();
             move || {
+                let _ = drop_sender.send(());
                 provider_storage.swap(None);
-            }
-        }));
-
-        drop_at_exit.push(Defer::new({
-            let piece_store = Arc::clone(&node.farmer_piece_store);
-            move || {
                 piece_store.blocking_lock().take();
             }
         }));
@@ -640,7 +635,7 @@ impl Config {
         Ok(Farmer {
             reward_address,
             plot_info,
-            handle: Some(handle),
+            result_receiver: Some(result_receiver),
             base_path,
             _drop_at_exit: drop_at_exit,
         })
@@ -654,7 +649,7 @@ impl Config {
 pub struct Farmer {
     reward_address: PublicKey,
     plot_info: HashMap<PathBuf, Plot>,
-    handle: Option<tokio::task::JoinHandle<anyhow::Result<()>>>,
+    result_receiver: Option<oneshot::Receiver<anyhow::Result<()>>>,
     base_path: PathBuf,
     _drop_at_exit: DropCollection,
 }
@@ -951,13 +946,13 @@ impl Farmer {
     pub async fn close(mut self) -> anyhow::Result<()> {
         const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
 
-        let handle = self.handle.take().expect("Handle is always there");
+        let result_receiver = self.result_receiver.take().expect("Handle is always there");
         let piece_cache_db_path = self.base_path.join("piece_cache_db");
 
         // Otherwise tokio panics because we lock async thread
         tokio::task::spawn_blocking(move || drop(self)).await?;
 
-        handle.await??;
+        result_receiver.await??;
 
         // HACK: Poll on piece store creation
         loop {
