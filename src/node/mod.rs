@@ -42,6 +42,7 @@ use crate::networking::provider_storage_utils::MaybeProviderStorage;
 use crate::networking::{
     FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage,
 };
+use crate::utils::Defer;
 
 pub mod chain_spec;
 pub mod domains;
@@ -1268,6 +1269,16 @@ impl Config {
             opt_stop_sender.map(|stop_sender| stop_sender.send(()));
         });
 
+        let _drop_at_exit = Defer::new(move || {
+            const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
+
+            // Busy wait till backend exits
+            // TODO: is it the only wait to check that substrate node exited?
+            while Arc::strong_count(&backend) != 1 {
+                std::thread::sleep(BUSY_WAIT_INTERVAL);
+            }
+        });
+
         Ok(Node {
             client,
             system_domain,
@@ -1281,7 +1292,7 @@ impl Config {
             farmer_provider_storage,
             piece_cache,
             piece_memory_cache,
-            backend,
+            _drop_at_exit,
         })
     }
 }
@@ -1348,7 +1359,7 @@ pub struct Node {
     #[derivative(Debug = "ignore")]
     pub(crate) piece_memory_cache: PieceMemoryCache,
     #[derivative(Debug = "ignore")]
-    backend: Arc<subspace_service::FullBackend>,
+    _drop_at_exit: Defer,
 }
 
 /// Hash type
@@ -1617,21 +1628,11 @@ impl Node {
 
     /// Leaves the network and gracefully shuts down
     pub async fn close(mut self) -> anyhow::Result<()> {
-        const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
-
         let (stop_sender, stop_receiver) = oneshot::channel();
         let _ = match self.stop_sender.send(stop_sender).await {
             Err(_) => return Err(anyhow::anyhow!("Node was already closed")),
             Ok(()) => stop_receiver.await,
         };
-        let backend = Arc::clone(&self.backend);
-        drop(self);
-
-        // Busy wait till backend exits
-        // TODO: is it the only wait to check that substrate node exited?
-        while Arc::strong_count(&backend) != 1 {
-            tokio::time::sleep(BUSY_WAIT_INTERVAL).await;
-        }
 
         Ok(())
     }

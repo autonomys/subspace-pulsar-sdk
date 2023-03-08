@@ -128,15 +128,15 @@ pub fn is_default<T: Default + PartialEq>(t: &T) -> bool {
     t == &T::default()
 }
 
-pub struct Defer<F: FnOnce()>(Option<F>);
+pub struct Defer(Option<Box<dyn FnOnce() + Send>>);
 
-impl<F: FnOnce()> Defer<F> {
-    pub fn new(f: F) -> Self {
-        Self(Some(f))
+impl Defer {
+    pub fn new<F: FnOnce() + Send + 'static>(f: F) -> Self {
+        Self(Some(Box::new(f)))
     }
 }
 
-impl<F: FnOnce()> Drop for Defer<F> {
+impl Drop for Defer {
     fn drop(&mut self) {
         (self.0.take().expect("Always set"))();
     }
