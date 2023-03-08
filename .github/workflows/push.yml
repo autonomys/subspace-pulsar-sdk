@@ -135,9 +135,7 @@ jobs:
       - name: Clean unused crate source checkouts and git repo checkouts
         run: cargo cache
 
-      - name: Build tests
-        run: cargo build --locked --lib --tests --release
-      - name: Run tests
+      - name: Build and run tests
         run: cargo test --locked --lib --tests --release -- --test-threads=1
 
       - name: Clean unused artifacts
