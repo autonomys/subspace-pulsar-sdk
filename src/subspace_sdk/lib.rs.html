@@ -473,7 +473,7 @@
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                <span class="kw-2">&amp;</span>node,
                 <span class="kw-2">&amp;</span>plot_descriptions,
                 CacheDescription::minimal(cache_dir.as_ref()),
             )
@@ -483,7 +483,7 @@
         node.subscribe_new_blocks().<span class="kw">await</span>.unwrap().take(<span class="number">2</span>).for_each(|<span class="kw">_</span>| <span class="kw">async move </span>{}).<span class="kw">await</span>;
 
         farmer.close().<span class="kw">await</span>.unwrap();
-        node.close().<span class="kw">await</span>;
+        node.close().<span class="kw">await</span>.unwrap();
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]

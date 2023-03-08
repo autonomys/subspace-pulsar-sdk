@@ -178,8 +178,8 @@
         <span class="self">Self </span>{ inner: Arc::new(RwLock::new(<span class="prelude-val">None</span>)) }
     }
 
-    <span class="kw">pub fn </span>swap(<span class="kw-2">&amp;</span><span class="self">self</span>, value: S) {
-        <span class="kw-2">*</span><span class="self">self</span>.inner.write() = <span class="prelude-val">Some</span>(value);
+    <span class="kw">pub fn </span>swap(<span class="kw-2">&amp;</span><span class="self">self</span>, value: <span class="prelude-ty">Option</span>&lt;S&gt;) {
+        <span class="kw-2">*</span><span class="self">self</span>.inner.write() = value;
     }
 }
 

@@ -162,6 +162,7 @@
 <a href="#162" id="162">162</a>
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
@@ -180,7 +181,8 @@
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>test_init() {
     <span class="kw">let _ </span>= tracing_subscriber::fmt()
         .with_env_filter(
-            <span class="string">&quot;info,subspace_sdk=trace,subspace_farmer=trace,subspace_service=trace,\
+            <span class="string">&quot;debug,parity-db=info,cranelift_codegen=info,wasmtime_cranelift=info,\
+             subspace_sdk=trace,subspace_farmer=trace,subspace_service=trace,\
              subspace_farmer::utils::parity_db_store=debug&quot;
                 </span>.parse::&lt;tracing_subscriber::EnvFilter&gt;()
                 .expect(<span class="string">&quot;Env filter directives are correct&quot;</span>),

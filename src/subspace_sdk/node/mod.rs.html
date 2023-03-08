@@ -2015,10 +2015,37 @@
 <a href="#2015" id="2015">2015</a>
 <a href="#2016" id="2016">2016</a>
 <a href="#2017" id="2017">2017</a>
+<a href="#2018" id="2018">2018</a>
+<a href="#2019" id="2019">2019</a>
+<a href="#2020" id="2020">2020</a>
+<a href="#2021" id="2021">2021</a>
+<a href="#2022" id="2022">2022</a>
+<a href="#2023" id="2023">2023</a>
+<a href="#2024" id="2024">2024</a>
+<a href="#2025" id="2025">2025</a>
+<a href="#2026" id="2026">2026</a>
+<a href="#2027" id="2027">2027</a>
+<a href="#2028" id="2028">2028</a>
+<a href="#2029" id="2029">2029</a>
+<a href="#2030" id="2030">2030</a>
+<a href="#2031" id="2031">2031</a>
+<a href="#2032" id="2032">2032</a>
+<a href="#2033" id="2033">2033</a>
+<a href="#2034" id="2034">2034</a>
+<a href="#2035" id="2035">2035</a>
+<a href="#2036" id="2036">2036</a>
+<a href="#2037" id="2037">2037</a>
+<a href="#2038" id="2038">2038</a>
+<a href="#2039" id="2039">2039</a>
+<a href="#2040" id="2040">2040</a>
+<a href="#2041" id="2041">2041</a>
+<a href="#2042" id="2042">2042</a>
+<a href="#2043" id="2043">2043</a>
+<a href="#2044" id="2044">2044</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::{NonZeroU64, NonZeroUsize};
 <span class="kw">use </span>std::path::Path;
-<span class="kw">use </span>std::sync::{Arc, Weak};
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::Context;
@@ -3211,9 +3238,14 @@
             sync_from_dsn,
         };
 
-        tokio::spawn(<span class="kw">async move </span>{
-            node_runner.run().<span class="kw">await</span>;
-        });
+        <span class="kw">let </span>node_runner_future = subspace_farmer::utils::run_future_in_dedicated_thread(
+            Box::pin(<span class="kw">async move </span>{
+                node_runner.run().<span class="kw">await</span>;
+                <span class="macro">tracing::error!</span>(<span class="string">&quot;Exited from node runner future&quot;</span>);
+            }),
+            <span class="comment">// TODO: Add propper thread name or remove in favour of `tokio::task::Builder`
+            </span><span class="string">&quot;subspace-sdk-networking&quot;</span>.to_owned(),
+        )<span class="question-mark">?</span>;
 
         <span class="kw">let </span>slot_proportion = sc_consensus_slots::SlotProportion::new(<span class="number">2f32 </span>/ <span class="number">3f32</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>full_client =
@@ -3251,9 +3283,9 @@
             rpc_handlers,
             network_starter,
             network,
+            backend,
 
             select_chain: <span class="kw">_</span>,
-            backend: <span class="kw">_</span>,
             reward_signing_notification_stream: <span class="kw">_</span>,
             archived_segment_notification_stream: <span class="kw">_</span>,
             transaction_pool: <span class="kw">_</span>,
@@ -3261,26 +3293,23 @@
             new_slot_notification_stream: <span class="kw">_</span>,
         } = full_client;
 
-        <span class="kw">let </span>client = Arc::downgrade(<span class="kw-2">&amp;</span>client);
         <span class="kw">let </span>rpc_handle = <span class="kw">crate</span>::utils::Rpc::new(<span class="kw-2">&amp;</span>rpc_handlers);
         network_starter.start_network();
         <span class="kw">let </span>(stop_sender, <span class="kw-2">mut </span>stop_receiver) = mpsc::channel::&lt;oneshot::Sender&lt;()&gt;&gt;(<span class="number">1</span>);
 
         tokio::spawn(<span class="kw">async move </span>{
-            <span class="kw">let </span>stop_sender = <span class="macro">futures::select! </span>{
-                opt_sender = stop_receiver.next() =&gt; {
-                    <span class="kw">match </span>opt_sender {
-                        <span class="prelude-val">Some</span>(sender) =&gt; sender,
-                        <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
-                    }
+            <span class="kw">let </span>opt_stop_sender = <span class="kw">async move </span>{
+                <span class="macro">futures::select! </span>{
+                    opt_sender = stop_receiver.next() =&gt; opt_sender,
+                    result = task_manager.future().fuse() =&gt; {
+                        result.expect(<span class="string">&quot;Task from manager paniced&quot;</span>);
+                        <span class="prelude-val">None
+                    </span>}
+                    <span class="kw">_ </span>= node_runner_future.fuse() =&gt; <span class="prelude-val">None</span>,
                 }
-                result = task_manager.future().fuse() =&gt; {
-                    result.expect(<span class="string">&quot;Task from manager paniced&quot;</span>);
-                    <span class="kw">return</span>;
-                }
-            };
-            drop(task_manager);
-            <span class="kw">let _ </span>= stop_sender.send(());
+            }
+            .<span class="kw">await</span>;
+            opt_stop_sender.map(|stop_sender| stop_sender.send(()));
         });
 
         <span class="prelude-val">Ok</span>(Node {
@@ -3296,6 +3325,7 @@
             farmer_provider_storage,
             piece_cache,
             piece_memory_cache,
+            backend,
         })
     }
 }
@@ -3331,16 +3361,17 @@
 &gt;;
 
 <span class="doccomment">/// Node structure
-</span><span class="attr">#[derive(Clone, Derivative)]
+</span><span class="attr">#[derive(Derivative)]
 #[derivative(Debug)]
+#[must_use = <span class="string">&quot;Node should be closed&quot;</span>]
 </span><span class="kw">pub struct </span>Node {
     system_domain: <span class="prelude-ty">Option</span>&lt;SystemDomainNode&gt;,
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
-    </span>client: Weak&lt;FullClient&gt;,
+    </span>client: Arc&lt;FullClient&gt;,
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
     </span>network: Arc&lt;NetworkService&lt;RuntimeBlock, Hash&gt;&gt;,
     <span class="kw">pub</span>(<span class="kw">crate</span>) rpc_handle: <span class="kw">crate</span>::utils::Rpc,
-    stop_sender: mpsc::Sender&lt;oneshot::Sender&lt;()&gt;&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) stop_sender: mpsc::Sender&lt;oneshot::Sender&lt;()&gt;&gt;,
     <span class="kw">pub</span>(<span class="kw">crate</span>) dsn_node: subspace_networking::Node,
     name: String,
     <span class="kw">pub</span>(<span class="kw">crate</span>) farmer_readers_and_pieces: Arc&lt;parking_lot::Mutex&lt;<span class="prelude-ty">Option</span>&lt;ReadersAndPieces&gt;&gt;&gt;,
@@ -3360,6 +3391,8 @@
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) piece_cache: NodePieceCache&lt;FullClient&gt;,
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) piece_memory_cache: PieceMemoryCache,
+    <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
+    </span>backend: Arc&lt;subspace_service::FullBackend&gt;,
 }
 
 <span class="doccomment">/// Hash type
@@ -3551,7 +3584,6 @@
         </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Failed to connect to the network&quot;</span>))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>(sender, receiver) = tokio::sync::mpsc::channel(<span class="number">10</span>);
-        <span class="kw">let </span>client = <span class="self">self</span>.client().context(<span class="string">&quot;Failed to fetch best block&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>inner = tokio_stream::wrappers::ReceiverStream::new(receiver);
 
         <span class="kw">let </span>result = backoff::future::retry(check_synced_backoff.clone(), || {
@@ -3573,7 +3605,7 @@
             </span><span class="prelude-val">Err</span>(<span class="prelude-val">None</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(SyncingProgressStream { inner, at: <span class="number">0</span>, target: <span class="number">0 </span>}),
         };
 
-        <span class="kw">let </span>at = client.chain_info().best_number;
+        <span class="kw">let </span>at = <span class="self">self</span>.client.chain_info().best_number;
         sender
             .send(<span class="prelude-val">Ok</span>(SyncingProgress { target, at, status }))
             .<span class="kw">await
@@ -3581,6 +3613,7 @@
 
         tokio::spawn({
             <span class="kw">let </span>network = Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.network);
+            <span class="kw">let </span>client = Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.client);
             <span class="kw">async move </span>{
                 <span class="kw">loop </span>{
                     tokio::time::sleep(CHECK_SYNCED_EVERY).<span class="kw">await</span>;
@@ -3627,10 +3660,24 @@
     }
 
     <span class="doccomment">/// Leaves the network and gracefully shuts down
-    </span><span class="kw">pub async fn </span>close(<span class="kw-2">mut </span><span class="self">self</span>) {
+    </span><span class="kw">pub async fn </span>close(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">const </span>BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(<span class="number">100</span>);
+
         <span class="kw">let </span>(stop_sender, stop_receiver) = oneshot::channel();
-        drop(<span class="self">self</span>.stop_sender.send(stop_sender).<span class="kw">await</span>);
-        <span class="kw">let _ </span>= stop_receiver.<span class="kw">await</span>;
+        <span class="kw">let _ </span>= <span class="kw">match </span><span class="self">self</span>.stop_sender.send(stop_sender).<span class="kw">await </span>{
+            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Node was already closed&quot;</span>)),
+            <span class="prelude-val">Ok</span>(()) =&gt; stop_receiver.<span class="kw">await</span>,
+        };
+        <span class="kw">let </span>backend = Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.backend);
+        drop(<span class="self">self</span>);
+
+        <span class="comment">// Busy wait till backend exits
+        // TODO: is it the only wait to check that substrate node exited?
+        </span><span class="kw">while </span>Arc::strong_count(<span class="kw-2">&amp;</span>backend) != <span class="number">1 </span>{
+            tokio::time::sleep(BUSY_WAIT_INTERVAL).<span class="kw">await</span>;
+        }
+
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Tells if the node was closed
@@ -3643,10 +3690,6 @@
         tokio::fs::remove_dir_all(path).<span class="kw">await
     </span>}
 
-    <span class="kw">fn </span>client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Arc&lt;FullClient&gt;&gt; {
-        <span class="self">self</span>.client.upgrade().ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;The node was already closed&quot;</span>))
-    }
-
     <span class="doccomment">/// Returns system domain node if one was setted up
     </span><span class="kw">pub fn </span>system_domain(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;SystemDomainNode&gt; {
         <span class="self">self</span>.system_domain.as_ref().cloned()
@@ -3654,7 +3697,6 @@
 
     <span class="doccomment">/// Get node info
     </span><span class="kw">pub async fn </span>get_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Info&gt; {
-        <span class="kw">let </span>client = <span class="self">self</span>.client().context(<span class="string">&quot;Failed to fetch node info&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>NetworkState { connected_peers, not_connected_peers, .. } = <span class="self">self
             </span>.network
             .network_state()
@@ -3668,10 +3710,10 @@
             finalized_number,
             block_gap,
             ..
-        } = client.chain_info();
+        } = <span class="self">self</span>.client.chain_info();
         <span class="kw">let </span>version = <span class="self">self</span>.rpc_handle.runtime_version(<span class="prelude-val">Some</span>(best_hash)).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>FarmerProtocolInfo { total_pieces, .. } =
-            <span class="self">self</span>.farmer_app_info().<span class="kw">await</span>.map_err(anyhow::Error::msg)<span class="question-mark">?</span>.protocol_info;
+            <span class="self">self</span>.rpc_handle.farmer_app_info().<span class="kw">await</span>.map_err(anyhow::Error::msg)<span class="question-mark">?</span>.protocol_info;
         <span class="prelude-val">Ok</span>(Info {
             chain: ChainInfo { genesis_hash },
             best_block: (best_hash, best_number),
@@ -3742,17 +3784,16 @@
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
     <span class="attr">#[async_trait::async_trait]
-    </span><span class="kw">impl </span>NodeClient <span class="kw">for </span>Node {
+    </span><span class="kw">impl </span>NodeClient <span class="kw">for </span><span class="kw">crate</span>::utils::Rpc {
         <span class="kw">async fn </span>farmer_app_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;FarmerAppInfo, Error&gt; {
-            <span class="prelude-val">Ok</span>(<span class="self">self</span>.rpc_handle.get_farmer_app_info().<span class="kw">await</span><span class="question-mark">?</span>)
+            <span class="prelude-val">Ok</span>(<span class="self">self</span>.get_farmer_app_info().<span class="kw">await</span><span class="question-mark">?</span>)
         }
 
         <span class="kw">async fn </span>subscribe_slot_info(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = SlotInfo&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;, Error&gt; {
             <span class="prelude-val">Ok</span>(Box::pin(
-                <span class="self">self</span>.rpc_handle
-                    .subscribe_slot_info()
+                SubspaceRpcApiClient::subscribe_slot_info(<span class="self">self</span>)
                     .<span class="kw">await</span><span class="question-mark">?
                     </span>.filter_map(|result| futures::future::ready(result.ok())),
             ))
@@ -3762,7 +3803,7 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             solution_response: SolutionResponse,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
-            <span class="prelude-val">Ok</span>(<span class="self">self</span>.rpc_handle.submit_solution_response(solution_response).<span class="kw">await</span><span class="question-mark">?</span>)
+            <span class="prelude-val">Ok</span>(SubspaceRpcApiClient::submit_solution_response(<span class="self">self</span>, solution_response).<span class="kw">await</span><span class="question-mark">?</span>)
         }
 
         <span class="kw">async fn </span>subscribe_reward_signing(
@@ -3770,8 +3811,7 @@
         ) -&gt; <span class="prelude-ty">Result</span>&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = RewardSigningInfo&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;, Error&gt;
         {
             <span class="prelude-val">Ok</span>(Box::pin(
-                <span class="self">self</span>.rpc_handle
-                    .subscribe_reward_signing()
+                SubspaceRpcApiClient::subscribe_reward_signing(<span class="self">self</span>)
                     .<span class="kw">await</span><span class="question-mark">?
                     </span>.filter_map(|result| futures::future::ready(result.ok())),
             ))
@@ -3781,15 +3821,14 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             reward_signature: RewardSignatureResponse,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
-            <span class="prelude-val">Ok</span>(<span class="self">self</span>.rpc_handle.submit_reward_signature(reward_signature).<span class="kw">await</span><span class="question-mark">?</span>)
+            <span class="prelude-val">Ok</span>(SubspaceRpcApiClient::submit_reward_signature(<span class="self">self</span>, reward_signature).<span class="kw">await</span><span class="question-mark">?</span>)
         }
 
         <span class="kw">async fn </span>subscribe_archived_segments(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = ArchivedSegment&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;, Error&gt; {
             <span class="prelude-val">Ok</span>(Box::pin(
-                <span class="self">self</span>.rpc_handle
-                    .subscribe_archived_segment()
+                SubspaceRpcApiClient::subscribe_archived_segment(<span class="self">self</span>)
                     .<span class="kw">await</span><span class="question-mark">?
                     </span>.filter_map(|result| futures::future::ready(result.ok())),
             ))
@@ -3799,14 +3838,14 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             segment_indexes: Vec&lt;SegmentIndex&gt;,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="prelude-ty">Option</span>&lt;RecordsRoot&gt;&gt;, Error&gt; {
-            <span class="prelude-val">Ok</span>(<span class="self">self</span>.rpc_handle.records_roots(segment_indexes).<span class="kw">await</span><span class="question-mark">?</span>)
+            <span class="prelude-val">Ok</span>(SubspaceRpcApiClient::records_roots(<span class="self">self</span>, segment_indexes).<span class="kw">await</span><span class="question-mark">?</span>)
         }
 
         <span class="kw">async fn </span>root_blocks(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             segment_indexes: Vec&lt;SegmentIndex&gt;,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="prelude-ty">Option</span>&lt;RootBlock&gt;&gt;, Error&gt; {
-            <span class="prelude-val">Ok</span>(<span class="self">self</span>.rpc_handle.root_blocks(segment_indexes).<span class="kw">await</span><span class="question-mark">?</span>)
+            <span class="prelude-val">Ok</span>(SubspaceRpcApiClient::root_blocks(<span class="self">self</span>, segment_indexes).<span class="kw">await</span><span class="question-mark">?</span>)
         }
     }
 }
@@ -3830,6 +3869,9 @@
             .role(Role::Authority)
             .build(dir.path(), chain_spec::dev_config().unwrap())
             .<span class="kw">await
+            </span>.unwrap()
+            .close()
+            .<span class="kw">await
             </span>.unwrap();
     }
 
@@ -3842,7 +3884,7 @@
             .<span class="kw">await
             </span>.unwrap();
 
-        <span class="macro">assert!</span>(node.farmer_app_info().<span class="kw">await</span>.is_ok());
+        <span class="macro">assert!</span>(node.rpc_handle.farmer_app_info().<span class="kw">await</span>.is_ok());
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
@@ -3858,18 +3900,13 @@
         <span class="kw">let </span>(plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         <span class="kw">let </span>plots = [PlotDescription::minimal(plot_dir.as_ref())];
         <span class="kw">let </span>farmer = Farmer::builder()
-            .build(
-                Default::default(),
-                node.clone(),
-                <span class="kw-2">&amp;</span>plots,
-                CacheDescription::minimal(cache_dir.as_ref()),
-            )
+            .build(Default::default(), <span class="kw-2">&amp;</span>node, <span class="kw-2">&amp;</span>plots, CacheDescription::minimal(cache_dir.as_ref()))
             .<span class="kw">await
             </span>.unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
 
         farmer.close().<span class="kw">await</span>.unwrap();
-        node.close().<span class="kw">await</span>;
+        node.close().<span class="kw">await</span>.unwrap();
     }
 
     <span class="kw">async fn </span>test_sync_block_inner() {
@@ -3891,7 +3928,7 @@
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                <span class="kw-2">&amp;</span>node,
                 <span class="kw-2">&amp;</span>[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::gb(<span class="number">1</span>)).unwrap()],
                 CacheDescription::minimal(cache_dir.as_ref()),
             )
@@ -3924,8 +3961,8 @@
         other_node.subscribe_syncing_progress().<span class="kw">await</span>.unwrap().for_each(|<span class="kw">_</span>| <span class="kw">async </span>{}).<span class="kw">await</span>;
         <span class="macro">assert_eq!</span>(other_node.get_info().<span class="kw">await</span>.unwrap().best_block.<span class="number">1</span>, farm_blocks);
 
-        node.close().<span class="kw">await</span>;
-        other_node.close().<span class="kw">await</span>;
+        node.close().<span class="kw">await</span>.unwrap();
+        other_node.close().<span class="kw">await</span>.unwrap();
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
@@ -3960,7 +3997,7 @@
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                <span class="kw-2">&amp;</span>node,
                 <span class="kw-2">&amp;</span>[PlotDescription::minimal(plot_dir.as_ref())],
                 CacheDescription::minimal(cache_dir.as_ref()),
             )
@@ -4002,7 +4039,7 @@
         <span class="kw">let </span>other_farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                <span class="kw-2">&amp;</span>node,
                 <span class="kw-2">&amp;</span>[PlotDescription::minimal(plot_dir.as_ref())],
                 CacheDescription::minimal(cache_dir.as_ref()),
             )
@@ -4016,8 +4053,8 @@
 
         plot.subscribe_new_solutions().<span class="kw">await</span>.next().<span class="kw">await</span>.expect(<span class="string">&quot;Solution stream never ends&quot;</span>);
 
-        node.close().<span class="kw">await</span>;
-        other_node.close().<span class="kw">await</span>;
+        node.close().<span class="kw">await</span>.unwrap();
+        other_node.close().<span class="kw">await</span>.unwrap();
         other_farmer.close().<span class="kw">await</span>.unwrap();
     }
 
@@ -4030,6 +4067,23 @@
         tokio::time::timeout(std::time::Duration::from_secs(<span class="number">60 </span>* <span class="number">60</span>), test_sync_plot_inner())
             .<span class="kw">await
             </span>.unwrap()
+    }
+
+    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    </span><span class="kw">async fn </span>test_node_restart() {
+        <span class="kw">crate</span>::utils::test_init();
+        <span class="kw">let </span>dir = TempDir::new().unwrap();
+
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">4 </span>{
+            <span class="macro">tracing::error!</span>(i, <span class="string">&quot;Running new node&quot;</span>);
+            Node::dev()
+                .build(dir.path(), chain_spec::dev_config().unwrap())
+                .<span class="kw">await
+                </span>.unwrap()
+                .close()
+                .<span class="kw">await
+                </span>.unwrap();
+        }
     }
 }
 </code></pre></div>

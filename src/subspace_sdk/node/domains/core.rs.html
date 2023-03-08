@@ -802,7 +802,7 @@
         <span class="kw">let </span>farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                <span class="kw-2">&amp;</span>node,
                 <span class="kw-2">&amp;</span>[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::gb(<span class="number">1</span>)).unwrap()],
                 CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
@@ -821,7 +821,7 @@
             </span>.unwrap();
 
         farmer.close().<span class="kw">await</span>.unwrap();
-        node.close().<span class="kw">await</span>;
+        node.close().<span class="kw">await</span>.unwrap();
     }
 }
 </code></pre></div>
