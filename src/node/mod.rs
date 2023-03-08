@@ -1018,32 +1018,38 @@ impl Config {
 
             // Start before archiver below, so we don't have potential race condition and
             // miss pieces
-            tokio::spawn({
-                let mut piece_cache = piece_cache.clone();
-                let mut archived_segment_notification_stream =
-                    partial_components.other.1.archived_segment_notification_stream().subscribe();
+            tokio::task::Builder::new()
+                .name(format!("subspace-sdk-node-{name}-piece-caching").as_ref())
+                .spawn({
+                    let mut piece_cache = piece_cache.clone();
+                    let mut archived_segment_notification_stream = partial_components
+                        .other
+                        .1
+                        .archived_segment_notification_stream()
+                        .subscribe();
 
-                async move {
-                    while let Some(archived_segment_notification) =
-                        archived_segment_notification_stream.next().await
-                    {
-                        let segment_index = archived_segment_notification
-                            .archived_segment
-                            .root_block
-                            .segment_index();
-                        if let Err(error) = piece_cache.add_pieces(
-                            segment_index * u64::from(subspace_core_primitives::PIECES_IN_SEGMENT),
-                            &archived_segment_notification.archived_segment.pieces,
-                        ) {
-                            tracing::error!(
-                                %segment_index,
-                                %error,
-                                "Failed to store pieces for segment in cache"
-                            );
+                    async move {
+                        while let Some(archived_segment_notification) =
+                            archived_segment_notification_stream.next().await
+                        {
+                            let segment_index = archived_segment_notification
+                                .archived_segment
+                                .root_block
+                                .segment_index();
+                            if let Err(error) = piece_cache.add_pieces(
+                                segment_index
+                                    * u64::from(subspace_core_primitives::PIECES_IN_SEGMENT),
+                                &archived_segment_notification.archived_segment.pieces,
+                            ) {
+                                tracing::error!(
+                                    %segment_index,
+                                    %error,
+                                    "Failed to store pieces for segment in cache"
+                                );
+                            }
                         }
                     }
-                }
-            });
+                })?;
 
             let chain_spec_boot_nodes = base
                 .chain_spec
@@ -1195,13 +1201,13 @@ impl Config {
             sync_from_dsn,
         };
 
-        let node_runner_future = subspace_farmer::utils::run_future_in_dedicated_thread(
-            Box::pin(async move {
+        let node_runner_future = crate::utils::spawn_cancellable_future(
+            async move {
                 node_runner.run().await;
                 tracing::error!("Exited from node runner future");
-            }),
+            },
             // TODO: Add propper thread name or remove in favour of `tokio::task::Builder`
-            "subspace-sdk-networking".to_owned(),
+            "subspace-sdk-networking-{node_name}".to_owned(),
         )?;
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);
@@ -1254,20 +1260,22 @@ impl Config {
         network_starter.start_network();
         let (stop_sender, mut stop_receiver) = mpsc::channel::<oneshot::Sender<()>>(1);
 
-        tokio::spawn(async move {
-            let opt_stop_sender = async move {
-                futures::select! {
-                    opt_sender = stop_receiver.next() => opt_sender,
-                    result = task_manager.future().fuse() => {
-                        result.expect("Task from manager paniced");
-                        None
+        tokio::task::Builder::new()
+            .name(format!("subspace-sdk-node-{name}-task-manager").as_ref())
+            .spawn(async move {
+                let opt_stop_sender = async move {
+                    futures::select! {
+                        opt_sender = stop_receiver.next() => opt_sender,
+                        result = task_manager.future().fuse() => {
+                            result.expect("Task from manager paniced");
+                            None
+                        }
+                        _ = node_runner_future.fuse() => None,
                     }
-                    _ = node_runner_future.fuse() => None,
                 }
-            }
-            .await;
-            opt_stop_sender.map(|stop_sender| stop_sender.send(()));
-        });
+                .await;
+                opt_stop_sender.map(|stop_sender| stop_sender.send(()));
+            })?;
 
         let _drop_at_exit = Defer::new(move || {
             const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
@@ -1340,7 +1348,7 @@ pub struct Node {
     pub(crate) rpc_handle: crate::utils::Rpc,
     pub(crate) stop_sender: mpsc::Sender<oneshot::Sender<()>>,
     pub(crate) dsn_node: subspace_networking::Node,
-    name: String,
+    pub(crate) name: String,
     pub(crate) farmer_readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
     #[derivative(Debug = "ignore")]
     pub(crate) farmer_piece_store: Arc<

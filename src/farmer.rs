@@ -352,6 +352,7 @@ fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAnd
     ReadersAndPieces::new(readers, plotted_pieces)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handler_on_sector_plotted(
     sector_offset: usize,
     plotted_sector: &subspace_farmer_components::plotting::PlottedSector,
@@ -360,6 +361,7 @@ fn handler_on_sector_plotted(
     node: &subspace_networking::Node,
     readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
     mut dropped_receiver: tokio::sync::broadcast::Receiver<()>,
+    node_name: &str,
 ) {
     let sector_index = plotted_sector.sector_index;
 
@@ -425,14 +427,16 @@ fn handler_on_sector_plotted(
         drop(plotting_permit);
     };
 
-    tokio::spawn(async move {
-        use futures::future::{select, Either};
+    let _ = tokio::task::Builder::new()
+        .name(format!("subspace-sdk-farmer-{node_name}-piece-publishing").as_ref())
+        .spawn(async move {
+            use futures::future::{select, Either};
 
-        let result = select(Box::pin(publish_fut), Box::pin(dropped_receiver.recv())).await;
-        if !matches!(result, Either::Right(_)) {
-            tracing::debug!("Piece publishing was cancelled due to shutdown.");
-        }
-    });
+            let result = select(Box::pin(publish_fut), Box::pin(dropped_receiver.recv())).await;
+            if !matches!(result, Either::Right(_)) {
+                tracing::debug!("Piece publishing was cancelled due to shutdown.");
+            }
+        });
 }
 
 impl Config {
@@ -467,6 +471,8 @@ impl Config {
 
         let base_path = cache.directory;
         let readers_and_pieces = Arc::clone(&node.farmer_readers_and_pieces);
+
+        let node_name = node.name.clone();
 
         let piece_cache_db_path = base_path.join("piece_cache_db");
 
@@ -576,6 +582,7 @@ impl Config {
             }));
 
             let node = node.dsn_node.clone();
+            let node_name = node_name.clone();
             // Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
             let handler_id = single_disk_plot.on_sector_plotted(Arc::new(
@@ -588,6 +595,7 @@ impl Config {
                         &node,
                         readers_and_pieces.clone(),
                         dropped_sender.subscribe(),
+                        &node_name,
                     )
                 },
             ));
@@ -600,27 +608,31 @@ impl Config {
 
         let (drop_sender, drop_receiver) = oneshot::channel::<()>();
         let (result_sender, result_receiver) = oneshot::channel::<_>();
-        tokio::task::spawn_blocking({
-            let handle = tokio::runtime::Handle::current();
-            let is_node_closed = {
-                let stop_sender = node.stop_sender.clone();
-                move || stop_sender.is_closed()
-            };
 
-            move || {
-                use future::Either::*;
-
-                let result = match handle
-                    .block_on(future::select(single_disk_plots_stream.next(), drop_receiver))
-                {
-                    Left((_, _)) if is_node_closed() => Ok(()),
-                    Left((maybe_result, _)) =>
-                        maybe_result.expect("there is always at least one plot"),
-                    Right((_, _)) => Ok(()),
+        tokio::task::Builder::new()
+            .name(format!("subspace-sdk-farmer-{node_name}-single-disk-plots-driver").as_ref())
+            .spawn_blocking({
+                let handle = tokio::runtime::Handle::current();
+                let is_node_closed = {
+                    let stop_sender = node.stop_sender.clone();
+                    move || stop_sender.is_closed()
                 };
-                let _ = result_sender.send(result);
-            }
-        });
+
+                move || {
+                    use future::Either::*;
+
+                    let result = match handle
+                        .block_on(future::select(single_disk_plots_stream.next(), drop_receiver))
+                    {
+                        Left((_, _)) if is_node_closed() => Ok(()),
+                        Left((maybe_result, _)) =>
+                            maybe_result.expect("there is always at least one plot"),
+                        Right((_, _)) => Ok(()),
+                    };
+                    let _ = result_sender.send(result);
+                }
+            })
+            .context("Failed to spawn task")?;
 
         drop_at_exit.push(Defer::new({
             const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
@@ -652,6 +664,7 @@ impl Config {
             reward_address,
             plot_info,
             result_receiver: Some(result_receiver),
+            node_name,
             base_path,
             _drop_at_exit: drop_at_exit,
         })
@@ -667,6 +680,7 @@ pub struct Farmer {
     plot_info: HashMap<PathBuf, Plot>,
     result_receiver: Option<oneshot::Receiver<anyhow::Result<()>>>,
     base_path: PathBuf,
+    node_name: String,
     _drop_at_exit: DropCollection,
 }
 
@@ -963,7 +977,10 @@ impl Farmer {
         let result_receiver = self.result_receiver.take().expect("Handle is always there");
 
         // Otherwise tokio panics because we lock async thread
-        tokio::task::spawn_blocking(move || drop(self)).await?;
+        tokio::task::Builder::new()
+            .name(format!("subspace-sdk-farmer-{}-dropper", self.node_name).as_ref())
+            .spawn_blocking(move || drop(self))?
+            .await?;
 
         result_receiver.await?
     }

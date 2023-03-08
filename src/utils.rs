@@ -177,6 +177,39 @@ impl<T: Send + 'static> Extend<T> for DropCollection {
     }
 }
 
+/// Spawns future and allows you to cancell it if you drop the returned handle
+pub fn spawn_cancellable_future<Fut>(
+    future: Fut,
+    task_name: String,
+) -> std::io::Result<
+    impl Future<Output = Result<Fut::Output, futures::channel::oneshot::Canceled>> + Send,
+>
+where
+    Fut: Future + Send + 'static,
+    Fut::Output: Send + 'static,
+{
+    let (drop_tx, drop_rx) = futures::channel::oneshot::channel::<()>();
+    let (result_tx, result_rx) = futures::channel::oneshot::channel();
+    tokio::task::Builder::new().name(task_name.clone().as_ref()).spawn(async move {
+        let result = match futures::future::select(Box::pin(future), drop_rx).await {
+            futures::future::Either::Left((result, _)) => result,
+            futures::future::Either::Right(_) => {
+                // Outer future was dropped, nothing left to do
+                return;
+            }
+        };
+        if let Err(_error) = result_tx.send(result) {
+            tracing::debug!(task_name, "Future finished, but receiver was already dropped",);
+        }
+    })?;
+
+    Ok(async move {
+        let result = result_rx.await;
+        drop(drop_tx);
+        result
+    })
+}
+
 pub mod chain_spec {
     use frame_support::traits::Get;
     use sc_service::Properties;
