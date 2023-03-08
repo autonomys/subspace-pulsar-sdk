@@ -352,6 +352,89 @@ fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAnd
     ReadersAndPieces::new(readers, plotted_pieces)
 }
 
+fn handler_on_sector_plotted(
+    sector_offset: usize,
+    plotted_sector: &subspace_farmer_components::plotting::PlottedSector,
+    plotting_permit: Arc<impl Send + Sync + 'static>,
+    plot_offset: usize,
+    node: &subspace_networking::Node,
+    readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
+    mut dropped_receiver: tokio::sync::broadcast::Receiver<()>,
+) {
+    let sector_index = plotted_sector.sector_index;
+
+    let new_pieces = {
+        let mut readers_and_pieces = readers_and_pieces.lock();
+        let readers_and_pieces =
+            readers_and_pieces.as_mut().expect("Initial value was populated above; qed");
+
+        let new_pieces = plotted_sector
+            .piece_indexes
+            .iter()
+            .filter(|&&piece_index| {
+                // Skip pieces that are already plotted and thus were announced
+                // before
+                !readers_and_pieces.contains_piece(&PieceIndexHash::from_index(piece_index))
+            })
+            .copied()
+            .collect::<Vec<_>>();
+
+        readers_and_pieces.add_pieces(
+            plotted_sector.piece_indexes.iter().copied().enumerate().map(
+                |(piece_offset, piece_index)| {
+                    (
+                        PieceIndexHash::from_index(piece_index),
+                        PieceDetails {
+                            plot_offset,
+                            sector_index,
+                            piece_offset: piece_offset as u64,
+                        },
+                    )
+                },
+            ),
+        );
+
+        new_pieces
+    };
+
+    if new_pieces.is_empty() {
+        // None of the pieces are new, nothing left to do here
+        return;
+    }
+
+    let node = node.clone();
+
+    // TODO: Skip those that were already announced (because they cached)
+    let publish_fut = async move {
+        new_pieces
+            .into_iter()
+            .map(|piece_index| {
+                subspace_networking::utils::pieces::announce_single_piece_index_with_backoff(
+                    piece_index,
+                    &node,
+                )
+            })
+            .collect::<FuturesUnordered<_>>()
+            .map(drop)
+            .collect::<Vec<()>>()
+            .await;
+
+        tracing::info!(sector_offset, sector_index, "Sector publishing was successful.");
+
+        // Release only after publishing is finished
+        drop(plotting_permit);
+    };
+
+    tokio::spawn(async move {
+        use futures::future::{select, Either};
+
+        let result = select(Box::pin(publish_fut), Box::pin(dropped_receiver.recv())).await;
+        if !matches!(result, Either::Right(_)) {
+            tracing::debug!("Piece publishing was cancelled due to shutdown.");
+        }
+    });
+}
+
 impl Config {
     /// Open and start farmer
     pub async fn build(
@@ -498,84 +581,19 @@ impl Config {
             let node = node.dsn_node.clone();
             // Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
-            let handler_id = single_disk_plot
-                .on_sector_plotted(Arc::new(move |(sector_offset, plotted_sector, plotting_permit)| {
-                    let plotting_permit = Arc::clone(plotting_permit);
-                    let sector_index = plotted_sector.sector_index;
-
-                    let mut dropped_receiver = dropped_sender.subscribe();
-
-                    let new_pieces = {
-                        let mut readers_and_pieces = readers_and_pieces.lock();
-                        let readers_and_pieces = readers_and_pieces
-                            .as_mut()
-                            .expect("Initial value was populated above; qed");
-
-                        let new_pieces = plotted_sector
-                            .piece_indexes
-                            .iter()
-                            .filter(|&&piece_index| {
-                                // Skip pieces that are already plotted and thus were announced
-                                // before
-                                !readers_and_pieces
-                                    .contains_piece(&PieceIndexHash::from_index(piece_index))
-                            })
-                            .copied()
-                            .collect::<Vec<_>>();
-
-                        readers_and_pieces.add_pieces(
-                            plotted_sector.piece_indexes.iter().copied().enumerate().map(
-                                |(piece_offset, piece_index)| {
-                                    (
-                                        PieceIndexHash::from_index(piece_index),
-                                        PieceDetails {
-                                            plot_offset,
-                                            sector_index,
-                                            piece_offset: piece_offset as u64,
-                                        },
-                                    )
-                                },
-                            ),
-                        );
-
-                        new_pieces
-                    };
-
-                    if new_pieces.is_empty() {
-                        // None of the pieces are new, nothing left to do here
-                        return;
-                    }
-
-                    let node = node.clone();
-                    let sector_offset = *sector_offset;
-                    // TODO: Skip those that were already announced (because they cached)
-                    let publish_fut = async move {
-                        new_pieces
-                            .into_iter()
-                            .map(|piece_index| {
-                                subspace_networking::utils::pieces::announce_single_piece_index_with_backoff(piece_index, &node)
-                            })
-                            .collect::<FuturesUnordered<_>>()
-                            .map(drop)
-                            .collect::<Vec<()>>()
-                            .await;
-
-                        tracing::info!(sector_offset, sector_index, "Sector publishing was successful.");
-
-                        // Release only after publishing is finished
-                        drop(plotting_permit);
-                    };
-
-                    tokio::spawn(async move {
-                        use futures::future::{select, Either};
-
-                        let result =
-                            select(Box::pin(publish_fut), Box::pin(dropped_receiver.recv())).await;
-                        if !matches!(result, Either::Right(_)) {
-                            tracing::debug!("Piece publishing was cancelled due to shutdown.");
-                        }
-                    });
-                }));
+            let handler_id = single_disk_plot.on_sector_plotted(Arc::new(
+                move |(sector_offset, plotted_sector, plotting_permit)| {
+                    handler_on_sector_plotted(
+                        *sector_offset,
+                        plotted_sector,
+                        Arc::clone(plotting_permit),
+                        plot_offset,
+                        &node,
+                        readers_and_pieces.clone(),
+                        dropped_sender.subscribe(),
+                    )
+                },
+            ));
 
             drop_at_exit.push(handler_id);
         }
