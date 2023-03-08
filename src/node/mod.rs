@@ -568,7 +568,7 @@ mod builder {
                 rpc_max_request_size,
                 rpc_max_response_size,
                 rpc_id_provider: None,
-                rpc_max_subs_per_conn: Some(rpc_max_subs_per_conn),
+                rpc_max_subs_per_conn,
                 ws_max_out_buffer_capacity,
                 prometheus_config: None,
                 telemetry_endpoints,
@@ -655,7 +655,7 @@ mod builder {
         /// Maximum allowed subscriptions per rpc connection
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub max_subs_per_conn: usize,
+        pub max_subs_per_conn: Option<usize>,
         /// Maximum size of the output buffer capacity for websocket
         /// connections.
         #[builder(setter(strip_option), default)]
