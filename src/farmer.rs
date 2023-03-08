@@ -33,6 +33,7 @@ use tracing_futures::Instrument;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
 use crate::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
+use crate::utils::{Defer, DropCollection};
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -385,13 +386,18 @@ impl Config {
             piece_cache
         };
 
+        let mut drop_at_exit = DropCollection::new();
+
         let piece_cache = Arc::new(tokio::sync::Mutex::new(piece_cache));
-        let announcement_processor = crate::networking::start_announcements_processor(
-            node.dsn_node.clone(),
-            Arc::clone(&piece_cache),
-            Arc::downgrade(&readers_and_pieces),
-        )
-        .context("Failed to start announcement processor")?;
+
+        drop_at_exit.push(
+            crate::networking::start_announcements_processor(
+                node.dsn_node.clone(),
+                Arc::clone(&piece_cache),
+                Arc::downgrade(&readers_and_pieces),
+            )
+            .context("Failed to start announcement processor")?,
+        );
 
         let kzg = kzg::Kzg::new(kzg::test_public_parameters());
         let records_roots_cache =
@@ -413,50 +419,16 @@ impl Config {
         ));
 
         for (disk_farm_idx, description) in plots.iter().enumerate() {
-            let directory = description.directory.clone();
-            let allocated_space = description.space_pledged.as_u64();
-            let description = SingleDiskPlotOptions {
-                allocated_space,
-                directory: directory.clone(),
-                reward_address: *reward_address,
-                node_client: node.rpc_handle.clone(),
-                kzg: kzg.clone(),
-                piece_getter: piece_getter.clone(),
-                concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
-                piece_memory_cache: node.piece_memory_cache.clone(),
-            };
-            let single_disk_plot = SingleDiskPlot::new(description, disk_farm_idx).await?;
-
-            let mut handlers = Vec::new();
-            let progress = {
-                let (sender, receiver) = watch::channel::<Option<_>>(None);
-                let handler = single_disk_plot.on_sector_plotted(Arc::new(move |sector| {
-                    let _ = sender.send(Some(sector.clone()));
-                }));
-                handlers.push(handler);
-                receiver
-            };
-            let solutions = {
-                let (sender, receiver) = watch::channel::<Option<_>>(None);
-                let handler = single_disk_plot.on_solution(Arc::new(move |solution| {
-                    let _ = sender.send(Some(solution.clone()));
-                }));
-                handlers.push(handler);
-                receiver
-            };
-            let plot = Plot {
-                directory: directory.clone(),
-                allocated_space,
-                progress,
-                solutions,
-                initial_plotting_progress: Arc::new(Mutex::new(InitialPlottingProgress {
-                    starting_sector: single_disk_plot.plotted_sectors_count(),
-                    current_sector: single_disk_plot.plotted_sectors_count(),
-                    total_sectors: allocated_space / subspace_core_primitives::PLOT_SECTOR_SIZE,
-                })),
-                _handlers: handlers,
-            };
-            plot_info.insert(directory, plot);
+            let (plot, single_disk_plot) = Plot::new(
+                disk_farm_idx,
+                reward_address,
+                node,
+                Arc::clone(&piece_getter),
+                Arc::clone(&concurrent_plotting_semaphore),
+                description,
+            )
+            .await?;
+            plot_info.insert(plot.directory.clone(), plot);
             single_disk_plots.push(single_disk_plot);
         }
 
@@ -511,13 +483,16 @@ impl Config {
         };
         readers_and_pieces.lock().replace(new_readers_and_pieces);
 
-        let drop_at_exit = single_disk_plots.iter().enumerate().map(|(plot_offset, single_disk_plot)| {
+        for (plot_offset, single_disk_plot) in single_disk_plots.iter().enumerate() {
             let readers_and_pieces = Arc::clone(&readers_and_pieces);
 
             // We are not going to send anything here, but dropping of sender on dropping of
             // corresponding `SingleDiskPlot` will allow us to stop background tasks.
             let (dropped_sender, _dropped_receiver) = tokio::sync::broadcast::channel::<()>(1);
-            let another_dropped_sender = dropped_sender.clone();
+            drop_at_exit.push(Defer::new({
+                let dropped_sender = dropped_sender.clone();
+                move || drop(dropped_sender.send(()))
+            }));
 
             let node = node.dsn_node.clone();
             // Collect newly plotted pieces
@@ -600,10 +575,9 @@ impl Config {
                         }
                     });
                 }));
-            Box::new((handler_id, another_dropped_sender)) as Box<dyn std::any::Any>
-        })
-        .chain(Some(Box::new(announcement_processor) as Box<dyn std::any::Any>))
-        .collect();
+
+            drop_at_exit.push(handler_id);
+        }
 
         let mut single_disk_plots_stream =
             single_disk_plots.into_iter().map(SingleDiskPlot::run).collect::<FuturesUnordered<_>>();
@@ -666,7 +640,7 @@ pub struct Farmer {
         >,
     >,
     base_path: PathBuf,
-    _drop_at_exit: Vec<Box<dyn std::any::Any>>,
+    _drop_at_exit: DropCollection,
 }
 
 /// Info about some plot
@@ -746,7 +720,7 @@ pub struct Plot {
     solutions: watch::Receiver<Option<SolutionResponse>>,
     initial_plotting_progress: Arc<Mutex<InitialPlottingProgress>>,
     allocated_space: u64,
-    _handlers: Vec<event_listener_primitives::HandlerId>,
+    _drop_at_exit: DropCollection,
 }
 
 #[pin_project::pin_project]
@@ -807,6 +781,61 @@ impl Stream for InitialPlottingProgressStream {
 }
 
 impl Plot {
+    async fn new(
+        disk_farm_idx: usize,
+        reward_address: PublicKey,
+        node: &Node,
+        piece_getter: impl subspace_farmer_components::plotting::PieceGetter + Send + 'static,
+        concurrent_plotting_semaphore: Arc<tokio::sync::Semaphore>,
+        description: &PlotDescription,
+    ) -> Result<(Self, SingleDiskPlot), BuildError> {
+        let directory = description.directory.clone();
+        let allocated_space = description.space_pledged.as_u64();
+        let description = SingleDiskPlotOptions {
+            allocated_space,
+            directory: directory.clone(),
+            reward_address: *reward_address,
+            node_client: node.rpc_handle.clone(),
+            kzg: kzg::Kzg::new(kzg::test_public_parameters()),
+            piece_getter,
+            concurrent_plotting_semaphore,
+            piece_memory_cache: node.piece_memory_cache.clone(),
+        };
+        let single_disk_plot = SingleDiskPlot::new(description, disk_farm_idx).await?;
+        let mut drop_at_exit = DropCollection::new();
+
+        let progress = {
+            let (sender, receiver) = watch::channel::<Option<_>>(None);
+            drop_at_exit.push(single_disk_plot.on_sector_plotted(Arc::new(move |sector| {
+                let _ = sender.send(Some(sector.clone()));
+            })));
+            receiver
+        };
+        let solutions = {
+            let (sender, receiver) = watch::channel::<Option<_>>(None);
+            drop_at_exit.push(single_disk_plot.on_solution(Arc::new(move |solution| {
+                let _ = sender.send(Some(solution.clone()));
+            })));
+            receiver
+        };
+
+        Ok((
+            Self {
+                directory: directory.clone(),
+                allocated_space,
+                progress,
+                solutions,
+                initial_plotting_progress: Arc::new(Mutex::new(InitialPlottingProgress {
+                    starting_sector: single_disk_plot.plotted_sectors_count(),
+                    current_sector: single_disk_plot.plotted_sectors_count(),
+                    total_sectors: allocated_space / subspace_core_primitives::PLOT_SECTOR_SIZE,
+                })),
+                _drop_at_exit: drop_at_exit,
+            },
+            single_disk_plot,
+        ))
+    }
+
     /// Plot location
     pub fn directory(&self) -> &PathBuf {
         &self.directory
