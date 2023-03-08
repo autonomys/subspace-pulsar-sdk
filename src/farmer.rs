@@ -468,8 +468,9 @@ impl Config {
         let base_path = cache.directory;
         let readers_and_pieces = Arc::clone(&node.farmer_readers_and_pieces);
 
-        let piece_cache = {
-            let piece_cache_db_path = base_path.join("piece_cache_db");
+        let piece_cache_db_path = base_path.join("piece_cache_db");
+
+        let piece_cache = Arc::new(tokio::sync::Mutex::new({
             let provider_db_path = base_path.join("providers_db");
             // TODO: Remove this migration code in the future
             {
@@ -487,28 +488,29 @@ impl Config {
                 "Initializing provider storage..."
             );
 
-            tracing::info!(
-                db_path = ?piece_cache_db_path,
-                size = ?piece_cache_size,
-                "Initializing piece cache..."
-            );
-
             let peer_id = node.dsn_node.id();
 
             let db_provider_storage =
                 ParityDbProviderStorage::new(&provider_db_path, provided_keys_limit, peer_id)
                     .context("Failed to create parity db provider storage")?;
 
+            tracing::info!(
+                db_path = ?piece_cache_db_path,
+                size = ?piece_cache_size,
+                "Initializing piece cache..."
+            );
+
             let piece_store = ParityDbStore::new(&piece_cache_db_path)
                 .context("Failed to create parity db piece store")?;
-            *node.farmer_piece_store.lock().await = Some(piece_store.clone());
 
-            let piece_cache = FarmerPieceCache::new(piece_store, piece_cache_size, peer_id);
+            let piece_cache = FarmerPieceCache::new(piece_store.clone(), piece_cache_size, peer_id);
 
             tracing::info!(
                 current_size = ?piece_cache.size(),
                 "Piece cache initialized successfully"
             );
+
+            node.farmer_piece_store.lock().await.replace(piece_store);
             node.farmer_provider_storage.swap(Some(FarmerProviderStorage::new(
                 peer_id,
                 Arc::clone(&readers_and_pieces),
@@ -517,11 +519,9 @@ impl Config {
             )));
 
             piece_cache
-        };
+        }));
 
         let mut drop_at_exit = DropCollection::new();
-
-        let piece_cache = Arc::new(tokio::sync::Mutex::new(piece_cache));
 
         drop_at_exit.push(
             crate::networking::start_announcements_processor(
@@ -623,12 +623,28 @@ impl Config {
         });
 
         drop_at_exit.push(Defer::new({
+            const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
+
             let piece_store = Arc::clone(&node.farmer_piece_store);
             let provider_storage = node.farmer_provider_storage.clone();
             move || {
                 let _ = drop_sender.send(());
                 provider_storage.swap(None);
                 piece_store.blocking_lock().take();
+
+                // HACK: Poll on piece store creation
+                loop {
+                    let result = ParityDbStore::<
+                        subspace_networking::libp2p::kad::record::Key,
+                        subspace_core_primitives::Piece,
+                    >::new(&piece_cache_db_path);
+
+                    match result.map(drop) {
+                        // If parity db is still locked wait on it
+                        Err(parity_db::Error::Locked(_)) => std::thread::sleep(PIECE_STORE_POLL),
+                        _ => return,
+                    }
+                }
             }
         }));
 
@@ -944,29 +960,12 @@ impl Farmer {
 
     /// Stops farming, closes plots, and sends signal to the node
     pub async fn close(mut self) -> anyhow::Result<()> {
-        const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
-
         let result_receiver = self.result_receiver.take().expect("Handle is always there");
-        let piece_cache_db_path = self.base_path.join("piece_cache_db");
 
         // Otherwise tokio panics because we lock async thread
         tokio::task::spawn_blocking(move || drop(self)).await?;
 
-        result_receiver.await??;
-
-        // HACK: Poll on piece store creation
-        loop {
-            let result = ParityDbStore::<
-                subspace_networking::libp2p::kad::record::Key,
-                subspace_core_primitives::Piece,
-            >::new(&piece_cache_db_path);
-
-            match result.map(drop) {
-                // If parity db is still locked wait on it
-                Err(parity_db::Error::Locked(_)) => tokio::time::sleep(PIECE_STORE_POLL).await,
-                result => return result.context("Parity db store failure"),
-            }
-        }
+        result_receiver.await?
     }
 }
 
