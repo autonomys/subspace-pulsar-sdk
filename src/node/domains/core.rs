@@ -389,7 +389,7 @@ mod tests {
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                &node,
                 &[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::gb(1)).unwrap()],
                 CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
             )
@@ -408,6 +408,6 @@ mod tests {
             .unwrap();
 
         farmer.close().await.unwrap();
-        node.close().await;
+        node.close().await.unwrap();
     }
 }

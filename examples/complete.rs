@@ -23,7 +23,7 @@ async fn main() {
         // .listen_on("/ip4/0.0.0.0/tcp/40333".parse().unwrap())
         .build(
             reward_address,
-            node.clone(),
+            &node,
             &plots,
             CacheDescription::new("cache", ByteSize::mib(100)).unwrap(),
         )
@@ -52,7 +52,7 @@ async fn main() {
     dbg!(farmer.get_info().await.unwrap());
 
     farmer.close().await.unwrap();
-    node.close().await;
+    node.close().await.unwrap();
 
     // Restarting
     let node = Node::builder()
@@ -66,7 +66,7 @@ async fn main() {
     let farmer = Farmer::builder()
         .build(
             reward_address,
-            node.clone(),
+            &node,
             &[PlotDescription::new("plot", ByteSize::gb(10)).unwrap()],
             CacheDescription::new("cache", ByteSize::mib(100)).unwrap(),
         )
@@ -74,7 +74,7 @@ async fn main() {
         .expect("Failed to init a farmer");
 
     farmer.close().await.unwrap();
-    node.close().await;
+    node.close().await.unwrap();
 
     // Delete everything
     for plot in plots {

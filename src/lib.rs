@@ -224,7 +224,7 @@ mod tests {
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                &node,
                 &plot_descriptions,
                 CacheDescription::minimal(cache_dir.as_ref()),
             )
@@ -234,7 +234,7 @@ mod tests {
         node.subscribe_new_blocks().await.unwrap().take(2).for_each(|_| async move {}).await;
 
         farmer.close().await.unwrap();
-        node.close().await;
+        node.close().await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
