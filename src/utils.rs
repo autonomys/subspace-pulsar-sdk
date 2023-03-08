@@ -128,6 +128,55 @@ pub fn is_default<T: Default + PartialEq>(t: &T) -> bool {
     t == &T::default()
 }
 
+pub struct Defer<F: FnOnce()>(Option<F>);
+
+impl<F: FnOnce()> Defer<F> {
+    pub fn new(f: F) -> Self {
+        Self(Some(f))
+    }
+}
+
+impl<F: FnOnce()> Drop for Defer<F> {
+    fn drop(&mut self) {
+        (self.0.take().expect("Always set"))();
+    }
+}
+
+#[derive(Default, derivative::Derivative)]
+#[derivative(Debug)]
+pub struct DropCollection {
+    #[derivative(Debug = "ignore")]
+    vec: Vec<Box<dyn Send>>,
+}
+
+impl DropCollection {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn push<T: Send + 'static>(&mut self, t: T) {
+        self.vec.push(Box::new(t))
+    }
+}
+
+impl<T: Send + 'static> FromIterator<T> for DropCollection {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let mut me = Self::new();
+        for item in iter {
+            me.push(item);
+        }
+        me
+    }
+}
+
+impl<T: Send + 'static> Extend<T> for DropCollection {
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        for item in iter {
+            self.push(item);
+        }
+    }
+}
+
 pub mod chain_spec {
     use frame_support::traits::Get;
     use sc_service::Properties;
