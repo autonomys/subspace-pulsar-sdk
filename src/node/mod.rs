@@ -1617,7 +1617,7 @@ impl Node {
 
     /// Leaves the network and gracefully shuts down
     pub async fn close(mut self) -> anyhow::Result<()> {
-        const BUSY_WAIT_INTERVAL: Duration = Duration::from_nanos(1);
+        const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
 
         let (stop_sender, stop_receiver) = oneshot::channel();
         let _ = match self.stop_sender.send(stop_sender).await {

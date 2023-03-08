@@ -3,6 +3,7 @@ use std::io;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context;
 pub use builder::{Builder, Config};
@@ -903,6 +904,8 @@ impl Farmer {
 
     /// Stops farming, closes plots, and sends signal to the node
     pub async fn close(mut self) -> anyhow::Result<()> {
+        const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
+
         let Some(cmd_sender) = self.cmd_sender.take() else {
             return Ok(());
         };
@@ -923,8 +926,7 @@ impl Farmer {
 
             match result.map(drop) {
                 // If parity db is still locked wait on it
-                Err(parity_db::Error::Locked(_)) =>
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await,
+                Err(parity_db::Error::Locked(_)) => tokio::time::sleep(PIECE_STORE_POLL).await,
                 result => return result.context("Parity db store failure"),
             }
         }
