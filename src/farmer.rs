@@ -532,16 +532,13 @@ impl Config {
             .context("Failed to start announcement processor")?,
         );
 
-        let kzg = kzg::Kzg::new(kzg::test_public_parameters());
-        let records_roots_cache =
-            parking_lot::Mutex::new(lru::LruCache::new(RECORDS_ROOTS_CACHE_SIZE));
         let piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
             node.dsn_node.clone(),
             Some(RecordsRootPieceValidator::new(
                 node.dsn_node.clone(),
                 node.rpc_handle.clone(),
-                kzg.clone(),
-                records_roots_cache,
+                kzg::Kzg::new(kzg::test_public_parameters()),
+                parking_lot::Mutex::new(lru::LruCache::new(RECORDS_ROOTS_CACHE_SIZE)),
             )),
             true,
         );
@@ -602,6 +599,9 @@ impl Config {
             single_disk_plots.into_iter().map(SingleDiskPlot::run).collect::<FuturesUnordered<_>>();
 
         let (cmd_sender, cmd_receiver) = oneshot::channel::<()>();
+        drop_at_exit.push(Defer::new(move || {
+            let _ = cmd_sender.send(());
+        }));
 
         let handle = tokio::task::spawn_blocking({
             let handle = tokio::runtime::Handle::current();
@@ -623,13 +623,24 @@ impl Config {
             }
         });
 
+        drop_at_exit.push(Defer::new({
+            let provider_storage = node.farmer_provider_storage.clone();
+            move || {
+                provider_storage.swap(None);
+            }
+        }));
+
+        drop_at_exit.push(Defer::new({
+            let piece_store = Arc::clone(&node.farmer_piece_store);
+            move || {
+                piece_store.blocking_lock().take();
+            }
+        }));
+
         Ok(Farmer {
-            cmd_sender: Some(cmd_sender),
             reward_address,
             plot_info,
-            handle,
-            provider_storage: node.farmer_provider_storage.clone(),
-            piece_store: Arc::clone(&node.farmer_piece_store),
+            handle: Some(handle),
             base_path,
             _drop_at_exit: drop_at_exit,
         })
@@ -641,23 +652,9 @@ impl Config {
 #[derivative(Debug)]
 #[must_use = "Farmer should be closed"]
 pub struct Farmer {
-    cmd_sender: Option<oneshot::Sender<()>>,
     reward_address: PublicKey,
     plot_info: HashMap<PathBuf, Plot>,
-    handle: tokio::task::JoinHandle<anyhow::Result<()>>,
-    provider_storage:
-        crate::networking::provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage>,
-    #[derivative(Debug = "ignore")]
-    piece_store: Arc<
-        Mutex<
-            Option<
-                ParityDbStore<
-                    subspace_networking::libp2p::kad::record::Key,
-                    subspace_core_primitives::Piece,
-                >,
-            >,
-        >,
-    >,
+    handle: Option<tokio::task::JoinHandle<anyhow::Result<()>>>,
     base_path: PathBuf,
     _drop_at_exit: DropCollection,
 }
@@ -954,16 +951,13 @@ impl Farmer {
     pub async fn close(mut self) -> anyhow::Result<()> {
         const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
 
-        let Some(cmd_sender) = self.cmd_sender.take() else {
-            return Ok(());
-        };
-        let _ = cmd_sender.send(());
-
-        self.provider_storage.swap(None);
-        (&mut self.handle).await??;
-        self.piece_store.lock().await.take();
+        let handle = self.handle.take().expect("Handle is always there");
         let piece_cache_db_path = self.base_path.join("piece_cache_db");
-        drop(self);
+
+        // Otherwise tokio panics because we lock async thread
+        tokio::task::spawn_blocking(move || drop(self)).await?;
+
+        handle.await??;
 
         // HACK: Poll on piece store creation
         loop {
