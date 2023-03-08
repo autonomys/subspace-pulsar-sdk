@@ -302,6 +302,56 @@ pub(crate) fn get_piece_by_hash(
 
 const RECORDS_ROOTS_CACHE_SIZE: NonZeroUsize = NonZeroUsize::new(1_000_000).expect("Not zero; qed");
 
+fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAndPieces {
+    // Store piece readers so we can reference them later
+    let readers = single_disk_plots.iter().map(SingleDiskPlot::piece_reader).collect();
+
+    tracing::debug!("Collecting already plotted pieces");
+
+    // Collect already plotted pieces
+    let plotted_pieces: HashMap<PieceIndexHash, PieceDetails> = single_disk_plots
+        .iter()
+        .enumerate()
+        .flat_map(|(plot_offset, single_disk_plot)| {
+            single_disk_plot
+                .plotted_sectors()
+                .enumerate()
+                .filter_map(move |(sector_offset, plotted_sector_result)| {
+                    match plotted_sector_result {
+                        Ok(plotted_sector) => Some(plotted_sector),
+                        Err(error) => {
+                            tracing::error!(
+                                %error,
+                                %plot_offset,
+                                %sector_offset,
+                                "Failed reading plotted sector on startup, skipping"
+                            );
+                            None
+                        }
+                    }
+                })
+                .flat_map(move |plotted_sector| {
+                    plotted_sector.piece_indexes.into_iter().enumerate().map(
+                        move |(piece_offset, piece_index)| {
+                            (
+                                PieceIndexHash::from_index(piece_index),
+                                PieceDetails {
+                                    plot_offset,
+                                    sector_index: plotted_sector.sector_index,
+                                    piece_offset: piece_offset as u64,
+                                },
+                            )
+                        },
+                    )
+                })
+        })
+        // We implicitly ignore duplicates here, reading just from one of the plots
+        .collect();
+    tracing::debug!("Finished collecting already plotted pieces");
+
+    ReadersAndPieces::new(readers, plotted_pieces)
+}
+
 impl Config {
     /// Open and start farmer
     pub async fn build(
@@ -432,56 +482,7 @@ impl Config {
             single_disk_plots.push(single_disk_plot);
         }
 
-        let new_readers_and_pieces = {
-            // Store piece readers so we can reference them later
-            let readers = single_disk_plots.iter().map(SingleDiskPlot::piece_reader).collect();
-
-            tracing::debug!("Collecting already plotted pieces");
-
-            // Collect already plotted pieces
-            let plotted_pieces: HashMap<PieceIndexHash, PieceDetails> = single_disk_plots
-                .iter()
-                .enumerate()
-                .flat_map(|(plot_offset, single_disk_plot)| {
-                    single_disk_plot
-                        .plotted_sectors()
-                        .enumerate()
-                        .filter_map(move |(sector_offset, plotted_sector_result)| {
-                            match plotted_sector_result {
-                                Ok(plotted_sector) => Some(plotted_sector),
-                                Err(error) => {
-                                    tracing::error!(
-                                        %error,
-                                        %plot_offset,
-                                        %sector_offset,
-                                        "Failed reading plotted sector on startup, skipping"
-                                    );
-                                    None
-                                }
-                            }
-                        })
-                        .flat_map(move |plotted_sector| {
-                            plotted_sector.piece_indexes.into_iter().enumerate().map(
-                                move |(piece_offset, piece_index)| {
-                                    (
-                                        PieceIndexHash::from_index(piece_index),
-                                        PieceDetails {
-                                            plot_offset,
-                                            sector_index: plotted_sector.sector_index,
-                                            piece_offset: piece_offset as u64,
-                                        },
-                                    )
-                                },
-                            )
-                        })
-                })
-                // We implicitly ignore duplicates here, reading just from one of the plots
-                .collect();
-            tracing::debug!("Finished collecting already plotted pieces");
-
-            ReadersAndPieces::new(readers, plotted_pieces)
-        };
-        readers_and_pieces.lock().replace(new_readers_and_pieces);
+        readers_and_pieces.lock().replace(create_readers_and_pieces(&single_disk_plots));
 
         for (plot_offset, single_disk_plot) in single_disk_plots.iter().enumerate() {
             let readers_and_pieces = Arc::clone(&readers_and_pieces);
