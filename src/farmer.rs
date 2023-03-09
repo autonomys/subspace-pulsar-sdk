@@ -548,7 +548,6 @@ impl Config {
                 // comment is in multiple files)
                 parking_lot::Mutex::new(lru::LruCache::new(RECORDS_ROOTS_CACHE_SIZE)),
             )),
-            true,
         );
         let piece_getter = Arc::new(FarmerPieceGetter::new(
             NodePieceGetter::new(DsnPieceGetter::new(piece_provider), node.piece_cache.clone()),
