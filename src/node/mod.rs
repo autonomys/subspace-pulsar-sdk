@@ -1220,7 +1220,7 @@ impl Config {
         sc_storage_monitor::StorageMonitorService::try_spawn(
             // TODO: move storage monitor parameters to base node configuration
             sc_storage_monitor::StorageMonitorParams {
-                threshold: 1000, // MB
+                threshold: 1000,   // MB
                 polling_period: 5, // seconds
             },
             database_source,
@@ -1731,10 +1731,7 @@ pub(crate) fn get_root_block_by_segment_indexes(
             let max_segment_index = root_block_cache.max_segment_index();
 
             // several last segment indexes
-            (0..=max_segment_index)
-                .rev()
-                .take(block_limit as usize)
-                .collect::<Vec<_>>()
+            (0..=max_segment_index).rev().take(block_limit as usize).collect::<Vec<_>>()
         }
     };
 
