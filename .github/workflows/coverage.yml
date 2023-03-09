@@ -7,6 +7,12 @@ on:
       - '**.md'
       - '.gitignore'
 
+env:
+  # Not needed in CI, should make things a bit faster
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+  MAX_TARGET_SIZE: 1024 # MB
+
 jobs:
   code-coverage:
     runs-on: ubuntu-latest
@@ -39,9 +45,6 @@ jobs:
           test -x ~/.cargo/bin/cargo-sweep || cargo install cargo-sweep
           test -x ~/.cargo/bin/cargo-cache || cargo install cargo-cache --no-default-features --features ci-autoclean cargo-cache
 
-      - name: Register artifacts
-        run: cargo sweep --stamp
-
       - name: Clean unused crate source checkouts and git repo checkouts
         run: cargo cache
 
@@ -58,4 +61,4 @@ jobs:
           fail_ci_if_error: true
 
       - name: Clean unused artifacts
-        run: cargo sweep --file
+        run: cargo sweep --maxsize $MAX_TARGET_SIZE
