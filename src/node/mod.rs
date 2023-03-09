@@ -1712,17 +1712,40 @@ impl Node {
     }
 }
 
+const ROOT_BLOCK_NUMBER_LIMIT: u64 = 100;
+
 pub(crate) fn get_root_block_by_segment_indexes(
-    RootBlockRequest { segment_indexes }: &RootBlockRequest,
+    req: &RootBlockRequest,
     root_block_cache: &RootBlockCache<impl sc_client_api::AuxStore>,
 ) -> Option<RootBlockResponse> {
+    let segment_indexes = match req {
+        RootBlockRequest::SegmentIndexes { segment_indexes } => segment_indexes.clone(),
+        RootBlockRequest::LastRootBlocks { root_block_number } => {
+            let mut block_limit = *root_block_number;
+            if *root_block_number > ROOT_BLOCK_NUMBER_LIMIT {
+                tracing::debug!(%root_block_number, "Root block number exceeded the limit.");
+
+                block_limit = ROOT_BLOCK_NUMBER_LIMIT;
+            }
+
+            let max_segment_index = root_block_cache.max_segment_index();
+
+            // several last segment indexes
+            (0..=max_segment_index)
+                .rev()
+                .take(block_limit as usize)
+                .collect::<Vec<_>>()
+        }
+    };
+
     let internal_result = segment_indexes
         .iter()
         .map(|segment_index| root_block_cache.get_root_block(*segment_index))
-        .collect::<Result<Vec<Option<subspace_core_primitives::RootBlock>>, _>>();
+        .collect::<Result<Option<Vec<subspace_core_primitives::RootBlock>>, _>>();
 
     match internal_result {
-        Ok(root_blocks) => Some(RootBlockResponse { root_blocks }),
+        Ok(Some(root_blocks)) => Some(RootBlockResponse { root_blocks }),
+        Ok(None) => None,
         Err(error) => {
             tracing::error!(%error, "Failed to get root blocks from cache");
 
