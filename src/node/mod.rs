@@ -491,7 +491,7 @@ mod builder {
                     name,
                     client_id,
                     enable_mdns,
-                    allow_private_ipv4,
+                    allow_private_ip,
                     allow_non_globals_in_dht,
                 } = network;
                 let name = name.unwrap_or_else(|| {
@@ -516,7 +516,7 @@ mod builder {
                     listen_addresses,
                     boot_nodes: chain_spec.boot_nodes().iter().cloned().chain(boot_nodes).collect(),
                     force_synced,
-                    transport: TransportConfig::Normal { enable_mdns, allow_private_ipv4 },
+                    transport: TransportConfig::Normal { enable_mdns, allow_private_ip },
                     extra_sets: vec![NonDefaultSetConfig::new(
                         ProtocolName::Static("/subspace/cross-domain-messages"),
                         40,
@@ -711,7 +711,7 @@ mod builder {
         /// Listen on some address for other nodes
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub allow_private_ipv4: bool,
+        pub allow_private_ip: bool,
         /// Allow non globals in network DHT
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
@@ -741,7 +741,7 @@ mod builder {
     impl NetworkBuilder {
         /// Dev chain configuration
         pub fn dev() -> Self {
-            Self::default().force_synced(true).allow_private_ipv4(true)
+            Self::default().force_synced(true).allow_private_ip(true)
         }
 
         /// Gemini 3c configuration
@@ -986,6 +986,7 @@ impl Config {
         } = self;
         let base = base.configuration(directory.as_ref(), chain_spec.clone()).await;
         let name = base.network.node_name.clone();
+        let database_source = base.database.clone();
 
         let partial_components =
             subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&base)
@@ -1215,6 +1216,17 @@ impl Config {
             subspace_service::new_full(configuration, partial_components, true, slot_proportion)
                 .await
                 .context("Failed to build a full subspace node")?;
+
+        sc_storage_monitor::StorageMonitorService::try_spawn(
+            // TODO: move storage monitor parameters to base node configuration
+            sc_storage_monitor::StorageMonitorParams {
+                threshold: 1000, // MB
+                polling_period: 5, // seconds
+            },
+            database_source,
+            &full_client.task_manager.spawn_essential_handle(),
+        )
+        .context("Failed to start storage monitor")?;
 
         let system_domain = if let Some(config) = system_domain {
             use sc_service::ChainSpecExtension;
