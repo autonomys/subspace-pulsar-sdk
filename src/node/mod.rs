@@ -1,7 +1,7 @@
 use std::io;
 use std::num::{NonZeroU64, NonZeroUsize};
 use std::path::Path;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -568,7 +568,7 @@ mod builder {
                 rpc_max_request_size,
                 rpc_max_response_size,
                 rpc_id_provider: None,
-                rpc_max_subs_per_conn: Some(rpc_max_subs_per_conn),
+                rpc_max_subs_per_conn,
                 ws_max_out_buffer_capacity,
                 prometheus_config: None,
                 telemetry_endpoints,
@@ -655,7 +655,7 @@ mod builder {
         /// Maximum allowed subscriptions per rpc connection
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub max_subs_per_conn: usize,
+        pub max_subs_per_conn: Option<usize>,
         /// Maximum size of the output buffer capacity for websocket
         /// connections.
         #[builder(setter(strip_option), default)]
@@ -1194,9 +1194,14 @@ impl Config {
             sync_from_dsn,
         };
 
-        tokio::spawn(async move {
-            node_runner.run().await;
-        });
+        let node_runner_future = subspace_farmer::utils::run_future_in_dedicated_thread(
+            Box::pin(async move {
+                node_runner.run().await;
+                tracing::error!("Exited from node runner future");
+            }),
+            // TODO: Add propper thread name or remove in favour of `tokio::task::Builder`
+            "subspace-sdk-networking".to_owned(),
+        )?;
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);
         let mut full_client =
@@ -1234,9 +1239,9 @@ impl Config {
             rpc_handlers,
             network_starter,
             network,
+            backend,
 
             select_chain: _,
-            backend: _,
             reward_signing_notification_stream: _,
             archived_segment_notification_stream: _,
             transaction_pool: _,
@@ -1244,26 +1249,23 @@ impl Config {
             new_slot_notification_stream: _,
         } = full_client;
 
-        let client = Arc::downgrade(&client);
         let rpc_handle = crate::utils::Rpc::new(&rpc_handlers);
         network_starter.start_network();
         let (stop_sender, mut stop_receiver) = mpsc::channel::<oneshot::Sender<()>>(1);
 
         tokio::spawn(async move {
-            let stop_sender = futures::select! {
-                opt_sender = stop_receiver.next() => {
-                    match opt_sender {
-                        Some(sender) => sender,
-                        None => return,
+            let opt_stop_sender = async move {
+                futures::select! {
+                    opt_sender = stop_receiver.next() => opt_sender,
+                    result = task_manager.future().fuse() => {
+                        result.expect("Task from manager paniced");
+                        None
                     }
+                    _ = node_runner_future.fuse() => None,
                 }
-                result = task_manager.future().fuse() => {
-                    result.expect("Task from manager paniced");
-                    return;
-                }
-            };
-            drop(task_manager);
-            let _ = stop_sender.send(());
+            }
+            .await;
+            opt_stop_sender.map(|stop_sender| stop_sender.send(()));
         });
 
         tracing::debug!("Started node");
@@ -1281,6 +1283,7 @@ impl Config {
             farmer_provider_storage,
             piece_cache,
             piece_memory_cache,
+            backend,
         })
     }
 }
@@ -1316,16 +1319,17 @@ pub(crate) type NewFull = subspace_service::NewFull<
 >;
 
 /// Node structure
-#[derive(Clone, Derivative)]
+#[derive(Derivative)]
 #[derivative(Debug)]
+#[must_use = "Node should be closed"]
 pub struct Node {
     system_domain: Option<SystemDomainNode>,
     #[derivative(Debug = "ignore")]
-    client: Weak<FullClient>,
+    client: Arc<FullClient>,
     #[derivative(Debug = "ignore")]
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     pub(crate) rpc_handle: crate::utils::Rpc,
-    stop_sender: mpsc::Sender<oneshot::Sender<()>>,
+    pub(crate) stop_sender: mpsc::Sender<oneshot::Sender<()>>,
     pub(crate) dsn_node: subspace_networking::Node,
     name: String,
     pub(crate) farmer_readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
@@ -1345,6 +1349,8 @@ pub struct Node {
     pub(crate) piece_cache: NodePieceCache<FullClient>,
     #[derivative(Debug = "ignore")]
     pub(crate) piece_memory_cache: PieceMemoryCache,
+    #[derivative(Debug = "ignore")]
+    backend: Arc<subspace_service::FullBackend>,
 }
 
 /// Hash type
@@ -1536,7 +1542,6 @@ impl Node {
         .map_err(|_| anyhow::anyhow!("Failed to connect to the network"))?;
 
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
-        let client = self.client().context("Failed to fetch best block")?;
         let inner = tokio_stream::wrappers::ReceiverStream::new(receiver);
 
         let result = backoff::future::retry(check_synced_backoff.clone(), || {
@@ -1558,7 +1563,7 @@ impl Node {
             Err(None) => return Ok(SyncingProgressStream { inner, at: 0, target: 0 }),
         };
 
-        let at = client.chain_info().best_number;
+        let at = self.client.chain_info().best_number;
         sender
             .send(Ok(SyncingProgress { target, at, status }))
             .await
@@ -1566,6 +1571,7 @@ impl Node {
 
         tokio::spawn({
             let network = Arc::clone(&self.network);
+            let client = Arc::clone(&self.client);
             async move {
                 loop {
                     tokio::time::sleep(CHECK_SYNCED_EVERY).await;
@@ -1612,10 +1618,24 @@ impl Node {
     }
 
     /// Leaves the network and gracefully shuts down
-    pub async fn close(mut self) {
+    pub async fn close(mut self) -> anyhow::Result<()> {
+        const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
+
         let (stop_sender, stop_receiver) = oneshot::channel();
-        drop(self.stop_sender.send(stop_sender).await);
-        let _ = stop_receiver.await;
+        let _ = match self.stop_sender.send(stop_sender).await {
+            Err(_) => return Err(anyhow::anyhow!("Node was already closed")),
+            Ok(()) => stop_receiver.await,
+        };
+        let backend = Arc::clone(&self.backend);
+        drop(self);
+
+        // Busy wait till backend exits
+        // TODO: is it the only wait to check that substrate node exited?
+        while Arc::strong_count(&backend) != 1 {
+            tokio::time::sleep(BUSY_WAIT_INTERVAL).await;
+        }
+
+        Ok(())
     }
 
     /// Tells if the node was closed
@@ -1628,10 +1648,6 @@ impl Node {
         tokio::fs::remove_dir_all(path).await
     }
 
-    fn client(&self) -> anyhow::Result<Arc<FullClient>> {
-        self.client.upgrade().ok_or_else(|| anyhow::anyhow!("The node was already closed"))
-    }
-
     /// Returns system domain node if one was setted up
     pub fn system_domain(&self) -> Option<SystemDomainNode> {
         self.system_domain.as_ref().cloned()
@@ -1639,7 +1655,6 @@ impl Node {
 
     /// Get node info
     pub async fn get_info(&self) -> anyhow::Result<Info> {
-        let client = self.client().context("Failed to fetch node info")?;
         let NetworkState { connected_peers, not_connected_peers, .. } = self
             .network
             .network_state()
@@ -1653,10 +1668,10 @@ impl Node {
             finalized_number,
             block_gap,
             ..
-        } = client.chain_info();
+        } = self.client.chain_info();
         let version = self.rpc_handle.runtime_version(Some(best_hash)).await?;
         let FarmerProtocolInfo { total_pieces, .. } =
-            self.farmer_app_info().await.map_err(anyhow::Error::msg)?.protocol_info;
+            self.rpc_handle.farmer_app_info().await.map_err(anyhow::Error::msg)?.protocol_info;
         Ok(Info {
             chain: ChainInfo { genesis_hash },
             best_block: (best_hash, best_number),
@@ -1727,17 +1742,16 @@ mod farmer_rpc_client {
     use super::*;
 
     #[async_trait::async_trait]
-    impl NodeClient for Node {
+    impl NodeClient for crate::utils::Rpc {
         async fn farmer_app_info(&self) -> Result<FarmerAppInfo, Error> {
-            Ok(self.rpc_handle.get_farmer_app_info().await?)
+            Ok(self.get_farmer_app_info().await?)
         }
 
         async fn subscribe_slot_info(
             &self,
         ) -> Result<Pin<Box<dyn Stream<Item = SlotInfo> + Send + 'static>>, Error> {
             Ok(Box::pin(
-                self.rpc_handle
-                    .subscribe_slot_info()
+                SubspaceRpcApiClient::subscribe_slot_info(self)
                     .await?
                     .filter_map(|result| futures::future::ready(result.ok())),
             ))
@@ -1747,7 +1761,7 @@ mod farmer_rpc_client {
             &self,
             solution_response: SolutionResponse,
         ) -> Result<(), Error> {
-            Ok(self.rpc_handle.submit_solution_response(solution_response).await?)
+            Ok(SubspaceRpcApiClient::submit_solution_response(self, solution_response).await?)
         }
 
         async fn subscribe_reward_signing(
@@ -1755,8 +1769,7 @@ mod farmer_rpc_client {
         ) -> Result<Pin<Box<dyn Stream<Item = RewardSigningInfo> + Send + 'static>>, Error>
         {
             Ok(Box::pin(
-                self.rpc_handle
-                    .subscribe_reward_signing()
+                SubspaceRpcApiClient::subscribe_reward_signing(self)
                     .await?
                     .filter_map(|result| futures::future::ready(result.ok())),
             ))
@@ -1766,15 +1779,14 @@ mod farmer_rpc_client {
             &self,
             reward_signature: RewardSignatureResponse,
         ) -> Result<(), Error> {
-            Ok(self.rpc_handle.submit_reward_signature(reward_signature).await?)
+            Ok(SubspaceRpcApiClient::submit_reward_signature(self, reward_signature).await?)
         }
 
         async fn subscribe_archived_segments(
             &self,
         ) -> Result<Pin<Box<dyn Stream<Item = ArchivedSegment> + Send + 'static>>, Error> {
             Ok(Box::pin(
-                self.rpc_handle
-                    .subscribe_archived_segment()
+                SubspaceRpcApiClient::subscribe_archived_segment(self)
                     .await?
                     .filter_map(|result| futures::future::ready(result.ok())),
             ))
@@ -1784,14 +1796,14 @@ mod farmer_rpc_client {
             &self,
             segment_indexes: Vec<SegmentIndex>,
         ) -> Result<Vec<Option<RecordsRoot>>, Error> {
-            Ok(self.rpc_handle.records_roots(segment_indexes).await?)
+            Ok(SubspaceRpcApiClient::records_roots(self, segment_indexes).await?)
         }
 
         async fn root_blocks(
             &self,
             segment_indexes: Vec<SegmentIndex>,
         ) -> Result<Vec<Option<RootBlock>>, Error> {
-            Ok(self.rpc_handle.root_blocks(segment_indexes).await?)
+            Ok(SubspaceRpcApiClient::root_blocks(self, segment_indexes).await?)
         }
     }
 }
@@ -1826,7 +1838,7 @@ mod tests {
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                &node,
                 &[PlotDescription::minimal(plot_dir.as_ref())],
                 CacheDescription::minimal(cache_dir.as_ref()),
             )
@@ -1859,8 +1871,8 @@ mod tests {
         other_node.subscribe_syncing_progress().await.unwrap().for_each(|_| async {}).await;
         assert_eq!(other_node.get_info().await.unwrap().best_block.1, farm_blocks);
 
-        node.close().await;
-        other_node.close().await;
+        node.close().await.unwrap();
+        other_node.close().await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1895,7 +1907,7 @@ mod tests {
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                &node,
                 &[PlotDescription::minimal(plot_dir.as_ref())],
                 CacheDescription::minimal(cache_dir.as_ref()),
             )
@@ -1937,7 +1949,7 @@ mod tests {
         let other_farmer = Farmer::builder()
             .build(
                 Default::default(),
-                node.clone(),
+                &node,
                 &[PlotDescription::minimal(plot_dir.as_ref())],
                 CacheDescription::minimal(cache_dir.as_ref()),
             )
@@ -1951,8 +1963,8 @@ mod tests {
 
         plot.subscribe_new_solutions().await.next().await.expect("Solution stream never ends");
 
-        node.close().await;
-        other_node.close().await;
+        node.close().await.unwrap();
+        other_node.close().await.unwrap();
         other_farmer.close().await.unwrap();
     }
 
@@ -1965,5 +1977,22 @@ mod tests {
         tokio::time::timeout(std::time::Duration::from_secs(60 * 60), test_sync_plot_inner())
             .await
             .unwrap()
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_node_restart() {
+        crate::utils::test_init();
+        let dir = TempDir::new().unwrap();
+
+        for i in 0..4 {
+            tracing::error!(i, "Running new node");
+            Node::dev()
+                .build(dir.path(), chain_spec::dev_config().unwrap())
+                .await
+                .unwrap()
+                .close()
+                .await
+                .unwrap();
+        }
     }
 }

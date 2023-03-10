@@ -27,8 +27,8 @@ impl<S> MaybeProviderStorage<S> {
         Self { inner: Arc::new(RwLock::new(None)) }
     }
 
-    pub fn swap(&self, value: S) {
-        *self.inner.write() = Some(value);
+    pub fn swap(&self, value: Option<S>) {
+        *self.inner.write() = value;
     }
 }
 
