@@ -21,13 +21,13 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_TERM_COLOR: always
   MAX_TARGET_SIZE: 1024 # MB
+  RUSTFLAGS: -C debuginfo=0 --cfg tokio_unstable
 
 jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
-
       - run: cargo fmt -- --check
 
   clippy:
@@ -70,8 +70,6 @@ jobs:
         run: cargo cache
 
       - uses: actions-rs/clippy-check@b5b5f21f4797c02da247df37026fcd0a5024aa4d # v1.0.7
-        env:
-          RUSTFLAGS: -C debuginfo=0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --locked -- -D warnings

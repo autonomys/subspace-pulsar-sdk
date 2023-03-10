@@ -12,6 +12,7 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_TERM_COLOR: always
   MAX_TARGET_SIZE: 1024 # MB
+  RUSTFLAGS: --cfg tokio_unstable
 
 jobs:
   code-coverage:
