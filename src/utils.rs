@@ -128,15 +128,15 @@ pub fn is_default<T: Default + PartialEq>(t: &T) -> bool {
     t == &T::default()
 }
 
-pub struct Defer(Option<Box<dyn FnOnce() + Send>>);
+struct Defer<F: FnOnce()>(Option<F>);
 
-impl Defer {
-    pub fn new<F: FnOnce() + Send + 'static>(f: F) -> Self {
-        Self(Some(Box::new(f)))
+impl<F: FnOnce()> Defer<F> {
+    pub fn new(f: F) -> Self {
+        Self(Some(f))
     }
 }
 
-impl Drop for Defer {
+impl<F: FnOnce()> Drop for Defer<F> {
     fn drop(&mut self) {
         (self.0.take().expect("Always set"))();
     }
@@ -152,6 +152,10 @@ pub struct DropCollection {
 impl DropCollection {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn defer<F: FnOnce() + Send + 'static>(&mut self, f: F) {
+        self.push(Defer::new(f))
     }
 
     pub fn push<T: Send + 'static>(&mut self, t: T) {
@@ -175,39 +179,6 @@ impl<T: Send + 'static> Extend<T> for DropCollection {
             self.push(item);
         }
     }
-}
-
-/// Spawns future and allows you to cancell it if you drop the returned handle
-pub fn spawn_cancellable_future<Fut>(
-    future: Fut,
-    task_name: String,
-) -> std::io::Result<
-    impl Future<Output = Result<Fut::Output, futures::channel::oneshot::Canceled>> + Send,
->
-where
-    Fut: Future + Send + 'static,
-    Fut::Output: Send + 'static,
-{
-    let (drop_tx, drop_rx) = futures::channel::oneshot::channel::<()>();
-    let (result_tx, result_rx) = futures::channel::oneshot::channel();
-    tokio::task::Builder::new().name(task_name.clone().as_ref()).spawn(async move {
-        let result = match futures::future::select(Box::pin(future), drop_rx).await {
-            futures::future::Either::Left((result, _)) => result,
-            futures::future::Either::Right(_) => {
-                // Outer future was dropped, nothing left to do
-                return;
-            }
-        };
-        if let Err(_error) = result_tx.send(result) {
-            tracing::debug!(task_name, "Future finished, but receiver was already dropped",);
-        }
-    })?;
-
-    Ok(async move {
-        let result = result_rx.await;
-        drop(drop_tx);
-        result
-    })
 }
 
 pub mod chain_spec {

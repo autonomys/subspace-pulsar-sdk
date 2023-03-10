@@ -42,7 +42,7 @@ use crate::networking::provider_storage_utils::MaybeProviderStorage;
 use crate::networking::{
     FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage,
 };
-use crate::utils::Defer;
+use crate::utils::DropCollection;
 
 pub mod chain_spec;
 pub mod domains;
@@ -1201,14 +1201,14 @@ impl Config {
             sync_from_dsn,
         };
 
-        let node_runner_future = crate::utils::spawn_cancellable_future(
-            async move {
+        let node_runner_future = subspace_farmer::utils::run_future_in_dedicated_thread(
+            Box::pin(async move {
                 node_runner.run().await;
                 tracing::error!("Exited from node runner future");
-            },
-            // TODO: Add propper thread name or remove in favour of `tokio::task::Builder`
-            "subspace-sdk-networking-{node_name}".to_owned(),
-        )?;
+            }),
+            format!("subspace-sdk-networking-{name}"),
+        )
+        .context("Failed to run node runner future")?;
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);
         let mut full_client =
@@ -1277,7 +1277,8 @@ impl Config {
                 opt_stop_sender.map(|stop_sender| stop_sender.send(()));
             })?;
 
-        let _drop_at_exit = Defer::new(move || {
+        let mut drop_collection = DropCollection::new();
+        drop_collection.defer(move || {
             const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
 
             // Busy wait till backend exits
@@ -1300,7 +1301,7 @@ impl Config {
             farmer_provider_storage,
             piece_cache,
             piece_memory_cache,
-            _drop_at_exit,
+            _drop_at_exit: drop_collection,
         })
     }
 }
@@ -1366,8 +1367,9 @@ pub struct Node {
     pub(crate) piece_cache: NodePieceCache<FullClient>,
     #[derivative(Debug = "ignore")]
     pub(crate) piece_memory_cache: PieceMemoryCache,
+
     #[derivative(Debug = "ignore")]
-    _drop_at_exit: Defer,
+    _drop_at_exit: DropCollection,
 }
 
 /// Hash type

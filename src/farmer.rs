@@ -33,7 +33,7 @@ use tracing_futures::Instrument;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
 use crate::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
-use crate::utils::{Defer, DropCollection};
+use crate::utils::DropCollection;
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -534,6 +534,7 @@ impl Config {
                 node.dsn_node.clone(),
                 Arc::clone(&piece_cache),
                 Arc::downgrade(&readers_and_pieces),
+                &node.name,
             )
             .context("Failed to start announcement processor")?,
         );
@@ -576,10 +577,10 @@ impl Config {
             // We are not going to send anything here, but dropping of sender on dropping of
             // corresponding `SingleDiskPlot` will allow us to stop background tasks.
             let (dropped_sender, _dropped_receiver) = tokio::sync::broadcast::channel::<()>(1);
-            drop_at_exit.push(Defer::new({
+            drop_at_exit.defer({
                 let dropped_sender = dropped_sender.clone();
                 move || drop(dropped_sender.send(()))
-            }));
+            });
 
             let node = node.dsn_node.clone();
             let node_name = node_name.clone();
@@ -634,7 +635,7 @@ impl Config {
             })
             .context("Failed to spawn task")?;
 
-        drop_at_exit.push(Defer::new({
+        drop_at_exit.defer({
             const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
 
             let piece_store = Arc::clone(&node.farmer_piece_store);
@@ -658,7 +659,7 @@ impl Config {
                     }
                 }
             }
-        }));
+        });
 
         Ok(Farmer {
             reward_address,
