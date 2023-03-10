@@ -281,6 +281,10 @@ mod builder {
         #[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub dsn: Dsn,
+        /// Storage monitor settings
+        #[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub storage_monitor: Option<StorageMonitor>,
     }
 
     impl Config {
@@ -340,6 +344,22 @@ mod builder {
         ))]
         pub(crate) String,
     );
+
+    #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+    pub struct StorageMonitor {
+        #[serde(with = "bytesize_serde")]
+        pub threshold: bytesize::ByteSize,
+        pub polling_period: std::time::Duration,
+    }
+
+    impl From<StorageMonitor> for sc_storage_monitor::StorageMonitorParams {
+        fn from(StorageMonitor { threshold, polling_period }: StorageMonitor) -> Self {
+            Self {
+                threshold: (threshold.as_u64() / bytesize::MIB).max(1),
+                polling_period: polling_period.as_secs().max(1) as u32,
+            }
+        }
+    }
 
     #[doc(hidden)]
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
@@ -983,6 +1003,7 @@ impl Config {
             system_domain,
             segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
             sync_from_dsn,
+            storage_monitor,
         } = self;
         let base = base.configuration(directory.as_ref(), chain_spec.clone()).await;
         let name = base.network.node_name.clone();
@@ -1217,16 +1238,14 @@ impl Config {
                 .await
                 .context("Failed to build a full subspace node")?;
 
-        sc_storage_monitor::StorageMonitorService::try_spawn(
-            // TODO: move storage monitor parameters to base node configuration
-            sc_storage_monitor::StorageMonitorParams {
-                threshold: 1000,   // MB
-                polling_period: 5, // seconds
-            },
-            database_source,
-            &full_client.task_manager.spawn_essential_handle(),
-        )
-        .context("Failed to start storage monitor")?;
+        if let Some(storage_monitor) = storage_monitor {
+            sc_storage_monitor::StorageMonitorService::try_spawn(
+                storage_monitor.into(),
+                database_source,
+                &full_client.task_manager.spawn_essential_handle(),
+            )
+            .context("Failed to start storage monitor")?;
+        }
 
         let system_domain = if let Some(config) = system_domain {
             use sc_service::ChainSpecExtension;
