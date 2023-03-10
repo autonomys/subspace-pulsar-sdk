@@ -75,7 +75,7 @@ jobs:
           args: --locked -- -D warnings
 
       - name: Clean unused artifacts
-        run: cargo sweep --maxsize "$MAX_TARGET_SIZE"
+        run: cargo sweep --maxsize ${{ env.MAX_TARGET_SIZE }}
 
 
   test:
@@ -134,7 +134,7 @@ jobs:
         run: cargo test --locked --lib --tests --release -- --test-threads=1
 
       - name: Clean unused artifacts
-        run: cargo sweep --maxsize "$MAX_TARGET_SIZE"
+        run: cargo sweep --maxsize ${{ env.MAX_TARGET_SIZE }}
 
   docs:
     runs-on: ubuntu-22.04
@@ -196,4 +196,4 @@ jobs:
         run: cargo check && SKIP_WASM_BUILD=1 cargo udeps
 
       - name: Clean unused artifacts
-        run: cargo sweep --maxsize "$MAX_TARGET_SIZE"
+        run: cargo sweep --maxsize ${{ env.MAX_TARGET_SIZE }}

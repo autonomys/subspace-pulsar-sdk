@@ -62,4 +62,4 @@ jobs:
           fail_ci_if_error: true
 
       - name: Clean unused artifacts
-        run: cargo sweep --maxsize "$MAX_TARGET_SIZE"
+        run: cargo sweep --maxsize ${{ env.MAX_TARGET_SIZE }}
