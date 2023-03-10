@@ -373,7 +373,7 @@ mod tests {
     use crate::node::{chain_spec, domains, Role};
     use crate::{Farmer, Node, PlotDescription};
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_core() {
         crate::utils::test_init();
 
@@ -390,8 +390,8 @@ mod tests {
             .build(
                 Default::default(),
                 node.clone(),
-                &[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::gb(1)).unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                &[PlotDescription::minimal(plot_dir.as_ref())],
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .await
             .unwrap();

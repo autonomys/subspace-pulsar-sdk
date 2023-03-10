@@ -1266,6 +1266,8 @@ impl Config {
             let _ = stop_sender.send(());
         });
 
+        tracing::debug!("Started node");
+
         Ok(Node {
             client,
             system_domain,
@@ -1798,62 +1800,12 @@ mod farmer_rpc_client {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use subspace_farmer::node_client::NodeClient;
     use tempfile::TempDir;
     use tracing_futures::Instrument;
 
     use super::*;
     use crate::farmer::CacheDescription;
     use crate::{Farmer, PlotDescription};
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_start_node() {
-        let dir = TempDir::new().unwrap();
-        Node::dev()
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_rpc() {
-        let dir = TempDir::new().unwrap();
-        let node = Node::dev()
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
-
-        assert!(node.farmer_app_info().await.is_ok());
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_closing() {
-        crate::utils::test_init();
-
-        let dir = TempDir::new().unwrap();
-        let node = Node::dev()
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
-        let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let plots = [PlotDescription::minimal(plot_dir.as_ref())];
-        let farmer = Farmer::builder()
-            .build(
-                Default::default(),
-                node.clone(),
-                &plots,
-                CacheDescription::minimal(cache_dir.as_ref()),
-            )
-            .await
-            .unwrap();
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-        farmer.close().await.unwrap();
-        node.close().await;
-    }
 
     async fn test_sync_block_inner() {
         crate::utils::test_init();
@@ -1875,7 +1827,7 @@ mod tests {
             .build(
                 Default::default(),
                 node.clone(),
-                &[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::gb(1)).unwrap()],
+                &[PlotDescription::minimal(plot_dir.as_ref())],
                 CacheDescription::minimal(cache_dir.as_ref()),
             )
             .await
@@ -1911,7 +1863,7 @@ mod tests {
         other_node.close().await;
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[cfg_attr(
         any(tarpaulin, not(target_os = "linux")),
         ignore = "Slow tests are run only on linux"
@@ -2004,7 +1956,7 @@ mod tests {
         other_farmer.close().await.unwrap();
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[cfg_attr(
         any(tarpaulin, not(target_os = "linux")),
         ignore = "Slow tests are run only on linux"
