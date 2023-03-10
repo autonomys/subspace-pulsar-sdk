@@ -1105,6 +1105,60 @@
 <a href="#1105" id="1105">1105</a>
 <a href="#1106" id="1106">1106</a>
 <a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
+<a href="#1145" id="1145">1145</a>
+<a href="#1146" id="1146">1146</a>
+<a href="#1147" id="1147">1147</a>
+<a href="#1148" id="1148">1148</a>
+<a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a>
+<a href="#1151" id="1151">1151</a>
+<a href="#1152" id="1152">1152</a>
+<a href="#1153" id="1153">1153</a>
+<a href="#1154" id="1154">1154</a>
+<a href="#1155" id="1155">1155</a>
+<a href="#1156" id="1156">1156</a>
+<a href="#1157" id="1157">1157</a>
+<a href="#1158" id="1158">1158</a>
+<a href="#1159" id="1159">1159</a>
+<a href="#1160" id="1160">1160</a>
+<a href="#1161" id="1161">1161</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1140,6 +1194,7 @@
 
 <span class="kw">use </span><span class="self">self</span>::builder::{PieceCacheSize, ProvidedKeysLimit};
 <span class="kw">use </span><span class="kw">crate</span>::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
+<span class="kw">use </span><span class="kw">crate</span>::utils::DropCollection;
 <span class="kw">use crate</span>::{Node, PublicKey};
 
 <span class="doccomment">/// Description of the cache
@@ -1408,6 +1463,143 @@
 
 <span class="kw">const </span>RECORDS_ROOTS_CACHE_SIZE: NonZeroUsize = NonZeroUsize::new(<span class="number">1_000_000</span>).expect(<span class="string">&quot;Not zero; qed&quot;</span>);
 
+<span class="kw">fn </span>create_readers_and_pieces(single_disk_plots: <span class="kw-2">&amp;</span>[SingleDiskPlot]) -&gt; ReadersAndPieces {
+    <span class="comment">// Store piece readers so we can reference them later
+    </span><span class="kw">let </span>readers = single_disk_plots.iter().map(SingleDiskPlot::piece_reader).collect();
+
+    <span class="macro">tracing::debug!</span>(<span class="string">&quot;Collecting already plotted pieces&quot;</span>);
+
+    <span class="comment">// Collect already plotted pieces
+    </span><span class="kw">let </span>plotted_pieces: HashMap&lt;PieceIndexHash, PieceDetails&gt; = single_disk_plots
+        .iter()
+        .enumerate()
+        .flat_map(|(plot_offset, single_disk_plot)| {
+            single_disk_plot
+                .plotted_sectors()
+                .enumerate()
+                .filter_map(<span class="kw">move </span>|(sector_offset, plotted_sector_result)| {
+                    <span class="kw">match </span>plotted_sector_result {
+                        <span class="prelude-val">Ok</span>(plotted_sector) =&gt; <span class="prelude-val">Some</span>(plotted_sector),
+                        <span class="prelude-val">Err</span>(error) =&gt; {
+                            <span class="macro">tracing::error!</span>(
+                                %error,
+                                %plot_offset,
+                                %sector_offset,
+                                <span class="string">&quot;Failed reading plotted sector on startup, skipping&quot;
+                            </span>);
+                            <span class="prelude-val">None
+                        </span>}
+                    }
+                })
+                .flat_map(<span class="kw">move </span>|plotted_sector| {
+                    plotted_sector.piece_indexes.into_iter().enumerate().map(
+                        <span class="kw">move </span>|(piece_offset, piece_index)| {
+                            (
+                                PieceIndexHash::from_index(piece_index),
+                                PieceDetails {
+                                    plot_offset,
+                                    sector_index: plotted_sector.sector_index,
+                                    piece_offset: piece_offset <span class="kw">as </span>u64,
+                                },
+                            )
+                        },
+                    )
+                })
+        })
+        <span class="comment">// We implicitly ignore duplicates here, reading just from one of the plots
+        </span>.collect();
+    <span class="macro">tracing::debug!</span>(<span class="string">&quot;Finished collecting already plotted pieces&quot;</span>);
+
+    ReadersAndPieces::new(readers, plotted_pieces)
+}
+
+<span class="attr">#[allow(clippy::too_many_arguments)]
+</span><span class="kw">fn </span>handler_on_sector_plotted(
+    sector_offset: usize,
+    plotted_sector: <span class="kw-2">&amp;</span>subspace_farmer_components::plotting::PlottedSector,
+    plotting_permit: Arc&lt;<span class="kw">impl </span>Send + Sync + <span class="lifetime">&#39;static</span>&gt;,
+    plot_offset: usize,
+    node: <span class="kw-2">&amp;</span>subspace_networking::Node,
+    readers_and_pieces: Arc&lt;parking_lot::Mutex&lt;<span class="prelude-ty">Option</span>&lt;ReadersAndPieces&gt;&gt;&gt;,
+    <span class="kw-2">mut </span>dropped_receiver: tokio::sync::broadcast::Receiver&lt;()&gt;,
+    node_name: <span class="kw-2">&amp;</span>str,
+) {
+    <span class="kw">let </span>sector_index = plotted_sector.sector_index;
+
+    <span class="kw">let </span>new_pieces = {
+        <span class="kw">let </span><span class="kw-2">mut </span>readers_and_pieces = readers_and_pieces.lock();
+        <span class="kw">let </span>readers_and_pieces =
+            readers_and_pieces.as_mut().expect(<span class="string">&quot;Initial value was populated above; qed&quot;</span>);
+
+        <span class="kw">let </span>new_pieces = plotted_sector
+            .piece_indexes
+            .iter()
+            .filter(|&amp;&amp;piece_index| {
+                <span class="comment">// Skip pieces that are already plotted and thus were announced
+                // before
+                </span>!readers_and_pieces.contains_piece(<span class="kw-2">&amp;</span>PieceIndexHash::from_index(piece_index))
+            })
+            .copied()
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
+        readers_and_pieces.add_pieces(
+            plotted_sector.piece_indexes.iter().copied().enumerate().map(
+                |(piece_offset, piece_index)| {
+                    (
+                        PieceIndexHash::from_index(piece_index),
+                        PieceDetails {
+                            plot_offset,
+                            sector_index,
+                            piece_offset: piece_offset <span class="kw">as </span>u64,
+                        },
+                    )
+                },
+            ),
+        );
+
+        new_pieces
+    };
+
+    <span class="kw">if </span>new_pieces.is_empty() {
+        <span class="comment">// None of the pieces are new, nothing left to do here
+        </span><span class="kw">return</span>;
+    }
+
+    <span class="kw">let </span>node = node.clone();
+
+    <span class="comment">// TODO: Skip those that were already announced (because they cached)
+    </span><span class="kw">let </span>publish_fut = <span class="kw">async move </span>{
+        new_pieces
+            .into_iter()
+            .map(|piece_index| {
+                subspace_networking::utils::pieces::announce_single_piece_index_with_backoff(
+                    piece_index,
+                    <span class="kw-2">&amp;</span>node,
+                )
+            })
+            .collect::&lt;FuturesUnordered&lt;<span class="kw">_</span>&gt;&gt;()
+            .map(drop)
+            .collect::&lt;Vec&lt;()&gt;&gt;()
+            .<span class="kw">await</span>;
+
+        <span class="macro">tracing::info!</span>(sector_offset, sector_index, <span class="string">&quot;Sector publishing was successful.&quot;</span>);
+
+        <span class="comment">// Release only after publishing is finished
+        </span>drop(plotting_permit);
+    };
+
+    <span class="kw">let _ </span>= tokio::task::Builder::new()
+        .name(<span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-farmer-{node_name}-piece-publishing&quot;</span>).as_ref())
+        .spawn(<span class="kw">async move </span>{
+            <span class="kw">use </span>futures::future::{select, Either};
+
+            <span class="kw">let </span>result = select(Box::pin(publish_fut), Box::pin(dropped_receiver.recv())).<span class="kw">await</span>;
+            <span class="kw">if </span>!<span class="macro">matches!</span>(result, Either::Right(<span class="kw">_</span>)) {
+                <span class="macro">tracing::debug!</span>(<span class="string">&quot;Piece publishing was cancelled due to shutdown.&quot;</span>);
+            }
+        });
+}
+
 <span class="kw">impl </span>Config {
     <span class="doccomment">/// Open and start farmer
     </span><span class="kw">pub async fn </span>build(
@@ -1441,8 +1633,11 @@
         <span class="kw">let </span>base_path = cache.directory;
         <span class="kw">let </span>readers_and_pieces = Arc::clone(<span class="kw-2">&amp;</span>node.farmer_readers_and_pieces);
 
-        <span class="kw">let </span>piece_cache = {
-            <span class="kw">let </span>piece_cache_db_path = base_path.join(<span class="string">&quot;piece_cache_db&quot;</span>);
+        <span class="kw">let </span>node_name = node.name.clone();
+
+        <span class="kw">let </span>piece_cache_db_path = base_path.join(<span class="string">&quot;piece_cache_db&quot;</span>);
+
+        <span class="kw">let </span>piece_cache = Arc::new(tokio::sync::Mutex::new({
             <span class="kw">let </span>provider_db_path = base_path.join(<span class="string">&quot;providers_db&quot;</span>);
             <span class="comment">// TODO: Remove this migration code in the future
             </span>{
@@ -1460,28 +1655,29 @@
                 <span class="string">&quot;Initializing provider storage...&quot;
             </span>);
 
-            <span class="macro">tracing::info!</span>(
-                db_path = <span class="question-mark">?</span>piece_cache_db_path,
-                size = <span class="question-mark">?</span>piece_cache_size,
-                <span class="string">&quot;Initializing piece cache...&quot;
-            </span>);
-
             <span class="kw">let </span>peer_id = node.dsn_node.id();
 
             <span class="kw">let </span>db_provider_storage =
                 ParityDbProviderStorage::new(<span class="kw-2">&amp;</span>provider_db_path, provided_keys_limit, peer_id)
                     .context(<span class="string">&quot;Failed to create parity db provider storage&quot;</span>)<span class="question-mark">?</span>;
 
+            <span class="macro">tracing::info!</span>(
+                db_path = <span class="question-mark">?</span>piece_cache_db_path,
+                size = <span class="question-mark">?</span>piece_cache_size,
+                <span class="string">&quot;Initializing piece cache...&quot;
+            </span>);
+
             <span class="kw">let </span>piece_store = ParityDbStore::new(<span class="kw-2">&amp;</span>piece_cache_db_path)
                 .context(<span class="string">&quot;Failed to create parity db piece store&quot;</span>)<span class="question-mark">?</span>;
-            <span class="kw-2">*</span>node.farmer_piece_store.lock().<span class="kw">await </span>= <span class="prelude-val">Some</span>(piece_store.clone());
 
-            <span class="kw">let </span>piece_cache = FarmerPieceCache::new(piece_store, piece_cache_size, peer_id);
+            <span class="kw">let </span>piece_cache = FarmerPieceCache::new(piece_store.clone(), piece_cache_size, peer_id);
 
             <span class="macro">tracing::info!</span>(
                 current_size = <span class="question-mark">?</span>piece_cache.size(),
                 <span class="string">&quot;Piece cache initialized successfully&quot;
             </span>);
+
+            node.farmer_piece_store.lock().<span class="kw">await</span>.replace(piece_store);
             node.farmer_provider_storage.swap(<span class="prelude-val">Some</span>(FarmerProviderStorage::new(
                 peer_id,
                 Arc::clone(<span class="kw-2">&amp;</span>readers_and_pieces),
@@ -1490,26 +1686,27 @@
             )));
 
             piece_cache
-        };
+        }));
 
-        <span class="kw">let </span>piece_cache = Arc::new(tokio::sync::Mutex::new(piece_cache));
-        <span class="kw">let </span>announcement_processor = <span class="kw">crate</span>::networking::start_announcements_processor(
-            node.dsn_node.clone(),
-            Arc::clone(<span class="kw-2">&amp;</span>piece_cache),
-            Arc::downgrade(<span class="kw-2">&amp;</span>readers_and_pieces),
-        )
-        .context(<span class="string">&quot;Failed to start announcement processor&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>drop_at_exit = DropCollection::new();
 
-        <span class="kw">let </span>kzg = kzg::Kzg::new(kzg::test_public_parameters());
-        <span class="kw">let </span>records_roots_cache =
-            parking_lot::Mutex::new(lru::LruCache::new(RECORDS_ROOTS_CACHE_SIZE));
+        drop_at_exit.push(
+            <span class="kw">crate</span>::networking::start_announcements_processor(
+                node.dsn_node.clone(),
+                Arc::clone(<span class="kw-2">&amp;</span>piece_cache),
+                Arc::downgrade(<span class="kw-2">&amp;</span>readers_and_pieces),
+                <span class="kw-2">&amp;</span>node.name,
+            )
+            .context(<span class="string">&quot;Failed to start announcement processor&quot;</span>)<span class="question-mark">?</span>,
+        );
+
         <span class="kw">let </span>piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
             node.dsn_node.clone(),
             <span class="prelude-val">Some</span>(RecordsRootPieceValidator::new(
                 node.dsn_node.clone(),
                 node.rpc_handle.clone(),
-                kzg.clone(),
-                records_roots_cache,
+                kzg::Kzg::new(kzg::test_public_parameters()),
+                parking_lot::Mutex::new(lru::LruCache::new(RECORDS_ROOTS_CACHE_SIZE)),
             )),
             <span class="bool-val">true</span>,
         );
@@ -1520,230 +1717,116 @@
         ));
 
         <span class="kw">for </span>(disk_farm_idx, description) <span class="kw">in </span>plots.iter().enumerate() {
-            <span class="kw">let </span>directory = description.directory.clone();
-            <span class="kw">let </span>allocated_space = description.space_pledged.as_u64();
-            <span class="kw">let </span>description = SingleDiskPlotOptions {
-                allocated_space,
-                directory: directory.clone(),
-                reward_address: <span class="kw-2">*</span>reward_address,
-                node_client: node.rpc_handle.clone(),
-                kzg: kzg.clone(),
-                piece_getter: piece_getter.clone(),
-                concurrent_plotting_semaphore: Arc::clone(<span class="kw-2">&amp;</span>concurrent_plotting_semaphore),
-                piece_memory_cache: node.piece_memory_cache.clone(),
-            };
-            <span class="kw">let </span>single_disk_plot = SingleDiskPlot::new(description, disk_farm_idx).<span class="kw">await</span><span class="question-mark">?</span>;
-
-            <span class="kw">let </span><span class="kw-2">mut </span>handlers = Vec::new();
-            <span class="kw">let </span>progress = {
-                <span class="kw">let </span>(sender, receiver) = watch::channel::&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw">_</span>&gt;&gt;(<span class="prelude-val">None</span>);
-                <span class="kw">let </span>handler = single_disk_plot.on_sector_plotted(Arc::new(<span class="kw">move </span>|sector| {
-                    <span class="kw">let _ </span>= sender.send(<span class="prelude-val">Some</span>(sector.clone()));
-                }));
-                handlers.push(handler);
-                receiver
-            };
-            <span class="kw">let </span>solutions = {
-                <span class="kw">let </span>(sender, receiver) = watch::channel::&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw">_</span>&gt;&gt;(<span class="prelude-val">None</span>);
-                <span class="kw">let </span>handler = single_disk_plot.on_solution(Arc::new(<span class="kw">move </span>|solution| {
-                    <span class="kw">let _ </span>= sender.send(<span class="prelude-val">Some</span>(solution.clone()));
-                }));
-                handlers.push(handler);
-                receiver
-            };
-            <span class="kw">let </span>plot = Plot {
-                directory: directory.clone(),
-                allocated_space,
-                progress,
-                solutions,
-                initial_plotting_progress: Arc::new(Mutex::new(InitialPlottingProgress {
-                    starting_sector: single_disk_plot.plotted_sectors_count(),
-                    current_sector: single_disk_plot.plotted_sectors_count(),
-                    total_sectors: allocated_space / subspace_core_primitives::PLOT_SECTOR_SIZE,
-                })),
-                _handlers: handlers,
-            };
-            plot_info.insert(directory, plot);
+            <span class="kw">let </span>(plot, single_disk_plot) = Plot::new(
+                disk_farm_idx,
+                reward_address,
+                node,
+                Arc::clone(<span class="kw-2">&amp;</span>piece_getter),
+                Arc::clone(<span class="kw-2">&amp;</span>concurrent_plotting_semaphore),
+                description,
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+            plot_info.insert(plot.directory.clone(), plot);
             single_disk_plots.push(single_disk_plot);
         }
 
-        <span class="kw">let </span>new_readers_and_pieces = {
-            <span class="comment">// Store piece readers so we can reference them later
-            </span><span class="kw">let </span>readers = single_disk_plots.iter().map(SingleDiskPlot::piece_reader).collect();
+        readers_and_pieces.lock().replace(create_readers_and_pieces(<span class="kw-2">&amp;</span>single_disk_plots));
 
-            <span class="macro">tracing::debug!</span>(<span class="string">&quot;Collecting already plotted pieces&quot;</span>);
-
-            <span class="comment">// Collect already plotted pieces
-            </span><span class="kw">let </span>plotted_pieces: HashMap&lt;PieceIndexHash, PieceDetails&gt; = single_disk_plots
-                .iter()
-                .enumerate()
-                .flat_map(|(plot_offset, single_disk_plot)| {
-                    single_disk_plot
-                        .plotted_sectors()
-                        .enumerate()
-                        .filter_map(<span class="kw">move </span>|(sector_offset, plotted_sector_result)| {
-                            <span class="kw">match </span>plotted_sector_result {
-                                <span class="prelude-val">Ok</span>(plotted_sector) =&gt; <span class="prelude-val">Some</span>(plotted_sector),
-                                <span class="prelude-val">Err</span>(error) =&gt; {
-                                    <span class="macro">tracing::error!</span>(
-                                        %error,
-                                        %plot_offset,
-                                        %sector_offset,
-                                        <span class="string">&quot;Failed reading plotted sector on startup, skipping&quot;
-                                    </span>);
-                                    <span class="prelude-val">None
-                                </span>}
-                            }
-                        })
-                        .flat_map(<span class="kw">move </span>|plotted_sector| {
-                            plotted_sector.piece_indexes.into_iter().enumerate().map(
-                                <span class="kw">move </span>|(piece_offset, piece_index)| {
-                                    (
-                                        PieceIndexHash::from_index(piece_index),
-                                        PieceDetails {
-                                            plot_offset,
-                                            sector_index: plotted_sector.sector_index,
-                                            piece_offset: piece_offset <span class="kw">as </span>u64,
-                                        },
-                                    )
-                                },
-                            )
-                        })
-                })
-                <span class="comment">// We implicitly ignore duplicates here, reading just from one of the plots
-                </span>.collect();
-            <span class="macro">tracing::debug!</span>(<span class="string">&quot;Finished collecting already plotted pieces&quot;</span>);
-
-            ReadersAndPieces::new(readers, plotted_pieces)
-        };
-        readers_and_pieces.lock().replace(new_readers_and_pieces);
-
-        <span class="kw">let </span>drop_at_exit = single_disk_plots.iter().enumerate().map(|(plot_offset, single_disk_plot)| {
+        <span class="kw">for </span>(plot_offset, single_disk_plot) <span class="kw">in </span>single_disk_plots.iter().enumerate() {
             <span class="kw">let </span>readers_and_pieces = Arc::clone(<span class="kw-2">&amp;</span>readers_and_pieces);
 
             <span class="comment">// We are not going to send anything here, but dropping of sender on dropping of
             // corresponding `SingleDiskPlot` will allow us to stop background tasks.
             </span><span class="kw">let </span>(dropped_sender, _dropped_receiver) = tokio::sync::broadcast::channel::&lt;()&gt;(<span class="number">1</span>);
-            <span class="kw">let </span>another_dropped_sender = dropped_sender.clone();
+            drop_at_exit.defer({
+                <span class="kw">let </span>dropped_sender = dropped_sender.clone();
+                <span class="kw">move </span>|| drop(dropped_sender.send(()))
+            });
 
             <span class="kw">let </span>node = node.dsn_node.clone();
+            <span class="kw">let </span>node_name = node_name.clone();
             <span class="comment">// Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
-            </span><span class="kw">let </span>handler_id = single_disk_plot
-                .on_sector_plotted(Arc::new(<span class="kw">move </span>|(sector_offset, plotted_sector, plotting_permit)| {
-                    <span class="kw">let </span>plotting_permit = Arc::clone(plotting_permit);
-                    <span class="kw">let </span>sector_index = plotted_sector.sector_index;
+            </span><span class="kw">let </span>handler_id = single_disk_plot.on_sector_plotted(Arc::new(
+                <span class="kw">move </span>|(sector_offset, plotted_sector, plotting_permit)| {
+                    handler_on_sector_plotted(
+                        <span class="kw-2">*</span>sector_offset,
+                        plotted_sector,
+                        Arc::clone(plotting_permit),
+                        plot_offset,
+                        <span class="kw-2">&amp;</span>node,
+                        readers_and_pieces.clone(),
+                        dropped_sender.subscribe(),
+                        <span class="kw-2">&amp;</span>node_name,
+                    )
+                },
+            ));
 
-                    <span class="kw">let </span><span class="kw-2">mut </span>dropped_receiver = dropped_sender.subscribe();
-
-                    <span class="kw">let </span>new_pieces = {
-                        <span class="kw">let </span><span class="kw-2">mut </span>readers_and_pieces = readers_and_pieces.lock();
-                        <span class="kw">let </span>readers_and_pieces = readers_and_pieces
-                            .as_mut()
-                            .expect(<span class="string">&quot;Initial value was populated above; qed&quot;</span>);
-
-                        <span class="kw">let </span>new_pieces = plotted_sector
-                            .piece_indexes
-                            .iter()
-                            .filter(|&amp;&amp;piece_index| {
-                                <span class="comment">// Skip pieces that are already plotted and thus were announced
-                                // before
-                                </span>!readers_and_pieces
-                                    .contains_piece(<span class="kw-2">&amp;</span>PieceIndexHash::from_index(piece_index))
-                            })
-                            .copied()
-                            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-
-                        readers_and_pieces.add_pieces(
-                            plotted_sector.piece_indexes.iter().copied().enumerate().map(
-                                |(piece_offset, piece_index)| {
-                                    (
-                                        PieceIndexHash::from_index(piece_index),
-                                        PieceDetails {
-                                            plot_offset,
-                                            sector_index,
-                                            piece_offset: piece_offset <span class="kw">as </span>u64,
-                                        },
-                                    )
-                                },
-                            ),
-                        );
-
-                        new_pieces
-                    };
-
-                    <span class="kw">if </span>new_pieces.is_empty() {
-                        <span class="comment">// None of the pieces are new, nothing left to do here
-                        </span><span class="kw">return</span>;
-                    }
-
-                    <span class="kw">let </span>node = node.clone();
-                    <span class="kw">let </span>sector_offset = <span class="kw-2">*</span>sector_offset;
-                    <span class="comment">// TODO: Skip those that were already announced (because they cached)
-                    </span><span class="kw">let </span>publish_fut = <span class="kw">async move </span>{
-                        new_pieces
-                            .into_iter()
-                            .map(|piece_index| {
-                                subspace_networking::utils::pieces::announce_single_piece_index_with_backoff(piece_index, <span class="kw-2">&amp;</span>node)
-                            })
-                            .collect::&lt;FuturesUnordered&lt;<span class="kw">_</span>&gt;&gt;()
-                            .map(drop)
-                            .collect::&lt;Vec&lt;()&gt;&gt;()
-                            .<span class="kw">await</span>;
-
-                        <span class="macro">tracing::info!</span>(sector_offset, sector_index, <span class="string">&quot;Sector publishing was successful.&quot;</span>);
-
-                        <span class="comment">// Release only after publishing is finished
-                        </span>drop(plotting_permit);
-                    };
-
-                    tokio::spawn(<span class="kw">async move </span>{
-                        <span class="kw">use </span>futures::future::{select, Either};
-
-                        <span class="kw">let </span>result =
-                            select(Box::pin(publish_fut), Box::pin(dropped_receiver.recv())).<span class="kw">await</span>;
-                        <span class="kw">if </span>!<span class="macro">matches!</span>(result, Either::Right(<span class="kw">_</span>)) {
-                            <span class="macro">tracing::debug!</span>(<span class="string">&quot;Piece publishing was cancelled due to shutdown.&quot;</span>);
-                        }
-                    });
-                }));
-            Box::new((handler_id, another_dropped_sender)) <span class="kw">as </span>Box&lt;<span class="kw">dyn </span>std::any::Any&gt;
-        })
-        .chain(<span class="prelude-val">Some</span>(Box::new(announcement_processor) <span class="kw">as </span>Box&lt;<span class="kw">dyn </span>std::any::Any&gt;))
-        .collect();
+            drop_at_exit.push(handler_id);
+        }
 
         <span class="kw">let </span><span class="kw-2">mut </span>single_disk_plots_stream =
             single_disk_plots.into_iter().map(SingleDiskPlot::run).collect::&lt;FuturesUnordered&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let </span>(cmd_sender, cmd_receiver) = oneshot::channel::&lt;()&gt;();
+        <span class="kw">let </span>(drop_sender, drop_receiver) = oneshot::channel::&lt;()&gt;();
+        <span class="kw">let </span>(result_sender, result_receiver) = oneshot::channel::&lt;<span class="kw">_</span>&gt;();
 
-        <span class="kw">let </span>handle = tokio::task::spawn_blocking({
-            <span class="kw">let </span>handle = tokio::runtime::Handle::current();
-            <span class="kw">let </span>is_node_closed = {
-                <span class="kw">let </span>stop_sender = node.stop_sender.clone();
-                <span class="kw">move </span>|| stop_sender.is_closed()
-            };
+        tokio::task::Builder::new()
+            .name(<span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-farmer-{node_name}-single-disk-plots-driver&quot;</span>).as_ref())
+            .spawn_blocking({
+                <span class="kw">let </span>handle = tokio::runtime::Handle::current();
+                <span class="kw">let </span>is_node_closed = {
+                    <span class="kw">let </span>stop_sender = node.stop_sender.clone();
+                    <span class="kw">move </span>|| stop_sender.is_closed()
+                };
 
+                <span class="kw">move </span>|| {
+                    <span class="kw">use </span>future::Either::<span class="kw-2">*</span>;
+
+                    <span class="kw">let </span>result = <span class="kw">match </span>handle
+                        .block_on(future::select(single_disk_plots_stream.next(), drop_receiver))
+                    {
+                        Left((<span class="kw">_</span>, <span class="kw">_</span>)) <span class="kw">if </span>is_node_closed() =&gt; <span class="prelude-val">Ok</span>(()),
+                        Left((maybe_result, <span class="kw">_</span>)) =&gt;
+                            maybe_result.expect(<span class="string">&quot;there is always at least one plot&quot;</span>),
+                        Right((<span class="kw">_</span>, <span class="kw">_</span>)) =&gt; <span class="prelude-val">Ok</span>(()),
+                    };
+                    <span class="kw">let _ </span>= result_sender.send(result);
+                }
+            })
+            .context(<span class="string">&quot;Failed to spawn task&quot;</span>)<span class="question-mark">?</span>;
+
+        drop_at_exit.defer({
+            <span class="kw">const </span>PIECE_STORE_POLL: Duration = Duration::from_millis(<span class="number">100</span>);
+
+            <span class="kw">let </span>piece_store = Arc::clone(<span class="kw-2">&amp;</span>node.farmer_piece_store);
+            <span class="kw">let </span>provider_storage = node.farmer_provider_storage.clone();
             <span class="kw">move </span>|| {
-                <span class="kw">use </span>future::Either::<span class="kw-2">*</span>;
+                <span class="kw">let _ </span>= drop_sender.send(());
+                provider_storage.swap(<span class="prelude-val">None</span>);
+                piece_store.blocking_lock().take();
 
-                <span class="kw">match </span>handle.block_on(future::select(single_disk_plots_stream.next(), cmd_receiver))
-                {
-                    Left((<span class="kw">_</span>, <span class="kw">_</span>)) <span class="kw">if </span>is_node_closed() =&gt; <span class="prelude-val">Ok</span>(()),
-                    Left((maybe_result, <span class="kw">_</span>)) =&gt;
-                        maybe_result.expect(<span class="string">&quot;there is always at least one plot&quot;</span>),
-                    Right((<span class="kw">_</span>, <span class="kw">_</span>)) =&gt; <span class="prelude-val">Ok</span>(()),
+                <span class="comment">// HACK: Poll on piece store creation
+                </span><span class="kw">loop </span>{
+                    <span class="kw">let </span>result = ParityDbStore::&lt;
+                        subspace_networking::libp2p::kad::record::Key,
+                        subspace_core_primitives::Piece,
+                    &gt;::new(<span class="kw-2">&amp;</span>piece_cache_db_path);
+
+                    <span class="kw">match </span>result.map(drop) {
+                        <span class="comment">// If parity db is still locked wait on it
+                        </span><span class="prelude-val">Err</span>(parity_db::Error::Locked(<span class="kw">_</span>)) =&gt; std::thread::sleep(PIECE_STORE_POLL),
+                        <span class="kw">_ </span>=&gt; <span class="kw">return</span>,
+                    }
                 }
             }
         });
 
         <span class="prelude-val">Ok</span>(Farmer {
-            cmd_sender: <span class="prelude-val">Some</span>(cmd_sender),
             reward_address,
             plot_info,
-            handle,
-            provider_storage: node.farmer_provider_storage.clone(),
-            piece_store: Arc::clone(<span class="kw-2">&amp;</span>node.farmer_piece_store),
+            result_receiver: <span class="prelude-val">Some</span>(result_receiver),
+            node_name,
             base_path,
             _drop_at_exit: drop_at_exit,
         })
@@ -1755,25 +1838,12 @@
 #[derivative(Debug)]
 #[must_use = <span class="string">&quot;Farmer should be closed&quot;</span>]
 </span><span class="kw">pub struct </span>Farmer {
-    cmd_sender: <span class="prelude-ty">Option</span>&lt;oneshot::Sender&lt;()&gt;&gt;,
     reward_address: PublicKey,
     plot_info: HashMap&lt;PathBuf, Plot&gt;,
-    handle: tokio::task::JoinHandle&lt;anyhow::Result&lt;()&gt;&gt;,
-    provider_storage:
-        <span class="kw">crate</span>::networking::provider_storage_utils::MaybeProviderStorage&lt;FarmerProviderStorage&gt;,
-    <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
-    </span>piece_store: Arc&lt;
-        Mutex&lt;
-            <span class="prelude-ty">Option</span>&lt;
-                ParityDbStore&lt;
-                    subspace_networking::libp2p::kad::record::Key,
-                    subspace_core_primitives::Piece,
-                &gt;,
-            &gt;,
-        &gt;,
-    &gt;,
+    result_receiver: <span class="prelude-ty">Option</span>&lt;oneshot::Receiver&lt;anyhow::Result&lt;()&gt;&gt;&gt;,
     base_path: PathBuf,
-    _drop_at_exit: Vec&lt;Box&lt;<span class="kw">dyn </span>std::any::Any&gt;&gt;,
+    node_name: String,
+    _drop_at_exit: DropCollection,
 }
 
 <span class="doccomment">/// Info about some plot
@@ -1853,7 +1923,7 @@
     solutions: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;SolutionResponse&gt;&gt;,
     initial_plotting_progress: Arc&lt;Mutex&lt;InitialPlottingProgress&gt;&gt;,
     allocated_space: u64,
-    _handlers: Vec&lt;event_listener_primitives::HandlerId&gt;,
+    _drop_at_exit: DropCollection,
 }
 
 <span class="attr">#[pin_project::pin_project]
@@ -1914,6 +1984,61 @@
 }
 
 <span class="kw">impl </span>Plot {
+    <span class="kw">async fn </span>new(
+        disk_farm_idx: usize,
+        reward_address: PublicKey,
+        node: <span class="kw-2">&amp;</span>Node,
+        piece_getter: <span class="kw">impl </span>subspace_farmer_components::plotting::PieceGetter + Send + <span class="lifetime">&#39;static</span>,
+        concurrent_plotting_semaphore: Arc&lt;tokio::sync::Semaphore&gt;,
+        description: <span class="kw-2">&amp;</span>PlotDescription,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="self">Self</span>, SingleDiskPlot), BuildError&gt; {
+        <span class="kw">let </span>directory = description.directory.clone();
+        <span class="kw">let </span>allocated_space = description.space_pledged.as_u64();
+        <span class="kw">let </span>description = SingleDiskPlotOptions {
+            allocated_space,
+            directory: directory.clone(),
+            reward_address: <span class="kw-2">*</span>reward_address,
+            node_client: node.rpc_handle.clone(),
+            kzg: kzg::Kzg::new(kzg::test_public_parameters()),
+            piece_getter,
+            concurrent_plotting_semaphore,
+            piece_memory_cache: node.piece_memory_cache.clone(),
+        };
+        <span class="kw">let </span>single_disk_plot = SingleDiskPlot::new(description, disk_farm_idx).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>drop_at_exit = DropCollection::new();
+
+        <span class="kw">let </span>progress = {
+            <span class="kw">let </span>(sender, receiver) = watch::channel::&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw">_</span>&gt;&gt;(<span class="prelude-val">None</span>);
+            drop_at_exit.push(single_disk_plot.on_sector_plotted(Arc::new(<span class="kw">move </span>|sector| {
+                <span class="kw">let _ </span>= sender.send(<span class="prelude-val">Some</span>(sector.clone()));
+            })));
+            receiver
+        };
+        <span class="kw">let </span>solutions = {
+            <span class="kw">let </span>(sender, receiver) = watch::channel::&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw">_</span>&gt;&gt;(<span class="prelude-val">None</span>);
+            drop_at_exit.push(single_disk_plot.on_solution(Arc::new(<span class="kw">move </span>|solution| {
+                <span class="kw">let _ </span>= sender.send(<span class="prelude-val">Some</span>(solution.clone()));
+            })));
+            receiver
+        };
+
+        <span class="prelude-val">Ok</span>((
+            <span class="self">Self </span>{
+                directory: directory.clone(),
+                allocated_space,
+                progress,
+                solutions,
+                initial_plotting_progress: Arc::new(Mutex::new(InitialPlottingProgress {
+                    starting_sector: single_disk_plot.plotted_sectors_count(),
+                    current_sector: single_disk_plot.plotted_sectors_count(),
+                    total_sectors: allocated_space / subspace_core_primitives::PLOT_SECTOR_SIZE,
+                })),
+                _drop_at_exit: drop_at_exit,
+            },
+            single_disk_plot,
+        ))
+    }
+
     <span class="doccomment">/// Plot location
     </span><span class="kw">pub fn </span>directory(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>PathBuf {
         <span class="kw-2">&amp;</span><span class="self">self</span>.directory
@@ -2011,33 +2136,16 @@
 
     <span class="doccomment">/// Stops farming, closes plots, and sends signal to the node
     </span><span class="kw">pub async fn </span>close(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">const </span>PIECE_STORE_POLL: Duration = Duration::from_millis(<span class="number">100</span>);
+        <span class="kw">let </span>result_receiver = <span class="self">self</span>.result_receiver.take().expect(<span class="string">&quot;Handle is always there&quot;</span>);
 
-        <span class="kw">let </span><span class="prelude-val">Some</span>(cmd_sender) = <span class="self">self</span>.cmd_sender.take() <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-        };
-        <span class="kw">let _ </span>= cmd_sender.send(());
+        <span class="comment">// Otherwise tokio panics because we lock async thread
+        </span>tokio::task::Builder::new()
+            .name(<span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-farmer-{}-dropper&quot;</span>, <span class="self">self</span>.node_name).as_ref())
+            .spawn_blocking(<span class="kw">move </span>|| drop(<span class="self">self</span>))<span class="question-mark">?
+            </span>.<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="self">self</span>.provider_storage.swap(<span class="prelude-val">None</span>);
-        (<span class="kw-2">&amp;mut </span><span class="self">self</span>.handle).<span class="kw">await</span><span class="question-mark">??</span>;
-        <span class="self">self</span>.piece_store.lock().<span class="kw">await</span>.take();
-        <span class="kw">let </span>piece_cache_db_path = <span class="self">self</span>.base_path.join(<span class="string">&quot;piece_cache_db&quot;</span>);
-        drop(<span class="self">self</span>);
-
-        <span class="comment">// HACK: Poll on piece store creation
-        </span><span class="kw">loop </span>{
-            <span class="kw">let </span>result = ParityDbStore::&lt;
-                subspace_networking::libp2p::kad::record::Key,
-                subspace_core_primitives::Piece,
-            &gt;::new(<span class="kw-2">&amp;</span>piece_cache_db_path);
-
-            <span class="kw">match </span>result.map(drop) {
-                <span class="comment">// If parity db is still locked wait on it
-                </span><span class="prelude-val">Err</span>(parity_db::Error::Locked(<span class="kw">_</span>)) =&gt; tokio::time::sleep(PIECE_STORE_POLL).<span class="kw">await</span>,
-                result =&gt; <span class="kw">return </span>result.context(<span class="string">&quot;Parity db store failure&quot;</span>),
-            }
-        }
-    }
+        result_receiver.<span class="kw">await</span><span class="question-mark">?
+    </span>}
 }
 
 <span class="attr">#[cfg(test)]

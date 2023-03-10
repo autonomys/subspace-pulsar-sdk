@@ -179,6 +179,7 @@
     node: Node,
     piece_cache: Arc&lt;tokio::sync::Mutex&lt;FarmerPieceCache&gt;&gt;,
     weak_readers_and_pieces: Weak&lt;Mutex&lt;<span class="prelude-ty">Option</span>&lt;ReadersAndPieces&gt;&gt;&gt;,
+    node_name: <span class="kw-2">&amp;</span>str,
 ) -&gt; std::io::Result&lt;HandlerId&gt; {
     <span class="kw">let </span>(provider_records_sender, <span class="kw-2">mut </span>provider_records_receiver) =
         futures::channel::mpsc::channel(MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE.get());
@@ -204,7 +205,6 @@
         }
     }));
 
-    <span class="kw">let </span>handle = tokio::runtime::Handle::current();
     <span class="kw">let </span>span = tracing::Span::current();
     <span class="kw">let </span><span class="kw-2">mut </span>provider_record_processor = FarmerProviderRecordProcessor::new(
         node,
@@ -214,16 +214,16 @@
         MAX_CONCURRENT_RE_ANNOUNCEMENTS_PROCESSING,
     );
 
-    <span class="comment">// We are working with database internally, better to run in a separate thread
-    </span>std::thread::Builder::new().name(<span class="string">&quot;ann-processor&quot;</span>.to_string()).spawn(<span class="kw">move </span>|| {
-        <span class="kw">let </span>processor_fut = <span class="kw">async </span>{
-            <span class="kw">while let </span><span class="prelude-val">Some</span>((provider_record, guard)) = provider_records_receiver.next().<span class="kw">await </span>{
-                provider_record_processor.process_provider_record(provider_record, guard).<span class="kw">await</span>;
+    tokio::task::Builder::new()
+        .name(<span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-farmer-{node_name}-ann-processor&quot;</span>).as_ref())
+        .spawn(
+            <span class="kw">async move </span>{
+                <span class="kw">while let </span><span class="prelude-val">Some</span>((provider_record, guard)) = provider_records_receiver.next().<span class="kw">await </span>{
+                    provider_record_processor.process_provider_record(provider_record, guard).<span class="kw">await</span>;
+                }
             }
-        };
-
-        handle.block_on(processor_fut.instrument(span));
-    })<span class="question-mark">?</span>;
+            .instrument(span),
+        )<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(handler_id)
 }

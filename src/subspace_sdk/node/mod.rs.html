@@ -2042,6 +2042,17 @@
 <a href="#2042" id="2042">2042</a>
 <a href="#2043" id="2043">2043</a>
 <a href="#2044" id="2044">2044</a>
+<a href="#2045" id="2045">2045</a>
+<a href="#2046" id="2046">2046</a>
+<a href="#2047" id="2047">2047</a>
+<a href="#2048" id="2048">2048</a>
+<a href="#2049" id="2049">2049</a>
+<a href="#2050" id="2050">2050</a>
+<a href="#2051" id="2051">2051</a>
+<a href="#2052" id="2052">2052</a>
+<a href="#2053" id="2053">2053</a>
+<a href="#2054" id="2054">2054</a>
+<a href="#2055" id="2055">2055</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::{NonZeroU64, NonZeroUsize};
 <span class="kw">use </span>std::path::Path;
@@ -2086,6 +2097,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::networking::{
     FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage,
 };
+<span class="kw">use </span><span class="kw">crate</span>::utils::DropCollection;
 
 <span class="kw">pub mod </span>chain_spec;
 <span class="kw">pub mod </span>domains;
@@ -3061,32 +3073,38 @@
 
             <span class="comment">// Start before archiver below, so we don&#39;t have potential race condition and
             // miss pieces
-            </span>tokio::spawn({
-                <span class="kw">let </span><span class="kw-2">mut </span>piece_cache = piece_cache.clone();
-                <span class="kw">let </span><span class="kw-2">mut </span>archived_segment_notification_stream =
-                    partial_components.other.<span class="number">1</span>.archived_segment_notification_stream().subscribe();
+            </span>tokio::task::Builder::new()
+                .name(<span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-node-{name}-piece-caching&quot;</span>).as_ref())
+                .spawn({
+                    <span class="kw">let </span><span class="kw-2">mut </span>piece_cache = piece_cache.clone();
+                    <span class="kw">let </span><span class="kw-2">mut </span>archived_segment_notification_stream = partial_components
+                        .other
+                        .<span class="number">1
+                        </span>.archived_segment_notification_stream()
+                        .subscribe();
 
-                <span class="kw">async move </span>{
-                    <span class="kw">while let </span><span class="prelude-val">Some</span>(archived_segment_notification) =
-                        archived_segment_notification_stream.next().<span class="kw">await
-                    </span>{
-                        <span class="kw">let </span>segment_index = archived_segment_notification
-                            .archived_segment
-                            .root_block
-                            .segment_index();
-                        <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = piece_cache.add_pieces(
-                            segment_index * u64::from(subspace_core_primitives::PIECES_IN_SEGMENT),
-                            <span class="kw-2">&amp;</span>archived_segment_notification.archived_segment.pieces,
-                        ) {
-                            <span class="macro">tracing::error!</span>(
-                                %segment_index,
-                                %error,
-                                <span class="string">&quot;Failed to store pieces for segment in cache&quot;
-                            </span>);
+                    <span class="kw">async move </span>{
+                        <span class="kw">while let </span><span class="prelude-val">Some</span>(archived_segment_notification) =
+                            archived_segment_notification_stream.next().<span class="kw">await
+                        </span>{
+                            <span class="kw">let </span>segment_index = archived_segment_notification
+                                .archived_segment
+                                .root_block
+                                .segment_index();
+                            <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = piece_cache.add_pieces(
+                                segment_index
+                                    * u64::from(subspace_core_primitives::PIECES_IN_SEGMENT),
+                                <span class="kw-2">&amp;</span>archived_segment_notification.archived_segment.pieces,
+                            ) {
+                                <span class="macro">tracing::error!</span>(
+                                    %segment_index,
+                                    %error,
+                                    <span class="string">&quot;Failed to store pieces for segment in cache&quot;
+                                </span>);
+                            }
                         }
                     }
-                }
-            });
+                })<span class="question-mark">?</span>;
 
             <span class="kw">let </span>chain_spec_boot_nodes = base
                 .chain_spec
@@ -3243,9 +3261,9 @@
                 node_runner.run().<span class="kw">await</span>;
                 <span class="macro">tracing::error!</span>(<span class="string">&quot;Exited from node runner future&quot;</span>);
             }),
-            <span class="comment">// TODO: Add propper thread name or remove in favour of `tokio::task::Builder`
-            </span><span class="string">&quot;subspace-sdk-networking&quot;</span>.to_owned(),
-        )<span class="question-mark">?</span>;
+            <span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-networking-{name}&quot;</span>),
+        )
+        .context(<span class="string">&quot;Failed to run node runner future&quot;</span>)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>slot_proportion = sc_consensus_slots::SlotProportion::new(<span class="number">2f32 </span>/ <span class="number">3f32</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>full_client =
@@ -3297,19 +3315,32 @@
         network_starter.start_network();
         <span class="kw">let </span>(stop_sender, <span class="kw-2">mut </span>stop_receiver) = mpsc::channel::&lt;oneshot::Sender&lt;()&gt;&gt;(<span class="number">1</span>);
 
-        tokio::spawn(<span class="kw">async move </span>{
-            <span class="kw">let </span>opt_stop_sender = <span class="kw">async move </span>{
-                <span class="macro">futures::select! </span>{
-                    opt_sender = stop_receiver.next() =&gt; opt_sender,
-                    result = task_manager.future().fuse() =&gt; {
-                        result.expect(<span class="string">&quot;Task from manager paniced&quot;</span>);
-                        <span class="prelude-val">None
-                    </span>}
-                    <span class="kw">_ </span>= node_runner_future.fuse() =&gt; <span class="prelude-val">None</span>,
+        tokio::task::Builder::new()
+            .name(<span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-node-{name}-task-manager&quot;</span>).as_ref())
+            .spawn(<span class="kw">async move </span>{
+                <span class="kw">let </span>opt_stop_sender = <span class="kw">async move </span>{
+                    <span class="macro">futures::select! </span>{
+                        opt_sender = stop_receiver.next() =&gt; opt_sender,
+                        result = task_manager.future().fuse() =&gt; {
+                            result.expect(<span class="string">&quot;Task from manager paniced&quot;</span>);
+                            <span class="prelude-val">None
+                        </span>}
+                        <span class="kw">_ </span>= node_runner_future.fuse() =&gt; <span class="prelude-val">None</span>,
+                    }
                 }
+                .<span class="kw">await</span>;
+                opt_stop_sender.map(|stop_sender| stop_sender.send(()));
+            })<span class="question-mark">?</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>drop_collection = DropCollection::new();
+        drop_collection.defer(<span class="kw">move </span>|| {
+            <span class="kw">const </span>BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(<span class="number">100</span>);
+
+            <span class="comment">// Busy wait till backend exits
+            // TODO: is it the only wait to check that substrate node exited?
+            </span><span class="kw">while </span>Arc::strong_count(<span class="kw-2">&amp;</span>backend) != <span class="number">1 </span>{
+                std::thread::sleep(BUSY_WAIT_INTERVAL);
             }
-            .<span class="kw">await</span>;
-            opt_stop_sender.map(|stop_sender| stop_sender.send(()));
         });
 
         <span class="prelude-val">Ok</span>(Node {
@@ -3325,7 +3356,7 @@
             farmer_provider_storage,
             piece_cache,
             piece_memory_cache,
-            backend,
+            _drop_at_exit: drop_collection,
         })
     }
 }
@@ -3373,7 +3404,7 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) rpc_handle: <span class="kw">crate</span>::utils::Rpc,
     <span class="kw">pub</span>(<span class="kw">crate</span>) stop_sender: mpsc::Sender&lt;oneshot::Sender&lt;()&gt;&gt;,
     <span class="kw">pub</span>(<span class="kw">crate</span>) dsn_node: subspace_networking::Node,
-    name: String,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) name: String,
     <span class="kw">pub</span>(<span class="kw">crate</span>) farmer_readers_and_pieces: Arc&lt;parking_lot::Mutex&lt;<span class="prelude-ty">Option</span>&lt;ReadersAndPieces&gt;&gt;&gt;,
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) farmer_piece_store: Arc&lt;
@@ -3391,8 +3422,9 @@
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) piece_cache: NodePieceCache&lt;FullClient&gt;,
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) piece_memory_cache: PieceMemoryCache,
+
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
-    </span>backend: Arc&lt;subspace_service::FullBackend&gt;,
+    </span>_drop_at_exit: DropCollection,
 }
 
 <span class="doccomment">/// Hash type
@@ -3661,21 +3693,11 @@
 
     <span class="doccomment">/// Leaves the network and gracefully shuts down
     </span><span class="kw">pub async fn </span>close(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">const </span>BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(<span class="number">100</span>);
-
         <span class="kw">let </span>(stop_sender, stop_receiver) = oneshot::channel();
         <span class="kw">let _ </span>= <span class="kw">match </span><span class="self">self</span>.stop_sender.send(stop_sender).<span class="kw">await </span>{
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Node was already closed&quot;</span>)),
             <span class="prelude-val">Ok</span>(()) =&gt; stop_receiver.<span class="kw">await</span>,
         };
-        <span class="kw">let </span>backend = Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.backend);
-        drop(<span class="self">self</span>);
-
-        <span class="comment">// Busy wait till backend exits
-        // TODO: is it the only wait to check that substrate node exited?
-        </span><span class="kw">while </span>Arc::strong_count(<span class="kw-2">&amp;</span>backend) != <span class="number">1 </span>{
-            tokio::time::sleep(BUSY_WAIT_INTERVAL).<span class="kw">await</span>;
-        }
 
         <span class="prelude-val">Ok</span>(())
     }
