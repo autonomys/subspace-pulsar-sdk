@@ -2,16 +2,28 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use bytesize::ByteSize;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use futures::prelude::*;
 use subspace_sdk::farmer::CacheDescription;
 use subspace_sdk::node::{self, Node};
 use subspace_sdk::{Farmer, PlotDescription, PublicKey};
 
+#[derive(Subcommand, Debug)]
+enum Chain {
+    Gemini3C,
+    Devnet,
+}
+
 /// Gemini 3c test binary
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
 pub struct Args {
+    /// Set the chain
+    #[command(subcommand)]
+    chain: Chain,
+    /// Should we run the executor?
+    #[arg(short, long)]
+    executor: bool,
     /// Address for farming rewards
     #[arg(short, long)]
     reward_address: PublicKey,
@@ -35,23 +47,41 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let Args { reward_address, base_path, plot_size, cache_size } = Args::parse();
+    let Args { chain, executor, reward_address, base_path, plot_size, cache_size } = Args::parse();
     let (base_path, _tmp_dir) = base_path.map(|x| (x, None)).unwrap_or_else(|| {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
         (tmp.as_ref().to_owned(), Some(tmp))
     });
 
     let node_dir = base_path.join("node");
-    let node = Node::gemini_3c()
-        .role(node::Role::Authority)
-        .build(&node_dir, node::chain_spec::gemini_3c().unwrap())
-        .await?;
+    let node = match chain {
+        Chain::Gemini3C => Node::gemini_3c(),
+        Chain::Devnet => Node::devnet(),
+    }
+    .role(node::Role::Authority);
+
+    let node = if executor {
+        node.system_domain(
+            subspace_sdk::node::domains::ConfigBuilder::new()
+                .core(subspace_sdk::node::domains::core::ConfigBuilder::new().build()),
+        )
+    } else {
+        node
+    }
+    .build(
+        &node_dir,
+        match chain {
+            Chain::Gemini3C => node::chain_spec::gemini_3c().unwrap(),
+            Chain::Devnet => node::chain_spec::devnet_config().unwrap(),
+        },
+    )
+    .await?;
 
     tokio::select! {
         result = node.sync() => result?,
         _ = tokio::signal::ctrl_c() => {
             tracing::info!("Exitting...");
-            return Ok(())
+            return node.close().await.context("Failed to close node")
         }
     }
     tracing::info!("Node was synced!");
