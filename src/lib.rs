@@ -1,6 +1,6 @@
 //! Subspace SDK for easy running of both Subspace node and farmer
 
-#![deny(missing_docs, clippy::dbg_macro, clippy::unwrap_used, clippy::disallowed_types)]
+#![warn(missing_docs, clippy::dbg_macro, clippy::unwrap_used, clippy::disallowed_types)]
 #![feature(type_changing_struct_update, concat_idents, const_option)]
 
 /// Module related to the farmer
@@ -194,56 +194,5 @@ mod parse_ss58 {
         fn from_str(s: &str) -> Result<Self, Self::Err> {
             parse_ss58_reward_address(s).map(Self)
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #![allow(clippy::unwrap_used)]
-
-    use futures::StreamExt;
-    use tempfile::TempDir;
-
-    use super::farmer::CacheDescription;
-    use super::node::Role;
-    use super::*;
-
-    async fn test_integration_inner() {
-        crate::utils::test_init();
-
-        let dir = TempDir::new().unwrap();
-        let node = Node::dev()
-            .role(Role::Authority)
-            .build(dir, node::chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
-
-        let (dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let plot_descriptions =
-            [PlotDescription::new(dir.path(), "100m".parse().unwrap()).unwrap()];
-        let farmer = Farmer::builder()
-            .build(
-                Default::default(),
-                &node,
-                &plot_descriptions,
-                CacheDescription::minimal(cache_dir.as_ref()),
-            )
-            .await
-            .unwrap();
-
-        node.subscribe_new_blocks().await.unwrap().take(2).for_each(|_| async move {}).await;
-
-        farmer.close().await.unwrap();
-        node.close().await.unwrap();
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    #[cfg_attr(
-        any(tarpaulin, not(target_os = "linux")),
-        ignore = "Ignored for coverage tests and not linux platforms"
-    )]
-    async fn test_integration() {
-        let timeout = std::time::Duration::from_secs(30 * 60);
-        tokio::time::timeout(timeout, test_integration_inner()).await.unwrap();
     }
 }

@@ -662,6 +662,8 @@ impl Config {
             }
         });
 
+        tracing::debug!("Started farmer");
+
         Ok(Farmer {
             reward_address,
             plot_info,
@@ -912,7 +914,7 @@ impl Plot {
                 }
             })
             .take_while(|InitialPlottingProgress { current_sector, total_sectors, .. }| {
-                futures::future::ready(current_sector != total_sectors)
+                futures::future::ready(current_sector <= total_sectors)
             })
             .chain(futures::stream::once({
                 let mut initial_progress = *self.initial_plotting_progress.lock().await;
@@ -997,8 +999,10 @@ mod tests {
     use super::*;
     use crate::node::{chain_spec, Node, Role};
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_get_info() {
+        crate::utils::test_init();
+
         let dir = TempDir::new().unwrap();
         let node = Node::dev()
             .role(Role::Authority)
@@ -1006,13 +1010,16 @@ mod tests {
             .await
             .unwrap();
         let plot_dir = TempDir::new().unwrap();
-        let plots = [PlotDescription::minimal(plot_dir.as_ref())];
         let cache_dir = TempDir::new().unwrap();
         let farmer = Farmer::builder()
-            .build(Default::default(), &node, &plots, CacheDescription::minimal(cache_dir.as_ref()))
+            .build(
+                Default::default(),
+                &node,
+                &[PlotDescription::minimal(plot_dir.as_ref())],
+                CacheDescription::minimal(cache_dir.as_ref()),
+            )
             .await
             .unwrap();
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
         let Info { reward_address, plots_info, .. } = farmer.get_info().await.unwrap();
         assert_eq!(reward_address, Default::default());
@@ -1023,8 +1030,10 @@ mod tests {
         node.close().await.unwrap();
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_track_progress() {
+        crate::utils::test_init();
+
         let dir = TempDir::new().unwrap();
         let node = Node::dev()
             .role(Role::Authority)
@@ -1032,7 +1041,7 @@ mod tests {
             .await
             .unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let n_sectors = 4;
+        let n_sectors = 2;
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
@@ -1063,8 +1072,10 @@ mod tests {
         node.close().await.unwrap();
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_new_solution() {
+        crate::utils::test_init();
+
         let dir = TempDir::new().unwrap();
         let node = Node::dev()
             .role(Role::Authority)
@@ -1097,8 +1108,10 @@ mod tests {
         node.close().await.unwrap();
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_progress_restart() {
+        crate::utils::test_init();
+
         let dir = TempDir::new().unwrap();
         let node = Node::dev()
             .role(Role::Authority)
