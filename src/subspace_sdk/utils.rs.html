@@ -364,7 +364,7 @@
 #[derivative(Debug)]
 </span><span class="kw">pub struct </span>DropCollection {
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
-    </span>vec: Vec&lt;Box&lt;<span class="kw">dyn </span>Send&gt;&gt;,
+    </span>vec: Vec&lt;Box&lt;<span class="kw">dyn </span>Send + Sync&gt;&gt;,
 }
 
 <span class="kw">impl </span>DropCollection {
@@ -372,16 +372,16 @@
         <span class="self">Self</span>::default()
     }
 
-    <span class="kw">pub fn </span>defer&lt;F: FnOnce() + Send + <span class="lifetime">&#39;static</span>&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, f: F) {
+    <span class="kw">pub fn </span>defer&lt;F: FnOnce() + Sync + Send + <span class="lifetime">&#39;static</span>&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, f: F) {
         <span class="self">self</span>.push(Defer::new(f))
     }
 
-    <span class="kw">pub fn </span>push&lt;T: Send + <span class="lifetime">&#39;static</span>&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, t: T) {
+    <span class="kw">pub fn </span>push&lt;T: Send + Sync + <span class="lifetime">&#39;static</span>&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, t: T) {
         <span class="self">self</span>.vec.push(Box::new(t))
     }
 }
 
-<span class="kw">impl</span>&lt;T: Send + <span class="lifetime">&#39;static</span>&gt; FromIterator&lt;T&gt; <span class="kw">for </span>DropCollection {
+<span class="kw">impl</span>&lt;T: Send + Sync + <span class="lifetime">&#39;static</span>&gt; FromIterator&lt;T&gt; <span class="kw">for </span>DropCollection {
     <span class="kw">fn </span>from_iter&lt;I: IntoIterator&lt;Item = T&gt;&gt;(iter: I) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>me = <span class="self">Self</span>::new();
         <span class="kw">for </span>item <span class="kw">in </span>iter {
@@ -391,7 +391,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;T: Send + <span class="lifetime">&#39;static</span>&gt; Extend&lt;T&gt; <span class="kw">for </span>DropCollection {
+<span class="kw">impl</span>&lt;T: Send + Sync + <span class="lifetime">&#39;static</span>&gt; Extend&lt;T&gt; <span class="kw">for </span>DropCollection {
     <span class="kw">fn </span>extend&lt;I: IntoIterator&lt;Item = T&gt;&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, iter: I) {
         <span class="kw">for </span>item <span class="kw">in </span>iter {
             <span class="self">self</span>.push(item);

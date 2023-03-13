@@ -2008,6 +2008,9 @@
 <a href="#2008" id="2008">2008</a>
 <a href="#2009" id="2009">2009</a>
 <a href="#2010" id="2010">2010</a>
+<a href="#2011" id="2011">2011</a>
+<a href="#2012" id="2012">2012</a>
+<a href="#2013" id="2013">2013</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::{NonZeroU64, NonZeroUsize};
 <span class="kw">use </span>std::path::Path;
@@ -3383,6 +3386,9 @@
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
     </span>_drop_at_exit: DropCollection,
 }
+
+<span class="macro">static_assertions::assert_impl_all!</span>(Node: Send, Sync);
+<span class="macro">static_assertions::assert_impl_all!</span>(SystemDomainNode: Send, Sync);
 
 <span class="doccomment">/// Hash type
 </span><span class="kw">pub type </span>Hash = H256;

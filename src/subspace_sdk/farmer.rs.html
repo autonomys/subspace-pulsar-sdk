@@ -1173,6 +1173,9 @@
 <a href="#1173" id="1173">1173</a>
 <a href="#1174" id="1174">1174</a>
 <a href="#1175" id="1175">1175</a>
+<a href="#1176" id="1176">1176</a>
+<a href="#1177" id="1177">1177</a>
+<a href="#1178" id="1178">1178</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1862,6 +1865,9 @@
     node_name: String,
     _drop_at_exit: DropCollection,
 }
+
+<span class="macro">static_assertions::assert_impl_all!</span>(Farmer: Send, Sync);
+<span class="macro">static_assertions::assert_impl_all!</span>(Plot: Send, Sync);
 
 <span class="doccomment">/// Info about some plot
 </span><span class="attr">#[derive(Debug)]
