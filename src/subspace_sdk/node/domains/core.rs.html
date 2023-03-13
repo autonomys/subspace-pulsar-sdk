@@ -786,7 +786,7 @@
     <span class="kw">use </span><span class="kw">crate</span>::node::{chain_spec, domains, Role};
     <span class="kw">use crate</span>::{Farmer, Node, PlotDescription};
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>, worker_threads = <span class="number">2</span>)]
     </span><span class="kw">async fn </span>test_core() {
         <span class="kw">crate</span>::utils::test_init();
 
@@ -803,8 +803,8 @@
             .build(
                 Default::default(),
                 <span class="kw-2">&amp;</span>node,
-                <span class="kw-2">&amp;</span>[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::gb(<span class="number">1</span>)).unwrap()],
-                CacheDescription::new(cache_dir.as_ref(), CacheDescription::MIN_SIZE).unwrap(),
+                <span class="kw-2">&amp;</span>[PlotDescription::minimal(plot_dir.as_ref())],
+                CacheDescription::minimal(cache_dir.as_ref()),
             )
             .<span class="kw">await
             </span>.unwrap();

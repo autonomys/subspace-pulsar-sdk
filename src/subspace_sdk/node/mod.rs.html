@@ -2008,52 +2008,6 @@
 <a href="#2008" id="2008">2008</a>
 <a href="#2009" id="2009">2009</a>
 <a href="#2010" id="2010">2010</a>
-<a href="#2011" id="2011">2011</a>
-<a href="#2012" id="2012">2012</a>
-<a href="#2013" id="2013">2013</a>
-<a href="#2014" id="2014">2014</a>
-<a href="#2015" id="2015">2015</a>
-<a href="#2016" id="2016">2016</a>
-<a href="#2017" id="2017">2017</a>
-<a href="#2018" id="2018">2018</a>
-<a href="#2019" id="2019">2019</a>
-<a href="#2020" id="2020">2020</a>
-<a href="#2021" id="2021">2021</a>
-<a href="#2022" id="2022">2022</a>
-<a href="#2023" id="2023">2023</a>
-<a href="#2024" id="2024">2024</a>
-<a href="#2025" id="2025">2025</a>
-<a href="#2026" id="2026">2026</a>
-<a href="#2027" id="2027">2027</a>
-<a href="#2028" id="2028">2028</a>
-<a href="#2029" id="2029">2029</a>
-<a href="#2030" id="2030">2030</a>
-<a href="#2031" id="2031">2031</a>
-<a href="#2032" id="2032">2032</a>
-<a href="#2033" id="2033">2033</a>
-<a href="#2034" id="2034">2034</a>
-<a href="#2035" id="2035">2035</a>
-<a href="#2036" id="2036">2036</a>
-<a href="#2037" id="2037">2037</a>
-<a href="#2038" id="2038">2038</a>
-<a href="#2039" id="2039">2039</a>
-<a href="#2040" id="2040">2040</a>
-<a href="#2041" id="2041">2041</a>
-<a href="#2042" id="2042">2042</a>
-<a href="#2043" id="2043">2043</a>
-<a href="#2044" id="2044">2044</a>
-<a href="#2045" id="2045">2045</a>
-<a href="#2046" id="2046">2046</a>
-<a href="#2047" id="2047">2047</a>
-<a href="#2048" id="2048">2048</a>
-<a href="#2049" id="2049">2049</a>
-<a href="#2050" id="2050">2050</a>
-<a href="#2051" id="2051">2051</a>
-<a href="#2052" id="2052">2052</a>
-<a href="#2053" id="2053">2053</a>
-<a href="#2054" id="2054">2054</a>
-<a href="#2055" id="2055">2055</a>
-<a href="#2056" id="2056">2056</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::{NonZeroU64, NonZeroUsize};
 <span class="kw">use </span>std::path::Path;
@@ -3344,6 +3298,8 @@
             }
         });
 
+        <span class="macro">tracing::debug!</span>(<span class="string">&quot;Started node&quot;</span>);
+
         <span class="prelude-val">Ok</span>(Node {
             client,
             system_domain,
@@ -3878,60 +3834,12 @@
 </span><span class="kw">mod </span>tests {
     <span class="attr">#![allow(clippy::unwrap_used)]
 
-    </span><span class="kw">use </span>subspace_farmer::node_client::NodeClient;
-    <span class="kw">use </span>tempfile::TempDir;
+    </span><span class="kw">use </span>tempfile::TempDir;
     <span class="kw">use </span>tracing_futures::Instrument;
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
     <span class="kw">use </span><span class="kw">crate</span>::farmer::CacheDescription;
     <span class="kw">use crate</span>::{Farmer, PlotDescription};
-
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
-    </span><span class="kw">async fn </span>test_start_node() {
-        <span class="kw">let </span>dir = TempDir::new().unwrap();
-        Node::dev()
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .<span class="kw">await
-            </span>.unwrap()
-            .close()
-            .<span class="kw">await
-            </span>.unwrap();
-    }
-
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
-    </span><span class="kw">async fn </span>test_rpc() {
-        <span class="kw">let </span>dir = TempDir::new().unwrap();
-        <span class="kw">let </span>node = Node::dev()
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .<span class="kw">await
-            </span>.unwrap();
-
-        <span class="macro">assert!</span>(node.rpc_handle.farmer_app_info().<span class="kw">await</span>.is_ok());
-    }
-
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
-    </span><span class="kw">async fn </span>test_closing() {
-        <span class="kw">crate</span>::utils::test_init();
-
-        <span class="kw">let </span>dir = TempDir::new().unwrap();
-        <span class="kw">let </span>node = Node::dev()
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .<span class="kw">await
-            </span>.unwrap();
-        <span class="kw">let </span>(plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        <span class="kw">let </span>plots = [PlotDescription::minimal(plot_dir.as_ref())];
-        <span class="kw">let </span>farmer = Farmer::builder()
-            .build(Default::default(), <span class="kw-2">&amp;</span>node, <span class="kw-2">&amp;</span>plots, CacheDescription::minimal(cache_dir.as_ref()))
-            .<span class="kw">await
-            </span>.unwrap();
-        tokio::time::sleep(std::time::Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
-
-        farmer.close().<span class="kw">await</span>.unwrap();
-        node.close().<span class="kw">await</span>.unwrap();
-    }
 
     <span class="kw">async fn </span>test_sync_block_inner() {
         <span class="kw">crate</span>::utils::test_init();
@@ -3953,7 +3861,7 @@
             .build(
                 Default::default(),
                 <span class="kw-2">&amp;</span>node,
-                <span class="kw-2">&amp;</span>[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::gb(<span class="number">1</span>)).unwrap()],
+                <span class="kw-2">&amp;</span>[PlotDescription::minimal(plot_dir.as_ref())],
                 CacheDescription::minimal(cache_dir.as_ref()),
             )
             .<span class="kw">await
@@ -3989,7 +3897,7 @@
         other_node.close().<span class="kw">await</span>.unwrap();
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>, worker_threads = <span class="number">2</span>)]
     #[cfg_attr(
         any(tarpaulin, not(target_os = <span class="string">&quot;linux&quot;</span>)),
         ignore = <span class="string">&quot;Slow tests are run only on linux&quot;
@@ -4082,7 +3990,7 @@
         other_farmer.close().<span class="kw">await</span>.unwrap();
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>, worker_threads = <span class="number">2</span>)]
     #[cfg_attr(
         any(tarpaulin, not(target_os = <span class="string">&quot;linux&quot;</span>)),
         ignore = <span class="string">&quot;Slow tests are run only on linux&quot;
