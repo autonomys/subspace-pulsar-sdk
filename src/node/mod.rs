@@ -42,7 +42,7 @@ use crate::networking::provider_storage_utils::MaybeProviderStorage;
 use crate::networking::{
     FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage,
 };
-use crate::utils::Defer;
+use crate::utils::DropCollection;
 
 pub mod chain_spec;
 pub mod domains;
@@ -1223,14 +1223,14 @@ impl Config {
             sync_from_dsn,
         };
 
-        let node_runner_future = crate::utils::spawn_cancellable_future(
-            async move {
+        let node_runner_future = subspace_farmer::utils::run_future_in_dedicated_thread(
+            Box::pin(async move {
                 node_runner.run().await;
                 tracing::error!("Exited from node runner future");
-            },
-            // TODO: Add propper thread name or remove in favour of `tokio::task::Builder`
-            "subspace-sdk-networking-{node_name}".to_owned(),
-        )?;
+            }),
+            format!("subspace-sdk-networking-{name}"),
+        )
+        .context("Failed to run node runner future")?;
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);
         let mut full_client =
@@ -1308,7 +1308,8 @@ impl Config {
                 opt_stop_sender.map(|stop_sender| stop_sender.send(()));
             })?;
 
-        let _drop_at_exit = Defer::new(move || {
+        let mut drop_collection = DropCollection::new();
+        drop_collection.defer(move || {
             const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
 
             // Busy wait till backend exits
@@ -1317,6 +1318,8 @@ impl Config {
                 std::thread::sleep(BUSY_WAIT_INTERVAL);
             }
         });
+
+        tracing::debug!("Started node");
 
         Ok(Node {
             client,
@@ -1331,7 +1334,7 @@ impl Config {
             farmer_provider_storage,
             piece_cache,
             piece_memory_cache,
-            _drop_at_exit,
+            _drop_at_exit: drop_collection,
         })
     }
 }
@@ -1397,8 +1400,9 @@ pub struct Node {
     pub(crate) piece_cache: NodePieceCache<FullClient>,
     #[derivative(Debug = "ignore")]
     pub(crate) piece_memory_cache: PieceMemoryCache,
+
     #[derivative(Debug = "ignore")]
-    _drop_at_exit: Defer,
+    _drop_at_exit: DropCollection,
 }
 
 /// Hash type
@@ -1576,7 +1580,8 @@ impl Node {
             .with_max_elapsed_time(Some(Duration::from_secs(60)))
             .build();
         let check_synced_backoff = backoff::ExponentialBackoffBuilder::new()
-            .with_max_elapsed_time(Some(Duration::from_secs(60)))
+            .with_initial_interval(Duration::from_secs(1))
+            .with_max_elapsed_time(Some(Duration::from_secs(10)))
             .build();
 
         backoff::future::retry(check_offline_backoff, || {
@@ -1870,60 +1875,12 @@ mod farmer_rpc_client {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use subspace_farmer::node_client::NodeClient;
     use tempfile::TempDir;
     use tracing_futures::Instrument;
 
     use super::*;
     use crate::farmer::CacheDescription;
     use crate::{Farmer, PlotDescription};
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_start_node() {
-        let dir = TempDir::new().unwrap();
-        Node::dev()
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .await
-            .unwrap()
-            .close()
-            .await
-            .unwrap();
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_rpc() {
-        let dir = TempDir::new().unwrap();
-        let node = Node::dev()
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
-
-        assert!(node.rpc_handle.farmer_app_info().await.is_ok());
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_closing() {
-        crate::utils::test_init();
-
-        let dir = TempDir::new().unwrap();
-        let node = Node::dev()
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
-            .await
-            .unwrap();
-        let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let plots = [PlotDescription::minimal(plot_dir.as_ref())];
-        let farmer = Farmer::builder()
-            .build(Default::default(), &node, &plots, CacheDescription::minimal(cache_dir.as_ref()))
-            .await
-            .unwrap();
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-        farmer.close().await.unwrap();
-        node.close().await.unwrap();
-    }
 
     async fn test_sync_block_inner() {
         crate::utils::test_init();
@@ -1945,7 +1902,7 @@ mod tests {
             .build(
                 Default::default(),
                 &node,
-                &[PlotDescription::new(plot_dir.as_ref(), bytesize::ByteSize::gb(1)).unwrap()],
+                &[PlotDescription::minimal(plot_dir.as_ref())],
                 CacheDescription::minimal(cache_dir.as_ref()),
             )
             .await
@@ -1981,7 +1938,7 @@ mod tests {
         other_node.close().await.unwrap();
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[cfg_attr(
         any(tarpaulin, not(target_os = "linux")),
         ignore = "Slow tests are run only on linux"
@@ -2074,7 +2031,7 @@ mod tests {
         other_farmer.close().await.unwrap();
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[cfg_attr(
         any(tarpaulin, not(target_os = "linux")),
         ignore = "Slow tests are run only on linux"

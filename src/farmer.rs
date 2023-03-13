@@ -33,7 +33,7 @@ use tracing_futures::Instrument;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
 use crate::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
-use crate::utils::{Defer, DropCollection};
+use crate::utils::DropCollection;
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -476,7 +476,7 @@ impl Config {
 
         let piece_cache_db_path = base_path.join("piece_cache_db");
 
-        let piece_cache = Arc::new(tokio::sync::Mutex::new({
+        let (piece_store, piece_cache, farmer_provider_storage) = {
             let provider_db_path = base_path.join("providers_db");
             // TODO: Remove this migration code in the future
             {
@@ -515,28 +515,17 @@ impl Config {
                 current_size = ?piece_cache.size(),
                 "Piece cache initialized successfully"
             );
-
-            node.farmer_piece_store.lock().await.replace(piece_store);
-            node.farmer_provider_storage.swap(Some(FarmerProviderStorage::new(
+            let farmer_provider_storage = FarmerProviderStorage::new(
                 peer_id,
                 Arc::clone(&readers_and_pieces),
                 db_provider_storage,
                 piece_cache.clone(),
-            )));
+            );
 
-            piece_cache
-        }));
+            (piece_store, Arc::new(Mutex::new(piece_cache)), farmer_provider_storage)
+        };
 
         let mut drop_at_exit = DropCollection::new();
-
-        drop_at_exit.push(
-            crate::networking::start_announcements_processor(
-                node.dsn_node.clone(),
-                Arc::clone(&piece_cache),
-                Arc::downgrade(&readers_and_pieces),
-            )
-            .context("Failed to start announcement processor")?,
-        );
 
         let piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
             node.dsn_node.clone(),
@@ -577,10 +566,10 @@ impl Config {
             // We are not going to send anything here, but dropping of sender on dropping of
             // corresponding `SingleDiskPlot` will allow us to stop background tasks.
             let (dropped_sender, _dropped_receiver) = tokio::sync::broadcast::channel::<()>(1);
-            drop_at_exit.push(Defer::new({
+            drop_at_exit.defer({
                 let dropped_sender = dropped_sender.clone();
                 move || drop(dropped_sender.send(()))
-            }));
+            });
 
             let node = node.dsn_node.clone();
             let node_name = node_name.clone();
@@ -635,7 +624,20 @@ impl Config {
             })
             .context("Failed to spawn task")?;
 
-        drop_at_exit.push(Defer::new({
+        node.farmer_piece_store.lock().await.replace(piece_store);
+        node.farmer_provider_storage.swap(Some(farmer_provider_storage));
+
+        drop_at_exit.push(
+            crate::networking::start_announcements_processor(
+                node.dsn_node.clone(),
+                Arc::clone(&piece_cache),
+                Arc::downgrade(&readers_and_pieces),
+                &node.name,
+            )
+            .context("Failed to start announcement processor")?,
+        );
+
+        drop_at_exit.defer({
             const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
 
             let piece_store = Arc::clone(&node.farmer_piece_store);
@@ -659,7 +661,9 @@ impl Config {
                     }
                 }
             }
-        }));
+        });
+
+        tracing::debug!("Started farmer");
 
         Ok(Farmer {
             reward_address,
@@ -911,7 +915,7 @@ impl Plot {
                 }
             })
             .take_while(|InitialPlottingProgress { current_sector, total_sectors, .. }| {
-                futures::future::ready(current_sector != total_sectors)
+                futures::future::ready(current_sector <= total_sectors)
             })
             .chain(futures::stream::once({
                 let mut initial_progress = *self.initial_plotting_progress.lock().await;
@@ -996,8 +1000,10 @@ mod tests {
     use super::*;
     use crate::node::{chain_spec, Node, Role};
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_get_info() {
+        crate::utils::test_init();
+
         let dir = TempDir::new().unwrap();
         let node = Node::dev()
             .role(Role::Authority)
@@ -1005,13 +1011,16 @@ mod tests {
             .await
             .unwrap();
         let plot_dir = TempDir::new().unwrap();
-        let plots = [PlotDescription::minimal(plot_dir.as_ref())];
         let cache_dir = TempDir::new().unwrap();
         let farmer = Farmer::builder()
-            .build(Default::default(), &node, &plots, CacheDescription::minimal(cache_dir.as_ref()))
+            .build(
+                Default::default(),
+                &node,
+                &[PlotDescription::minimal(plot_dir.as_ref())],
+                CacheDescription::minimal(cache_dir.as_ref()),
+            )
             .await
             .unwrap();
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
         let Info { reward_address, plots_info, .. } = farmer.get_info().await.unwrap();
         assert_eq!(reward_address, Default::default());
@@ -1022,8 +1031,10 @@ mod tests {
         node.close().await.unwrap();
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_track_progress() {
+        crate::utils::test_init();
+
         let dir = TempDir::new().unwrap();
         let node = Node::dev()
             .role(Role::Authority)
@@ -1031,7 +1042,7 @@ mod tests {
             .await
             .unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let n_sectors = 4;
+        let n_sectors = 2;
         let farmer = Farmer::builder()
             .build(
                 Default::default(),
@@ -1062,8 +1073,10 @@ mod tests {
         node.close().await.unwrap();
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_new_solution() {
+        crate::utils::test_init();
+
         let dir = TempDir::new().unwrap();
         let node = Node::dev()
             .role(Role::Authority)
@@ -1096,8 +1109,10 @@ mod tests {
         node.close().await.unwrap();
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_progress_restart() {
+        crate::utils::test_init();
+
         let dir = TempDir::new().unwrap();
         let node = Node::dev()
             .role(Role::Authority)

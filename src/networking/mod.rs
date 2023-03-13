@@ -47,6 +47,7 @@ pub fn start_announcements_processor(
     node: Node,
     piece_cache: Arc<tokio::sync::Mutex<FarmerPieceCache>>,
     weak_readers_and_pieces: Weak<Mutex<Option<ReadersAndPieces>>>,
+    node_name: &str,
 ) -> std::io::Result<HandlerId> {
     let (provider_records_sender, mut provider_records_receiver) =
         futures::channel::mpsc::channel(MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE.get());
@@ -72,7 +73,6 @@ pub fn start_announcements_processor(
         }
     }));
 
-    let handle = tokio::runtime::Handle::current();
     let span = tracing::Span::current();
     let mut provider_record_processor = FarmerProviderRecordProcessor::new(
         node,
@@ -82,16 +82,16 @@ pub fn start_announcements_processor(
         MAX_CONCURRENT_RE_ANNOUNCEMENTS_PROCESSING,
     );
 
-    // We are working with database internally, better to run in a separate thread
-    std::thread::Builder::new().name("ann-processor".to_string()).spawn(move || {
-        let processor_fut = async {
-            while let Some((provider_record, guard)) = provider_records_receiver.next().await {
-                provider_record_processor.process_provider_record(provider_record, guard).await;
+    tokio::task::Builder::new()
+        .name(format!("subspace-sdk-farmer-{node_name}-ann-processor").as_ref())
+        .spawn(
+            async move {
+                while let Some((provider_record, guard)) = provider_records_receiver.next().await {
+                    provider_record_processor.process_provider_record(provider_record, guard).await;
+                }
             }
-        };
-
-        handle.block_on(processor_fut.instrument(span));
-    })?;
+            .instrument(span),
+        )?;
 
     Ok(handler_id)
 }

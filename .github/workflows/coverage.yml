@@ -8,6 +8,10 @@ on:
       - '.gitignore'
 
 env:
+  # Not needed in CI, should make things a bit faster
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+  MAX_TARGET_SIZE: 1024 # MB
   RUSTFLAGS: --cfg tokio_unstable
 
 jobs:
@@ -26,10 +30,27 @@ jobs:
         with:
           version: "14.0"
 
-      - name: Configure cache
-        uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
+      - name: Add cache
+        uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/bin
+            ~/.cargo/git
+            target
+          key: coverage-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: coverage-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
 
-      - run: cargo install cargo-tarpaulin
+      - name: Install utils for caching
+        run: |
+          test -x ~/.cargo/bin/cargo-sweep || cargo install cargo-sweep
+          test -x ~/.cargo/bin/cargo-cache || cargo install cargo-cache --no-default-features --features ci-autoclean cargo-cache
+
+      - name: Clean unused crate source checkouts and git repo checkouts
+        run: cargo cache
+
+      - name: cargo install cargo-tarpaulin
+        run: test -x ~/.cargo/bin/cargo-tarpaulin || cargo install cargo-tarpaulin
 
       - name: Generate code coverage
         run: cargo tarpaulin --verbose --timeout $((2 * 60 * 60)) --out Xml --release --locked
@@ -39,3 +60,6 @@ jobs:
         with:
           # token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
           fail_ci_if_error: true
+
+      - name: Clean unused artifacts
+        run: cargo sweep --maxsize ${{ env.MAX_TARGET_SIZE }}
