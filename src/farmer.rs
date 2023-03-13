@@ -476,7 +476,7 @@ impl Config {
 
         let piece_cache_db_path = base_path.join("piece_cache_db");
 
-        let piece_cache = Arc::new(tokio::sync::Mutex::new({
+        let (piece_store, piece_cache, farmer_provider_storage) = {
             let provider_db_path = base_path.join("providers_db");
             // TODO: Remove this migration code in the future
             {
@@ -515,29 +515,17 @@ impl Config {
                 current_size = ?piece_cache.size(),
                 "Piece cache initialized successfully"
             );
-
-            node.farmer_piece_store.lock().await.replace(piece_store);
-            node.farmer_provider_storage.swap(Some(FarmerProviderStorage::new(
+            let farmer_provider_storage = FarmerProviderStorage::new(
                 peer_id,
                 Arc::clone(&readers_and_pieces),
                 db_provider_storage,
                 piece_cache.clone(),
-            )));
+            );
 
-            piece_cache
-        }));
+            (piece_store, Arc::new(Mutex::new(piece_cache)), farmer_provider_storage)
+        };
 
         let mut drop_at_exit = DropCollection::new();
-
-        drop_at_exit.push(
-            crate::networking::start_announcements_processor(
-                node.dsn_node.clone(),
-                Arc::clone(&piece_cache),
-                Arc::downgrade(&readers_and_pieces),
-                &node.name,
-            )
-            .context("Failed to start announcement processor")?,
-        );
 
         let piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
             node.dsn_node.clone(),
@@ -634,6 +622,19 @@ impl Config {
                 }
             })
             .context("Failed to spawn task")?;
+
+        node.farmer_piece_store.lock().await.replace(piece_store);
+        node.farmer_provider_storage.swap(Some(farmer_provider_storage));
+
+        drop_at_exit.push(
+            crate::networking::start_announcements_processor(
+                node.dsn_node.clone(),
+                Arc::clone(&piece_cache),
+                Arc::downgrade(&readers_and_pieces),
+                &node.name,
+            )
+            .context("Failed to start announcement processor")?,
+        );
 
         drop_at_exit.defer({
             const PIECE_STORE_POLL: Duration = Duration::from_millis(100);

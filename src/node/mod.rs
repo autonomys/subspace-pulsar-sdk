@@ -1549,7 +1549,8 @@ impl Node {
             .with_max_elapsed_time(Some(Duration::from_secs(60)))
             .build();
         let check_synced_backoff = backoff::ExponentialBackoffBuilder::new()
-            .with_max_elapsed_time(Some(Duration::from_secs(60)))
+            .with_initial_interval(Duration::from_secs(1))
+            .with_max_elapsed_time(Some(Duration::from_secs(10)))
             .build();
 
         backoff::future::retry(check_offline_backoff, || {
