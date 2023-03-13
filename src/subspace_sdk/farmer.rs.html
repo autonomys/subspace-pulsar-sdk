@@ -1159,6 +1159,7 @@
 <a href="#1159" id="1159">1159</a>
 <a href="#1160" id="1160">1160</a>
 <a href="#1161" id="1161">1161</a>
+<a href="#1162" id="1162">1162</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1637,7 +1638,7 @@
 
         <span class="kw">let </span>piece_cache_db_path = base_path.join(<span class="string">&quot;piece_cache_db&quot;</span>);
 
-        <span class="kw">let </span>piece_cache = Arc::new(tokio::sync::Mutex::new({
+        <span class="kw">let </span>(piece_store, piece_cache, farmer_provider_storage) = {
             <span class="kw">let </span>provider_db_path = base_path.join(<span class="string">&quot;providers_db&quot;</span>);
             <span class="comment">// TODO: Remove this migration code in the future
             </span>{
@@ -1676,29 +1677,17 @@
                 current_size = <span class="question-mark">?</span>piece_cache.size(),
                 <span class="string">&quot;Piece cache initialized successfully&quot;
             </span>);
-
-            node.farmer_piece_store.lock().<span class="kw">await</span>.replace(piece_store);
-            node.farmer_provider_storage.swap(<span class="prelude-val">Some</span>(FarmerProviderStorage::new(
+            <span class="kw">let </span>farmer_provider_storage = FarmerProviderStorage::new(
                 peer_id,
                 Arc::clone(<span class="kw-2">&amp;</span>readers_and_pieces),
                 db_provider_storage,
                 piece_cache.clone(),
-            )));
+            );
 
-            piece_cache
-        }));
+            (piece_store, Arc::new(Mutex::new(piece_cache)), farmer_provider_storage)
+        };
 
         <span class="kw">let </span><span class="kw-2">mut </span>drop_at_exit = DropCollection::new();
-
-        drop_at_exit.push(
-            <span class="kw">crate</span>::networking::start_announcements_processor(
-                node.dsn_node.clone(),
-                Arc::clone(<span class="kw-2">&amp;</span>piece_cache),
-                Arc::downgrade(<span class="kw-2">&amp;</span>readers_and_pieces),
-                <span class="kw-2">&amp;</span>node.name,
-            )
-            .context(<span class="string">&quot;Failed to start announcement processor&quot;</span>)<span class="question-mark">?</span>,
-        );
 
         <span class="kw">let </span>piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
             node.dsn_node.clone(),
@@ -1795,6 +1784,19 @@
                 }
             })
             .context(<span class="string">&quot;Failed to spawn task&quot;</span>)<span class="question-mark">?</span>;
+
+        node.farmer_piece_store.lock().<span class="kw">await</span>.replace(piece_store);
+        node.farmer_provider_storage.swap(<span class="prelude-val">Some</span>(farmer_provider_storage));
+
+        drop_at_exit.push(
+            <span class="kw">crate</span>::networking::start_announcements_processor(
+                node.dsn_node.clone(),
+                Arc::clone(<span class="kw-2">&amp;</span>piece_cache),
+                Arc::downgrade(<span class="kw-2">&amp;</span>readers_and_pieces),
+                <span class="kw-2">&amp;</span>node.name,
+            )
+            .context(<span class="string">&quot;Failed to start announcement processor&quot;</span>)<span class="question-mark">?</span>,
+        );
 
         drop_at_exit.defer({
             <span class="kw">const </span>PIECE_STORE_POLL: Duration = Duration::from_millis(<span class="number">100</span>);

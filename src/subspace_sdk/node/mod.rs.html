@@ -2053,6 +2053,7 @@
 <a href="#2053" id="2053">2053</a>
 <a href="#2054" id="2054">2054</a>
 <a href="#2055" id="2055">2055</a>
+<a href="#2056" id="2056">2056</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::{NonZeroU64, NonZeroUsize};
 <span class="kw">use </span>std::path::Path;
@@ -3602,7 +3603,8 @@
             .with_max_elapsed_time(<span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">60</span>)))
             .build();
         <span class="kw">let </span>check_synced_backoff = backoff::ExponentialBackoffBuilder::new()
-            .with_max_elapsed_time(<span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">60</span>)))
+            .with_initial_interval(Duration::from_secs(<span class="number">1</span>))
+            .with_max_elapsed_time(<span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">10</span>)))
             .build();
 
         backoff::future::retry(check_offline_backoff, || {
