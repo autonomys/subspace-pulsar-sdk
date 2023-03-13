@@ -146,7 +146,7 @@ impl<F: FnOnce()> Drop for Defer<F> {
 #[derivative(Debug)]
 pub struct DropCollection {
     #[derivative(Debug = "ignore")]
-    vec: Vec<Box<dyn Send>>,
+    vec: Vec<Box<dyn Send + Sync>>,
 }
 
 impl DropCollection {
@@ -154,16 +154,16 @@ impl DropCollection {
         Self::default()
     }
 
-    pub fn defer<F: FnOnce() + Send + 'static>(&mut self, f: F) {
+    pub fn defer<F: FnOnce() + Sync + Send + 'static>(&mut self, f: F) {
         self.push(Defer::new(f))
     }
 
-    pub fn push<T: Send + 'static>(&mut self, t: T) {
+    pub fn push<T: Send + Sync + 'static>(&mut self, t: T) {
         self.vec.push(Box::new(t))
     }
 }
 
-impl<T: Send + 'static> FromIterator<T> for DropCollection {
+impl<T: Send + Sync + 'static> FromIterator<T> for DropCollection {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut me = Self::new();
         for item in iter {
@@ -173,7 +173,7 @@ impl<T: Send + 'static> FromIterator<T> for DropCollection {
     }
 }
 
-impl<T: Send + 'static> Extend<T> for DropCollection {
+impl<T: Send + Sync + 'static> Extend<T> for DropCollection {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         for item in iter {
             self.push(item);
