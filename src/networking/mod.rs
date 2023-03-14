@@ -11,7 +11,7 @@ use sc_client_api::AuxStore;
 use subspace_core_primitives::PieceIndexHash;
 use subspace_farmer::utils::farmer_provider_record_processor::FarmerProviderRecordProcessor;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
-use subspace_farmer_components::plotting::PieceGetter;
+use subspace_farmer_components::plotting::{PieceGetter, PieceGetterRetryPolicy};
 use subspace_networking::utils::piece_provider::PieceValidator;
 use subspace_networking::{Node, ParityDbProviderStorage};
 use tracing::{warn, Instrument};
@@ -115,6 +115,7 @@ impl<PV: PieceValidator, C: AuxStore + Send + Sync> PieceGetter for NodePieceGet
     async fn get_piece(
         &self,
         piece_index: subspace_core_primitives::PieceIndex,
+        retry_policy: PieceGetterRetryPolicy,
     ) -> Result<
         Option<subspace_core_primitives::Piece>,
         Box<dyn std::error::Error + Send + Sync + 'static>,
@@ -127,6 +128,6 @@ impl<PV: PieceValidator, C: AuxStore + Send + Sync> PieceGetter for NodePieceGet
             return Ok(piece);
         }
 
-        self.piece_getter.get_piece(piece_index).await
+        self.piece_getter.get_piece(piece_index, retry_policy).await
     }
 }

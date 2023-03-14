@@ -281,6 +281,10 @@ mod builder {
         #[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub dsn: Dsn,
+        /// Storage monitor settings
+        #[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub storage_monitor: Option<StorageMonitor>,
     }
 
     impl Config {
@@ -340,6 +344,22 @@ mod builder {
         ))]
         pub(crate) String,
     );
+
+    #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+    pub struct StorageMonitor {
+        #[serde(with = "bytesize_serde")]
+        pub threshold: bytesize::ByteSize,
+        pub polling_period: std::time::Duration,
+    }
+
+    impl From<StorageMonitor> for sc_storage_monitor::StorageMonitorParams {
+        fn from(StorageMonitor { threshold, polling_period }: StorageMonitor) -> Self {
+            Self {
+                threshold: (threshold.as_u64() / bytesize::MIB).max(1),
+                polling_period: polling_period.as_secs().max(1) as u32,
+            }
+        }
+    }
 
     #[doc(hidden)]
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
@@ -491,7 +511,7 @@ mod builder {
                     name,
                     client_id,
                     enable_mdns,
-                    allow_private_ipv4,
+                    allow_private_ip,
                     allow_non_globals_in_dht,
                 } = network;
                 let name = name.unwrap_or_else(|| {
@@ -516,7 +536,7 @@ mod builder {
                     listen_addresses,
                     boot_nodes: chain_spec.boot_nodes().iter().cloned().chain(boot_nodes).collect(),
                     force_synced,
-                    transport: TransportConfig::Normal { enable_mdns, allow_private_ipv4 },
+                    transport: TransportConfig::Normal { enable_mdns, allow_private_ip },
                     extra_sets: vec![NonDefaultSetConfig::new(
                         ProtocolName::Static("/subspace/cross-domain-messages"),
                         40,
@@ -711,7 +731,7 @@ mod builder {
         /// Listen on some address for other nodes
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub allow_private_ipv4: bool,
+        pub allow_private_ip: bool,
         /// Allow non globals in network DHT
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
@@ -741,7 +761,7 @@ mod builder {
     impl NetworkBuilder {
         /// Dev chain configuration
         pub fn dev() -> Self {
-            Self::default().force_synced(true).allow_private_ipv4(true)
+            Self::default().force_synced(true).allow_private_ip(true)
         }
 
         /// Gemini 3c configuration
@@ -983,9 +1003,11 @@ impl Config {
             system_domain,
             segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
             sync_from_dsn,
+            storage_monitor,
         } = self;
         let base = base.configuration(directory.as_ref(), chain_spec.clone()).await;
         let name = base.network.node_name.clone();
+        let database_source = base.database.clone();
 
         let partial_components =
             subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&base)
@@ -1215,6 +1237,15 @@ impl Config {
             subspace_service::new_full(configuration, partial_components, true, slot_proportion)
                 .await
                 .context("Failed to build a full subspace node")?;
+
+        if let Some(storage_monitor) = storage_monitor {
+            sc_storage_monitor::StorageMonitorService::try_spawn(
+                storage_monitor.into(),
+                database_source,
+                &full_client.task_manager.spawn_essential_handle(),
+            )
+            .context("Failed to start storage monitor")?;
+        }
 
         let system_domain = if let Some(config) = system_domain {
             use sc_service::ChainSpecExtension;
@@ -1708,17 +1739,37 @@ impl Node {
     }
 }
 
+const ROOT_BLOCK_NUMBER_LIMIT: u64 = 100;
+
 pub(crate) fn get_root_block_by_segment_indexes(
-    RootBlockRequest { segment_indexes }: &RootBlockRequest,
+    req: &RootBlockRequest,
     root_block_cache: &RootBlockCache<impl sc_client_api::AuxStore>,
 ) -> Option<RootBlockResponse> {
+    let segment_indexes = match req {
+        RootBlockRequest::SegmentIndexes { segment_indexes } => segment_indexes.clone(),
+        RootBlockRequest::LastRootBlocks { root_block_number } => {
+            let mut block_limit = *root_block_number;
+            if *root_block_number > ROOT_BLOCK_NUMBER_LIMIT {
+                tracing::debug!(%root_block_number, "Root block number exceeded the limit.");
+
+                block_limit = ROOT_BLOCK_NUMBER_LIMIT;
+            }
+
+            let max_segment_index = root_block_cache.max_segment_index();
+
+            // several last segment indexes
+            (0..=max_segment_index).rev().take(block_limit as usize).collect::<Vec<_>>()
+        }
+    };
+
     let internal_result = segment_indexes
         .iter()
         .map(|segment_index| root_block_cache.get_root_block(*segment_index))
-        .collect::<Result<Vec<Option<subspace_core_primitives::RootBlock>>, _>>();
+        .collect::<Result<Option<Vec<subspace_core_primitives::RootBlock>>, _>>();
 
     match internal_result {
-        Ok(root_blocks) => Some(RootBlockResponse { root_blocks }),
+        Ok(Some(root_blocks)) => Some(RootBlockResponse { root_blocks }),
+        Ok(None) => None,
         Err(error) => {
             tracing::error!(%error, "Failed to get root blocks from cache");
 

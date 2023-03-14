@@ -533,9 +533,10 @@ impl Config {
                 node.dsn_node.clone(),
                 node.rpc_handle.clone(),
                 kzg::Kzg::new(kzg::test_public_parameters()),
+                // TODO: Consider introducing and using global in-memory root block cache (this
+                // comment is in multiple files)
                 parking_lot::Mutex::new(lru::LruCache::new(RECORDS_ROOTS_CACHE_SIZE)),
             )),
-            true,
         );
         let piece_getter = Arc::new(FarmerPieceGetter::new(
             NodePieceGetter::new(DsnPieceGetter::new(piece_provider), node.piece_cache.clone()),
