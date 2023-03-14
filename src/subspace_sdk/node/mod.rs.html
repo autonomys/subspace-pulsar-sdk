@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/node/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-52c5db6f6f352e54.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-4743e13df3dfe8c4.css"><link rel="stylesheet" disabled href="../../../static.files/dark-0e1b889528bd466b.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-65289d5d067c7c66.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-d2686a620d99aad7.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../subspace_sdk/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/node/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c4dbdcde0fbd8430.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-db279b6232be9c13.css"><link rel="stylesheet" disabled href="../../../static.files/dark-cf923f49f397b216.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-be46fdc453a55015.css"><script src="../../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../../static.files/source-script-1b95b7cca98b26e5.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-98a684e84ae5b08b.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../subspace_sdk/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -2011,6 +2011,57 @@
 <a href="#2011" id="2011">2011</a>
 <a href="#2012" id="2012">2012</a>
 <a href="#2013" id="2013">2013</a>
+<a href="#2014" id="2014">2014</a>
+<a href="#2015" id="2015">2015</a>
+<a href="#2016" id="2016">2016</a>
+<a href="#2017" id="2017">2017</a>
+<a href="#2018" id="2018">2018</a>
+<a href="#2019" id="2019">2019</a>
+<a href="#2020" id="2020">2020</a>
+<a href="#2021" id="2021">2021</a>
+<a href="#2022" id="2022">2022</a>
+<a href="#2023" id="2023">2023</a>
+<a href="#2024" id="2024">2024</a>
+<a href="#2025" id="2025">2025</a>
+<a href="#2026" id="2026">2026</a>
+<a href="#2027" id="2027">2027</a>
+<a href="#2028" id="2028">2028</a>
+<a href="#2029" id="2029">2029</a>
+<a href="#2030" id="2030">2030</a>
+<a href="#2031" id="2031">2031</a>
+<a href="#2032" id="2032">2032</a>
+<a href="#2033" id="2033">2033</a>
+<a href="#2034" id="2034">2034</a>
+<a href="#2035" id="2035">2035</a>
+<a href="#2036" id="2036">2036</a>
+<a href="#2037" id="2037">2037</a>
+<a href="#2038" id="2038">2038</a>
+<a href="#2039" id="2039">2039</a>
+<a href="#2040" id="2040">2040</a>
+<a href="#2041" id="2041">2041</a>
+<a href="#2042" id="2042">2042</a>
+<a href="#2043" id="2043">2043</a>
+<a href="#2044" id="2044">2044</a>
+<a href="#2045" id="2045">2045</a>
+<a href="#2046" id="2046">2046</a>
+<a href="#2047" id="2047">2047</a>
+<a href="#2048" id="2048">2048</a>
+<a href="#2049" id="2049">2049</a>
+<a href="#2050" id="2050">2050</a>
+<a href="#2051" id="2051">2051</a>
+<a href="#2052" id="2052">2052</a>
+<a href="#2053" id="2053">2053</a>
+<a href="#2054" id="2054">2054</a>
+<a href="#2055" id="2055">2055</a>
+<a href="#2056" id="2056">2056</a>
+<a href="#2057" id="2057">2057</a>
+<a href="#2058" id="2058">2058</a>
+<a href="#2059" id="2059">2059</a>
+<a href="#2060" id="2060">2060</a>
+<a href="#2061" id="2061">2061</a>
+<a href="#2062" id="2062">2062</a>
+<a href="#2063" id="2063">2063</a>
+<a href="#2064" id="2064">2064</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::{NonZeroU64, NonZeroUsize};
 <span class="kw">use </span>std::path::Path;
@@ -2294,6 +2345,10 @@
         </span><span class="attr">#[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
         </span><span class="kw">pub </span>dsn: Dsn,
+        <span class="doccomment">/// Storage monitor settings
+        </span><span class="attr">#[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
+        </span><span class="kw">pub </span>storage_monitor: <span class="prelude-ty">Option</span>&lt;StorageMonitor&gt;,
     }
 
     <span class="kw">impl </span>Config {
@@ -2353,6 +2408,22 @@
         </span>))]
         </span><span class="kw">pub</span>(<span class="kw">crate</span>) String,
     );
+
+    <span class="attr">#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+    </span><span class="kw">pub struct </span>StorageMonitor {
+        <span class="attr">#[serde(with = <span class="string">&quot;bytesize_serde&quot;</span>)]
+        </span><span class="kw">pub </span>threshold: bytesize::ByteSize,
+        <span class="kw">pub </span>polling_period: std::time::Duration,
+    }
+
+    <span class="kw">impl </span>From&lt;StorageMonitor&gt; <span class="kw">for </span>sc_storage_monitor::StorageMonitorParams {
+        <span class="kw">fn </span>from(StorageMonitor { threshold, polling_period }: StorageMonitor) -&gt; <span class="self">Self </span>{
+            <span class="self">Self </span>{
+                threshold: (threshold.as_u64() / bytesize::MIB).max(<span class="number">1</span>),
+                polling_period: polling_period.as_secs().max(<span class="number">1</span>) <span class="kw">as </span>u32,
+            }
+        }
+    }
 
     <span class="attr">#[doc(hidden)]
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
@@ -2504,7 +2575,7 @@
                     name,
                     client_id,
                     enable_mdns,
-                    allow_private_ipv4,
+                    allow_private_ip,
                     allow_non_globals_in_dht,
                 } = network;
                 <span class="kw">let </span>name = name.unwrap_or_else(|| {
@@ -2529,7 +2600,7 @@
                     listen_addresses,
                     boot_nodes: chain_spec.boot_nodes().iter().cloned().chain(boot_nodes).collect(),
                     force_synced,
-                    transport: TransportConfig::Normal { enable_mdns, allow_private_ipv4 },
+                    transport: TransportConfig::Normal { enable_mdns, allow_private_ip },
                     extra_sets: <span class="macro">vec!</span>[NonDefaultSetConfig::new(
                         ProtocolName::Static(<span class="string">&quot;/subspace/cross-domain-messages&quot;</span>),
                         <span class="number">40</span>,
@@ -2724,7 +2795,7 @@
         <span class="doccomment">/// Listen on some address for other nodes
         </span><span class="attr">#[builder(default)]
         #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
-        </span><span class="kw">pub </span>allow_private_ipv4: bool,
+        </span><span class="kw">pub </span>allow_private_ip: bool,
         <span class="doccomment">/// Allow non globals in network DHT
         </span><span class="attr">#[builder(default)]
         #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
@@ -2754,7 +2825,7 @@
     <span class="kw">impl </span>NetworkBuilder {
         <span class="doccomment">/// Dev chain configuration
         </span><span class="kw">pub fn </span>dev() -&gt; <span class="self">Self </span>{
-            <span class="self">Self</span>::default().force_synced(<span class="bool-val">true</span>).allow_private_ipv4(<span class="bool-val">true</span>)
+            <span class="self">Self</span>::default().force_synced(<span class="bool-val">true</span>).allow_private_ip(<span class="bool-val">true</span>)
         }
 
         <span class="doccomment">/// Gemini 3c configuration
@@ -2996,9 +3067,11 @@
             system_domain,
             segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
             sync_from_dsn,
+            storage_monitor,
         } = <span class="self">self</span>;
         <span class="kw">let </span>base = base.configuration(directory.as_ref(), chain_spec.clone()).<span class="kw">await</span>;
         <span class="kw">let </span>name = base.network.node_name.clone();
+        <span class="kw">let </span>database_source = base.database.clone();
 
         <span class="kw">let </span>partial_components =
             subspace_service::new_partial::&lt;RuntimeApi, ExecutorDispatch&gt;(<span class="kw-2">&amp;</span>base)
@@ -3228,6 +3301,15 @@
             subspace_service::new_full(configuration, partial_components, <span class="bool-val">true</span>, slot_proportion)
                 .<span class="kw">await
                 </span>.context(<span class="string">&quot;Failed to build a full subspace node&quot;</span>)<span class="question-mark">?</span>;
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(storage_monitor) = storage_monitor {
+            sc_storage_monitor::StorageMonitorService::try_spawn(
+                storage_monitor.into(),
+                database_source,
+                <span class="kw-2">&amp;</span>full_client.task_manager.spawn_essential_handle(),
+            )
+            .context(<span class="string">&quot;Failed to start storage monitor&quot;</span>)<span class="question-mark">?</span>;
+        }
 
         <span class="kw">let </span>system_domain = <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = system_domain {
             <span class="kw">use </span>sc_service::ChainSpecExtension;
@@ -3721,17 +3803,37 @@
     }
 }
 
+<span class="kw">const </span>ROOT_BLOCK_NUMBER_LIMIT: u64 = <span class="number">100</span>;
+
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_root_block_by_segment_indexes(
-    RootBlockRequest { segment_indexes }: <span class="kw-2">&amp;</span>RootBlockRequest,
+    req: <span class="kw-2">&amp;</span>RootBlockRequest,
     root_block_cache: <span class="kw-2">&amp;</span>RootBlockCache&lt;<span class="kw">impl </span>sc_client_api::AuxStore&gt;,
 ) -&gt; <span class="prelude-ty">Option</span>&lt;RootBlockResponse&gt; {
+    <span class="kw">let </span>segment_indexes = <span class="kw">match </span>req {
+        RootBlockRequest::SegmentIndexes { segment_indexes } =&gt; segment_indexes.clone(),
+        RootBlockRequest::LastRootBlocks { root_block_number } =&gt; {
+            <span class="kw">let </span><span class="kw-2">mut </span>block_limit = <span class="kw-2">*</span>root_block_number;
+            <span class="kw">if </span><span class="kw-2">*</span>root_block_number &gt; ROOT_BLOCK_NUMBER_LIMIT {
+                <span class="macro">tracing::debug!</span>(%root_block_number, <span class="string">&quot;Root block number exceeded the limit.&quot;</span>);
+
+                block_limit = ROOT_BLOCK_NUMBER_LIMIT;
+            }
+
+            <span class="kw">let </span>max_segment_index = root_block_cache.max_segment_index();
+
+            <span class="comment">// several last segment indexes
+            </span>(<span class="number">0</span>..=max_segment_index).rev().take(block_limit <span class="kw">as </span>usize).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+        }
+    };
+
     <span class="kw">let </span>internal_result = segment_indexes
         .iter()
         .map(|segment_index| root_block_cache.get_root_block(<span class="kw-2">*</span>segment_index))
-        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="prelude-ty">Option</span>&lt;subspace_core_primitives::RootBlock&gt;&gt;, <span class="kw">_</span>&gt;&gt;();
+        .collect::&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;subspace_core_primitives::RootBlock&gt;&gt;, <span class="kw">_</span>&gt;&gt;();
 
     <span class="kw">match </span>internal_result {
-        <span class="prelude-val">Ok</span>(root_blocks) =&gt; <span class="prelude-val">Some</span>(RootBlockResponse { root_blocks }),
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(root_blocks)) =&gt; <span class="prelude-val">Some</span>(RootBlockResponse { root_blocks }),
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; <span class="prelude-val">None</span>,
         <span class="prelude-val">Err</span>(error) =&gt; {
             <span class="macro">tracing::error!</span>(%error, <span class="string">&quot;Failed to get root blocks from cache&quot;</span>);
 
@@ -4025,4 +4127,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="subspace_sdk" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (afaf3e07a 2023-01-14)" data-search-js="search-181581080540673f.js" data-settings-js="settings-a2afdefbb7c817f1.js" data-settings-css="settings-84508a86fe805444.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="subspace_sdk" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (e3dfeeaa4 2023-03-07)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
