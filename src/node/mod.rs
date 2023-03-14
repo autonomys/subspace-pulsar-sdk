@@ -1405,6 +1405,9 @@ pub struct Node {
     _drop_at_exit: DropCollection,
 }
 
+static_assertions::assert_impl_all!(Node: Send, Sync);
+static_assertions::assert_impl_all!(SystemDomainNode: Send, Sync);
+
 /// Hash type
 pub type Hash = H256;
 /// Block number

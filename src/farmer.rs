@@ -689,6 +689,9 @@ pub struct Farmer {
     _drop_at_exit: DropCollection,
 }
 
+static_assertions::assert_impl_all!(Farmer: Send, Sync);
+static_assertions::assert_impl_all!(Plot: Send, Sync);
+
 /// Info about some plot
 #[derive(Debug)]
 #[non_exhaustive]
