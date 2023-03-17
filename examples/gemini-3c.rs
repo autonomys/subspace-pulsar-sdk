@@ -28,6 +28,8 @@ pub struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    fdlimit::raise_fd_limit();
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
@@ -42,10 +44,34 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let node_dir = base_path.join("node");
-    let node = Node::gemini_3c()
-        .role(node::Role::Authority)
-        .build(&node_dir, node::chain_spec::gemini_3c().unwrap())
-        .await?;
+    let node = match chain {
+        Chain::Gemini3C => Node::gemini_3c().dsn(
+            subspace_sdk::node::DsnBuilder::gemini_3c()
+                .provider_storage_path(node_dir.join("provider_storage")),
+        ),
+        Chain::Devnet => Node::devnet().dsn(
+            subspace_sdk::node::DsnBuilder::devnet()
+                .provider_storage_path(node_dir.join("provider_storage")),
+        ),
+    }
+    .role(node::Role::Authority);
+
+    let node = if executor {
+        node.system_domain(
+            subspace_sdk::node::domains::ConfigBuilder::new()
+                .core(subspace_sdk::node::domains::core::ConfigBuilder::new().build()),
+        )
+    } else {
+        node
+    }
+    .build(
+        &node_dir,
+        match chain {
+            Chain::Gemini3C => node::chain_spec::gemini_3c().unwrap(),
+            Chain::Devnet => node::chain_spec::devnet_config().unwrap(),
+        },
+    )
+    .await?;
 
     tokio::select! {
         result = node.sync() => result?,

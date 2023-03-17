@@ -91,6 +91,7 @@ clap = { version = "4", features = ["derive"] }
 tempfile = "3.3"
 tokio = { version = "1.25", features = ["rt-multi-thread", "macros"] }
 tracing-subscriber = "0.3"
+fdlimit = "0.2"
 
 [patch.crates-io]
 # TODO: Remove once chacha20poly1305 0.10 appears in libp2p's dependencies
