@@ -40,6 +40,8 @@ pub struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    fdlimit::raise_fd_limit();
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
@@ -55,8 +57,14 @@ async fn main() -> anyhow::Result<()> {
 
     let node_dir = base_path.join("node");
     let node = match chain {
-        Chain::Gemini3C => Node::gemini_3c(),
-        Chain::Devnet => Node::devnet(),
+        Chain::Gemini3C => Node::gemini_3c().dsn(
+            subspace_sdk::node::DsnBuilder::gemini_3c()
+                .provider_storage_path(node_dir.join("provider_storage")),
+        ),
+        Chain::Devnet => Node::devnet().dsn(
+            subspace_sdk::node::DsnBuilder::devnet()
+                .provider_storage_path(node_dir.join("provider_storage")),
+        ),
     }
     .role(node::Role::Authority);
 
