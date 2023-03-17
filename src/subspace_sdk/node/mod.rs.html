@@ -2062,6 +2062,8 @@
 <a href="#2062" id="2062">2062</a>
 <a href="#2063" id="2063">2063</a>
 <a href="#2064" id="2064">2064</a>
+<a href="#2065" id="2065">2065</a>
+<a href="#2066" id="2066">2066</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::{NonZeroU64, NonZeroUsize};
 <span class="kw">use </span>std::path::Path;
@@ -3668,6 +3670,8 @@
             <span class="self">self</span>.network.status().map(|result| <span class="kw">match </span>result.map(|status| status.sync_state) {
                 <span class="prelude-val">Ok</span>(SyncState::Importing { target }) =&gt; <span class="prelude-val">Ok</span>((target, SyncStatus::Importing)),
                 <span class="prelude-val">Ok</span>(SyncState::Downloading { target }) =&gt; <span class="prelude-val">Ok</span>((target, SyncStatus::Downloading)),
+                <span class="kw">_ if </span><span class="self">self</span>.network.is_offline() =&gt;
+                    <span class="prelude-val">Err</span>(backoff::Error::transient(<span class="prelude-val">Some</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Node went offline&quot;</span>)))),
                 <span class="prelude-val">Err</span>(()) =&gt; <span class="prelude-val">Err</span>(backoff::Error::transient(<span class="prelude-val">Some</span>(<span class="macro">anyhow::anyhow!</span>(
                     <span class="string">&quot;Failed to fetch networking status&quot;
                 </span>)))),
