@@ -7,6 +7,7 @@ use futures::prelude::*;
 use subspace_sdk::farmer::CacheDescription;
 use subspace_sdk::node::{self, Node};
 use subspace_sdk::{Farmer, PlotDescription, PublicKey};
+use tracing_subscriber::prelude::*;
 
 #[derive(Subcommand, Debug)]
 enum Chain {
@@ -42,8 +43,10 @@ pub struct Args {
 async fn main() -> anyhow::Result<()> {
     fdlimit::raise_fd_limit();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(
+    tracing_subscriber::registry()
+        .with(console_subscriber::spawn())
+        .with(tracing_subscriber::fmt::layer())
+        .with(
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive("info".parse().unwrap()),
         )
@@ -124,7 +127,6 @@ async fn main() -> anyhow::Result<()> {
         _ = subscriptions => {},
         _ = tokio::signal::ctrl_c() => {
             tracing::info!("Exitting...");
-            return Ok(())
         }
     }
 

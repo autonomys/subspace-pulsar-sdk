@@ -91,6 +91,7 @@ clap = { version = "4", features = ["derive"] }
 tempfile = "3"
 tokio = { version = "1.26", features = ["rt-multi-thread", "macros"] }
 tracing-subscriber = "0.3"
+console-subscriber = "0.1"
 fdlimit = "0.2"
 
 [patch.crates-io]
