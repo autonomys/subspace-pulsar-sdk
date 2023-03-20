@@ -467,7 +467,6 @@ impl SystemDomainNode {
         let system_domain_node = domain_service::new_full_system(
             system_domain_config,
             primary_new_full.client.clone(),
-            primary_new_full.backend.clone(),
             primary_new_full.network.clone(),
             &primary_new_full.select_chain,
             imported_block_notification_stream,
