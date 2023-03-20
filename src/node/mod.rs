@@ -438,6 +438,8 @@ mod builder {
                 network: $crate::node::Network,
                 /// Offchain worker settings
                 offchain_worker: $crate::node::OffchainWorker,
+                /// Enable color for substrate informant
+                informant_enable_color: bool,
             });
         }
     }
