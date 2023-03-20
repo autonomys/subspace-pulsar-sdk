@@ -42,6 +42,7 @@ use crate::networking::provider_storage_utils::MaybeProviderStorage;
 use crate::networking::{
     FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage,
 };
+use crate::node::builder::{InConnections, OutConnections, TargetConnections};
 use crate::utils::DropCollection;
 
 pub mod chain_spec;
@@ -787,6 +788,57 @@ mod builder {
         pub(crate) Vec<Multiaddr>,
     );
 
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct InConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
+
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct OutConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
+
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct TargetConnections(#[derivative(Default(value = "50"))] pub(crate) u32);
+
     /// Node DSN builder
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
     #[derivative(Default)]
@@ -814,6 +866,19 @@ mod builder {
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub allow_non_global_addresses_in_dht: bool,
+        /// Defines max established incoming swarm connection limit.
+        #[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub in_connections: InConnections,
+        /// Defines max established outgoing swarm connection limit.
+        #[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub out_connections: OutConnections,
+        /// Defines target total (in and out) connection number for DSN that
+        /// should be maintained.
+        #[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub target_connections: TargetConnections,
     }
 
     impl DsnBuilder {
@@ -1079,6 +1144,9 @@ impl Config {
                     reserved_nodes,
                     allow_non_global_addresses_in_dht,
                     provider_storage_path,
+                    in_connections: InConnections(in_connections),
+                    out_connections: OutConnections(out_connections),
+                    target_connections: TargetConnections(target_connections),
                 } = dsn;
 
                 let peer_id = subspace_networking::peer_id(&keypair);
@@ -1186,6 +1254,9 @@ impl Config {
                                 .expect("Conversion between 2 libp2p versions is always right")
                         })
                         .collect(),
+                    max_established_incoming_connections: in_connections,
+                    max_established_outgoing_connections: out_connections,
+                    target_connections,
                     ..subspace_networking::Config::default()
                 };
 
