@@ -834,28 +834,45 @@ mod builder {
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub allow_non_global_addresses_in_dht: bool,
+        /// Defines max established incoming swarm connection limit.
+        #[builder(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub max_in_connections: u32,
+        /// Defines max established outgoing swarm connection limit.
+        #[builder(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub max_out_connections: u32,
     }
 
     impl DsnBuilder {
         /// Dev chain configuration
         pub fn dev() -> Self {
-            Self::new().allow_non_global_addresses_in_dht(true)
+            Self::new()
+                .allow_non_global_addresses_in_dht(true)
+                .max_in_connections(100)
+                .max_out_connections(100)
         }
 
         /// Gemini 3c configuration
         pub fn gemini_3c() -> Self {
-            Self::new().listen_addresses(vec![
-                "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
-                "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
-            ])
+            Self::new()
+                .listen_addresses(vec![
+                    "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
+                    "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
+                ])
+                .max_in_connections(100)
+                .max_out_connections(100)
         }
 
         /// Gemini 3c configuration
         pub fn devnet() -> Self {
-            Self::new().listen_addresses(vec![
-                "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
-                "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
-            ])
+            Self::new()
+                .listen_addresses(vec![
+                    "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
+                    "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
+                ])
+                .max_in_connections(100)
+                .max_out_connections(100)
         }
     }
 
@@ -1101,6 +1118,8 @@ impl Config {
                     reserved_nodes,
                     allow_non_global_addresses_in_dht,
                     provider_storage_path,
+                    max_in_connections,
+                    max_out_connections,
                 } = dsn;
 
                 let peer_id = subspace_networking::peer_id(&keypair);
@@ -1208,6 +1227,8 @@ impl Config {
                                 .expect("Conversion between 2 libp2p versions is always right")
                         })
                         .collect(),
+                    max_established_incoming_connections: max_in_connections,
+                    max_established_outgoing_connections: max_out_connections,
                     ..subspace_networking::Config::default()
                 };
 
