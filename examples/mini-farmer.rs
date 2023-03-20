@@ -7,6 +7,7 @@ use futures::prelude::*;
 use subspace_sdk::farmer::CacheDescription;
 use subspace_sdk::node::{self, Node};
 use subspace_sdk::{Farmer, PlotDescription, PublicKey};
+use tracing_subscriber::prelude::*;
 
 #[derive(Subcommand, Debug)]
 enum Chain {
@@ -40,8 +41,12 @@ pub struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
+    fdlimit::raise_fd_limit();
+
+    tracing_subscriber::registry()
+        .with(console_subscriber::spawn())
+        .with(tracing_subscriber::fmt::layer())
+        .with(
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive("info".parse().unwrap()),
         )
@@ -55,8 +60,14 @@ async fn main() -> anyhow::Result<()> {
 
     let node_dir = base_path.join("node");
     let node = match chain {
-        Chain::Gemini3C => Node::gemini_3c(),
-        Chain::Devnet => Node::devnet(),
+        Chain::Gemini3C => Node::gemini_3c().dsn(
+            subspace_sdk::node::DsnBuilder::gemini_3c()
+                .provider_storage_path(node_dir.join("provider_storage")),
+        ),
+        Chain::Devnet => Node::devnet().dsn(
+            subspace_sdk::node::DsnBuilder::devnet()
+                .provider_storage_path(node_dir.join("provider_storage")),
+        ),
     }
     .role(node::Role::Authority);
 
@@ -116,7 +127,6 @@ async fn main() -> anyhow::Result<()> {
         _ = subscriptions => {},
         _ = tokio::signal::ctrl_c() => {
             tracing::info!("Exitting...");
-            return Ok(())
         }
     }
 

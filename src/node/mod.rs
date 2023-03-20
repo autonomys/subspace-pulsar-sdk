@@ -1611,6 +1611,8 @@ impl Node {
             self.network.status().map(|result| match result.map(|status| status.sync_state) {
                 Ok(SyncState::Importing { target }) => Ok((target, SyncStatus::Importing)),
                 Ok(SyncState::Downloading { target }) => Ok((target, SyncStatus::Downloading)),
+                _ if self.network.is_offline() =>
+                    Err(backoff::Error::transient(Some(anyhow::anyhow!("Node went offline")))),
                 Err(()) => Err(backoff::Error::transient(Some(anyhow::anyhow!(
                     "Failed to fetch networking status"
                 )))),
