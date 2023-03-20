@@ -9916,6 +9916,7 @@ dependencies = [
  "sc-consensus-subspace",
  "sc-consensus-subspace-rpc",
  "sc-executor",
+ "sc-informant",
  "sc-network",
  "sc-network-common",
  "sc-rpc",

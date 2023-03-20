@@ -407,6 +407,10 @@ mod builder {
         #[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub offchain_worker: OffchainWorker,
+        /// Enable color for substrate informant
+        #[builder(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub informant_enable_color: bool,
     }
 
     #[doc(hidden)]
@@ -498,6 +502,7 @@ mod builder {
                     },
                 network,
                 offchain_worker,
+                informant_enable_color,
             } = self;
 
             let base_path = BasePath::new(directory.as_ref());
@@ -605,7 +610,9 @@ mod builder {
                 announce_block: true,
                 role: role.into(),
                 base_path: Some(base_path),
-                informant_output_format: Default::default(),
+                informant_output_format: sc_informant::OutputFormat {
+                    enable_color: informant_enable_color,
+                },
                 runtime_cache_size: 2,
             }
         }
