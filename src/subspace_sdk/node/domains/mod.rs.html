@@ -534,8 +534,6 @@
 <a href="#534" id="534">534</a>
 <a href="#535" id="535">535</a>
 <a href="#536" id="536">536</a>
-<a href="#537" id="537">537</a>
-<a href="#538" id="538">538</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Module for executor and its domains
 
 </span><span class="kw">use </span>std::path::Path;
@@ -982,7 +980,6 @@
             .then(|imported_block_notification| <span class="kw">async move </span>{
                 (
                     imported_block_notification.block_number,
-                    imported_block_notification.fork_choice,
                     imported_block_notification.block_import_acknowledgement_sender,
                 )
             });
@@ -1006,7 +1003,6 @@
         <span class="kw">let </span>system_domain_node = domain_service::new_full_system(
             system_domain_config,
             primary_new_full.client.clone(),
-            primary_new_full.backend.clone(),
             primary_new_full.network.clone(),
             <span class="kw-2">&amp;</span>primary_new_full.select_chain,
             imported_block_notification_stream,
