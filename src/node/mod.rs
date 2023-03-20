@@ -42,6 +42,7 @@ use crate::networking::provider_storage_utils::MaybeProviderStorage;
 use crate::networking::{
     FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage,
 };
+use crate::node::builder::{InConnections, OutConnections, TargetConnections};
 use crate::utils::DropCollection;
 
 pub mod chain_spec;
@@ -807,6 +808,57 @@ mod builder {
         pub(crate) Vec<Multiaddr>,
     );
 
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct InConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
+
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct OutConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
+
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct TargetConnections(#[derivative(Default(value = "50"))] pub(crate) u32);
+
     /// Node DSN builder
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
     #[derivative(Default)]
@@ -835,44 +887,40 @@ mod builder {
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub allow_non_global_addresses_in_dht: bool,
         /// Defines max established incoming swarm connection limit.
-        #[builder(default)]
+        #[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub max_in_connections: u32,
+        pub in_connections: InConnections,
         /// Defines max established outgoing swarm connection limit.
-        #[builder(default)]
+        #[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub max_out_connections: u32,
+        pub out_connections: OutConnections,
+        /// Defines target total (in and out) connection number for DSN that
+        /// should be maintained.
+        #[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub target_connections: TargetConnections,
     }
 
     impl DsnBuilder {
         /// Dev chain configuration
         pub fn dev() -> Self {
-            Self::new()
-                .allow_non_global_addresses_in_dht(true)
-                .max_in_connections(100)
-                .max_out_connections(100)
+            Self::new().allow_non_global_addresses_in_dht(true)
         }
 
         /// Gemini 3c configuration
         pub fn gemini_3c() -> Self {
-            Self::new()
-                .listen_addresses(vec![
-                    "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
-                    "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
-                ])
-                .max_in_connections(100)
-                .max_out_connections(100)
+            Self::new().listen_addresses(vec![
+                "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
+                "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
+            ])
         }
 
         /// Gemini 3c configuration
         pub fn devnet() -> Self {
-            Self::new()
-                .listen_addresses(vec![
-                    "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
-                    "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
-                ])
-                .max_in_connections(100)
-                .max_out_connections(100)
+            Self::new().listen_addresses(vec![
+                "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
+                "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
+            ])
         }
     }
 
@@ -1118,8 +1166,9 @@ impl Config {
                     reserved_nodes,
                     allow_non_global_addresses_in_dht,
                     provider_storage_path,
-                    max_in_connections,
-                    max_out_connections,
+                    in_connections: InConnections(in_connections),
+                    out_connections: OutConnections(out_connections),
+                    target_connections: TargetConnections(target_connections),
                 } = dsn;
 
                 let peer_id = subspace_networking::peer_id(&keypair);
@@ -1227,8 +1276,9 @@ impl Config {
                                 .expect("Conversion between 2 libp2p versions is always right")
                         })
                         .collect(),
-                    max_established_incoming_connections: max_in_connections,
-                    max_established_outgoing_connections: max_out_connections,
+                    max_established_incoming_connections: in_connections,
+                    max_established_outgoing_connections: out_connections,
+                    target_connections,
                     ..subspace_networking::Config::default()
                 };
 
