@@ -308,7 +308,6 @@ impl CoreDomainNode {
             .then(|imported_block_notification| async move {
                 (
                     imported_block_notification.block_number,
-                    imported_block_notification.fork_choice,
                     imported_block_notification.block_import_acknowledgement_sender,
                 )
             });
@@ -328,7 +327,7 @@ impl CoreDomainNode {
             system_domain_client: system_domain_node.client.clone(),
             system_domain_network: system_domain_node.network.clone(),
             primary_chain_client: primary_chain_node.client.clone(),
-            primary_network: primary_chain_node.network.clone(),
+            primary_network_sync_oracle: primary_chain_node.network.clone(),
             select_chain: primary_chain_node.select_chain.clone(),
             imported_block_notification_stream,
             new_slot_notification_stream,
