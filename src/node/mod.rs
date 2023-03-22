@@ -42,7 +42,9 @@ use crate::networking::provider_storage_utils::MaybeProviderStorage;
 use crate::networking::{
     FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage,
 };
-use crate::node::builder::{InConnections, OutConnections, TargetConnections};
+use crate::node::builder::{
+    InConnections, OutConnections, PendingInConnections, PendingOutConnections, TargetConnections,
+};
 use crate::utils::DropCollection;
 
 pub mod chain_spec;
@@ -859,6 +861,40 @@ mod builder {
     #[serde(transparent)]
     pub struct TargetConnections(#[derivative(Default(value = "50"))] pub(crate) u32);
 
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct PendingInConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
+
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct PendingOutConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
+
     /// Node DSN builder
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
     #[derivative(Default)]
@@ -894,6 +930,14 @@ mod builder {
         #[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub out_connections: OutConnections,
+        /// Pending incoming swarm connection limit.
+        #[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub pending_in_connections: PendingInConnections,
+        /// Pending outgoing swarm connection limit.
+        #[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub pending_out_connections: PendingOutConnections,
         /// Defines target total (in and out) connection number for DSN that
         /// should be maintained.
         #[builder(setter(into), default)]
@@ -1166,9 +1210,11 @@ impl Config {
                     reserved_nodes,
                     allow_non_global_addresses_in_dht,
                     provider_storage_path,
-                    in_connections: InConnections(in_connections),
-                    out_connections: OutConnections(out_connections),
+                    in_connections: InConnections(max_established_incoming_connections),
+                    out_connections: OutConnections(max_established_outgoing_connections),
                     target_connections: TargetConnections(target_connections),
+                    pending_in_connections: PendingInConnections(max_pending_incoming_connections),
+                    pending_out_connections: PendingOutConnections(max_pending_outgoing_connections),
                 } = dsn;
 
                 let peer_id = subspace_networking::peer_id(&keypair);
@@ -1280,9 +1326,11 @@ impl Config {
                                 .expect("Conversion between 2 libp2p versions is always right")
                         })
                         .collect(),
-                    max_established_incoming_connections: in_connections,
-                    max_established_outgoing_connections: out_connections,
+                    max_established_incoming_connections,
+                    max_established_outgoing_connections,
                     target_connections,
+                    max_pending_incoming_connections,
+                    max_pending_outgoing_connections,
                     ..subspace_networking::Config::default()
                 };
 
