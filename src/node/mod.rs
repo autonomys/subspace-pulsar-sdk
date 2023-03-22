@@ -1192,6 +1192,14 @@ impl Config {
                     })
                     .collect();
 
+                let networking_parameters_registry =
+                    subspace_networking::NetworkingParametersManager::new(
+                        &directory.as_ref().join("known_addresses_db"),
+                        bootstrap_nodes.clone(),
+                    )
+                    .context("Failed to open known addresses database for DSN")?
+                    .boxed();
+
                 let external_provider_storage = match provider_storage_path {
                     Some(path) => Either::Left(subspace_networking::ParityDbProviderStorage::new(
                         &path,
@@ -1213,11 +1221,7 @@ impl Config {
                     keypair,
                     listen_on,
                     allow_non_global_addresses_in_dht,
-                    networking_parameters_registry:
-                        subspace_networking::BootstrappedNetworkingParameters::new(
-                            bootstrap_nodes.clone(),
-                        )
-                        .boxed(),
+                    networking_parameters_registry,
                     request_response_protocols: vec![
                         PieceByHashRequestHandler::create({
                             let weak_readers_and_pieces =
