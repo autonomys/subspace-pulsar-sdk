@@ -33,7 +33,7 @@ use tracing_futures::Instrument;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
 use crate::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
-use crate::utils::DropCollection;
+use crate::utils::{AsyncDropFutures, DropCollection};
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -644,17 +644,43 @@ impl Config {
             }
         });
 
+        let mut async_drop = AsyncDropFutures::new();
+
+        async_drop.push({
+            let piece_store = Arc::clone(&node.farmer_piece_store);
+            async move {
+                piece_store.lock().await.take();
+            }
+        });
+
+        async_drop.push(async move {
+            const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
+
+            // HACK: Poll on piece store creation just to be sure
+            loop {
+                let result = ParityDbStore::<
+                    subspace_networking::libp2p::kad::record::Key,
+                    subspace_core_primitives::Piece,
+                >::new(&piece_cache_db_path);
+
+                match result.map(drop) {
+                    // If parity db is still locked wait on it
+                    Err(parity_db::Error::Locked(_)) => tokio::time::sleep(PIECE_STORE_POLL).await,
+                    _ => break,
+                }
+            }
+        });
+
         tracing::debug!("Started farmer");
 
         Ok(Farmer {
-            piece_store: Arc::clone(&node.farmer_piece_store),
-            piece_cache_db_path,
             reward_address,
             plot_info,
             result_receiver: Some(result_receiver),
             node_name,
             base_path,
             _drop_at_exit: drop_at_exit,
+            _async_drop: Some(async_drop),
         })
     }
 }
@@ -669,19 +695,8 @@ pub struct Farmer {
     result_receiver: Option<oneshot::Receiver<anyhow::Result<()>>>,
     base_path: PathBuf,
     node_name: String,
-    #[derivative(Debug = "ignore")]
-    piece_store: Arc<
-        tokio::sync::Mutex<
-            Option<
-                ParityDbStore<
-                    subspace_networking::libp2p::kad::record::Key,
-                    subspace_core_primitives::Piece,
-                >,
-            >,
-        >,
-    >,
-    piece_cache_db_path: PathBuf,
     _drop_at_exit: DropCollection,
+    _async_drop: Option<AsyncDropFutures>,
 }
 
 static_assertions::assert_impl_all!(Farmer: Send, Sync);
@@ -977,28 +992,11 @@ impl Farmer {
 
     /// Stops farming, closes plots, and sends signal to the node
     pub async fn close(mut self) -> anyhow::Result<()> {
-        const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
-
-        self.piece_store.lock().await.take();
-
-        // Wait for parity-db store to exit
         let result_receiver = self.result_receiver.take().expect("Handle is always there");
-        let piece_cache_db_path = self.piece_cache_db_path.clone();
+        let async_drop = self._async_drop.take().expect("Always set").async_drop();
+
         drop(self);
-
-        // HACK: Poll on piece store creation just to be sure
-        loop {
-            let result = ParityDbStore::<
-                subspace_networking::libp2p::kad::record::Key,
-                subspace_core_primitives::Piece,
-            >::new(&piece_cache_db_path);
-
-            match result.map(drop) {
-                // If parity db is still locked wait on it
-                Err(parity_db::Error::Locked(_)) => tokio::time::sleep(PIECE_STORE_POLL).await,
-                _ => break,
-            }
-        }
+        async_drop.await;
 
         result_receiver.await?
     }
