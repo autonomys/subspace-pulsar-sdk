@@ -637,34 +637,18 @@ impl Config {
         );
 
         drop_at_exit.defer({
-            const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
-
-            let piece_store = Arc::clone(&node.farmer_piece_store);
             let provider_storage = node.farmer_provider_storage.clone();
             move || {
                 let _ = drop_sender.send(());
                 provider_storage.swap(None);
-                piece_store.blocking_lock().take();
-
-                // HACK: Poll on piece store creation
-                loop {
-                    let result = ParityDbStore::<
-                        subspace_networking::libp2p::kad::record::Key,
-                        subspace_core_primitives::Piece,
-                    >::new(&piece_cache_db_path);
-
-                    match result.map(drop) {
-                        // If parity db is still locked wait on it
-                        Err(parity_db::Error::Locked(_)) => std::thread::sleep(PIECE_STORE_POLL),
-                        _ => return,
-                    }
-                }
             }
         });
 
         tracing::debug!("Started farmer");
 
         Ok(Farmer {
+            piece_store: Arc::clone(&node.farmer_piece_store),
+            piece_cache_db_path,
             reward_address,
             plot_info,
             result_receiver: Some(result_receiver),
@@ -685,6 +669,18 @@ pub struct Farmer {
     result_receiver: Option<oneshot::Receiver<anyhow::Result<()>>>,
     base_path: PathBuf,
     node_name: String,
+    #[derivative(Debug = "ignore")]
+    piece_store: Arc<
+        tokio::sync::Mutex<
+            Option<
+                ParityDbStore<
+                    subspace_networking::libp2p::kad::record::Key,
+                    subspace_core_primitives::Piece,
+                >,
+            >,
+        >,
+    >,
+    piece_cache_db_path: PathBuf,
     _drop_at_exit: DropCollection,
 }
 
@@ -981,13 +977,28 @@ impl Farmer {
 
     /// Stops farming, closes plots, and sends signal to the node
     pub async fn close(mut self) -> anyhow::Result<()> {
-        let result_receiver = self.result_receiver.take().expect("Handle is always there");
+        const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
 
-        // Otherwise tokio panics because we lock async thread
-        tokio::task::Builder::new()
-            .name(format!("subspace-sdk-farmer-{}-dropper", self.node_name).as_ref())
-            .spawn_blocking(move || drop(self))?
-            .await?;
+        self.piece_store.lock().await.take();
+
+        // Wait for parity-db store to exit
+        let result_receiver = self.result_receiver.take().expect("Handle is always there");
+        let piece_cache_db_path = self.piece_cache_db_path.clone();
+        drop(self);
+
+        // HACK: Poll on piece store creation just to be sure
+        loop {
+            let result = ParityDbStore::<
+                subspace_networking::libp2p::kad::record::Key,
+                subspace_core_primitives::Piece,
+            >::new(&piece_cache_db_path);
+
+            match result.map(drop) {
+                // If parity db is still locked wait on it
+                Err(parity_db::Error::Locked(_)) => tokio::time::sleep(PIECE_STORE_POLL).await,
+                _ => break,
+            }
+        }
 
         result_receiver.await?
     }
@@ -1174,5 +1185,29 @@ mod tests {
         }
 
         node.close().await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_farmer_drop() {
+        crate::utils::test_init();
+
+        let dir = TempDir::new().unwrap();
+        let node = Node::dev()
+            .role(Role::Authority)
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
+
+        drop(
+            Farmer::builder()
+                .build(
+                    Default::default(),
+                    &node,
+                    &[PlotDescription::minimal(dir.path().join("plot"))],
+                    CacheDescription::minimal(dir.path().join("cache")),
+                )
+                .await
+                .unwrap(),
+        )
     }
 }
