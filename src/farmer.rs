@@ -33,7 +33,7 @@ use tracing_futures::Instrument;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
 use crate::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
-use crate::utils::DropCollection;
+use crate::utils::{AsyncDropFutures, DropCollection};
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -638,27 +638,36 @@ impl Config {
         );
 
         drop_at_exit.defer({
-            const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
-
-            let piece_store = Arc::clone(&node.farmer_piece_store);
             let provider_storage = node.farmer_provider_storage.clone();
             move || {
                 let _ = drop_sender.send(());
                 provider_storage.swap(None);
-                piece_store.blocking_lock().take();
+            }
+        });
 
-                // HACK: Poll on piece store creation
-                loop {
-                    let result = ParityDbStore::<
-                        subspace_networking::libp2p::kad::record::Key,
-                        subspace_core_primitives::Piece,
-                    >::new(&piece_cache_db_path);
+        let mut async_drop = AsyncDropFutures::new();
 
-                    match result.map(drop) {
-                        // If parity db is still locked wait on it
-                        Err(parity_db::Error::Locked(_)) => std::thread::sleep(PIECE_STORE_POLL),
-                        _ => return,
-                    }
+        async_drop.push({
+            let piece_store = Arc::clone(&node.farmer_piece_store);
+            async move {
+                piece_store.lock().await.take();
+            }
+        });
+
+        async_drop.push(async move {
+            const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
+
+            // HACK: Poll on piece store creation just to be sure
+            loop {
+                let result = ParityDbStore::<
+                    subspace_networking::libp2p::kad::record::Key,
+                    subspace_core_primitives::Piece,
+                >::new(&piece_cache_db_path);
+
+                match result.map(drop) {
+                    // If parity db is still locked wait on it
+                    Err(parity_db::Error::Locked(_)) => tokio::time::sleep(PIECE_STORE_POLL).await,
+                    _ => break,
                 }
             }
         });
@@ -672,6 +681,7 @@ impl Config {
             node_name,
             base_path,
             _drop_at_exit: drop_at_exit,
+            _async_drop: Some(async_drop),
         })
     }
 }
@@ -687,6 +697,7 @@ pub struct Farmer {
     base_path: PathBuf,
     node_name: String,
     _drop_at_exit: DropCollection,
+    _async_drop: Option<AsyncDropFutures>,
 }
 
 static_assertions::assert_impl_all!(Farmer: Send, Sync);
@@ -983,12 +994,10 @@ impl Farmer {
     /// Stops farming, closes plots, and sends signal to the node
     pub async fn close(mut self) -> anyhow::Result<()> {
         let result_receiver = self.result_receiver.take().expect("Handle is always there");
+        let async_drop = self._async_drop.take().expect("Always set").async_drop();
 
-        // Otherwise tokio panics because we lock async thread
-        tokio::task::Builder::new()
-            .name(format!("subspace-sdk-farmer-{}-dropper", self.node_name).as_ref())
-            .spawn_blocking(move || drop(self))?
-            .await?;
+        drop(self);
+        async_drop.await;
 
         result_receiver.await?
     }
@@ -1175,5 +1184,29 @@ mod tests {
         }
 
         node.close().await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_farmer_drop() {
+        crate::utils::test_init();
+
+        let dir = TempDir::new().unwrap();
+        let node = Node::dev()
+            .role(Role::Authority)
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .await
+            .unwrap();
+
+        drop(
+            Farmer::builder()
+                .build(
+                    Default::default(),
+                    &node,
+                    &[PlotDescription::minimal(dir.path().join("plot"))],
+                    CacheDescription::minimal(dir.path().join("cache")),
+                )
+                .await
+                .unwrap(),
+        )
     }
 }

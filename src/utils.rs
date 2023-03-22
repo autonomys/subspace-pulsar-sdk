@@ -1,3 +1,4 @@
+use std::pin::Pin;
 use std::sync::Arc;
 
 use futures::prelude::*;
@@ -18,7 +19,8 @@ pub(crate) fn test_init() {
         .with_env_filter(
             "debug,parity-db=info,cranelift_codegen=info,wasmtime_cranelift=info,\
              subspace_sdk=trace,subspace_farmer=trace,subspace_service=trace,\
-             subspace_farmer::utils::parity_db_store=debug"
+             subspace_farmer::utils::parity_db_store=debug,trie-cache=info,wasm_overrides=info,\
+             libp2p_gossipsub::behaviour=info,wasmtime_jit=info,wasm-runtime=info"
                 .parse::<tracing_subscriber::EnvFilter>()
                 .expect("Env filter directives are correct"),
         )
@@ -177,6 +179,29 @@ impl<T: Send + Sync + 'static> Extend<T> for DropCollection {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         for item in iter {
             self.push(item);
+        }
+    }
+}
+
+#[derive(Default, derivative::Derivative)]
+#[derivative(Debug)]
+pub struct AsyncDropFutures {
+    #[derivative(Debug = "ignore")]
+    vec: Vec<Pin<Box<dyn Future<Output = ()> + Send + Sync>>>,
+}
+
+impl AsyncDropFutures {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn push<F: Future<Output = ()> + Send + Sync + 'static>(&mut self, fut: F) {
+        self.vec.push(Box::pin(fut))
+    }
+
+    pub async fn async_drop(self) {
+        for f in self.vec {
+            f.await;
         }
     }
 }
