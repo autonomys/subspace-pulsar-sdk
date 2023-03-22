@@ -1,3 +1,4 @@
+use std::pin::Pin;
 use std::sync::Arc;
 
 use futures::prelude::*;
@@ -178,6 +179,29 @@ impl<T: Send + Sync + 'static> Extend<T> for DropCollection {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         for item in iter {
             self.push(item);
+        }
+    }
+}
+
+#[derive(Default, derivative::Derivative)]
+#[derivative(Debug)]
+pub struct AsyncDropFutures {
+    #[derivative(Debug = "ignore")]
+    vec: Vec<Pin<Box<dyn Future<Output = ()> + Send + Sync>>>,
+}
+
+impl AsyncDropFutures {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn push<F: Future<Output = ()> + Send + Sync + 'static>(&mut self, fut: F) {
+        self.vec.push(Box::pin(fut))
+    }
+
+    pub async fn async_drop(self) {
+        for f in self.vec {
+            f.await;
         }
     }
 }
