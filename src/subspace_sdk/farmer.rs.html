@@ -1177,6 +1177,39 @@
 <a href="#1177" id="1177">1177</a>
 <a href="#1178" id="1178">1178</a>
 <a href="#1179" id="1179">1179</a>
+<a href="#1180" id="1180">1180</a>
+<a href="#1181" id="1181">1181</a>
+<a href="#1182" id="1182">1182</a>
+<a href="#1183" id="1183">1183</a>
+<a href="#1184" id="1184">1184</a>
+<a href="#1185" id="1185">1185</a>
+<a href="#1186" id="1186">1186</a>
+<a href="#1187" id="1187">1187</a>
+<a href="#1188" id="1188">1188</a>
+<a href="#1189" id="1189">1189</a>
+<a href="#1190" id="1190">1190</a>
+<a href="#1191" id="1191">1191</a>
+<a href="#1192" id="1192">1192</a>
+<a href="#1193" id="1193">1193</a>
+<a href="#1194" id="1194">1194</a>
+<a href="#1195" id="1195">1195</a>
+<a href="#1196" id="1196">1196</a>
+<a href="#1197" id="1197">1197</a>
+<a href="#1198" id="1198">1198</a>
+<a href="#1199" id="1199">1199</a>
+<a href="#1200" id="1200">1200</a>
+<a href="#1201" id="1201">1201</a>
+<a href="#1202" id="1202">1202</a>
+<a href="#1203" id="1203">1203</a>
+<a href="#1204" id="1204">1204</a>
+<a href="#1205" id="1205">1205</a>
+<a href="#1206" id="1206">1206</a>
+<a href="#1207" id="1207">1207</a>
+<a href="#1208" id="1208">1208</a>
+<a href="#1209" id="1209">1209</a>
+<a href="#1210" id="1210">1210</a>
+<a href="#1211" id="1211">1211</a>
+<a href="#1212" id="1212">1212</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1212,7 +1245,7 @@
 
 <span class="kw">use </span><span class="self">self</span>::builder::{PieceCacheSize, ProvidedKeysLimit};
 <span class="kw">use </span><span class="kw">crate</span>::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
-<span class="kw">use </span><span class="kw">crate</span>::utils::DropCollection;
+<span class="kw">use </span><span class="kw">crate</span>::utils::{AsyncDropFutures, DropCollection};
 <span class="kw">use crate</span>::{Node, PublicKey};
 
 <span class="doccomment">/// Description of the cache
@@ -1817,27 +1850,36 @@
         );
 
         drop_at_exit.defer({
-            <span class="kw">const </span>PIECE_STORE_POLL: Duration = Duration::from_millis(<span class="number">100</span>);
-
-            <span class="kw">let </span>piece_store = Arc::clone(<span class="kw-2">&amp;</span>node.farmer_piece_store);
             <span class="kw">let </span>provider_storage = node.farmer_provider_storage.clone();
             <span class="kw">move </span>|| {
                 <span class="kw">let _ </span>= drop_sender.send(());
                 provider_storage.swap(<span class="prelude-val">None</span>);
-                piece_store.blocking_lock().take();
+            }
+        });
 
-                <span class="comment">// HACK: Poll on piece store creation
-                </span><span class="kw">loop </span>{
-                    <span class="kw">let </span>result = ParityDbStore::&lt;
-                        subspace_networking::libp2p::kad::record::Key,
-                        subspace_core_primitives::Piece,
-                    &gt;::new(<span class="kw-2">&amp;</span>piece_cache_db_path);
+        <span class="kw">let </span><span class="kw-2">mut </span>async_drop = AsyncDropFutures::new();
 
-                    <span class="kw">match </span>result.map(drop) {
-                        <span class="comment">// If parity db is still locked wait on it
-                        </span><span class="prelude-val">Err</span>(parity_db::Error::Locked(<span class="kw">_</span>)) =&gt; std::thread::sleep(PIECE_STORE_POLL),
-                        <span class="kw">_ </span>=&gt; <span class="kw">return</span>,
-                    }
+        async_drop.push({
+            <span class="kw">let </span>piece_store = Arc::clone(<span class="kw-2">&amp;</span>node.farmer_piece_store);
+            <span class="kw">async move </span>{
+                piece_store.lock().<span class="kw">await</span>.take();
+            }
+        });
+
+        async_drop.push(<span class="kw">async move </span>{
+            <span class="kw">const </span>PIECE_STORE_POLL: Duration = Duration::from_millis(<span class="number">100</span>);
+
+            <span class="comment">// HACK: Poll on piece store creation just to be sure
+            </span><span class="kw">loop </span>{
+                <span class="kw">let </span>result = ParityDbStore::&lt;
+                    subspace_networking::libp2p::kad::record::Key,
+                    subspace_core_primitives::Piece,
+                &gt;::new(<span class="kw-2">&amp;</span>piece_cache_db_path);
+
+                <span class="kw">match </span>result.map(drop) {
+                    <span class="comment">// If parity db is still locked wait on it
+                    </span><span class="prelude-val">Err</span>(parity_db::Error::Locked(<span class="kw">_</span>)) =&gt; tokio::time::sleep(PIECE_STORE_POLL).<span class="kw">await</span>,
+                    <span class="kw">_ </span>=&gt; <span class="kw">break</span>,
                 }
             }
         });
@@ -1851,6 +1893,7 @@
             node_name,
             base_path,
             _drop_at_exit: drop_at_exit,
+            _async_drop: <span class="prelude-val">Some</span>(async_drop),
         })
     }
 }
@@ -1866,6 +1909,7 @@
     base_path: PathBuf,
     node_name: String,
     _drop_at_exit: DropCollection,
+    _async_drop: <span class="prelude-ty">Option</span>&lt;AsyncDropFutures&gt;,
 }
 
 <span class="macro">static_assertions::assert_impl_all!</span>(Farmer: Send, Sync);
@@ -2162,12 +2206,10 @@
     <span class="doccomment">/// Stops farming, closes plots, and sends signal to the node
     </span><span class="kw">pub async fn </span>close(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>result_receiver = <span class="self">self</span>.result_receiver.take().expect(<span class="string">&quot;Handle is always there&quot;</span>);
+        <span class="kw">let </span>async_drop = <span class="self">self</span>._async_drop.take().expect(<span class="string">&quot;Always set&quot;</span>).async_drop();
 
-        <span class="comment">// Otherwise tokio panics because we lock async thread
-        </span>tokio::task::Builder::new()
-            .name(<span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-farmer-{}-dropper&quot;</span>, <span class="self">self</span>.node_name).as_ref())
-            .spawn_blocking(<span class="kw">move </span>|| drop(<span class="self">self</span>))<span class="question-mark">?
-            </span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        drop(<span class="self">self</span>);
+        async_drop.<span class="kw">await</span>;
 
         result_receiver.<span class="kw">await</span><span class="question-mark">?
     </span>}
@@ -2354,6 +2396,30 @@
         }
 
         node.close().<span class="kw">await</span>.unwrap();
+    }
+
+    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    </span><span class="kw">async fn </span>test_farmer_drop() {
+        <span class="kw">crate</span>::utils::test_init();
+
+        <span class="kw">let </span>dir = TempDir::new().unwrap();
+        <span class="kw">let </span>node = Node::dev()
+            .role(Role::Authority)
+            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .<span class="kw">await
+            </span>.unwrap();
+
+        drop(
+            Farmer::builder()
+                .build(
+                    Default::default(),
+                    <span class="kw-2">&amp;</span>node,
+                    <span class="kw-2">&amp;</span>[PlotDescription::minimal(dir.path().join(<span class="string">&quot;plot&quot;</span>))],
+                    CacheDescription::minimal(dir.path().join(<span class="string">&quot;cache&quot;</span>)),
+                )
+                .<span class="kw">await
+                </span>.unwrap(),
+        )
     }
 }
 </code></pre></div>
