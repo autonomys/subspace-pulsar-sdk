@@ -63,29 +63,29 @@ sp-session = { version = "4.0.0-dev", git = "https://github.com/subspace/substra
 sp-transaction-pool = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "456cfad45a178617f6886ec400c312f2fea59232" }
 sp-version = { version = "5.0.0", git = "https://github.com/subspace/substrate", rev = "456cfad45a178617f6886ec400c312f2fea59232" }
 
-core-payments-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-cross-domain-message-gossip = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-domain-client-message-relayer = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-domain-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-domain-service = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-sc-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-sc-subspace-chain-specs = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-sp-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-sp-domains = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-sp-objects = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-subspace-archiving = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-subspace-fraud-proof = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-subspace-networking = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-subspace-transaction-pool = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-subspace-service = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
-system-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "e0697cb052c8a4d853c257c7aa8194bb18e136f3" }
+core-payments-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+cross-domain-message-gossip = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+domain-client-message-relayer = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+domain-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+domain-service = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+sc-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+sc-subspace-chain-specs = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+sp-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+sp-domains = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+sp-objects = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+subspace-archiving = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+subspace-fraud-proof = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+subspace-networking = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+subspace-transaction-pool = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+subspace-service = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
+system-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "ce007f647ef1bc9c3e9be9a5ef31b641565a4d9b" }
 
 [dev-dependencies]
 clap = { version = "4", features = ["derive"] }
