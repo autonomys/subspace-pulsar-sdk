@@ -9,6 +9,7 @@ use derivative::Derivative;
 use derive_builder::Builder;
 use domain_service::DomainConfiguration;
 use futures::prelude::*;
+use sc_client_api::BlockchainEvents;
 use sc_service::ChainSpecExtension;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
@@ -464,14 +465,22 @@ impl SystemDomainNode {
         // TODO: proper value
         let block_import_throttling_buffer_size = 10;
 
+        let executor_streams = domain_client_executor::ExecutorStreams {
+            primary_block_import_throttling_buffer_size: block_import_throttling_buffer_size,
+            subspace_imported_block_notification_stream: imported_block_notification_stream,
+            client_imported_block_notification_stream: primary_new_full
+                .client
+                .every_import_notification_stream(),
+            new_slot_notification_stream,
+            _phantom: Default::default(),
+        };
+
         let system_domain_node = domain_service::new_full_system(
             system_domain_config,
             primary_new_full.client.clone(),
             primary_new_full.network.clone(),
             &primary_new_full.select_chain,
-            imported_block_notification_stream,
-            new_slot_notification_stream,
-            block_import_throttling_buffer_size,
+            executor_streams,
             gossip_msg_sink.clone(),
         )
         .await?;

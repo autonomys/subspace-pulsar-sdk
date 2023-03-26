@@ -1329,8 +1329,8 @@ impl Config {
                     max_established_incoming_connections,
                     max_established_outgoing_connections,
                     target_connections,
-                    // max_pending_incoming_connections,
-                    // max_pending_outgoing_connections,
+                    max_pending_incoming_connections,
+                    max_pending_outgoing_connections,
                     ..subspace_networking::Config::default()
                 };
 
