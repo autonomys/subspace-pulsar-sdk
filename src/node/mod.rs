@@ -394,6 +394,10 @@ mod builder {
         #[builder(default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub informant_enable_color: bool,
+        /// Additional telemetry endpoints
+        #[builder(default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub telemetry: Vec<(Multiaddr, u8)>,
     }
 
     #[doc(hidden)]
@@ -443,6 +447,8 @@ mod builder {
                 offchain_worker: $crate::node::OffchainWorker,
                 /// Enable color for substrate informant
                 informant_enable_color: bool,
+                /// Additional telemetry endpoints
+                telemetry: Vec<(libp2p_core::Multiaddr, u8)>,
             });
         }
     }
@@ -488,6 +494,7 @@ mod builder {
                 network,
                 offchain_worker,
                 informant_enable_color,
+                telemetry,
             } = self;
 
             let base_path = BasePath::new(directory.as_ref());
@@ -548,7 +555,28 @@ mod builder {
             // Full + Light clients
             network.default_peers_set.in_peers = 25 + 100;
             let (keystore_remote, keystore) = (None, KeystoreConfig::InMemory);
-            let telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
+
+            // HACK: Tricky way to add extra endpoints as we can't push into telemetry
+            // endpoints
+            let telemetry_endpoints = match chain_spec.telemetry_endpoints() {
+                Some(endpoints) => {
+                    let Ok(serde_json::Value::Array(extra_telemetry)) = serde_json::to_value(&telemetry) else {
+                        unreachable!("Will always return an array")
+                    };
+                    let Ok(serde_json::Value::Array(telemetry)) = serde_json::to_value(endpoints) else {
+                        unreachable!("Will always return an array")
+                    };
+
+                    serde_json::from_value(serde_json::Value::Array(
+                        telemetry.into_iter().chain(extra_telemetry).collect::<Vec<_>>(),
+                    ))
+                    .expect("Serialization is always valid")
+                }
+                None => sc_service::config::TelemetryEndpoints::new(
+                    telemetry.into_iter().map(|(endpoint, n)| (endpoint.to_string(), n)).collect(),
+                )
+                .expect("Never returns an error"),
+            };
 
             Configuration {
                 impl_name,
@@ -582,7 +610,7 @@ mod builder {
                 rpc_max_subs_per_conn,
                 ws_max_out_buffer_capacity,
                 prometheus_config: None,
-                telemetry_endpoints,
+                telemetry_endpoints: Some(telemetry_endpoints),
                 default_heap_pages: None,
                 offchain_worker: offchain_worker.into(),
                 force_authoring,
