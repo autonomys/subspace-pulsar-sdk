@@ -2144,6 +2144,34 @@
 <a href="#2144" id="2144">2144</a>
 <a href="#2145" id="2145">2145</a>
 <a href="#2146" id="2146">2146</a>
+<a href="#2147" id="2147">2147</a>
+<a href="#2148" id="2148">2148</a>
+<a href="#2149" id="2149">2149</a>
+<a href="#2150" id="2150">2150</a>
+<a href="#2151" id="2151">2151</a>
+<a href="#2152" id="2152">2152</a>
+<a href="#2153" id="2153">2153</a>
+<a href="#2154" id="2154">2154</a>
+<a href="#2155" id="2155">2155</a>
+<a href="#2156" id="2156">2156</a>
+<a href="#2157" id="2157">2157</a>
+<a href="#2158" id="2158">2158</a>
+<a href="#2159" id="2159">2159</a>
+<a href="#2160" id="2160">2160</a>
+<a href="#2161" id="2161">2161</a>
+<a href="#2162" id="2162">2162</a>
+<a href="#2163" id="2163">2163</a>
+<a href="#2164" id="2164">2164</a>
+<a href="#2165" id="2165">2165</a>
+<a href="#2166" id="2166">2166</a>
+<a href="#2167" id="2167">2167</a>
+<a href="#2168" id="2168">2168</a>
+<a href="#2169" id="2169">2169</a>
+<a href="#2170" id="2170">2170</a>
+<a href="#2171" id="2171">2171</a>
+<a href="#2172" id="2172">2172</a>
+<a href="#2173" id="2173">2173</a>
+<a href="#2174" id="2174">2174</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::{NonZeroU64, NonZeroUsize};
 <span class="kw">use </span>std::path::Path;
@@ -2558,6 +2586,10 @@
         </span><span class="attr">#[builder(default)]
         #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
         </span><span class="kw">pub </span>informant_enable_color: bool,
+        <span class="doccomment">/// Additional telemetry endpoints
+        </span><span class="attr">#[builder(default)]
+        #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
+        </span><span class="kw">pub </span>telemetry: Vec&lt;(Multiaddr, u8)&gt;,
     }
 
     <span class="attr">#[doc(hidden)]
@@ -2607,6 +2639,8 @@
                 </span>offchain_worker: <span class="macro-nonterminal">$crate::node::OffchainWorker</span>,
                 <span class="doccomment">/// Enable color for substrate informant
                 </span>informant_enable_color: bool,
+                <span class="doccomment">/// Additional telemetry endpoints
+                </span>telemetry: Vec&lt;(libp2p_core::Multiaddr, u8)&gt;,
             });
         }
     }
@@ -2652,6 +2686,7 @@
                 network,
                 offchain_worker,
                 informant_enable_color,
+                telemetry,
             } = <span class="self">self</span>;
 
             <span class="kw">let </span>base_path = BasePath::new(directory.as_ref());
@@ -2712,7 +2747,28 @@
             <span class="comment">// Full + Light clients
             </span>network.default_peers_set.in_peers = <span class="number">25 </span>+ <span class="number">100</span>;
             <span class="kw">let </span>(keystore_remote, keystore) = (<span class="prelude-val">None</span>, KeystoreConfig::InMemory);
-            <span class="kw">let </span>telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
+
+            <span class="comment">// HACK: Tricky way to add extra endpoints as we can&#39;t push into telemetry
+            // endpoints
+            </span><span class="kw">let </span>telemetry_endpoints = <span class="kw">match </span>chain_spec.telemetry_endpoints() {
+                <span class="prelude-val">Some</span>(endpoints) =&gt; {
+                    <span class="kw">let </span><span class="prelude-val">Ok</span>(serde_json::Value::Array(extra_telemetry)) = serde_json::to_value(<span class="kw-2">&amp;</span>telemetry) <span class="kw">else </span>{
+                        <span class="macro">unreachable!</span>(<span class="string">&quot;Will always return an array&quot;</span>)
+                    };
+                    <span class="kw">let </span><span class="prelude-val">Ok</span>(serde_json::Value::Array(telemetry)) = serde_json::to_value(endpoints) <span class="kw">else </span>{
+                        <span class="macro">unreachable!</span>(<span class="string">&quot;Will always return an array&quot;</span>)
+                    };
+
+                    serde_json::from_value(serde_json::Value::Array(
+                        telemetry.into_iter().chain(extra_telemetry).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
+                    ))
+                    .expect(<span class="string">&quot;Serialization is always valid&quot;</span>)
+                }
+                <span class="prelude-val">None </span>=&gt; sc_service::config::TelemetryEndpoints::new(
+                    telemetry.into_iter().map(|(endpoint, n)| (endpoint.to_string(), n)).collect(),
+                )
+                .expect(<span class="string">&quot;Never returns an error&quot;</span>),
+            };
 
             Configuration {
                 impl_name,
@@ -2746,7 +2802,7 @@
                 rpc_max_subs_per_conn,
                 ws_max_out_buffer_capacity,
                 prometheus_config: <span class="prelude-val">None</span>,
-                telemetry_endpoints,
+                telemetry_endpoints: <span class="prelude-val">Some</span>(telemetry_endpoints),
                 default_heap_pages: <span class="prelude-val">None</span>,
                 offchain_worker: offchain_worker.into(),
                 force_authoring,
