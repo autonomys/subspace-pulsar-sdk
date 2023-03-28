@@ -1374,6 +1374,21 @@ impl Config {
             )
         };
 
+        let mut drop_collection = DropCollection::new();
+        let on_new_listener = node.on_new_listener(Arc::new({
+            let node = node.clone();
+
+            move |address| {
+                tracing::info!(
+                    "DSN listening on {}",
+                    address.clone().with(subspace_networking::libp2p::multiaddr::Protocol::P2p(
+                        node.id().into()
+                    ))
+                );
+            }
+        }));
+        drop_collection.push(on_new_listener);
+
         // Default value are used for many of parameters
         let configuration = SubspaceConfiguration {
             base,
@@ -1468,7 +1483,6 @@ impl Config {
                 opt_stop_sender.map(|stop_sender| stop_sender.send(()));
             })?;
 
-        let mut drop_collection = DropCollection::new();
         drop_collection.defer(move || {
             const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
 
