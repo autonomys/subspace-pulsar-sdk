@@ -330,12 +330,6 @@ dependencies = [
 
 [[package]]
 name = "ahash"
-version = "0.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "739f4a8db6605981345c5654f3a85b056ce52f37a39d34da03f25bf2151ea16e"
-
-[[package]]
-name = "ahash"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fcb51a0695d8f838b1ee009b3fbf66bda078cd64590202a864a8f3e8c4315c47"
@@ -718,6 +712,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomic-polyfill"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c314e70d181aa6053b26e3f7fbf86d1dfff84f816a6175b967666b3506ef7289"
+dependencies = [
+ "critical-section",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -990,6 +993,29 @@ name = "block-padding"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
+
+[[package]]
+name = "blst"
+version = "0.3.10"
+source = "git+https://github.com/subspace/blst.git?rev=079887d2d05bb2d61df4ceef3d4c836228ebc6ff#079887d2d05bb2d61df4ceef3d4c836228ebc6ff"
+dependencies = [
+ "cc",
+ "glob",
+ "threadpool",
+ "zeroize",
+]
+
+[[package]]
+name = "blst_from_scratch"
+version = "0.1.0"
+source = "git+https://github.com/subspace/rust-kzg?rev=49e7b60ea51d918f04779dd83191ae0e01afcb30#49e7b60ea51d918f04779dd83191ae0e01afcb30"
+dependencies = [
+ "blst",
+ "kzg",
+ "libc",
+ "once_cell",
+ "sha2 0.10.6",
+]
 
 [[package]]
 name = "bounded-collections"
@@ -1418,7 +1444,7 @@ checksum = "5827cebf4670468b8772dd191856768aedcb1b0278a04f989f7766351917b9dc"
 [[package]]
 name = "core-payments-domain-runtime"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "domain-pallet-executive",
  "domain-runtime-primitives",
@@ -1573,7 +1599,7 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
  "cranelift-frontend",
- "itertools 0.10.5",
+ "itertools",
  "log",
  "smallvec",
  "wasmparser",
@@ -1605,9 +1631,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "critical-section"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6548a0ad5d2549e111e1f6a11a6c2e2d00ce6a3dafe22948d67c2b443f775e52"
+
+[[package]]
 name = "cross-domain-message-gossip"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "futures 0.3.27",
  "parity-scale-codec",
@@ -1954,17 +1986,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive-hex"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b6618553c32cd1c1f4fbdb9418cc035f3168422f24406ebb08576f6db5ed6ec"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "derive-syn-parse"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2149,7 +2170,7 @@ dependencies = [
 [[package]]
 name = "domain-block-builder"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "parity-scale-codec",
  "sc-client-api",
@@ -2166,7 +2187,7 @@ dependencies = [
 [[package]]
 name = "domain-client-consensus-relay-chain"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "async-trait",
  "parking_lot 0.12.1",
@@ -2182,7 +2203,7 @@ dependencies = [
 [[package]]
 name = "domain-client-executor"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "crossbeam",
  "domain-block-builder",
@@ -2213,6 +2234,7 @@ dependencies = [
  "sp-keystore",
  "sp-messenger",
  "sp-runtime",
+ "sp-state-machine",
  "sp-transaction-pool",
  "sp-trie",
  "subspace-core-primitives",
@@ -2229,7 +2251,7 @@ dependencies = [
 [[package]]
 name = "domain-client-executor-gossip"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "futures 0.3.27",
  "parity-scale-codec",
@@ -2247,7 +2269,7 @@ dependencies = [
 [[package]]
 name = "domain-client-message-relayer"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "cross-domain-message-gossip",
  "domain-runtime-primitives",
@@ -2272,7 +2294,7 @@ dependencies = [
 [[package]]
 name = "domain-pallet-executive"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-executive",
  "frame-support",
@@ -2289,7 +2311,7 @@ dependencies = [
 [[package]]
 name = "domain-runtime-primitives"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "parity-scale-codec",
  "sp-api",
@@ -2301,7 +2323,7 @@ dependencies = [
 [[package]]
 name = "domain-service"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "clap",
  "cross-domain-message-gossip",
@@ -2372,56 +2394,6 @@ name = "dtoa"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65d09067bfacaa79114679b279d7f5885b53295b1e2cfb4e79c8e4bd3d633169"
-
-[[package]]
-name = "dusk-bls12_381"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41fc81248ab76f1739dd4241ea2e7037a4d4cb0bd170443a7049e13b0e09acd6"
-dependencies = [
- "byteorder",
- "dusk-bytes",
- "rand_core 0.6.4",
- "rayon",
- "subtle",
-]
-
-[[package]]
-name = "dusk-bytes"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4aae12696d965c95ce5b79bc5612575e8aeac958c9e037b74ffa9e73e1cd8c7"
-dependencies = [
- "derive-hex",
-]
-
-[[package]]
-name = "dusk-jubjub"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c228f2adec5255faf67fe6d106caa093a6c2ef798dca42019b684716528250ff"
-dependencies = [
- "dusk-bls12_381",
- "dusk-bytes",
- "rand_core 0.6.4",
- "subtle",
-]
-
-[[package]]
-name = "dusk-plonk"
-version = "0.12.0"
-source = "git+https://github.com/subspace/plonk?rev=193e68ba3d20f737d730e4b6edc757e4f639e7c3#193e68ba3d20f737d730e4b6edc757e4f639e7c3"
-dependencies = [
- "cfg-if",
- "dusk-bls12_381",
- "dusk-bytes",
- "dusk-jubjub",
- "hashbrown 0.9.1",
- "itertools 0.9.0",
- "merlin 3.0.0",
- "rand_core 0.6.4",
- "rayon",
-]
 
 [[package]]
 name = "dyn-clonable"
@@ -2805,7 +2777,7 @@ dependencies = [
  "frame-system",
  "gethostname",
  "handlebars",
- "itertools 0.10.5",
+ "itertools",
  "lazy_static",
  "linked-hash-map",
  "log",
@@ -2907,7 +2879,7 @@ dependencies = [
  "cfg-expr",
  "derive-syn-parse",
  "frame-support-procedural-tools",
- "itertools 0.10.5",
+ "itertools",
  "proc-macro2",
  "quote",
  "syn",
@@ -3244,6 +3216,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad0a93d233ebf96623465aad4046a8d3aa4da22d4f4beba5388838c8a434bbb4"
 
 [[package]]
+name = "glob"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
+
+[[package]]
 name = "globset"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3358,15 +3336,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92c171d55b98633f4ed3860808f004099b36c1cc29c42cfc53aa8591b21efcf2"
 dependencies = [
  "crunchy",
-]
-
-[[package]]
-name = "hashbrown"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
-dependencies = [
- "ahash 0.4.7",
 ]
 
 [[package]]
@@ -3838,15 +3807,6 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
@@ -4101,6 +4061,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "kzg"
+version = "0.1.0"
+source = "git+https://github.com/subspace/rust-kzg?rev=49e7b60ea51d918f04779dd83191ae0e01afcb30#49e7b60ea51d918f04779dd83191ae0e01afcb30"
+
+[[package]]
 name = "language-tags"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4167,7 +4132,7 @@ dependencies = [
 [[package]]
 name = "libp2p"
 version = "0.51.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "bytes",
  "futures 0.3.27",
@@ -4233,7 +4198,7 @@ dependencies = [
 [[package]]
 name = "libp2p-core"
 version = "0.39.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "asn1_der",
  "bs58",
@@ -4246,14 +4211,14 @@ dependencies = [
  "log",
  "multiaddr 0.17.0",
  "multihash 0.17.0",
- "multistream-select 0.12.1 (git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475)",
+ "multistream-select 0.12.1 (git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad)",
  "once_cell",
  "parking_lot 0.12.1",
  "pin-project",
  "prost",
  "prost-build",
  "rand 0.8.5",
- "rw-stream-sink 0.3.0 (git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475)",
+ "rw-stream-sink 0.3.0 (git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad)",
  "sec1",
  "serde",
  "sha2 0.10.6",
@@ -4309,7 +4274,7 @@ dependencies = [
 [[package]]
 name = "libp2p-dns"
 version = "0.39.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "futures 0.3.27",
  "libp2p-core 0.39.0",
@@ -4322,7 +4287,7 @@ dependencies = [
 [[package]]
 name = "libp2p-gossipsub"
 version = "0.44.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "asynchronous-codec",
  "base64 0.20.0",
@@ -4338,7 +4303,7 @@ dependencies = [
  "prometheus-client 0.19.0",
  "prost",
  "prost-build",
- "prost-codec 0.3.0 (git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475)",
+ "prost-codec 0.3.0 (git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad)",
  "rand 0.8.5",
  "regex",
  "serde",
@@ -4373,7 +4338,7 @@ dependencies = [
 [[package]]
 name = "libp2p-identify"
 version = "0.42.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "asynchronous-codec",
  "either",
@@ -4385,7 +4350,7 @@ dependencies = [
  "lru 0.9.0",
  "prost",
  "prost-build",
- "prost-codec 0.3.0 (git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475)",
+ "prost-codec 0.3.0 (git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad)",
  "smallvec",
  "thiserror",
  "void",
@@ -4441,7 +4406,7 @@ dependencies = [
 [[package]]
 name = "libp2p-kad"
 version = "0.43.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "arrayvec 0.7.2",
  "asynchronous-codec",
@@ -4490,7 +4455,7 @@ dependencies = [
 [[package]]
 name = "libp2p-mdns"
 version = "0.43.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "data-encoding",
  "futures 0.3.27",
@@ -4523,7 +4488,7 @@ dependencies = [
 [[package]]
 name = "libp2p-metrics"
 version = "0.12.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "libp2p-core 0.39.0",
  "libp2p-gossipsub",
@@ -4578,7 +4543,7 @@ dependencies = [
 [[package]]
 name = "libp2p-noise"
 version = "0.42.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "bytes",
  "curve25519-dalek 3.2.0",
@@ -4616,7 +4581,7 @@ dependencies = [
 [[package]]
 name = "libp2p-ping"
 version = "0.42.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "either",
  "futures 0.3.27",
@@ -4653,7 +4618,7 @@ dependencies = [
 [[package]]
 name = "libp2p-quic"
 version = "0.7.0-alpha.2"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "bytes",
  "futures 0.3.27",
@@ -4691,7 +4656,7 @@ dependencies = [
 [[package]]
 name = "libp2p-request-response"
 version = "0.24.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4730,7 +4695,7 @@ dependencies = [
 [[package]]
 name = "libp2p-swarm"
 version = "0.42.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "either",
  "fnv",
@@ -4762,7 +4727,7 @@ dependencies = [
 [[package]]
 name = "libp2p-swarm-derive"
 version = "0.32.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "heck",
  "quote",
@@ -4788,7 +4753,7 @@ dependencies = [
 [[package]]
 name = "libp2p-tcp"
 version = "0.39.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "futures 0.3.27",
  "futures-timer",
@@ -4803,7 +4768,7 @@ dependencies = [
 [[package]]
 name = "libp2p-tls"
 version = "0.1.0-alpha.2"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "futures 0.3.27",
  "futures-rustls",
@@ -4884,7 +4849,7 @@ dependencies = [
 [[package]]
 name = "libp2p-webrtc"
 version = "0.4.0-alpha.2"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "async-trait",
  "asynchronous-codec",
@@ -4899,7 +4864,7 @@ dependencies = [
  "multihash 0.17.0",
  "prost",
  "prost-build",
- "prost-codec 0.3.0 (git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475)",
+ "prost-codec 0.3.0 (git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad)",
  "rand 0.8.5",
  "rcgen 0.9.3",
  "serde",
@@ -4933,7 +4898,7 @@ dependencies = [
 [[package]]
 name = "libp2p-websocket"
 version = "0.41.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "either",
  "futures 0.3.27",
@@ -4942,7 +4907,7 @@ dependencies = [
  "log",
  "parking_lot 0.12.1",
  "quicksink",
- "rw-stream-sink 0.3.0 (git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475)",
+ "rw-stream-sink 0.3.0 (git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad)",
  "soketto",
  "url",
  "webpki-roots",
@@ -4965,7 +4930,7 @@ dependencies = [
 [[package]]
 name = "libp2p-yamux"
 version = "0.43.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "futures 0.3.27",
  "libp2p-core 0.39.0",
@@ -5114,15 +5079,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "abb12e687cfb44aa40f41fc3978ef76448f9b6038cad6aef4259d3c095a2382e"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "lru"
-version = "0.7.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e999beba7b6e8345721bd280141ed958096a2e4abdf74f67ff4ce49b4b54e47a"
-dependencies = [
- "hashbrown 0.12.3",
 ]
 
 [[package]]
@@ -5302,18 +5258,6 @@ dependencies = [
  "byteorder",
  "keccak",
  "rand_core 0.5.1",
- "zeroize",
-]
-
-[[package]]
-name = "merlin"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58c38e2799fc0978b65dfff8023ec7843e2330bb462f19198840b34b6582397d"
-dependencies = [
- "byteorder",
- "keccak",
- "rand_core 0.6.4",
  "zeroize",
 ]
 
@@ -5499,7 +5443,7 @@ dependencies = [
 [[package]]
 name = "multistream-select"
 version = "0.12.1"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "bytes",
  "futures 0.3.27",
@@ -5779,6 +5723,10 @@ name = "once_cell"
 version = "1.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7e5500299e16ebb147ae15a00a942af264cf3688f47923b8fc2cd5858f23ad3"
+dependencies = [
+ "atomic-polyfill",
+ "critical-section",
+]
 
 [[package]]
 name = "opaque-debug"
@@ -5801,7 +5749,7 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 [[package]]
 name = "orml-vesting"
 version = "0.4.1-dev"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -5898,7 +5846,7 @@ dependencies = [
 [[package]]
 name = "pallet-domain-registry"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -5919,7 +5867,7 @@ dependencies = [
 [[package]]
 name = "pallet-domains"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -5936,7 +5884,7 @@ dependencies = [
 [[package]]
 name = "pallet-executor-registry"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -5954,7 +5902,7 @@ dependencies = [
 [[package]]
 name = "pallet-feeds"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -5970,7 +5918,7 @@ dependencies = [
 [[package]]
 name = "pallet-grandpa-finality-verifier"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "finality-grandpa",
  "frame-support",
@@ -5990,12 +5938,10 @@ dependencies = [
 [[package]]
 name = "pallet-messenger"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-support",
  "frame-system",
- "hash-db",
- "hex",
  "log",
  "parity-scale-codec",
  "scale-info",
@@ -6010,7 +5956,7 @@ dependencies = [
 [[package]]
 name = "pallet-object-store"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6025,7 +5971,7 @@ dependencies = [
 [[package]]
 name = "pallet-offences-subspace"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6040,7 +5986,7 @@ dependencies = [
 [[package]]
 name = "pallet-receipts"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6056,7 +6002,7 @@ dependencies = [
 [[package]]
 name = "pallet-rewards"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6069,7 +6015,7 @@ dependencies = [
 [[package]]
 name = "pallet-runtime-configs"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6081,7 +6027,7 @@ dependencies = [
 [[package]]
 name = "pallet-subspace"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6137,7 +6083,7 @@ dependencies = [
 [[package]]
 name = "pallet-transaction-fees"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6193,7 +6139,7 @@ dependencies = [
 [[package]]
 name = "pallet-transporter"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6224,9 +6170,9 @@ dependencies = [
 
 [[package]]
 name = "parity-db"
-version = "0.4.4"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df89dd8311063c54ae4e03d9aeb597b04212a57e82c339344130a9cad9b3e2d9"
+checksum = "00bfb81cf5c90a222db2fb7b3a7cbf8cc7f38dfb6647aca4d98edf8281f56ed5"
 dependencies = [
  "blake2",
  "crc32fast",
@@ -6568,7 +6514,7 @@ checksum = "59230a63c37f3e18569bdb90e4a89cbf5bf8b06fea0b84e65ea10cc4df47addd"
 dependencies = [
  "difflib",
  "float-cmp",
- "itertools 0.10.5",
+ "itertools",
  "normalize-line-endings",
  "predicates-core",
  "regex",
@@ -6734,7 +6680,7 @@ checksum = "2c828f93f5ca4826f97fedcbd3f9a536c16b12cff3dbbb4a007f932bbad95b12"
 dependencies = [
  "bytes",
  "heck",
- "itertools 0.10.5",
+ "itertools",
  "lazy_static",
  "log",
  "multimap",
@@ -6764,7 +6710,7 @@ dependencies = [
 [[package]]
 name = "prost-codec"
 version = "0.3.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "asynchronous-codec",
  "bytes",
@@ -6780,7 +6726,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ea9b0f8cbe5e15a8a042d030bd96668db28ecb567ec37d691971ff5731d2b1b"
 dependencies = [
  "anyhow",
- "itertools 0.10.5",
+ "itertools",
  "proc-macro2",
  "quote",
  "syn",
@@ -7014,21 +6960,6 @@ dependencies = [
  "getrandom 0.2.8",
  "redox_syscall",
  "thiserror",
-]
-
-[[package]]
-name = "reed-solomon-erasure"
-version = "6.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7263373d500d4d4f505d43a2a662d475a894aa94503a1ee28e9188b5f3960d4f"
-dependencies = [
- "cc",
- "libc",
- "libm 0.2.6",
- "lru 0.7.8",
- "parking_lot 0.11.2",
- "smallvec",
- "spin 0.9.6",
 ]
 
 [[package]]
@@ -7347,7 +7278,7 @@ dependencies = [
 [[package]]
 name = "rw-stream-sink"
 version = "0.3.0"
-source = "git+https://github.com/subspace/rust-libp2p?rev=2de61da642888e3c4deac9925be90d56cdef1475#2de61da642888e3c4deac9925be90d56cdef1475"
+source = "git+https://github.com/subspace/rust-libp2p?rev=917b388b0549810903946664a61c9b313b2e9fad#917b388b0549810903946664a61c9b313b2e9fad"
 dependencies = [
  "futures 0.3.27",
  "pin-project",
@@ -7573,7 +7504,7 @@ dependencies = [
 [[package]]
 name = "sc-consensus-fraud-proof"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "async-trait",
  "parity-scale-codec",
@@ -7611,7 +7542,7 @@ dependencies = [
 [[package]]
 name = "sc-consensus-subspace"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "async-trait",
  "fork-tree",
@@ -7652,7 +7583,7 @@ dependencies = [
 [[package]]
 name = "sc-consensus-subspace-rpc"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "async-oneshot",
  "futures 0.3.27",
@@ -8192,7 +8123,7 @@ dependencies = [
 [[package]]
 name = "sc-subspace-chain-specs"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "sc-chain-spec",
  "sc-service",
@@ -8393,7 +8324,7 @@ dependencies = [
  "arrayvec 0.5.2",
  "curve25519-dalek 2.1.3",
  "getrandom 0.1.16",
- "merlin 2.0.1",
+ "merlin",
  "rand 0.7.3",
  "rand_core 0.5.1",
  "sha2 0.8.2",
@@ -8944,7 +8875,7 @@ dependencies = [
 [[package]]
 name = "sp-consensus-subspace"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "async-trait",
  "log",
@@ -8953,13 +8884,13 @@ dependencies = [
  "schnorrkel",
  "sp-api",
  "sp-application-crypto",
- "sp-arithmetic",
- "sp-consensus",
  "sp-consensus-slots",
  "sp-core",
+ "sp-externalities",
  "sp-inherents",
  "sp-io",
  "sp-runtime",
+ "sp-runtime-interface",
  "sp-std",
  "sp-timestamp",
  "subspace-archiving",
@@ -8988,7 +8919,7 @@ dependencies = [
  "lazy_static",
  "libsecp256k1",
  "log",
- "merlin 2.0.1",
+ "merlin",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "primitive-types",
@@ -9059,7 +8990,7 @@ dependencies = [
 [[package]]
 name = "sp-domain-digests"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "parity-scale-codec",
  "sp-api",
@@ -9071,10 +9002,10 @@ dependencies = [
 [[package]]
 name = "sp-domains"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "blake2",
- "merlin 2.0.1",
+ "merlin",
  "parity-scale-codec",
  "rs_merkle",
  "scale-info",
@@ -9097,7 +9028,7 @@ dependencies = [
 [[package]]
 name = "sp-executor-registry"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "parity-scale-codec",
  "sp-domains",
@@ -9173,7 +9104,7 @@ source = "git+https://github.com/subspace/substrate?rev=456cfad45a178617f6886ec4
 dependencies = [
  "async-trait",
  "futures 0.3.27",
- "merlin 2.0.1",
+ "merlin",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "schnorrkel",
@@ -9195,22 +9126,24 @@ dependencies = [
 [[package]]
 name = "sp-messenger"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "frame-support",
+ "hash-db",
  "parity-scale-codec",
  "scale-info",
  "sp-api",
  "sp-core",
  "sp-domains",
  "sp-runtime",
+ "sp-std",
  "sp-trie",
 ]
 
 [[package]]
 name = "sp-objects"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "sp-api",
  "sp-std",
@@ -9241,12 +9174,13 @@ dependencies = [
 [[package]]
 name = "sp-receipts"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "parity-scale-codec",
  "sp-api",
  "sp-core",
  "sp-domains",
+ "sp-runtime",
  "sp-std",
 ]
 
@@ -9519,6 +9453,9 @@ name = "spin"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5d6e0250b93c8427a177b849d144a96d5acc57006149479403d7861ab721e34"
+dependencies = [
+ "lock_api",
+]
 
 [[package]]
 name = "spki"
@@ -9641,48 +9578,57 @@ dependencies = [
 [[package]]
 name = "subspace-archiving"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
- "blake2",
  "parity-scale-codec",
- "reed-solomon-erasure",
  "serde",
  "subspace-core-primitives",
+ "subspace-erasure-coding",
  "thiserror",
 ]
 
 [[package]]
 name = "subspace-core-primitives"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "ark-bls12-381",
  "ark-ff",
  "ark-poly",
  "blake2",
+ "blst_from_scratch",
  "derive_more",
- "dusk-bls12_381",
- "dusk-bytes",
- "dusk-plonk",
  "hex",
+ "kzg",
  "num-integer",
  "num-traits",
  "parity-scale-codec",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "rand_core 0.6.4",
+ "parking_lot 0.12.1",
  "rayon",
  "scale-info",
  "serde",
  "serde_arrays",
+ "spin 0.9.6",
+ "static_assertions",
  "thiserror",
+ "tracing",
  "uint",
+]
+
+[[package]]
+name = "subspace-erasure-coding"
+version = "0.1.0"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
+dependencies = [
+ "blst_from_scratch",
+ "kzg",
+ "subspace-core-primitives",
 ]
 
 [[package]]
 name = "subspace-farmer"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9731,7 +9677,7 @@ dependencies = [
 [[package]]
 name = "subspace-farmer-components"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "async-trait",
  "fs2",
@@ -9756,7 +9702,7 @@ dependencies = [
 [[package]]
 name = "subspace-fraud-proof"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "domain-runtime-primitives",
  "hash-db",
@@ -9777,7 +9723,7 @@ dependencies = [
 [[package]]
 name = "subspace-networking"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -9814,7 +9760,7 @@ dependencies = [
 [[package]]
 name = "subspace-rpc-primitives"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "hex",
  "serde",
@@ -9826,7 +9772,7 @@ dependencies = [
 [[package]]
 name = "subspace-runtime"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "domain-runtime-primitives",
  "frame-benchmarking",
@@ -9880,7 +9826,7 @@ dependencies = [
 [[package]]
 name = "subspace-runtime-primitives"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "parity-scale-codec",
  "serde",
@@ -9908,6 +9854,7 @@ dependencies = [
  "derivative",
  "derive_builder 0.12.0",
  "derive_more",
+ "domain-client-executor",
  "domain-client-message-relayer",
  "domain-runtime-primitives",
  "domain-service",
@@ -9984,7 +9931,7 @@ dependencies = [
 [[package]]
 name = "subspace-service"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "async-trait",
  "derive_more",
@@ -10024,6 +9971,7 @@ dependencies = [
  "sp-consensus-subspace",
  "sp-core",
  "sp-domains",
+ "sp-externalities",
  "sp-objects",
  "sp-offchain",
  "sp-receipts",
@@ -10048,9 +9996,9 @@ dependencies = [
 [[package]]
 name = "subspace-solving"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
- "merlin 2.0.1",
+ "merlin",
  "schnorrkel",
  "subspace-core-primitives",
 ]
@@ -10058,7 +10006,7 @@ dependencies = [
 [[package]]
 name = "subspace-transaction-pool"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "domain-runtime-primitives",
  "futures 0.3.27",
@@ -10085,9 +10033,9 @@ dependencies = [
 [[package]]
 name = "subspace-verification"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
- "merlin 2.0.1",
+ "merlin",
  "parity-scale-codec",
  "scale-info",
  "schnorrkel",
@@ -10102,7 +10050,7 @@ dependencies = [
 [[package]]
 name = "subspace-wasm-tools"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "sc-executor-common",
  "sp-domains",
@@ -10245,7 +10193,7 @@ dependencies = [
 [[package]]
 name = "system-domain-runtime"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "core-payments-domain-runtime",
  "domain-pallet-executive",
@@ -10289,7 +10237,7 @@ dependencies = [
 [[package]]
 name = "system-runtime-primitives"
 version = "0.1.0"
-source = "git+https://github.com/subspace/subspace?rev=5a2c152ea58de893021b8c69a46923ea4ac92193#5a2c152ea58de893021b8c69a46923ea4ac92193"
+source = "git+https://github.com/subspace/subspace?rev=8ec9eb9a27457fc08811b6c022166784500798c7#8ec9eb9a27457fc08811b6c022166784500798c7"
 dependencies = [
  "parity-scale-codec",
  "sp-api",
@@ -10850,7 +10798,7 @@ checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
  "digest 0.10.6",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

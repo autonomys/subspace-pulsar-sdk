@@ -42,7 +42,9 @@ use crate::networking::provider_storage_utils::MaybeProviderStorage;
 use crate::networking::{
     FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage,
 };
-use crate::node::builder::{InConnections, OutConnections, TargetConnections};
+use crate::node::builder::{
+    InConnections, OutConnections, PendingInConnections, PendingOutConnections, TargetConnections,
+};
 use crate::utils::DropCollection;
 
 pub mod chain_spec;
@@ -887,6 +889,40 @@ mod builder {
     #[serde(transparent)]
     pub struct TargetConnections(#[derivative(Default(value = "50"))] pub(crate) u32);
 
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct PendingInConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
+
+    #[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    pub struct PendingOutConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
+
     /// Node DSN builder
     #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
     #[derivative(Default)]
@@ -922,6 +958,14 @@ mod builder {
         #[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = "crate::utils::is_default")]
         pub out_connections: OutConnections,
+        /// Pending incoming swarm connection limit.
+        #[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub pending_in_connections: PendingInConnections,
+        /// Pending outgoing swarm connection limit.
+        #[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        pub pending_out_connections: PendingOutConnections,
         /// Defines target total (in and out) connection number for DSN that
         /// should be maintained.
         #[builder(setter(into), default)]
@@ -1194,9 +1238,11 @@ impl Config {
                     reserved_nodes,
                     allow_non_global_addresses_in_dht,
                     provider_storage_path,
-                    in_connections: InConnections(in_connections),
-                    out_connections: OutConnections(out_connections),
+                    in_connections: InConnections(max_established_incoming_connections),
+                    out_connections: OutConnections(max_established_outgoing_connections),
                     target_connections: TargetConnections(target_connections),
+                    pending_in_connections: PendingInConnections(max_pending_incoming_connections),
+                    pending_out_connections: PendingOutConnections(max_pending_outgoing_connections),
                 } = dsn;
 
                 let peer_id = subspace_networking::peer_id(&keypair);
@@ -1220,6 +1266,14 @@ impl Config {
                     })
                     .collect();
 
+                let networking_parameters_registry =
+                    subspace_networking::NetworkingParametersManager::new(
+                        &directory.as_ref().join("known_addresses_db"),
+                        bootstrap_nodes.clone(),
+                    )
+                    .context("Failed to open known addresses database for DSN")?
+                    .boxed();
+
                 let external_provider_storage = match provider_storage_path {
                     Some(path) => Either::Left(subspace_networking::ParityDbProviderStorage::new(
                         &path,
@@ -1241,11 +1295,7 @@ impl Config {
                     keypair,
                     listen_on,
                     allow_non_global_addresses_in_dht,
-                    networking_parameters_registry:
-                        subspace_networking::BootstrappedNetworkingParameters::new(
-                            bootstrap_nodes.clone(),
-                        )
-                        .boxed(),
+                    networking_parameters_registry,
                     request_response_protocols: vec![
                         PieceByHashRequestHandler::create({
                             let weak_readers_and_pieces =
@@ -1304,9 +1354,11 @@ impl Config {
                                 .expect("Conversion between 2 libp2p versions is always right")
                         })
                         .collect(),
-                    max_established_incoming_connections: in_connections,
-                    max_established_outgoing_connections: out_connections,
+                    max_established_incoming_connections,
+                    max_established_outgoing_connections,
                     target_connections,
+                    max_pending_incoming_connections,
+                    max_pending_outgoing_connections,
                     ..subspace_networking::Config::default()
                 };
 
@@ -1321,6 +1373,21 @@ impl Config {
                 (node, node_runner, piece_cache),
             )
         };
+
+        let mut drop_collection = DropCollection::new();
+        let on_new_listener = node.on_new_listener(Arc::new({
+            let node = node.clone();
+
+            move |address| {
+                tracing::info!(
+                    "DSN listening on {}",
+                    address.clone().with(subspace_networking::libp2p::multiaddr::Protocol::P2p(
+                        node.id().into()
+                    ))
+                );
+            }
+        }));
+        drop_collection.push(on_new_listener);
 
         // Default value are used for many of parameters
         let configuration = SubspaceConfiguration {
@@ -1416,7 +1483,6 @@ impl Config {
                 opt_stop_sender.map(|stop_sender| stop_sender.send(()));
             })?;
 
-        let mut drop_collection = DropCollection::new();
         drop_collection.defer(move || {
             const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -1453,10 +1519,13 @@ pub(crate) struct ExecutorDispatch;
 impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     // /// Only enable the benchmarking host functions when we actually want to
     // benchmark. #[cfg(feature = "runtime-benchmarks")]
-    // type ExtendHostFunctions = frame_benchmarking::benchmarking::HostFunctions;
+    // type ExtendHostFunctions = (
+    //     frame_benchmarking::benchmarking::HostFunctions,
+    //     sp_consensus_subspace::consensus::HostFunctions,
+    // )
     // /// Otherwise we only use the default Substrate host functions.
     // #[cfg(not(feature = "runtime-benchmarks"))]
-    type ExtendHostFunctions = ();
+    type ExtendHostFunctions = sp_consensus_subspace::consensus::HostFunctions;
 
     fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
         subspace_runtime::api::dispatch(method, data)

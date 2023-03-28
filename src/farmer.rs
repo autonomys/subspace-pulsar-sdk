@@ -526,13 +526,14 @@ impl Config {
         };
 
         let mut drop_at_exit = DropCollection::new();
+        let kzg = kzg::Kzg::new(kzg::embedded_kzg_settings());
 
         let piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
             node.dsn_node.clone(),
             Some(RecordsRootPieceValidator::new(
                 node.dsn_node.clone(),
                 node.rpc_handle.clone(),
-                kzg::Kzg::new(kzg::test_public_parameters()),
+                kzg.clone(),
                 // TODO: Consider introducing and using global in-memory root block cache (this
                 // comment is in multiple files)
                 parking_lot::Mutex::new(lru::LruCache::new(RECORDS_ROOTS_CACHE_SIZE)),
@@ -552,6 +553,7 @@ impl Config {
                 Arc::clone(&piece_getter),
                 Arc::clone(&concurrent_plotting_semaphore),
                 description,
+                kzg.clone(),
             )
             .await?;
             plot_info.insert(plot.directory.clone(), plot);
@@ -848,6 +850,7 @@ impl Plot {
         piece_getter: impl subspace_farmer_components::plotting::PieceGetter + Send + 'static,
         concurrent_plotting_semaphore: Arc<tokio::sync::Semaphore>,
         description: &PlotDescription,
+        kzg: kzg::Kzg,
     ) -> Result<(Self, SingleDiskPlot), BuildError> {
         let directory = description.directory.clone();
         let allocated_space = description.space_pledged.as_u64();
@@ -856,7 +859,7 @@ impl Plot {
             directory: directory.clone(),
             reward_address: *reward_address,
             node_client: node.rpc_handle.clone(),
-            kzg: kzg::Kzg::new(kzg::test_public_parameters()),
+            kzg,
             piece_getter,
             concurrent_plotting_semaphore,
             piece_memory_cache: node.piece_memory_cache.clone(),

@@ -9,6 +9,7 @@ use derivative::Derivative;
 use derive_builder::Builder;
 use domain_service::DomainConfiguration;
 use futures::prelude::*;
+use sc_client_api::BlockchainEvents;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
 
@@ -321,6 +322,16 @@ impl CoreDomainNode {
                 )
             });
 
+        let executor_streams = domain_client_executor::ExecutorStreams {
+            primary_block_import_throttling_buffer_size: block_import_throttling_buffer_size,
+            subspace_imported_block_notification_stream: imported_block_notification_stream,
+            client_imported_block_notification_stream: primary_chain_node
+                .client
+                .every_import_notification_stream(),
+            new_slot_notification_stream,
+            _phantom: Default::default(),
+        };
+
         let core_domain_params = domain_service::CoreDomainParams {
             domain_id: DomainId::CORE_PAYMENTS,
             core_domain_config,
@@ -329,9 +340,7 @@ impl CoreDomainNode {
             primary_chain_client: primary_chain_node.client.clone(),
             primary_network_sync_oracle: primary_chain_node.network.clone(),
             select_chain: primary_chain_node.select_chain.clone(),
-            imported_block_notification_stream,
-            new_slot_notification_stream,
-            block_import_throttling_buffer_size,
+            executor_streams,
             gossip_message_sink,
         };
 
