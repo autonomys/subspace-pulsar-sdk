@@ -10,7 +10,7 @@ use either::*;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 use libp2p_core::Multiaddr;
-use sc_consensus_subspace_rpc::RootBlockProvider;
+use sc_consensus_subspace_rpc::SegmentHeaderProvider;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
 use sc_network::network_state::NetworkState;
@@ -30,11 +30,11 @@ use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{
     PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
-    RootBlockBySegmentIndexesRequestHandler, RootBlockRequest, RootBlockResponse,
+    SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
 };
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
-use subspace_service::root_blocks::RootBlockCache;
+use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::SubspaceConfiguration;
 
 use self::builder::SegmentPublishConcurrency;
@@ -1202,7 +1202,7 @@ impl Config {
                         {
                             let segment_index = archived_segment_notification
                                 .archived_segment
-                                .root_block
+                                .segment_header
                                 .segment_index();
                             if let Err(error) = piece_cache.add_pieces(
                                 segment_index
@@ -1334,13 +1334,13 @@ impl Config {
                                 }
                             }
                         }),
-                        RootBlockBySegmentIndexesRequestHandler::create({
-                            let root_block_cache =
-                                RootBlockCache::new(partial_components.client.clone());
+                        SegmentHeaderBySegmentIndexesRequestHandler::create({
+                            let segment_header_cache =
+                                SegmentHeaderCache::new(partial_components.client.clone());
                             move |req| {
-                                futures::future::ready(get_root_block_by_segment_indexes(
+                                futures::future::ready(get_segment_header_by_segment_indexes(
                                     req,
-                                    &root_block_cache,
+                                    &segment_header_cache,
                                 ))
                             }
                         }),
@@ -1920,21 +1920,21 @@ impl Node {
 
 const ROOT_BLOCK_NUMBER_LIMIT: u64 = 100;
 
-pub(crate) fn get_root_block_by_segment_indexes(
-    req: &RootBlockRequest,
-    root_block_cache: &RootBlockCache<impl sc_client_api::AuxStore>,
-) -> Option<RootBlockResponse> {
+pub(crate) fn get_segment_header_by_segment_indexes(
+    req: &SegmentHeaderRequest,
+    segment_header_cache: &SegmentHeaderCache<impl sc_client_api::AuxStore>,
+) -> Option<SegmentHeaderResponse> {
     let segment_indexes = match req {
-        RootBlockRequest::SegmentIndexes { segment_indexes } => segment_indexes.clone(),
-        RootBlockRequest::LastRootBlocks { root_block_number } => {
-            let mut block_limit = *root_block_number;
-            if *root_block_number > ROOT_BLOCK_NUMBER_LIMIT {
-                tracing::debug!(%root_block_number, "Root block number exceeded the limit.");
+        SegmentHeaderRequest::SegmentIndexes { segment_indexes } => segment_indexes.clone(),
+        SegmentHeaderRequest::LastSegmentHeaders { segment_header_number } => {
+            let mut block_limit = *segment_header_number;
+            if *segment_header_number > ROOT_BLOCK_NUMBER_LIMIT {
+                tracing::debug!(%segment_header_number, "Segment header number exceeded the limit.");
 
                 block_limit = ROOT_BLOCK_NUMBER_LIMIT;
             }
 
-            let max_segment_index = root_block_cache.max_segment_index();
+            let max_segment_index = segment_header_cache.max_segment_index();
 
             // several last segment indexes
             (0..=max_segment_index).rev().take(block_limit as usize).collect::<Vec<_>>()
@@ -1943,14 +1943,14 @@ pub(crate) fn get_root_block_by_segment_indexes(
 
     let internal_result = segment_indexes
         .iter()
-        .map(|segment_index| root_block_cache.get_root_block(*segment_index))
-        .collect::<Result<Option<Vec<subspace_core_primitives::RootBlock>>, _>>();
+        .map(|segment_index| segment_header_cache.get_segment_header(*segment_index))
+        .collect::<Result<Option<Vec<subspace_core_primitives::SegmentHeader>>, _>>();
 
     match internal_result {
-        Ok(Some(root_blocks)) => Some(RootBlockResponse { root_blocks }),
+        Ok(Some(segment_headers)) => Some(SegmentHeaderResponse { segment_headers }),
         Ok(None) => None,
         Err(error) => {
-            tracing::error!(%error, "Failed to get root blocks from cache");
+            tracing::error!(%error, "Failed to get segment header from cache");
 
             None
         }
@@ -1978,7 +1978,7 @@ mod farmer_rpc_client {
     use futures::Stream;
     use sc_consensus_subspace_rpc::SubspaceRpcApiClient;
     use subspace_archiving::archiver::ArchivedSegment;
-    use subspace_core_primitives::{RecordsRoot, RootBlock, SegmentIndex};
+    use subspace_core_primitives::{SegmentCommitment, SegmentHeader, SegmentIndex};
     use subspace_farmer::node_client::{Error, NodeClient};
     use subspace_rpc_primitives::{
         FarmerAppInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
@@ -2037,18 +2037,18 @@ mod farmer_rpc_client {
             ))
         }
 
-        async fn records_roots(
+        async fn segment_commitments(
             &self,
             segment_indexes: Vec<SegmentIndex>,
-        ) -> Result<Vec<Option<RecordsRoot>>, Error> {
-            Ok(SubspaceRpcApiClient::records_roots(self, segment_indexes).await?)
+        ) -> Result<Vec<Option<SegmentCommitment>>, Error> {
+            Ok(SubspaceRpcApiClient::segment_commitments(self, segment_indexes).await?)
         }
 
-        async fn root_blocks(
+        async fn segment_headers(
             &self,
             segment_indexes: Vec<SegmentIndex>,
-        ) -> Result<Vec<Option<RootBlock>>, Error> {
-            Ok(SubspaceRpcApiClient::root_blocks(self, segment_indexes).await?)
+        ) -> Result<Vec<Option<SegmentHeader>>, Error> {
+            Ok(SubspaceRpcApiClient::segment_headers(self, segment_indexes).await?)
         }
     }
 }

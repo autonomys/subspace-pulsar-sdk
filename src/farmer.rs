@@ -21,7 +21,7 @@ use subspace_farmer::single_disk_plot::{
 use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 use subspace_farmer::utils::node_piece_getter::NodePieceGetter as DsnPieceGetter;
 use subspace_farmer::utils::parity_db_store::ParityDbStore;
-use subspace_farmer::utils::piece_validator::RecordsRootPieceValidator;
+use subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 use subspace_farmer::utils::readers_and_pieces::{PieceDetails, ReadersAndPieces};
 use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_farmer_components::plotting::PlottedSector;
@@ -300,7 +300,8 @@ pub(crate) fn get_piece_by_hash(
     Either::Right(read_piece_fut.map(|piece| Some(PieceByHashResponse { piece })))
 }
 
-const RECORDS_ROOTS_CACHE_SIZE: NonZeroUsize = NonZeroUsize::new(1_000_000).expect("Not zero; qed");
+const SEGMENT_COMMITMENTS_CACHE_SIZE: NonZeroUsize =
+    NonZeroUsize::new(1_000_000).expect("Not zero; qed");
 
 fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAndPieces {
     // Store piece readers so we can reference them later
@@ -530,13 +531,12 @@ impl Config {
 
         let piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
             node.dsn_node.clone(),
-            Some(RecordsRootPieceValidator::new(
+            Some(SegmentCommitmentPieceValidator::new(
                 node.dsn_node.clone(),
                 node.rpc_handle.clone(),
                 kzg.clone(),
-                // TODO: Consider introducing and using global in-memory root block cache (this
-                // comment is in multiple files)
-                parking_lot::Mutex::new(lru::LruCache::new(RECORDS_ROOTS_CACHE_SIZE)),
+                // TODO: Consider introducing and using global in-memory segment commitments cache
+                parking_lot::Mutex::new(lru::LruCache::new(SEGMENT_COMMITMENTS_CACHE_SIZE)),
             )),
         );
         let piece_getter = Arc::new(FarmerPieceGetter::new(
