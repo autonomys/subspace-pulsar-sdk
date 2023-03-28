@@ -534,6 +534,15 @@
 <a href="#534" id="534">534</a>
 <a href="#535" id="535">535</a>
 <a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Module for executor and its domains
 
 </span><span class="kw">use </span>std::path::Path;
@@ -545,6 +554,7 @@
 <span class="kw">use </span>derive_builder::Builder;
 <span class="kw">use </span>domain_service::DomainConfiguration;
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>sc_client_api::BlockchainEvents;
 <span class="kw">use </span>sc_service::ChainSpecExtension;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>sp_domains::DomainId;
@@ -1000,14 +1010,22 @@
         <span class="comment">// TODO: proper value
         </span><span class="kw">let </span>block_import_throttling_buffer_size = <span class="number">10</span>;
 
+        <span class="kw">let </span>executor_streams = domain_client_executor::ExecutorStreams {
+            primary_block_import_throttling_buffer_size: block_import_throttling_buffer_size,
+            subspace_imported_block_notification_stream: imported_block_notification_stream,
+            client_imported_block_notification_stream: primary_new_full
+                .client
+                .every_import_notification_stream(),
+            new_slot_notification_stream,
+            _phantom: Default::default(),
+        };
+
         <span class="kw">let </span>system_domain_node = domain_service::new_full_system(
             system_domain_config,
             primary_new_full.client.clone(),
             primary_new_full.network.clone(),
             <span class="kw-2">&amp;</span>primary_new_full.select_chain,
-            imported_block_notification_stream,
-            new_slot_notification_stream,
-            block_import_throttling_buffer_size,
+            executor_streams,
             gossip_msg_sink.clone(),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;

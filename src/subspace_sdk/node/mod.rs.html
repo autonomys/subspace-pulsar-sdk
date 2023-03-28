@@ -2172,6 +2172,75 @@
 <a href="#2172" id="2172">2172</a>
 <a href="#2173" id="2173">2173</a>
 <a href="#2174" id="2174">2174</a>
+<a href="#2175" id="2175">2175</a>
+<a href="#2176" id="2176">2176</a>
+<a href="#2177" id="2177">2177</a>
+<a href="#2178" id="2178">2178</a>
+<a href="#2179" id="2179">2179</a>
+<a href="#2180" id="2180">2180</a>
+<a href="#2181" id="2181">2181</a>
+<a href="#2182" id="2182">2182</a>
+<a href="#2183" id="2183">2183</a>
+<a href="#2184" id="2184">2184</a>
+<a href="#2185" id="2185">2185</a>
+<a href="#2186" id="2186">2186</a>
+<a href="#2187" id="2187">2187</a>
+<a href="#2188" id="2188">2188</a>
+<a href="#2189" id="2189">2189</a>
+<a href="#2190" id="2190">2190</a>
+<a href="#2191" id="2191">2191</a>
+<a href="#2192" id="2192">2192</a>
+<a href="#2193" id="2193">2193</a>
+<a href="#2194" id="2194">2194</a>
+<a href="#2195" id="2195">2195</a>
+<a href="#2196" id="2196">2196</a>
+<a href="#2197" id="2197">2197</a>
+<a href="#2198" id="2198">2198</a>
+<a href="#2199" id="2199">2199</a>
+<a href="#2200" id="2200">2200</a>
+<a href="#2201" id="2201">2201</a>
+<a href="#2202" id="2202">2202</a>
+<a href="#2203" id="2203">2203</a>
+<a href="#2204" id="2204">2204</a>
+<a href="#2205" id="2205">2205</a>
+<a href="#2206" id="2206">2206</a>
+<a href="#2207" id="2207">2207</a>
+<a href="#2208" id="2208">2208</a>
+<a href="#2209" id="2209">2209</a>
+<a href="#2210" id="2210">2210</a>
+<a href="#2211" id="2211">2211</a>
+<a href="#2212" id="2212">2212</a>
+<a href="#2213" id="2213">2213</a>
+<a href="#2214" id="2214">2214</a>
+<a href="#2215" id="2215">2215</a>
+<a href="#2216" id="2216">2216</a>
+<a href="#2217" id="2217">2217</a>
+<a href="#2218" id="2218">2218</a>
+<a href="#2219" id="2219">2219</a>
+<a href="#2220" id="2220">2220</a>
+<a href="#2221" id="2221">2221</a>
+<a href="#2222" id="2222">2222</a>
+<a href="#2223" id="2223">2223</a>
+<a href="#2224" id="2224">2224</a>
+<a href="#2225" id="2225">2225</a>
+<a href="#2226" id="2226">2226</a>
+<a href="#2227" id="2227">2227</a>
+<a href="#2228" id="2228">2228</a>
+<a href="#2229" id="2229">2229</a>
+<a href="#2230" id="2230">2230</a>
+<a href="#2231" id="2231">2231</a>
+<a href="#2232" id="2232">2232</a>
+<a href="#2233" id="2233">2233</a>
+<a href="#2234" id="2234">2234</a>
+<a href="#2235" id="2235">2235</a>
+<a href="#2236" id="2236">2236</a>
+<a href="#2237" id="2237">2237</a>
+<a href="#2238" id="2238">2238</a>
+<a href="#2239" id="2239">2239</a>
+<a href="#2240" id="2240">2240</a>
+<a href="#2241" id="2241">2241</a>
+<a href="#2242" id="2242">2242</a>
+<a href="#2243" id="2243">2243</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::{NonZeroU64, NonZeroUsize};
 <span class="kw">use </span>std::path::Path;
@@ -2216,7 +2285,9 @@
 <span class="kw">use </span><span class="kw">crate</span>::networking::{
     FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage,
 };
-<span class="kw">use </span><span class="kw">crate</span>::node::builder::{InConnections, OutConnections, TargetConnections};
+<span class="kw">use </span><span class="kw">crate</span>::node::builder::{
+    InConnections, OutConnections, PendingInConnections, PendingOutConnections, TargetConnections,
+};
 <span class="kw">use </span><span class="kw">crate</span>::utils::DropCollection;
 
 <span class="kw">pub mod </span>chain_spec;
@@ -3061,6 +3132,40 @@
     #[serde(transparent)]
     </span><span class="kw">pub struct </span>TargetConnections(<span class="attr">#[derivative(Default(value = <span class="string">&quot;50&quot;</span>))] </span><span class="kw">pub</span>(<span class="kw">crate</span>) u32);
 
+    <span class="attr">#[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    </span><span class="kw">pub struct </span>PendingInConnections(<span class="attr">#[derivative(Default(value = <span class="string">&quot;100&quot;</span>))] </span><span class="kw">pub</span>(<span class="kw">crate</span>) u32);
+
+    <span class="attr">#[derive(
+        Debug,
+        Clone,
+        Derivative,
+        Deserialize,
+        Serialize,
+        PartialEq,
+        Eq,
+        From,
+        Deref,
+        DerefMut,
+        Display,
+    )]
+    #[derivative(Default)]
+    #[serde(transparent)]
+    </span><span class="kw">pub struct </span>PendingOutConnections(<span class="attr">#[derivative(Default(value = <span class="string">&quot;100&quot;</span>))] </span><span class="kw">pub</span>(<span class="kw">crate</span>) u32);
+
     <span class="doccomment">/// Node DSN builder
     </span><span class="attr">#[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
     #[derivative(Default)]
@@ -3096,6 +3201,14 @@
         </span><span class="attr">#[builder(setter(into), default)]
         #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
         </span><span class="kw">pub </span>out_connections: OutConnections,
+        <span class="doccomment">/// Pending incoming swarm connection limit.
+        </span><span class="attr">#[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
+        </span><span class="kw">pub </span>pending_in_connections: PendingInConnections,
+        <span class="doccomment">/// Pending outgoing swarm connection limit.
+        </span><span class="attr">#[builder(setter(into), default)]
+        #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
+        </span><span class="kw">pub </span>pending_out_connections: PendingOutConnections,
         <span class="doccomment">/// Defines target total (in and out) connection number for DSN that
         /// should be maintained.
         </span><span class="attr">#[builder(setter(into), default)]
@@ -3368,9 +3481,11 @@
                     reserved_nodes,
                     allow_non_global_addresses_in_dht,
                     provider_storage_path,
-                    in_connections: InConnections(in_connections),
-                    out_connections: OutConnections(out_connections),
+                    in_connections: InConnections(max_established_incoming_connections),
+                    out_connections: OutConnections(max_established_outgoing_connections),
                     target_connections: TargetConnections(target_connections),
+                    pending_in_connections: PendingInConnections(max_pending_incoming_connections),
+                    pending_out_connections: PendingOutConnections(max_pending_outgoing_connections),
                 } = dsn;
 
                 <span class="kw">let </span>peer_id = subspace_networking::peer_id(<span class="kw-2">&amp;</span>keypair);
@@ -3394,6 +3509,14 @@
                     })
                     .collect();
 
+                <span class="kw">let </span>networking_parameters_registry =
+                    subspace_networking::NetworkingParametersManager::new(
+                        <span class="kw-2">&amp;</span>directory.as_ref().join(<span class="string">&quot;known_addresses_db&quot;</span>),
+                        bootstrap_nodes.clone(),
+                    )
+                    .context(<span class="string">&quot;Failed to open known addresses database for DSN&quot;</span>)<span class="question-mark">?
+                    </span>.boxed();
+
                 <span class="kw">let </span>external_provider_storage = <span class="kw">match </span>provider_storage_path {
                     <span class="prelude-val">Some</span>(path) =&gt; Either::Left(subspace_networking::ParityDbProviderStorage::new(
                         <span class="kw-2">&amp;</span>path,
@@ -3415,11 +3538,7 @@
                     keypair,
                     listen_on,
                     allow_non_global_addresses_in_dht,
-                    networking_parameters_registry:
-                        subspace_networking::BootstrappedNetworkingParameters::new(
-                            bootstrap_nodes.clone(),
-                        )
-                        .boxed(),
+                    networking_parameters_registry,
                     request_response_protocols: <span class="macro">vec!</span>[
                         PieceByHashRequestHandler::create({
                             <span class="kw">let </span>weak_readers_and_pieces =
@@ -3478,9 +3597,11 @@
                                 .expect(<span class="string">&quot;Conversion between 2 libp2p versions is always right&quot;</span>)
                         })
                         .collect(),
-                    max_established_incoming_connections: in_connections,
-                    max_established_outgoing_connections: out_connections,
+                    max_established_incoming_connections,
+                    max_established_outgoing_connections,
                     target_connections,
+                    max_pending_incoming_connections,
+                    max_pending_outgoing_connections,
                     ..subspace_networking::Config::default()
                 };
 
@@ -3495,6 +3616,21 @@
                 (node, node_runner, piece_cache),
             )
         };
+
+        <span class="kw">let </span><span class="kw-2">mut </span>drop_collection = DropCollection::new();
+        <span class="kw">let </span>on_new_listener = node.on_new_listener(Arc::new({
+            <span class="kw">let </span>node = node.clone();
+
+            <span class="kw">move </span>|address| {
+                <span class="macro">tracing::info!</span>(
+                    <span class="string">&quot;DSN listening on {}&quot;</span>,
+                    address.clone().with(subspace_networking::libp2p::multiaddr::Protocol::P2p(
+                        node.id().into()
+                    ))
+                );
+            }
+        }));
+        drop_collection.push(on_new_listener);
 
         <span class="comment">// Default value are used for many of parameters
         </span><span class="kw">let </span>configuration = SubspaceConfiguration {
@@ -3590,7 +3726,6 @@
                 opt_stop_sender.map(|stop_sender| stop_sender.send(()));
             })<span class="question-mark">?</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>drop_collection = DropCollection::new();
         drop_collection.defer(<span class="kw">move </span>|| {
             <span class="kw">const </span>BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(<span class="number">100</span>);
 
@@ -3627,10 +3762,13 @@
 <span class="kw">impl </span>sc_executor::NativeExecutionDispatch <span class="kw">for </span>ExecutorDispatch {
     <span class="comment">// /// Only enable the benchmarking host functions when we actually want to
     // benchmark. #[cfg(feature = &quot;runtime-benchmarks&quot;)]
-    // type ExtendHostFunctions = frame_benchmarking::benchmarking::HostFunctions;
+    // type ExtendHostFunctions = (
+    //     frame_benchmarking::benchmarking::HostFunctions,
+    //     sp_consensus_subspace::consensus::HostFunctions,
+    // )
     // /// Otherwise we only use the default Substrate host functions.
     // #[cfg(not(feature = &quot;runtime-benchmarks&quot;))]
-    </span><span class="kw">type </span>ExtendHostFunctions = ();
+    </span><span class="kw">type </span>ExtendHostFunctions = sp_consensus_subspace::consensus::HostFunctions;
 
     <span class="kw">fn </span>dispatch(method: <span class="kw-2">&amp;</span>str, data: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt; {
         subspace_runtime::api::dispatch(method, data)

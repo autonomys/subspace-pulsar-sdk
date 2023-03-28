@@ -410,6 +410,15 @@
 <a href="#410" id="410">410</a>
 <a href="#411" id="411">411</a>
 <a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Core payments domain module
 
 </span><span class="kw">use </span>std::path::Path;
@@ -421,6 +430,7 @@
 <span class="kw">use </span>derive_builder::Builder;
 <span class="kw">use </span>domain_service::DomainConfiguration;
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>sc_client_api::BlockchainEvents;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>sp_domains::DomainId;
 
@@ -733,6 +743,16 @@
                 )
             });
 
+        <span class="kw">let </span>executor_streams = domain_client_executor::ExecutorStreams {
+            primary_block_import_throttling_buffer_size: block_import_throttling_buffer_size,
+            subspace_imported_block_notification_stream: imported_block_notification_stream,
+            client_imported_block_notification_stream: primary_chain_node
+                .client
+                .every_import_notification_stream(),
+            new_slot_notification_stream,
+            _phantom: Default::default(),
+        };
+
         <span class="kw">let </span>core_domain_params = domain_service::CoreDomainParams {
             domain_id: DomainId::CORE_PAYMENTS,
             core_domain_config,
@@ -741,9 +761,7 @@
             primary_chain_client: primary_chain_node.client.clone(),
             primary_network_sync_oracle: primary_chain_node.network.clone(),
             select_chain: primary_chain_node.select_chain.clone(),
-            imported_block_notification_stream,
-            new_slot_notification_stream,
-            block_import_throttling_buffer_size,
+            executor_streams,
             gossip_message_sink,
         };
 
