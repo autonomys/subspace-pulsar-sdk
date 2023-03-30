@@ -185,9 +185,6 @@ mod parse_ss58 {
         state.finalize_fixed().into()
     }
 
-    /// ```
-    /// "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY".parse::<subspace_sdk::PublicKey>().unwrap();
-    /// ```
     impl std::str::FromStr for super::PublicKey {
         type Err = Ss58ParsingError;
 
