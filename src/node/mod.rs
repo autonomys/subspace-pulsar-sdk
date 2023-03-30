@@ -1983,7 +1983,7 @@ mod farmer_rpc_client {
 
     use futures::Stream;
     use sc_consensus_subspace_rpc::SubspaceRpcApiClient;
-    use subspace_archiving::archiver::ArchivedSegment;
+    use subspace_archiving::archiver::NewArchivedSegment;
     use subspace_core_primitives::{SegmentCommitment, SegmentHeader, SegmentIndex};
     use subspace_farmer::node_client::{Error, NodeClient};
     use subspace_rpc_primitives::{
@@ -2035,7 +2035,7 @@ mod farmer_rpc_client {
 
         async fn subscribe_archived_segments(
             &self,
-        ) -> Result<Pin<Box<dyn Stream<Item = ArchivedSegment> + Send + 'static>>, Error> {
+        ) -> Result<Pin<Box<dyn Stream<Item = NewArchivedSegment> + Send + 'static>>, Error> {
             Ok(Box::pin(
                 SubspaceRpcApiClient::subscribe_archived_segment(self)
                     .await?
