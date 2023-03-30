@@ -14,6 +14,7 @@ use sc_service::ChainSpecExtension;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
 use subspace_runtime::Block;
+use tracing_futures::Instrument;
 
 use self::core::CoreDomainNode;
 use crate::node::{Base, BaseBuilder, BlockNotification};
@@ -493,6 +494,7 @@ impl SystemDomainNode {
         let mut domain_tx_pool_sinks = std::collections::BTreeMap::new();
 
         let core = if let Some(core) = core {
+            let span = tracing::info_span!("CoreDomain");
             let core_domain_id = u32::from(DomainId::CORE_PAYMENTS);
             CoreDomainNode::new(
                 core,
@@ -503,6 +505,7 @@ impl SystemDomainNode {
                 gossip_msg_sink.clone(),
                 &mut domain_tx_pool_sinks,
             )
+            .instrument(span)
             .await
             .map(Some)?
         } else {
@@ -520,7 +523,11 @@ impl SystemDomainNode {
 
         let NewFull { client, network_starter, rpc_handlers, .. } = system_domain_node;
 
-        tokio::spawn(cross_domain_message_gossip_worker.run(gossip_msg_stream));
+        tokio::spawn(
+            cross_domain_message_gossip_worker
+                .run(gossip_msg_stream)
+                .instrument(tracing::Span::current()),
+        );
         network_starter.start_network();
 
         Ok(Self {

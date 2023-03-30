@@ -36,6 +36,7 @@ use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::SubspaceConfiguration;
+use tracing_futures::Instrument;
 
 use self::builder::SegmentPublishConcurrency;
 use crate::networking::provider_storage_utils::MaybeProviderStorage;
@@ -1423,6 +1424,7 @@ impl Config {
 
         let system_domain = if let Some(config) = system_domain {
             use sc_service::ChainSpecExtension;
+            let span = tracing::info_span!("SystemDomain");
 
             let system_domain_spec = chain_spec
                 .extensions()
@@ -1439,6 +1441,7 @@ impl Config {
                 system_domain_spec,
                 &mut full_client,
             )
+            .instrument(span)
             .await
             .map(Some)?
         } else {
