@@ -2035,7 +2035,8 @@ mod farmer_rpc_client {
 
         async fn subscribe_archived_segments(
             &self,
-        ) -> Result<Pin<Box<dyn Stream<Item = NewArchivedSegment> + Send + 'static>>, Error> {
+        ) -> Result<Pin<Box<dyn Stream<Item = NewArchivedSegment> + Send + 'static>>, Error>
+        {
             Ok(Box::pin(
                 SubspaceRpcApiClient::subscribe_archived_segment(self)
                     .await?

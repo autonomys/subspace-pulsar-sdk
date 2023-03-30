@@ -72,18 +72,15 @@ async fn main() -> anyhow::Result<()> {
     .role(node::Role::Authority);
 
     let node = if executor {
-        node.system_domain(
-            subspace_sdk::node::domains::ConfigBuilder::new()
-                .core(subspace_sdk::node::domains::core::ConfigBuilder::new().build()),
-        )
+        node.system_domain(subspace_sdk::node::domains::ConfigBuilder::new())
     } else {
         node
     }
     .build(
         &node_dir,
         match chain {
-            Chain::Gemini3D => node::chain_spec::gemini_3d().unwrap(),
-            Chain::Devnet => node::chain_spec::devnet_config().unwrap(),
+            Chain::Gemini3D => node::chain_spec::gemini_3d(),
+            Chain::Devnet => node::chain_spec::devnet_config(),
         },
     )
     .await?;
