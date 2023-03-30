@@ -107,15 +107,18 @@ pub(crate) mod chain_spec {
         )
     }
 
-    /// Gemini 3c chain spec
-    pub fn gemini_3c_config() -> ExecutionChainSpec<GenesisConfig> {
-        ExecutionChainSpec::from_genesis(
+    /// Gemini 3d chain spec
+    pub fn gemini_3d_config() -> ChainSpec {
+        ChainSpec::from_genesis(
             // Name
-            "Subspace Gemini 3c Core Payments Domain",
+            "Subspace Gemini 3d Core Payments Domain",
             // ID
-            "subspace_gemini_3c_core_payments_domain",
-            ChainType::Local,
+            "subspace_gemini_3d_core_payments_domain",
+            ChainType::Live,
             move || {
+                let sudo_account =
+                    AccountId::from_ss58check("5CZy4hcmaVZUMZLfB41v1eAKvtZ8W7axeWuDvwjhjPwfhAqt")
+                        .expect("Invalid Sudo account");
                 testnet_genesis(
                     vec![
                         // Genesis executor
@@ -123,8 +126,10 @@ pub(crate) mod chain_spec {
                             "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
                         )
                         .expect("Wrong executor account address"),
+                        // Sudo account
+                        sudo_account.clone(),
                     ],
-                    None,
+                    Some(sudo_account),
                     Default::default(),
                 )
             },
@@ -133,7 +138,7 @@ pub(crate) mod chain_spec {
             // Telemetry
             None,
             // Protocol ID
-            Some("subspace-gemini-3c-core-payments-domain"),
+            Some("subspace-gemini-3d-core-payments-domain"),
             None,
             // Properties
             Some(chain_spec_properties()),
@@ -390,7 +395,7 @@ mod tests {
         let node = Node::dev()
             .role(Role::Authority)
             .system_domain(domains::ConfigBuilder::new().core(core))
-            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .build(dir.path(), chain_spec::dev_config())
             .await
             .unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());

@@ -14,6 +14,7 @@ use sc_service::ChainSpecExtension;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
 use subspace_runtime::Block;
+use tracing_futures::Instrument;
 
 use self::core::CoreDomainNode;
 use crate::node::{Base, BaseBuilder, BlockNotification};
@@ -173,15 +174,18 @@ pub(crate) mod chain_spec {
         )
     }
 
-    /// Gemini 3c config
-    pub fn gemini_3c_config() -> ChainSpec {
+    /// Gemini 3d config
+    pub fn gemini_3d_config() -> ChainSpec {
         ChainSpec::from_genesis(
             // Name
-            "Subspace Gemini 3c System Domain",
+            "Subspace Gemini 3d System Domain",
             // ID
-            "subspace_gemini_3c_system_domain",
-            ChainType::Local,
+            "subspace_gemini_3d_system_domain",
+            ChainType::Live,
             move || {
+                let sudo_account =
+                    AccountId::from_ss58check("5CZy4hcmaVZUMZLfB41v1eAKvtZ8W7axeWuDvwjhjPwfhAqt")
+                        .expect("Invalid Sudo account.");
                 testnet_genesis(
                     vec![
                         // Genesis executor
@@ -189,6 +193,8 @@ pub(crate) mod chain_spec {
                             "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
                         )
                         .expect("Wrong executor account address"),
+                        // Sudo account
+                        sudo_account.clone(),
                     ],
                     vec![(
                         AccountId::from_ss58check(
@@ -227,7 +233,7 @@ pub(crate) mod chain_spec {
                         .expect("Wrong executor account address"),
                         Percent::from_percent(10),
                     )],
-                    None,
+                    Some(sudo_account),
                     Default::default(),
                 )
             },
@@ -236,13 +242,13 @@ pub(crate) mod chain_spec {
             // Telemetry
             None,
             // Protocol ID
-            Some("subspace-gemini-3c-system-domain"),
+            Some("subspace-gemini-3d-system-domain"),
             None,
             // Properties
             Some(chain_spec_properties()),
             // Extensions
             ChainSpecExtensions {
-                execution_chain_spec: super::core::chain_spec::gemini_3c_config(),
+                execution_chain_spec: super::core::chain_spec::gemini_3d_config(),
             },
         )
     }
@@ -256,7 +262,7 @@ pub(crate) mod chain_spec {
             ChainType::Custom("Testnet".to_string()),
             move || {
                 let sudo_account =
-                    AccountId::from_ss58check("5CXTmJEusve5ixyJufqHThmy4qUrrm6FyLCR7QfE4bbyMTNC")
+                    AccountId::from_ss58check("5CZy4hcmaVZUMZLfB41v1eAKvtZ8W7axeWuDvwjhjPwfhAqt")
                         .expect("Invalid Sudo account");
                 testnet_genesis(
                     vec![
@@ -488,6 +494,7 @@ impl SystemDomainNode {
         let mut domain_tx_pool_sinks = std::collections::BTreeMap::new();
 
         let core = if let Some(core) = core {
+            let span = tracing::info_span!("CoreDomain");
             let core_domain_id = u32::from(DomainId::CORE_PAYMENTS);
             CoreDomainNode::new(
                 core,
@@ -498,6 +505,7 @@ impl SystemDomainNode {
                 gossip_msg_sink.clone(),
                 &mut domain_tx_pool_sinks,
             )
+            .instrument(span)
             .await
             .map(Some)?
         } else {
@@ -515,7 +523,11 @@ impl SystemDomainNode {
 
         let NewFull { client, network_starter, rpc_handlers, .. } = system_domain_node;
 
-        tokio::spawn(cross_domain_message_gossip_worker.run(gossip_msg_stream));
+        tokio::spawn(
+            cross_domain_message_gossip_worker
+                .run(gossip_msg_stream)
+                .instrument(tracing::Span::current()),
+        );
         network_starter.start_network();
 
         Ok(Self {

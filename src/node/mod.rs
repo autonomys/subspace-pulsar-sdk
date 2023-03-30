@@ -10,7 +10,7 @@ use either::*;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 use libp2p_core::Multiaddr;
-use sc_consensus_subspace_rpc::RootBlockProvider;
+use sc_consensus_subspace_rpc::SegmentHeaderProvider;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
 use sc_network::network_state::NetworkState;
@@ -22,7 +22,7 @@ use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use serde::{Deserialize, Serialize};
 use sp_consensus::SyncOracle;
 use sp_core::H256;
-use subspace_core_primitives::PieceIndexHash;
+use subspace_core_primitives::{PieceIndexHash, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
 use subspace_farmer::utils::parity_db_store::ParityDbStore;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
@@ -30,12 +30,13 @@ use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{
     PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
-    RootBlockBySegmentIndexesRequestHandler, RootBlockRequest, RootBlockResponse,
+    SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
 };
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
-use subspace_service::root_blocks::RootBlockCache;
+use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::SubspaceConfiguration;
+use tracing_futures::Instrument;
 
 use self::builder::SegmentPublishConcurrency;
 use crate::networking::provider_storage_utils::MaybeProviderStorage;
@@ -296,9 +297,9 @@ mod builder {
             Builder::dev()
         }
 
-        /// Gemini 3c configuraiton
-        pub fn gemini_3c() -> Builder {
-            Builder::gemini_3c()
+        /// Gemini 3d configuraiton
+        pub fn gemini_3d() -> Builder {
+            Builder::gemini_3d()
         }
 
         /// Devnet configuraiton
@@ -730,8 +731,8 @@ mod builder {
             Self::default()
         }
 
-        /// Gemini 3c configuration
-        pub fn gemini_3c() -> Self {
+        /// Gemini 3d configuration
+        pub fn gemini_3d() -> Self {
             Self::new()
                 .http("127.0.0.1:9933".parse().expect("hardcoded value is true"))
                 .ws("127.0.0.1:9944".parse().expect("hardcoded value is true"))
@@ -804,8 +805,8 @@ mod builder {
             Self::default().force_synced(true).allow_private_ip(true)
         }
 
-        /// Gemini 3c configuration
-        pub fn gemini_3c() -> Self {
+        /// Gemini 3d configuration
+        pub fn gemini_3d() -> Self {
             Self::default()
                 .listen_addresses(vec![
                     "/ip6/::/tcp/30333".parse().expect("hardcoded value is true"),
@@ -814,7 +815,7 @@ mod builder {
                 .enable_mdns(true)
         }
 
-        /// Gemini 3c configuration
+        /// Gemini 3d configuration
         pub fn devnet() -> Self {
             Self::default()
                 .listen_addresses(vec![
@@ -979,15 +980,15 @@ mod builder {
             Self::new().allow_non_global_addresses_in_dht(true)
         }
 
-        /// Gemini 3c configuration
-        pub fn gemini_3c() -> Self {
+        /// Gemini 3d configuration
+        pub fn gemini_3d() -> Self {
             Self::new().listen_addresses(vec![
                 "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
                 "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
             ])
         }
 
-        /// Gemini 3c configuration
+        /// Gemini 3d configuration
         pub fn devnet() -> Self {
             Self::new().listen_addresses(vec![
                 "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
@@ -1018,8 +1019,8 @@ mod builder {
             Self::default()
         }
 
-        /// Gemini 3c configuration
-        pub fn gemini_3c() -> Self {
+        /// Gemini 3d configuration
+        pub fn gemini_3d() -> Self {
             Self::default().enabled(true)
         }
 
@@ -1046,14 +1047,14 @@ mod builder {
                 .offchain_worker(OffchainWorkerBuilder::dev())
         }
 
-        /// Gemini 3c configuration
-        pub fn gemini_3c() -> Self {
+        /// Gemini 3d configuration
+        pub fn gemini_3d() -> Self {
             Self::new()
                 .execution_strategy(ExecutionStrategy::AlwaysWasm)
-                .network(NetworkBuilder::gemini_3c())
-                .dsn(DsnBuilder::gemini_3c())
-                .rpc(RpcBuilder::gemini_3c())
-                .offchain_worker(OffchainWorkerBuilder::gemini_3c())
+                .network(NetworkBuilder::gemini_3d())
+                .dsn(DsnBuilder::gemini_3d())
+                .rpc(RpcBuilder::gemini_3d())
+                .offchain_worker(OffchainWorkerBuilder::gemini_3d())
         }
 
         /// Devnet chain configuration
@@ -1180,7 +1181,7 @@ impl Config {
 
             let piece_cache = NodePieceCache::new(
                 partial_components.client.clone(),
-                piece_cache_size.as_u64() / subspace_core_primitives::PIECE_SIZE as u64,
+                piece_cache_size.as_u64() / subspace_core_primitives::Piece::SIZE as u64,
                 subspace_networking::peer_id(&keypair),
             );
 
@@ -1202,11 +1203,10 @@ impl Config {
                         {
                             let segment_index = archived_segment_notification
                                 .archived_segment
-                                .root_block
+                                .segment_header
                                 .segment_index();
                             if let Err(error) = piece_cache.add_pieces(
-                                segment_index
-                                    * u64::from(subspace_core_primitives::PIECES_IN_SEGMENT),
+                                segment_index.first_piece_index(),
                                 &archived_segment_notification.archived_segment.pieces,
                             ) {
                                 tracing::error!(
@@ -1334,13 +1334,13 @@ impl Config {
                                 }
                             }
                         }),
-                        RootBlockBySegmentIndexesRequestHandler::create({
-                            let root_block_cache =
-                                RootBlockCache::new(partial_components.client.clone());
+                        SegmentHeaderBySegmentIndexesRequestHandler::create({
+                            let segment_header_cache =
+                                SegmentHeaderCache::new(partial_components.client.clone());
                             move |req| {
-                                futures::future::ready(get_root_block_by_segment_indexes(
+                                futures::future::ready(get_segment_header_by_segment_indexes(
                                     req,
-                                    &root_block_cache,
+                                    &segment_header_cache,
                                 ))
                             }
                         }),
@@ -1424,6 +1424,7 @@ impl Config {
 
         let system_domain = if let Some(config) = system_domain {
             use sc_service::ChainSpecExtension;
+            let span = tracing::info_span!("SystemDomain");
 
             let system_domain_spec = chain_spec
                 .extensions()
@@ -1440,6 +1441,7 @@ impl Config {
                 system_domain_spec,
                 &mut full_client,
             )
+            .instrument(span)
             .await
             .map(Some)?
         } else {
@@ -1542,8 +1544,12 @@ pub(crate) type FullClient =
     subspace_service::FullClient<subspace_runtime::RuntimeApi, ExecutorDispatch>;
 pub(crate) type NewFull = subspace_service::NewFull<
     FullClient,
-    subspace_transaction_pool::bundle_validator::BundleValidator<RuntimeBlock, FullClient>,
-    subspace_service::FraudProofVerifier<RuntimeApi, ExecutorDispatch>,
+    subspace_service::tx_pre_validator::PrimaryChainTxPreValidator<
+        RuntimeBlock,
+        FullClient,
+        subspace_service::FraudProofVerifier<RuntimeApi, ExecutorDispatch>,
+        subspace_transaction_pool::bundle_validator::BundleValidator<RuntimeBlock, FullClient>,
+    >,
 >;
 
 /// Node structure
@@ -1706,9 +1712,9 @@ impl Node {
         Builder::dev()
     }
 
-    /// Gemini 3c configuration
-    pub fn gemini_3c() -> Builder {
-        Builder::gemini_3c()
+    /// Gemini 3d configuration
+    pub fn gemini_3d() -> Builder {
+        Builder::gemini_3d()
     }
 
     /// Devnet configuration
@@ -1920,37 +1926,40 @@ impl Node {
 
 const ROOT_BLOCK_NUMBER_LIMIT: u64 = 100;
 
-pub(crate) fn get_root_block_by_segment_indexes(
-    req: &RootBlockRequest,
-    root_block_cache: &RootBlockCache<impl sc_client_api::AuxStore>,
-) -> Option<RootBlockResponse> {
+pub(crate) fn get_segment_header_by_segment_indexes(
+    req: &SegmentHeaderRequest,
+    segment_header_cache: &SegmentHeaderCache<impl sc_client_api::AuxStore>,
+) -> Option<SegmentHeaderResponse> {
     let segment_indexes = match req {
-        RootBlockRequest::SegmentIndexes { segment_indexes } => segment_indexes.clone(),
-        RootBlockRequest::LastRootBlocks { root_block_number } => {
-            let mut block_limit = *root_block_number;
-            if *root_block_number > ROOT_BLOCK_NUMBER_LIMIT {
-                tracing::debug!(%root_block_number, "Root block number exceeded the limit.");
+        SegmentHeaderRequest::SegmentIndexes { segment_indexes } => segment_indexes.clone(),
+        SegmentHeaderRequest::LastSegmentHeaders { segment_header_number } => {
+            let mut block_limit = *segment_header_number;
+            if *segment_header_number > ROOT_BLOCK_NUMBER_LIMIT {
+                tracing::debug!(%segment_header_number, "Segment header number exceeded the limit.");
 
                 block_limit = ROOT_BLOCK_NUMBER_LIMIT;
             }
 
-            let max_segment_index = root_block_cache.max_segment_index();
+            let max_segment_index = segment_header_cache.max_segment_index();
 
             // several last segment indexes
-            (0..=max_segment_index).rev().take(block_limit as usize).collect::<Vec<_>>()
+            (SegmentIndex::ZERO..=max_segment_index)
+                .rev()
+                .take(block_limit as usize)
+                .collect::<Vec<_>>()
         }
     };
 
     let internal_result = segment_indexes
         .iter()
-        .map(|segment_index| root_block_cache.get_root_block(*segment_index))
-        .collect::<Result<Option<Vec<subspace_core_primitives::RootBlock>>, _>>();
+        .map(|segment_index| segment_header_cache.get_segment_header(*segment_index))
+        .collect::<Result<Option<Vec<subspace_core_primitives::SegmentHeader>>, _>>();
 
     match internal_result {
-        Ok(Some(root_blocks)) => Some(RootBlockResponse { root_blocks }),
+        Ok(Some(segment_headers)) => Some(SegmentHeaderResponse { segment_headers }),
         Ok(None) => None,
         Err(error) => {
-            tracing::error!(%error, "Failed to get root blocks from cache");
+            tracing::error!(%error, "Failed to get segment header from cache");
 
             None
         }
@@ -1977,8 +1986,8 @@ mod farmer_rpc_client {
 
     use futures::Stream;
     use sc_consensus_subspace_rpc::SubspaceRpcApiClient;
-    use subspace_archiving::archiver::ArchivedSegment;
-    use subspace_core_primitives::{RecordsRoot, RootBlock, SegmentIndex};
+    use subspace_archiving::archiver::NewArchivedSegment;
+    use subspace_core_primitives::{SegmentCommitment, SegmentHeader, SegmentIndex};
     use subspace_farmer::node_client::{Error, NodeClient};
     use subspace_rpc_primitives::{
         FarmerAppInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
@@ -2029,7 +2038,8 @@ mod farmer_rpc_client {
 
         async fn subscribe_archived_segments(
             &self,
-        ) -> Result<Pin<Box<dyn Stream<Item = ArchivedSegment> + Send + 'static>>, Error> {
+        ) -> Result<Pin<Box<dyn Stream<Item = NewArchivedSegment> + Send + 'static>>, Error>
+        {
             Ok(Box::pin(
                 SubspaceRpcApiClient::subscribe_archived_segment(self)
                     .await?
@@ -2037,18 +2047,18 @@ mod farmer_rpc_client {
             ))
         }
 
-        async fn records_roots(
+        async fn segment_commitments(
             &self,
             segment_indexes: Vec<SegmentIndex>,
-        ) -> Result<Vec<Option<RecordsRoot>>, Error> {
-            Ok(SubspaceRpcApiClient::records_roots(self, segment_indexes).await?)
+        ) -> Result<Vec<Option<SegmentCommitment>>, Error> {
+            Ok(SubspaceRpcApiClient::segment_commitments(self, segment_indexes).await?)
         }
 
-        async fn root_blocks(
+        async fn segment_headers(
             &self,
             segment_indexes: Vec<SegmentIndex>,
-        ) -> Result<Vec<Option<RootBlock>>, Error> {
-            Ok(SubspaceRpcApiClient::root_blocks(self, segment_indexes).await?)
+        ) -> Result<Vec<Option<SegmentHeader>>, Error> {
+            Ok(SubspaceRpcApiClient::segment_headers(self, segment_indexes).await?)
         }
     }
 }
@@ -2068,7 +2078,7 @@ mod tests {
         crate::utils::test_init();
 
         let dir = TempDir::new().unwrap();
-        let chain = chain_spec::dev_config().unwrap();
+        let chain = chain_spec::dev_config();
         let node = Node::dev()
             .role(Role::Authority)
             .network(
@@ -2136,7 +2146,7 @@ mod tests {
 
         let node_span = tracing::trace_span!("node 1");
         let dir = TempDir::new().unwrap();
-        let chain = chain_spec::dev_config().unwrap();
+        let chain = chain_spec::dev_config();
         let node = Node::dev()
             .dsn(DsnBuilder::dev().listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()]))
             .network(
@@ -2232,7 +2242,7 @@ mod tests {
         for i in 0..4 {
             tracing::error!(i, "Running new node");
             Node::dev()
-                .build(dir.path(), chain_spec::dev_config().unwrap())
+                .build(dir.path(), chain_spec::dev_config())
                 .await
                 .unwrap()
                 .close()
