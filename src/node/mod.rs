@@ -34,10 +34,8 @@ use subspace_service::SubspaceConfiguration;
 use tracing_futures::Instrument;
 
 use self::builder::SegmentPublishConcurrency;
-use crate::networking::provider_storage_utils::MaybeProviderStorage;
-use crate::networking::{
-    FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage,
-};
+use crate::dsn::provider_storage_utils::MaybeProviderStorage;
+use crate::dsn::{FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage};
 use crate::node::builder::{
     InConnections, OutConnections, PendingInConnections, PendingOutConnections, TargetConnections,
 };

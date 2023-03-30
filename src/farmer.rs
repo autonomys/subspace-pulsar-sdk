@@ -32,7 +32,7 @@ use tokio::sync::{oneshot, watch, Mutex};
 use tracing_futures::Instrument;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
-use crate::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
+use crate::dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
 use crate::utils::{AsyncDropFutures, DropCollection};
 use crate::{Node, PublicKey};
 
@@ -630,7 +630,7 @@ impl Config {
         node.farmer_provider_storage.swap(Some(farmer_provider_storage));
 
         drop_at_exit.push(
-            crate::networking::start_announcements_processor(
+            crate::dsn::start_announcements_processor(
                 node.dsn_node.clone(),
                 Arc::clone(&piece_cache),
                 Arc::downgrade(&readers_and_pieces),

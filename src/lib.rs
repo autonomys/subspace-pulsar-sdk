@@ -3,9 +3,9 @@
 #![warn(missing_docs, clippy::dbg_macro, clippy::unwrap_used, clippy::disallowed_types)]
 #![feature(type_changing_struct_update, concat_idents, const_option)]
 
+pub(crate) mod dsn;
 /// Module related to the farmer
 pub mod farmer;
-pub(crate) mod networking;
 /// Module related to the node
 pub mod node;
 pub(crate) mod utils;
