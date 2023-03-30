@@ -9,7 +9,6 @@ use derivative::Derivative;
 use either::*;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
-use libp2p_core::Multiaddr;
 use sc_consensus_subspace_rpc::SegmentHeaderProvider;
 use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider, SyncState};
@@ -36,18 +35,17 @@ use tracing_futures::Instrument;
 use self::builder::SegmentPublishConcurrency;
 use crate::dsn::provider_storage_utils::MaybeProviderStorage;
 use crate::dsn::{FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage};
-use crate::node::builder::{
-    InConnections, OutConnections, PendingInConnections, PendingOutConnections, TargetConnections,
-};
 use crate::utils::DropCollection;
 
 pub mod chain_spec;
 pub mod domains;
 mod substrate;
 
-pub use builder::{Builder, Config, Dsn, DsnBuilder};
+pub use builder::{Builder, Config};
 pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
 pub use substrate::*;
+
+pub use crate::dsn::builder::*;
 
 mod builder {
     use std::num::NonZeroUsize;
@@ -59,6 +57,7 @@ mod builder {
 
     use super::substrate::Base;
     use super::*;
+    use crate::dsn::builder::Dsn;
 
     #[derive(
         Debug,
@@ -158,177 +157,6 @@ mod builder {
         }
     }
 
-    #[derive(
-        Debug, Clone, Derivative, Deserialize, Serialize, PartialEq, Eq, From, Deref, DerefMut,
-    )]
-    #[derivative(Default)]
-    #[serde(transparent)]
-    pub struct ListenAddresses(
-        #[derivative(Default(
-            // TODO: get rid of it, once it won't be required by monorepo
-            value = "vec![\"/ip4/127.0.0.1/tcp/0\".parse().expect(\"Always valid\")]"
-        ))]
-        pub(crate) Vec<Multiaddr>,
-    );
-
-    #[derive(
-        Debug,
-        Clone,
-        Derivative,
-        Deserialize,
-        Serialize,
-        PartialEq,
-        Eq,
-        From,
-        Deref,
-        DerefMut,
-        Display,
-    )]
-    #[derivative(Default)]
-    #[serde(transparent)]
-    pub struct InConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
-
-    #[derive(
-        Debug,
-        Clone,
-        Derivative,
-        Deserialize,
-        Serialize,
-        PartialEq,
-        Eq,
-        From,
-        Deref,
-        DerefMut,
-        Display,
-    )]
-    #[derivative(Default)]
-    #[serde(transparent)]
-    pub struct OutConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
-
-    #[derive(
-        Debug,
-        Clone,
-        Derivative,
-        Deserialize,
-        Serialize,
-        PartialEq,
-        Eq,
-        From,
-        Deref,
-        DerefMut,
-        Display,
-    )]
-    #[derivative(Default)]
-    #[serde(transparent)]
-    pub struct TargetConnections(#[derivative(Default(value = "50"))] pub(crate) u32);
-
-    #[derive(
-        Debug,
-        Clone,
-        Derivative,
-        Deserialize,
-        Serialize,
-        PartialEq,
-        Eq,
-        From,
-        Deref,
-        DerefMut,
-        Display,
-    )]
-    #[derivative(Default)]
-    #[serde(transparent)]
-    pub struct PendingInConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
-
-    #[derive(
-        Debug,
-        Clone,
-        Derivative,
-        Deserialize,
-        Serialize,
-        PartialEq,
-        Eq,
-        From,
-        Deref,
-        DerefMut,
-        Display,
-    )]
-    #[derivative(Default)]
-    #[serde(transparent)]
-    pub struct PendingOutConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
-
-    /// Node DSN builder
-    #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
-    #[derivative(Default)]
-    #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "DsnBuilder")]
-    #[non_exhaustive]
-    pub struct Dsn {
-        /// Listen on some address for other nodes
-        #[builder(default, setter(into, strip_option))]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub provider_storage_path: Option<std::path::PathBuf>,
-        /// Listen on some address for other nodes
-        #[builder(default, setter(into))]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub listen_addresses: ListenAddresses,
-        /// Boot nodes
-        #[builder(default)]
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        pub boot_nodes: Vec<MultiaddrWithPeerId>,
-        /// Reserved nodes
-        #[builder(default)]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub reserved_nodes: Vec<Multiaddr>,
-        /// Determines whether we allow keeping non-global (private, shared,
-        /// loopback..) addresses in Kademlia DHT.
-        #[builder(default)]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub allow_non_global_addresses_in_dht: bool,
-        /// Defines max established incoming swarm connection limit.
-        #[builder(setter(into), default)]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub in_connections: InConnections,
-        /// Defines max established outgoing swarm connection limit.
-        #[builder(setter(into), default)]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub out_connections: OutConnections,
-        /// Pending incoming swarm connection limit.
-        #[builder(setter(into), default)]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub pending_in_connections: PendingInConnections,
-        /// Pending outgoing swarm connection limit.
-        #[builder(setter(into), default)]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub pending_out_connections: PendingOutConnections,
-        /// Defines target total (in and out) connection number for DSN that
-        /// should be maintained.
-        #[builder(setter(into), default)]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-        pub target_connections: TargetConnections,
-    }
-
-    impl DsnBuilder {
-        /// Dev chain configuration
-        pub fn dev() -> Self {
-            Self::new().allow_non_global_addresses_in_dht(true)
-        }
-
-        /// Gemini 3d configuration
-        pub fn gemini_3d() -> Self {
-            Self::new().listen_addresses(vec![
-                "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
-                "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
-            ])
-        }
-
-        /// Gemini 3d configuration
-        pub fn devnet() -> Self {
-            Self::new().listen_addresses(vec![
-                "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
-                "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
-            ])
-        }
-    }
-
     impl Builder {
         /// Dev chain configuration
         pub fn dev() -> Self {
@@ -381,7 +209,6 @@ mod builder {
     }
 
     crate::derive_base!(Base => Builder);
-    crate::generate_builder!(Dsn);
 }
 
 const MAX_PROVIDER_RECORDS_LIMIT: NonZeroUsize = NonZeroUsize::new(100000).expect("100000 > 0"); // ~ 10 MB
@@ -482,7 +309,7 @@ impl Config {
             let (node, node_runner, bootstrap_nodes) = {
                 tracing::trace!("Subspace networking starting.");
 
-                let builder::Dsn {
+                let Dsn {
                     listen_addresses,
                     boot_nodes,
                     reserved_nodes,
