@@ -13,7 +13,7 @@ use subspace_runtime_primitives::{AccountId, Balance, BlockNumber, SSC};
 use crate::utils::chain_spec as utils;
 
 const SUBSPACE_TELEMETRY_URL: &str = "wss://telemetry.subspace.network/submit/";
-const GEMINI_3C_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-gemini-3c.json");
+const GEMINI_3D_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-gemini-3d.json");
 const DEVNET_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-devnet.json");
 
 /// List of accounts which should receive token grants, amounts are specified in
@@ -57,22 +57,22 @@ pub type ChainSpec = SerializableChainSpec<
     >,
 >;
 
-/// Gemini 3c chain spec
-pub fn gemini_3c() -> Result<ChainSpec, String> {
-    ChainSpec::from_json_bytes(GEMINI_3C_CHAIN_SPEC)
+/// Gemini 3d chain spec
+pub fn gemini_3d() -> ChainSpec {
+    ChainSpec::from_json_bytes(GEMINI_3D_CHAIN_SPEC).expect("Always valid")
 }
 
-/// Gemini 3c compiled chain spec
-pub fn gemini_3c_compiled() -> Result<ChainSpec, String> {
-    Ok(ChainSpec::from_genesis(
+/// Gemini 3d compiled chain spec
+pub fn gemini_3d_compiled() -> ChainSpec {
+    ChainSpec::from_genesis(
         // Name
-        "Subspace Gemini 3c",
+        "Subspace Gemini 3d",
         // ID
-        "subspace_gemini_3c",
-        ChainType::Custom("Subspace Gemini 3c".to_string()),
+        "subspace_gemini_3d",
+        ChainType::Custom("Subspace Gemini 3d".to_string()),
         || {
             let sudo_account =
-                AccountId::from_ss58check("5CXTmJEusve5ixyJufqHThmy4qUrrm6FyLCR7QfE4bbyMTNC")
+                AccountId::from_ss58check("5CZy4hcmaVZUMZLfB41v1eAKvtZ8W7axeWuDvwjhjPwfhAqt")
                     .expect("Wrong root account address");
 
             let mut balances = vec![(sudo_account.clone(), 1_000 * SSC)];
@@ -82,16 +82,13 @@ pub fn gemini_3c_compiled() -> Result<ChainSpec, String> {
                     let account_id = AccountId::from_ss58check(account_address)
                         .expect("Wrong vesting account address");
                     let amount: Balance = amount * SSC;
-
                     // TODO: Adjust start block to real value before mainnet launch
                     let start_block = 100_000_000;
                     let one_month_in_blocks =
                         u32::try_from(3600 * 24 * 30 * MILLISECS_PER_BLOCK / 1000)
                             .expect("One month of blocks always fits in u32; qed");
-
                     // Add balance so it can be locked
                     balances.push((account_id.clone(), amount));
-
                     [
                         // 1/4 of tokens are released after 1 year.
                         (account_id.clone(), start_block, one_month_in_blocks * 12, 1, amount / 4),
@@ -113,16 +110,14 @@ pub fn gemini_3c_compiled() -> Result<ChainSpec, String> {
                 vesting_schedules,
                 GenesisParams {
                     enable_rewards: false,
-                    enable_transfer: false,
                     enable_storage_access: false,
                     allow_authoring_by: AllowAuthoringBy::RootFarmer(
-                        sp_consensus_subspace::FarmerPublicKey::unchecked_from([
-                            0x50, 0x69, 0x60, 0xf3, 0x50, 0x33, 0xee, 0xc1, 0x12, 0xb5, 0xbc, 0xb4,
-                            0xe5, 0x91, 0xfb, 0xbb, 0xf5, 0x88, 0xac, 0x45, 0x26, 0x90, 0xd4, 0x70,
-                            0x32, 0x6c, 0x3f, 0x7b, 0x4e, 0xd9, 0x41, 0x17,
-                        ]),
+                        sp_consensus_subspace::FarmerPublicKey::unchecked_from(hex_literal::hex!(
+                            "8aecbcf0b404590ddddc01ebacb205a562d12fdb5c2aa6a4035c1a20f23c9515"
+                        )),
                     ),
                     enable_executor: true,
+                    enable_transfer: false,
                     confirmation_depth_k: 100, // TODO: Proper value here
                 },
             )
@@ -132,28 +127,28 @@ pub fn gemini_3c_compiled() -> Result<ChainSpec, String> {
         // Telemetry
         Some(
             TelemetryEndpoints::new(vec![(SUBSPACE_TELEMETRY_URL.into(), 1)])
-                .map_err(|error| error.to_string())?,
+                .expect("Telemetry value is valid"),
         ),
         // Protocol ID
-        Some("subspace-gemini-3c"),
+        Some("subspace-gemini-3d"),
         None,
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
         ChainSpecExtensions {
-            execution_chain_spec: super::domains::chain_spec::gemini_3c_config(),
+            execution_chain_spec: super::domains::chain_spec::gemini_3d_config(),
         },
-    ))
+    )
 }
 
 /// Dev net raw configuration
-pub fn devnet_config() -> Result<ChainSpec, String> {
-    ChainSpec::from_json_bytes(DEVNET_CHAIN_SPEC)
+pub fn devnet_config() -> ChainSpec {
+    ChainSpec::from_json_bytes(DEVNET_CHAIN_SPEC).expect("Always valid")
 }
 
 /// Dev net compiled configuration
-pub fn devnet_config_compiled() -> Result<ChainSpec, String> {
-    Ok(ChainSpec::from_genesis(
+pub fn devnet_config_compiled() -> ChainSpec {
+    ChainSpec::from_genesis(
         // Name
         "Subspace Dev network",
         // ID
@@ -215,7 +210,7 @@ pub fn devnet_config_compiled() -> Result<ChainSpec, String> {
         // Telemetry
         Some(
             TelemetryEndpoints::new(vec![(SUBSPACE_TELEMETRY_URL.into(), 1)])
-                .map_err(|error| error.to_string())?,
+                .expect("Telemetry value is valid"),
         ),
         // Protocol ID
         Some("subspace-devnet"),
@@ -224,14 +219,14 @@ pub fn devnet_config_compiled() -> Result<ChainSpec, String> {
         Some(utils::chain_spec_properties()),
         // Extensions
         ChainSpecExtensions { execution_chain_spec: super::domains::chain_spec::devnet_config() },
-    ))
+    )
 }
 
 /// New dev chain spec
-pub fn dev_config() -> Result<ChainSpec, String> {
-    let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
+pub fn dev_config() -> ChainSpec {
+    let wasm_binary = WASM_BINARY.expect("Development wasm not available");
 
-    Ok(ChainSpec::from_genesis(
+    ChainSpec::from_genesis(
         // Name
         "Subspace development",
         // ID
@@ -273,14 +268,14 @@ pub fn dev_config() -> Result<ChainSpec, String> {
         ChainSpecExtensions {
             execution_chain_spec: super::domains::chain_spec::development_config(),
         },
-    ))
+    )
 }
 
 /// New local chain spec
-pub fn local_config() -> Result<ChainSpec, String> {
-    let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
+pub fn local_config() -> ChainSpec {
+    let wasm_binary = WASM_BINARY.expect("Development wasm not available");
 
-    Ok(ChainSpec::from_genesis(
+    ChainSpec::from_genesis(
         // Name
         "Subspace local",
         // ID
@@ -330,7 +325,7 @@ pub fn local_config() -> Result<ChainSpec, String> {
         ChainSpecExtensions {
             execution_chain_spec: super::domains::chain_spec::local_testnet_config(),
         },
-    ))
+    )
 }
 
 /// Configure initial storage state for FRAME modules.
@@ -380,11 +375,11 @@ mod tests {
 
     #[test]
     fn test_chain_specs() {
-        gemini_3c_compiled().unwrap();
-        gemini_3c().unwrap();
-        devnet_config_compiled().unwrap();
-        devnet_config().unwrap();
-        dev_config().unwrap();
-        local_config().unwrap();
+        gemini_3d_compiled();
+        gemini_3d();
+        devnet_config_compiled();
+        devnet_config();
+        dev_config();
+        local_config();
     }
 }

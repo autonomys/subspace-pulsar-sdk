@@ -296,9 +296,9 @@ mod builder {
             Builder::dev()
         }
 
-        /// Gemini 3c configuraiton
-        pub fn gemini_3c() -> Builder {
-            Builder::gemini_3c()
+        /// Gemini 3d configuraiton
+        pub fn gemini_3d() -> Builder {
+            Builder::gemini_3d()
         }
 
         /// Devnet configuraiton
@@ -730,8 +730,8 @@ mod builder {
             Self::default()
         }
 
-        /// Gemini 3c configuration
-        pub fn gemini_3c() -> Self {
+        /// Gemini 3d configuration
+        pub fn gemini_3d() -> Self {
             Self::new()
                 .http("127.0.0.1:9933".parse().expect("hardcoded value is true"))
                 .ws("127.0.0.1:9944".parse().expect("hardcoded value is true"))
@@ -804,8 +804,8 @@ mod builder {
             Self::default().force_synced(true).allow_private_ip(true)
         }
 
-        /// Gemini 3c configuration
-        pub fn gemini_3c() -> Self {
+        /// Gemini 3d configuration
+        pub fn gemini_3d() -> Self {
             Self::default()
                 .listen_addresses(vec![
                     "/ip6/::/tcp/30333".parse().expect("hardcoded value is true"),
@@ -814,7 +814,7 @@ mod builder {
                 .enable_mdns(true)
         }
 
-        /// Gemini 3c configuration
+        /// Gemini 3d configuration
         pub fn devnet() -> Self {
             Self::default()
                 .listen_addresses(vec![
@@ -979,15 +979,15 @@ mod builder {
             Self::new().allow_non_global_addresses_in_dht(true)
         }
 
-        /// Gemini 3c configuration
-        pub fn gemini_3c() -> Self {
+        /// Gemini 3d configuration
+        pub fn gemini_3d() -> Self {
             Self::new().listen_addresses(vec![
                 "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
                 "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
             ])
         }
 
-        /// Gemini 3c configuration
+        /// Gemini 3d configuration
         pub fn devnet() -> Self {
             Self::new().listen_addresses(vec![
                 "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
@@ -1018,8 +1018,8 @@ mod builder {
             Self::default()
         }
 
-        /// Gemini 3c configuration
-        pub fn gemini_3c() -> Self {
+        /// Gemini 3d configuration
+        pub fn gemini_3d() -> Self {
             Self::default().enabled(true)
         }
 
@@ -1046,14 +1046,14 @@ mod builder {
                 .offchain_worker(OffchainWorkerBuilder::dev())
         }
 
-        /// Gemini 3c configuration
-        pub fn gemini_3c() -> Self {
+        /// Gemini 3d configuration
+        pub fn gemini_3d() -> Self {
             Self::new()
                 .execution_strategy(ExecutionStrategy::AlwaysWasm)
-                .network(NetworkBuilder::gemini_3c())
-                .dsn(DsnBuilder::gemini_3c())
-                .rpc(RpcBuilder::gemini_3c())
-                .offchain_worker(OffchainWorkerBuilder::gemini_3c())
+                .network(NetworkBuilder::gemini_3d())
+                .dsn(DsnBuilder::gemini_3d())
+                .rpc(RpcBuilder::gemini_3d())
+                .offchain_worker(OffchainWorkerBuilder::gemini_3d())
         }
 
         /// Devnet chain configuration
@@ -1709,9 +1709,9 @@ impl Node {
         Builder::dev()
     }
 
-    /// Gemini 3c configuration
-    pub fn gemini_3c() -> Builder {
-        Builder::gemini_3c()
+    /// Gemini 3d configuration
+    pub fn gemini_3d() -> Builder {
+        Builder::gemini_3d()
     }
 
     /// Devnet configuration
@@ -2074,7 +2074,7 @@ mod tests {
         crate::utils::test_init();
 
         let dir = TempDir::new().unwrap();
-        let chain = chain_spec::dev_config().unwrap();
+        let chain = chain_spec::dev_config();
         let node = Node::dev()
             .role(Role::Authority)
             .network(
@@ -2142,7 +2142,7 @@ mod tests {
 
         let node_span = tracing::trace_span!("node 1");
         let dir = TempDir::new().unwrap();
-        let chain = chain_spec::dev_config().unwrap();
+        let chain = chain_spec::dev_config();
         let node = Node::dev()
             .dsn(DsnBuilder::dev().listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()]))
             .network(
@@ -2238,7 +2238,7 @@ mod tests {
         for i in 0..4 {
             tracing::error!(i, "Running new node");
             Node::dev()
-                .build(dir.path(), chain_spec::dev_config().unwrap())
+                .build(dir.path(), chain_spec::dev_config())
                 .await
                 .unwrap()
                 .close()

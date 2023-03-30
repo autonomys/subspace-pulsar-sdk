@@ -1022,7 +1022,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let node = Node::dev()
             .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .build(dir.path(), chain_spec::dev_config())
             .await
             .unwrap();
         let plot_dir = TempDir::new().unwrap();
@@ -1053,7 +1053,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let node = Node::dev()
             .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .build(dir.path(), chain_spec::dev_config())
             .await
             .unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
@@ -1095,7 +1095,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let node = Node::dev()
             .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .build(dir.path(), chain_spec::dev_config())
             .await
             .unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
@@ -1131,7 +1131,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let node = Node::dev()
             .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .build(dir.path(), chain_spec::dev_config())
             .await
             .unwrap();
         let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
@@ -1167,7 +1167,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let node = Node::dev()
             .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .build(dir.path(), chain_spec::dev_config())
             .await
             .unwrap();
 
@@ -1196,7 +1196,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let node = Node::dev()
             .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .build(dir.path(), chain_spec::dev_config())
             .await
             .unwrap();
 

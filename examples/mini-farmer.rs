@@ -11,11 +11,11 @@ use tracing_subscriber::prelude::*;
 
 #[derive(Subcommand, Debug)]
 enum Chain {
-    Gemini3C,
+    Gemini3D,
     Devnet,
 }
 
-/// Gemini 3c test binary
+/// Mini farmer
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
 pub struct Args {
@@ -60,8 +60,8 @@ async fn main() -> anyhow::Result<()> {
 
     let node_dir = base_path.join("node");
     let node = match chain {
-        Chain::Gemini3C => Node::gemini_3c().dsn(
-            subspace_sdk::node::DsnBuilder::gemini_3c()
+        Chain::Gemini3D => Node::gemini_3d().dsn(
+            subspace_sdk::node::DsnBuilder::gemini_3d()
                 .provider_storage_path(node_dir.join("provider_storage")),
         ),
         Chain::Devnet => Node::devnet().dsn(
@@ -82,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
     .build(
         &node_dir,
         match chain {
-            Chain::Gemini3C => node::chain_spec::gemini_3c().unwrap(),
+            Chain::Gemini3D => node::chain_spec::gemini_3d().unwrap(),
             Chain::Devnet => node::chain_spec::devnet_config().unwrap(),
         },
     )

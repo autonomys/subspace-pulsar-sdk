@@ -9864,6 +9864,7 @@ dependencies = [
  "frame-support",
  "frame-system-rpc-runtime-api",
  "futures 0.3.27",
+ "hex-literal",
  "jsonrpsee-core",
  "libp2p-core 0.39.1",
  "lru 0.9.0",

@@ -173,15 +173,18 @@ pub(crate) mod chain_spec {
         )
     }
 
-    /// Gemini 3c config
-    pub fn gemini_3c_config() -> ChainSpec {
+    /// Gemini 3d config
+    pub fn gemini_3d_config() -> ChainSpec {
         ChainSpec::from_genesis(
             // Name
-            "Subspace Gemini 3c System Domain",
+            "Subspace Gemini 3d System Domain",
             // ID
-            "subspace_gemini_3c_system_domain",
-            ChainType::Local,
+            "subspace_gemini_3d_system_domain",
+            ChainType::Live,
             move || {
+                let sudo_account =
+                    AccountId::from_ss58check("5CZy4hcmaVZUMZLfB41v1eAKvtZ8W7axeWuDvwjhjPwfhAqt")
+                        .expect("Invalid Sudo account.");
                 testnet_genesis(
                     vec![
                         // Genesis executor
@@ -189,6 +192,8 @@ pub(crate) mod chain_spec {
                             "5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ",
                         )
                         .expect("Wrong executor account address"),
+                        // Sudo account
+                        sudo_account.clone(),
                     ],
                     vec![(
                         AccountId::from_ss58check(
@@ -227,7 +232,7 @@ pub(crate) mod chain_spec {
                         .expect("Wrong executor account address"),
                         Percent::from_percent(10),
                     )],
-                    None,
+                    Some(sudo_account),
                     Default::default(),
                 )
             },
@@ -236,13 +241,13 @@ pub(crate) mod chain_spec {
             // Telemetry
             None,
             // Protocol ID
-            Some("subspace-gemini-3c-system-domain"),
+            Some("subspace-gemini-3d-system-domain"),
             None,
             // Properties
             Some(chain_spec_properties()),
             // Extensions
             ChainSpecExtensions {
-                execution_chain_spec: super::core::chain_spec::gemini_3c_config(),
+                execution_chain_spec: super::core::chain_spec::gemini_3d_config(),
             },
         )
     }
@@ -256,7 +261,7 @@ pub(crate) mod chain_spec {
             ChainType::Custom("Testnet".to_string()),
             move || {
                 let sudo_account =
-                    AccountId::from_ss58check("5CXTmJEusve5ixyJufqHThmy4qUrrm6FyLCR7QfE4bbyMTNC")
+                    AccountId::from_ss58check("5CZy4hcmaVZUMZLfB41v1eAKvtZ8W7axeWuDvwjhjPwfhAqt")
                         .expect("Invalid Sudo account");
                 testnet_genesis(
                     vec![
