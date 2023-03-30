@@ -8,7 +8,7 @@ async fn main() {
         .force_authoring(true)
         .role(subspace_sdk::node::Role::Authority)
         // Starting a new chain
-        .build("node", subspace_sdk::chain_spec::dev_config().unwrap())
+        .build("node", subspace_sdk::chain_spec::dev_config())
         .await
         .unwrap();
 

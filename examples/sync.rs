@@ -49,14 +49,7 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     match args {
         Args::GenerateSpec { path } =>
-            tokio::fs::write(
-                path,
-                serde_json::to_string_pretty(
-                    &chain_spec::dev_config()
-                        .map_err(|err| anyhow::anyhow!("Failed to generate a chain spec: {err}"))?,
-                )?,
-            )
-            .await?,
+            tokio::fs::write(path, serde_json::to_string_pretty(&chain_spec::dev_config())?).await?,
         Args::Farm { plot, plot_size, node, spec } => {
             let chain_spec = serde_json::from_str(&tokio::fs::read_to_string(spec).await?)?;
             let (plot_size, cache_size) =
