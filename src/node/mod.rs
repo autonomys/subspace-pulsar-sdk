@@ -1541,8 +1541,12 @@ pub(crate) type FullClient =
     subspace_service::FullClient<subspace_runtime::RuntimeApi, ExecutorDispatch>;
 pub(crate) type NewFull = subspace_service::NewFull<
     FullClient,
-    subspace_transaction_pool::bundle_validator::BundleValidator<RuntimeBlock, FullClient>,
-    subspace_service::FraudProofVerifier<RuntimeApi, ExecutorDispatch>,
+    subspace_service::tx_pre_validator::PrimaryChainTxPreValidator<
+        RuntimeBlock,
+        FullClient,
+        subspace_service::FraudProofVerifier<RuntimeApi, ExecutorDispatch>,
+        subspace_transaction_pool::bundle_validator::BundleValidator<RuntimeBlock, FullClient>,
+    >,
 >;
 
 /// Node structure
