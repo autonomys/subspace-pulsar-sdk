@@ -22,7 +22,7 @@ use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use serde::{Deserialize, Serialize};
 use sp_consensus::SyncOracle;
 use sp_core::H256;
-use subspace_core_primitives::PieceIndexHash;
+use subspace_core_primitives::{PieceIndexHash, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
 use subspace_farmer::utils::parity_db_store::ParityDbStore;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
@@ -1205,8 +1205,7 @@ impl Config {
                                 .segment_header
                                 .segment_index();
                             if let Err(error) = piece_cache.add_pieces(
-                                segment_index
-                                    * u64::from(subspace_core_primitives::PIECES_IN_SEGMENT),
+                                segment_index.first_piece_index(),
                                 &archived_segment_notification.archived_segment.pieces,
                             ) {
                                 tracing::error!(
@@ -1937,7 +1936,10 @@ pub(crate) fn get_segment_header_by_segment_indexes(
             let max_segment_index = segment_header_cache.max_segment_index();
 
             // several last segment indexes
-            (0..=max_segment_index).rev().take(block_limit as usize).collect::<Vec<_>>()
+            (SegmentIndex::ZERO..=max_segment_index)
+                .rev()
+                .take(block_limit as usize)
+                .collect::<Vec<_>>()
         }
     };
 
