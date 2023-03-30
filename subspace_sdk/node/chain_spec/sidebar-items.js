@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["dev_config","devnet_config","devnet_config_compiled","gemini_3c","gemini_3c_compiled","local_config"],"struct":["GenesisParams"],"type":["ChainSpec"]};
+window.SIDEBAR_ITEMS = {"fn":["dev_config","devnet_config","devnet_config_compiled","gemini_3d","gemini_3d_compiled","local_config"],"struct":["GenesisParams"],"type":["ChainSpec"]};

@@ -2241,6 +2241,16 @@
 <a href="#2241" id="2241">2241</a>
 <a href="#2242" id="2242">2242</a>
 <a href="#2243" id="2243">2243</a>
+<a href="#2244" id="2244">2244</a>
+<a href="#2245" id="2245">2245</a>
+<a href="#2246" id="2246">2246</a>
+<a href="#2247" id="2247">2247</a>
+<a href="#2248" id="2248">2248</a>
+<a href="#2249" id="2249">2249</a>
+<a href="#2250" id="2250">2250</a>
+<a href="#2251" id="2251">2251</a>
+<a href="#2252" id="2252">2252</a>
+<a href="#2253" id="2253">2253</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::{NonZeroU64, NonZeroUsize};
 <span class="kw">use </span>std::path::Path;
@@ -2253,7 +2263,7 @@
 <span class="kw">use </span>futures::channel::{mpsc, oneshot};
 <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
 <span class="kw">use </span>libp2p_core::Multiaddr;
-<span class="kw">use </span>sc_consensus_subspace_rpc::RootBlockProvider;
+<span class="kw">use </span>sc_consensus_subspace_rpc::SegmentHeaderProvider;
 <span class="kw">use </span>sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 <span class="kw">use </span>sc_network::config::{NodeKeyConfig, Secret};
 <span class="kw">use </span>sc_network::network_state::NetworkState;
@@ -2265,7 +2275,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>sp_consensus::SyncOracle;
 <span class="kw">use </span>sp_core::H256;
-<span class="kw">use </span>subspace_core_primitives::PieceIndexHash;
+<span class="kw">use </span>subspace_core_primitives::{PieceIndexHash, SegmentIndex};
 <span class="kw">use </span>subspace_farmer::node_client::NodeClient;
 <span class="kw">use </span>subspace_farmer::utils::parity_db_store::ParityDbStore;
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
@@ -2273,12 +2283,13 @@
 <span class="kw">use </span>subspace_farmer_components::FarmerProtocolInfo;
 <span class="kw">use </span>subspace_networking::{
     PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
-    RootBlockBySegmentIndexesRequestHandler, RootBlockRequest, RootBlockResponse,
+    SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
 };
 <span class="kw">use </span>subspace_runtime::RuntimeApi;
 <span class="kw">use </span>subspace_runtime_primitives::opaque::{Block <span class="kw">as </span>RuntimeBlock, Header};
-<span class="kw">use </span>subspace_service::root_blocks::RootBlockCache;
+<span class="kw">use </span>subspace_service::segment_headers::SegmentHeaderCache;
 <span class="kw">use </span>subspace_service::SubspaceConfiguration;
+<span class="kw">use </span>tracing_futures::Instrument;
 
 <span class="kw">use </span><span class="self">self</span>::builder::SegmentPublishConcurrency;
 <span class="kw">use </span><span class="kw">crate</span>::networking::provider_storage_utils::MaybeProviderStorage;
@@ -2539,9 +2550,9 @@
             Builder::dev()
         }
 
-        <span class="doccomment">/// Gemini 3c configuraiton
-        </span><span class="kw">pub fn </span>gemini_3c() -&gt; Builder {
-            Builder::gemini_3c()
+        <span class="doccomment">/// Gemini 3d configuraiton
+        </span><span class="kw">pub fn </span>gemini_3d() -&gt; Builder {
+            Builder::gemini_3d()
         }
 
         <span class="doccomment">/// Devnet configuraiton
@@ -2973,8 +2984,8 @@
             <span class="self">Self</span>::default()
         }
 
-        <span class="doccomment">/// Gemini 3c configuration
-        </span><span class="kw">pub fn </span>gemini_3c() -&gt; <span class="self">Self </span>{
+        <span class="doccomment">/// Gemini 3d configuration
+        </span><span class="kw">pub fn </span>gemini_3d() -&gt; <span class="self">Self </span>{
             <span class="self">Self</span>::new()
                 .http(<span class="string">&quot;127.0.0.1:9933&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>))
                 .ws(<span class="string">&quot;127.0.0.1:9944&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>))
@@ -3047,8 +3058,8 @@
             <span class="self">Self</span>::default().force_synced(<span class="bool-val">true</span>).allow_private_ip(<span class="bool-val">true</span>)
         }
 
-        <span class="doccomment">/// Gemini 3c configuration
-        </span><span class="kw">pub fn </span>gemini_3c() -&gt; <span class="self">Self </span>{
+        <span class="doccomment">/// Gemini 3d configuration
+        </span><span class="kw">pub fn </span>gemini_3d() -&gt; <span class="self">Self </span>{
             <span class="self">Self</span>::default()
                 .listen_addresses(<span class="macro">vec!</span>[
                     <span class="string">&quot;/ip6/::/tcp/30333&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>),
@@ -3057,7 +3068,7 @@
                 .enable_mdns(<span class="bool-val">true</span>)
         }
 
-        <span class="doccomment">/// Gemini 3c configuration
+        <span class="doccomment">/// Gemini 3d configuration
         </span><span class="kw">pub fn </span>devnet() -&gt; <span class="self">Self </span>{
             <span class="self">Self</span>::default()
                 .listen_addresses(<span class="macro">vec!</span>[
@@ -3222,15 +3233,15 @@
             <span class="self">Self</span>::new().allow_non_global_addresses_in_dht(<span class="bool-val">true</span>)
         }
 
-        <span class="doccomment">/// Gemini 3c configuration
-        </span><span class="kw">pub fn </span>gemini_3c() -&gt; <span class="self">Self </span>{
+        <span class="doccomment">/// Gemini 3d configuration
+        </span><span class="kw">pub fn </span>gemini_3d() -&gt; <span class="self">Self </span>{
             <span class="self">Self</span>::new().listen_addresses(<span class="macro">vec!</span>[
                 <span class="string">&quot;/ip6/::/tcp/30433&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>),
                 <span class="string">&quot;/ip4/0.0.0.0/tcp/30433&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>),
             ])
         }
 
-        <span class="doccomment">/// Gemini 3c configuration
+        <span class="doccomment">/// Gemini 3d configuration
         </span><span class="kw">pub fn </span>devnet() -&gt; <span class="self">Self </span>{
             <span class="self">Self</span>::new().listen_addresses(<span class="macro">vec!</span>[
                 <span class="string">&quot;/ip6/::/tcp/30433&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>),
@@ -3261,8 +3272,8 @@
             <span class="self">Self</span>::default()
         }
 
-        <span class="doccomment">/// Gemini 3c configuration
-        </span><span class="kw">pub fn </span>gemini_3c() -&gt; <span class="self">Self </span>{
+        <span class="doccomment">/// Gemini 3d configuration
+        </span><span class="kw">pub fn </span>gemini_3d() -&gt; <span class="self">Self </span>{
             <span class="self">Self</span>::default().enabled(<span class="bool-val">true</span>)
         }
 
@@ -3289,14 +3300,14 @@
                 .offchain_worker(OffchainWorkerBuilder::dev())
         }
 
-        <span class="doccomment">/// Gemini 3c configuration
-        </span><span class="kw">pub fn </span>gemini_3c() -&gt; <span class="self">Self </span>{
+        <span class="doccomment">/// Gemini 3d configuration
+        </span><span class="kw">pub fn </span>gemini_3d() -&gt; <span class="self">Self </span>{
             <span class="self">Self</span>::new()
                 .execution_strategy(ExecutionStrategy::AlwaysWasm)
-                .network(NetworkBuilder::gemini_3c())
-                .dsn(DsnBuilder::gemini_3c())
-                .rpc(RpcBuilder::gemini_3c())
-                .offchain_worker(OffchainWorkerBuilder::gemini_3c())
+                .network(NetworkBuilder::gemini_3d())
+                .dsn(DsnBuilder::gemini_3d())
+                .rpc(RpcBuilder::gemini_3d())
+                .offchain_worker(OffchainWorkerBuilder::gemini_3d())
         }
 
         <span class="doccomment">/// Devnet chain configuration
@@ -3423,7 +3434,7 @@
 
             <span class="kw">let </span>piece_cache = NodePieceCache::new(
                 partial_components.client.clone(),
-                piece_cache_size.as_u64() / subspace_core_primitives::PIECE_SIZE <span class="kw">as </span>u64,
+                piece_cache_size.as_u64() / subspace_core_primitives::Piece::SIZE <span class="kw">as </span>u64,
                 subspace_networking::peer_id(<span class="kw-2">&amp;</span>keypair),
             );
 
@@ -3445,11 +3456,10 @@
                         </span>{
                             <span class="kw">let </span>segment_index = archived_segment_notification
                                 .archived_segment
-                                .root_block
+                                .segment_header
                                 .segment_index();
                             <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = piece_cache.add_pieces(
-                                segment_index
-                                    * u64::from(subspace_core_primitives::PIECES_IN_SEGMENT),
+                                segment_index.first_piece_index(),
                                 <span class="kw-2">&amp;</span>archived_segment_notification.archived_segment.pieces,
                             ) {
                                 <span class="macro">tracing::error!</span>(
@@ -3577,13 +3587,13 @@
                                 }
                             }
                         }),
-                        RootBlockBySegmentIndexesRequestHandler::create({
-                            <span class="kw">let </span>root_block_cache =
-                                RootBlockCache::new(partial_components.client.clone());
+                        SegmentHeaderBySegmentIndexesRequestHandler::create({
+                            <span class="kw">let </span>segment_header_cache =
+                                SegmentHeaderCache::new(partial_components.client.clone());
                             <span class="kw">move </span>|req| {
-                                futures::future::ready(get_root_block_by_segment_indexes(
+                                futures::future::ready(get_segment_header_by_segment_indexes(
                                     req,
-                                    <span class="kw-2">&amp;</span>root_block_cache,
+                                    <span class="kw-2">&amp;</span>segment_header_cache,
                                 ))
                             }
                         }),
@@ -3667,6 +3677,7 @@
 
         <span class="kw">let </span>system_domain = <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = system_domain {
             <span class="kw">use </span>sc_service::ChainSpecExtension;
+            <span class="kw">let </span>span = <span class="macro">tracing::info_span!</span>(<span class="string">&quot;SystemDomain&quot;</span>);
 
             <span class="kw">let </span>system_domain_spec = chain_spec
                 .extensions()
@@ -3683,6 +3694,7 @@
                 system_domain_spec,
                 <span class="kw-2">&amp;mut </span>full_client,
             )
+            .instrument(span)
             .<span class="kw">await
             </span>.map(<span class="prelude-val">Some</span>)<span class="question-mark">?
         </span>} <span class="kw">else </span>{
@@ -3785,8 +3797,12 @@
     subspace_service::FullClient&lt;subspace_runtime::RuntimeApi, ExecutorDispatch&gt;;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>NewFull = subspace_service::NewFull&lt;
     FullClient,
-    subspace_transaction_pool::bundle_validator::BundleValidator&lt;RuntimeBlock, FullClient&gt;,
-    subspace_service::FraudProofVerifier&lt;RuntimeApi, ExecutorDispatch&gt;,
+    subspace_service::tx_pre_validator::PrimaryChainTxPreValidator&lt;
+        RuntimeBlock,
+        FullClient,
+        subspace_service::FraudProofVerifier&lt;RuntimeApi, ExecutorDispatch&gt;,
+        subspace_transaction_pool::bundle_validator::BundleValidator&lt;RuntimeBlock, FullClient&gt;,
+    &gt;,
 &gt;;
 
 <span class="doccomment">/// Node structure
@@ -3949,9 +3965,9 @@
         Builder::dev()
     }
 
-    <span class="doccomment">/// Gemini 3c configuration
-    </span><span class="kw">pub fn </span>gemini_3c() -&gt; Builder {
-        Builder::gemini_3c()
+    <span class="doccomment">/// Gemini 3d configuration
+    </span><span class="kw">pub fn </span>gemini_3d() -&gt; Builder {
+        Builder::gemini_3d()
     }
 
     <span class="doccomment">/// Devnet configuration
@@ -4163,37 +4179,40 @@
 
 <span class="kw">const </span>ROOT_BLOCK_NUMBER_LIMIT: u64 = <span class="number">100</span>;
 
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_root_block_by_segment_indexes(
-    req: <span class="kw-2">&amp;</span>RootBlockRequest,
-    root_block_cache: <span class="kw-2">&amp;</span>RootBlockCache&lt;<span class="kw">impl </span>sc_client_api::AuxStore&gt;,
-) -&gt; <span class="prelude-ty">Option</span>&lt;RootBlockResponse&gt; {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_segment_header_by_segment_indexes(
+    req: <span class="kw-2">&amp;</span>SegmentHeaderRequest,
+    segment_header_cache: <span class="kw-2">&amp;</span>SegmentHeaderCache&lt;<span class="kw">impl </span>sc_client_api::AuxStore&gt;,
+) -&gt; <span class="prelude-ty">Option</span>&lt;SegmentHeaderResponse&gt; {
     <span class="kw">let </span>segment_indexes = <span class="kw">match </span>req {
-        RootBlockRequest::SegmentIndexes { segment_indexes } =&gt; segment_indexes.clone(),
-        RootBlockRequest::LastRootBlocks { root_block_number } =&gt; {
-            <span class="kw">let </span><span class="kw-2">mut </span>block_limit = <span class="kw-2">*</span>root_block_number;
-            <span class="kw">if </span><span class="kw-2">*</span>root_block_number &gt; ROOT_BLOCK_NUMBER_LIMIT {
-                <span class="macro">tracing::debug!</span>(%root_block_number, <span class="string">&quot;Root block number exceeded the limit.&quot;</span>);
+        SegmentHeaderRequest::SegmentIndexes { segment_indexes } =&gt; segment_indexes.clone(),
+        SegmentHeaderRequest::LastSegmentHeaders { segment_header_number } =&gt; {
+            <span class="kw">let </span><span class="kw-2">mut </span>block_limit = <span class="kw-2">*</span>segment_header_number;
+            <span class="kw">if </span><span class="kw-2">*</span>segment_header_number &gt; ROOT_BLOCK_NUMBER_LIMIT {
+                <span class="macro">tracing::debug!</span>(%segment_header_number, <span class="string">&quot;Segment header number exceeded the limit.&quot;</span>);
 
                 block_limit = ROOT_BLOCK_NUMBER_LIMIT;
             }
 
-            <span class="kw">let </span>max_segment_index = root_block_cache.max_segment_index();
+            <span class="kw">let </span>max_segment_index = segment_header_cache.max_segment_index();
 
             <span class="comment">// several last segment indexes
-            </span>(<span class="number">0</span>..=max_segment_index).rev().take(block_limit <span class="kw">as </span>usize).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            </span>(SegmentIndex::ZERO..=max_segment_index)
+                .rev()
+                .take(block_limit <span class="kw">as </span>usize)
+                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
         }
     };
 
     <span class="kw">let </span>internal_result = segment_indexes
         .iter()
-        .map(|segment_index| root_block_cache.get_root_block(<span class="kw-2">*</span>segment_index))
-        .collect::&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;subspace_core_primitives::RootBlock&gt;&gt;, <span class="kw">_</span>&gt;&gt;();
+        .map(|segment_index| segment_header_cache.get_segment_header(<span class="kw-2">*</span>segment_index))
+        .collect::&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;subspace_core_primitives::SegmentHeader&gt;&gt;, <span class="kw">_</span>&gt;&gt;();
 
     <span class="kw">match </span>internal_result {
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(root_blocks)) =&gt; <span class="prelude-val">Some</span>(RootBlockResponse { root_blocks }),
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(segment_headers)) =&gt; <span class="prelude-val">Some</span>(SegmentHeaderResponse { segment_headers }),
         <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; <span class="prelude-val">None</span>,
         <span class="prelude-val">Err</span>(error) =&gt; {
-            <span class="macro">tracing::error!</span>(%error, <span class="string">&quot;Failed to get root blocks from cache&quot;</span>);
+            <span class="macro">tracing::error!</span>(%error, <span class="string">&quot;Failed to get segment header from cache&quot;</span>);
 
             <span class="prelude-val">None
         </span>}
@@ -4220,8 +4239,8 @@
 
     <span class="kw">use </span>futures::Stream;
     <span class="kw">use </span>sc_consensus_subspace_rpc::SubspaceRpcApiClient;
-    <span class="kw">use </span>subspace_archiving::archiver::ArchivedSegment;
-    <span class="kw">use </span>subspace_core_primitives::{RecordsRoot, RootBlock, SegmentIndex};
+    <span class="kw">use </span>subspace_archiving::archiver::NewArchivedSegment;
+    <span class="kw">use </span>subspace_core_primitives::{SegmentCommitment, SegmentHeader, SegmentIndex};
     <span class="kw">use </span>subspace_farmer::node_client::{Error, NodeClient};
     <span class="kw">use </span>subspace_rpc_primitives::{
         FarmerAppInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
@@ -4272,7 +4291,8 @@
 
         <span class="kw">async fn </span>subscribe_archived_segments(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = ArchivedSegment&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;, Error&gt; {
+        ) -&gt; <span class="prelude-ty">Result</span>&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = NewArchivedSegment&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;, Error&gt;
+        {
             <span class="prelude-val">Ok</span>(Box::pin(
                 SubspaceRpcApiClient::subscribe_archived_segment(<span class="self">self</span>)
                     .<span class="kw">await</span><span class="question-mark">?
@@ -4280,18 +4300,18 @@
             ))
         }
 
-        <span class="kw">async fn </span>records_roots(
+        <span class="kw">async fn </span>segment_commitments(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             segment_indexes: Vec&lt;SegmentIndex&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="prelude-ty">Option</span>&lt;RecordsRoot&gt;&gt;, Error&gt; {
-            <span class="prelude-val">Ok</span>(SubspaceRpcApiClient::records_roots(<span class="self">self</span>, segment_indexes).<span class="kw">await</span><span class="question-mark">?</span>)
+        ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="prelude-ty">Option</span>&lt;SegmentCommitment&gt;&gt;, Error&gt; {
+            <span class="prelude-val">Ok</span>(SubspaceRpcApiClient::segment_commitments(<span class="self">self</span>, segment_indexes).<span class="kw">await</span><span class="question-mark">?</span>)
         }
 
-        <span class="kw">async fn </span>root_blocks(
+        <span class="kw">async fn </span>segment_headers(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             segment_indexes: Vec&lt;SegmentIndex&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="prelude-ty">Option</span>&lt;RootBlock&gt;&gt;, Error&gt; {
-            <span class="prelude-val">Ok</span>(SubspaceRpcApiClient::root_blocks(<span class="self">self</span>, segment_indexes).<span class="kw">await</span><span class="question-mark">?</span>)
+        ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="prelude-ty">Option</span>&lt;SegmentHeader&gt;&gt;, Error&gt; {
+            <span class="prelude-val">Ok</span>(SubspaceRpcApiClient::segment_headers(<span class="self">self</span>, segment_indexes).<span class="kw">await</span><span class="question-mark">?</span>)
         }
     }
 }
@@ -4311,7 +4331,7 @@
         <span class="kw">crate</span>::utils::test_init();
 
         <span class="kw">let </span>dir = TempDir::new().unwrap();
-        <span class="kw">let </span>chain = chain_spec::dev_config().unwrap();
+        <span class="kw">let </span>chain = chain_spec::dev_config();
         <span class="kw">let </span>node = Node::dev()
             .role(Role::Authority)
             .network(
@@ -4379,7 +4399,7 @@
 
         <span class="kw">let </span>node_span = <span class="macro">tracing::trace_span!</span>(<span class="string">&quot;node 1&quot;</span>);
         <span class="kw">let </span>dir = TempDir::new().unwrap();
-        <span class="kw">let </span>chain = chain_spec::dev_config().unwrap();
+        <span class="kw">let </span>chain = chain_spec::dev_config();
         <span class="kw">let </span>node = Node::dev()
             .dsn(DsnBuilder::dev().listen_addresses(<span class="macro">vec!</span>[<span class="string">&quot;/ip4/127.0.0.1/tcp/0&quot;</span>.parse().unwrap()]))
             .network(
@@ -4475,7 +4495,7 @@
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">4 </span>{
             <span class="macro">tracing::error!</span>(i, <span class="string">&quot;Running new node&quot;</span>);
             Node::dev()
-                .build(dir.path(), chain_spec::dev_config().unwrap())
+                .build(dir.path(), chain_spec::dev_config())
                 .<span class="kw">await
                 </span>.unwrap()
                 .close()

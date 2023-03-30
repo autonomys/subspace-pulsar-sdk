@@ -1236,7 +1236,7 @@
 <span class="kw">use </span>subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 <span class="kw">use </span>subspace_farmer::utils::node_piece_getter::NodePieceGetter <span class="kw">as </span>DsnPieceGetter;
 <span class="kw">use </span>subspace_farmer::utils::parity_db_store::ParityDbStore;
-<span class="kw">use </span>subspace_farmer::utils::piece_validator::RecordsRootPieceValidator;
+<span class="kw">use </span>subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::{PieceDetails, ReadersAndPieces};
 <span class="kw">use </span>subspace_farmer_components::piece_caching::PieceMemoryCache;
 <span class="kw">use </span>subspace_farmer_components::plotting::PlottedSector;
@@ -1515,7 +1515,8 @@
     Either::Right(read_piece_fut.map(|piece| <span class="prelude-val">Some</span>(PieceByHashResponse { piece })))
 }
 
-<span class="kw">const </span>RECORDS_ROOTS_CACHE_SIZE: NonZeroUsize = NonZeroUsize::new(<span class="number">1_000_000</span>).expect(<span class="string">&quot;Not zero; qed&quot;</span>);
+<span class="kw">const </span>SEGMENT_COMMITMENTS_CACHE_SIZE: NonZeroUsize =
+    NonZeroUsize::new(<span class="number">1_000_000</span>).expect(<span class="string">&quot;Not zero; qed&quot;</span>);
 
 <span class="kw">fn </span>create_readers_and_pieces(single_disk_plots: <span class="kw-2">&amp;</span>[SingleDiskPlot]) -&gt; ReadersAndPieces {
     <span class="comment">// Store piece readers so we can reference them later
@@ -1674,7 +1675,7 @@
         } = <span class="self">self</span>;
 
         <span class="kw">let </span>piece_cache_size = NonZeroUsize::new(
-            piece_cache_size.as_u64() <span class="kw">as </span>usize / subspace_core_primitives::PIECE_SIZE,
+            piece_cache_size.as_u64() <span class="kw">as </span>usize / subspace_core_primitives::Piece::SIZE,
         )
         .ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Piece cache size shouldn&#39;t be zero&quot;</span>))<span class="question-mark">?</span>;
 
@@ -1745,13 +1746,12 @@
 
         <span class="kw">let </span>piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
             node.dsn_node.clone(),
-            <span class="prelude-val">Some</span>(RecordsRootPieceValidator::new(
+            <span class="prelude-val">Some</span>(SegmentCommitmentPieceValidator::new(
                 node.dsn_node.clone(),
                 node.rpc_handle.clone(),
                 kzg.clone(),
-                <span class="comment">// TODO: Consider introducing and using global in-memory root block cache (this
-                // comment is in multiple files)
-                </span>parking_lot::Mutex::new(lru::LruCache::new(RECORDS_ROOTS_CACHE_SIZE)),
+                <span class="comment">// TODO: Consider introducing and using global in-memory segment commitments cache
+                </span>parking_lot::Mutex::new(lru::LruCache::new(SEGMENT_COMMITMENTS_CACHE_SIZE)),
             )),
         );
         <span class="kw">let </span>piece_getter = Arc::new(FarmerPieceGetter::new(
@@ -2237,7 +2237,7 @@
         <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>node = Node::dev()
             .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .build(dir.path(), chain_spec::dev_config())
             .<span class="kw">await
             </span>.unwrap();
         <span class="kw">let </span>plot_dir = TempDir::new().unwrap();
@@ -2268,7 +2268,7 @@
         <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>node = Node::dev()
             .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .build(dir.path(), chain_spec::dev_config())
             .<span class="kw">await
             </span>.unwrap();
         <span class="kw">let </span>(plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
@@ -2310,7 +2310,7 @@
         <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>node = Node::dev()
             .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .build(dir.path(), chain_spec::dev_config())
             .<span class="kw">await
             </span>.unwrap();
         <span class="kw">let </span>(plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
@@ -2346,7 +2346,7 @@
         <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>node = Node::dev()
             .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .build(dir.path(), chain_spec::dev_config())
             .<span class="kw">await
             </span>.unwrap();
         <span class="kw">let </span>(plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
@@ -2382,7 +2382,7 @@
         <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>node = Node::dev()
             .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .build(dir.path(), chain_spec::dev_config())
             .<span class="kw">await
             </span>.unwrap();
 
@@ -2411,7 +2411,7 @@
         <span class="kw">let </span>dir = TempDir::new().unwrap();
         <span class="kw">let </span>node = Node::dev()
             .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .build(dir.path(), chain_spec::dev_config())
             .<span class="kw">await
             </span>.unwrap();
 

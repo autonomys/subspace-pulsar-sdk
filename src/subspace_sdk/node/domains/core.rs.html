@@ -419,6 +419,11 @@
 <a href="#419" id="419">419</a>
 <a href="#420" id="420">420</a>
 <a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Core payments domain module
 
 </span><span class="kw">use </span>std::path::Path;
@@ -528,15 +533,18 @@
         )
     }
 
-    <span class="doccomment">/// Gemini 3c chain spec
-    </span><span class="kw">pub fn </span>gemini_3c_config() -&gt; ExecutionChainSpec&lt;GenesisConfig&gt; {
-        ExecutionChainSpec::from_genesis(
+    <span class="doccomment">/// Gemini 3d chain spec
+    </span><span class="kw">pub fn </span>gemini_3d_config() -&gt; ChainSpec {
+        ChainSpec::from_genesis(
             <span class="comment">// Name
-            </span><span class="string">&quot;Subspace Gemini 3c Core Payments Domain&quot;</span>,
+            </span><span class="string">&quot;Subspace Gemini 3d Core Payments Domain&quot;</span>,
             <span class="comment">// ID
-            </span><span class="string">&quot;subspace_gemini_3c_core_payments_domain&quot;</span>,
-            ChainType::Local,
+            </span><span class="string">&quot;subspace_gemini_3d_core_payments_domain&quot;</span>,
+            ChainType::Live,
             <span class="kw">move </span>|| {
+                <span class="kw">let </span>sudo_account =
+                    AccountId::from_ss58check(<span class="string">&quot;5CZy4hcmaVZUMZLfB41v1eAKvtZ8W7axeWuDvwjhjPwfhAqt&quot;</span>)
+                        .expect(<span class="string">&quot;Invalid Sudo account&quot;</span>);
                 testnet_genesis(
                     <span class="macro">vec!</span>[
                         <span class="comment">// Genesis executor
@@ -544,8 +552,10 @@
                             <span class="string">&quot;5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ&quot;</span>,
                         )
                         .expect(<span class="string">&quot;Wrong executor account address&quot;</span>),
+                        <span class="comment">// Sudo account
+                        </span>sudo_account.clone(),
                     ],
-                    <span class="prelude-val">None</span>,
+                    <span class="prelude-val">Some</span>(sudo_account),
                     Default::default(),
                 )
             },
@@ -554,7 +564,7 @@
             <span class="comment">// Telemetry
             </span><span class="prelude-val">None</span>,
             <span class="comment">// Protocol ID
-            </span><span class="prelude-val">Some</span>(<span class="string">&quot;subspace-gemini-3c-core-payments-domain&quot;</span>),
+            </span><span class="prelude-val">Some</span>(<span class="string">&quot;subspace-gemini-3d-core-payments-domain&quot;</span>),
             <span class="prelude-val">None</span>,
             <span class="comment">// Properties
             </span><span class="prelude-val">Some</span>(chain_spec_properties()),
@@ -811,7 +821,7 @@
         <span class="kw">let </span>node = Node::dev()
             .role(Role::Authority)
             .system_domain(domains::ConfigBuilder::new().core(core))
-            .build(dir.path(), chain_spec::dev_config().unwrap())
+            .build(dir.path(), chain_spec::dev_config())
             .<span class="kw">await
             </span>.unwrap();
         <span class="kw">let </span>(plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
