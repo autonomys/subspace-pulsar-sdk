@@ -7,6 +7,7 @@ use derivative::Derivative;
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
 use either::*;
+use futures::prelude::*;
 use libp2p_core::Multiaddr;
 use sc_network_common::config::MultiaddrWithPeerId;
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,8 @@ use subspace_service::segment_headers::SegmentHeaderCache;
 
 use super::provider_storage_utils::MaybeProviderStorage;
 use super::{FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage};
+use crate::node::PieceCacheSize;
+use crate::utils::DropCollection;
 use crate::{farmer, node};
 
 /// Wrapper with default value for listen address
@@ -153,13 +156,21 @@ impl DsnBuilder {
 
 const MAX_PROVIDER_RECORDS_LIMIT: NonZeroUsize = NonZeroUsize::new(100000).expect("100000 > 0"); // ~ 10 MB
 
-pub(crate) struct DsnOptions<C: sc_client_api::AuxStore> {
-    pub(crate) segment_header_cache: SegmentHeaderCache<C>,
+pub(crate) struct DsnOptions<C: sc_client_api::AuxStore, ASNS> {
+    pub(crate) client: Arc<C>,
+    pub(crate) node_name: String,
+    pub(crate) archived_segment_notification_stream: ASNS,
+    pub(crate) piece_cache_size: PieceCacheSize,
     pub(crate) base_path: PathBuf,
     pub(crate) keypair: subspace_networking::libp2p::identity::Keypair,
-    pub(crate) piece_cache: NodePieceCache<C>,
-    pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
+}
+
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub(crate) struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
+    pub(crate) node: subspace_networking::Node,
     pub(crate) farmer_readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
+    #[derivative(Debug = "ignore")]
     pub(crate) farmer_piece_store: Arc<
         tokio::sync::Mutex<
             Option<
@@ -170,14 +181,75 @@ pub(crate) struct DsnOptions<C: sc_client_api::AuxStore> {
             >,
         >,
     >,
+    pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
+    #[derivative(Debug = "ignore")]
+    pub(crate) piece_cache: NodePieceCache<C>,
+    #[derivative(Debug = "ignore")]
     pub(crate) piece_memory_cache: PieceMemoryCache,
+
+    _drop: DropCollection,
 }
 
 impl Dsn {
-    pub(crate) fn build_config<C: sc_client_api::AuxStore + Send + Sync + 'static>(
+    pub(crate) fn build_dsn<C, ASNS>(
         self,
-        options: DsnOptions<C>,
-    ) -> anyhow::Result<subspace_networking::Config<super::ProviderStorage<C>>> {
+        options: DsnOptions<C, ASNS>,
+    ) -> anyhow::Result<(DsnShared<C>, subspace_networking::NodeRunner<ProviderStorage<C>>)>
+    where
+        C: sc_client_api::AuxStore + Send + Sync + 'static,
+        ASNS: Stream<Item = sc_consensus_subspace::ArchivedSegmentNotification>
+            + Unpin
+            + Send
+            + 'static,
+    {
+        let DsnOptions {
+            mut archived_segment_notification_stream,
+            node_name,
+            client,
+            base_path,
+            keypair,
+            piece_cache_size,
+        } = options;
+        let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
+        let farmer_piece_store = Arc::new(tokio::sync::Mutex::new(None));
+        let farmer_provider_storage = MaybeProviderStorage::none();
+        let piece_memory_cache = PieceMemoryCache::default();
+
+        let piece_cache = NodePieceCache::new(
+            client.clone(),
+            piece_cache_size.as_u64() / subspace_core_primitives::Piece::SIZE as u64,
+            subspace_networking::peer_id(&keypair),
+        );
+
+        // Start before archiver, so we don't have potential race condition and
+        // miss pieces
+        tokio::task::Builder::new()
+            .name(format!("subspace-sdk-node-{node_name}-piece-caching").as_ref())
+            .spawn({
+                let mut piece_cache = piece_cache.clone();
+
+                async move {
+                    while let Some(archived_segment_notification) =
+                        archived_segment_notification_stream.next().await
+                    {
+                        let segment_index = archived_segment_notification
+                            .archived_segment
+                            .segment_header
+                            .segment_index();
+                        if let Err(error) = piece_cache.add_pieces(
+                            segment_index.first_piece_index(),
+                            &archived_segment_notification.archived_segment.pieces,
+                        ) {
+                            tracing::error!(
+                                %segment_index,
+                                %error,
+                                "Failed to store pieces for segment in cache"
+                            );
+                        }
+                    }
+                }
+            })?;
+
         let Self {
             listen_addresses,
             reserved_nodes,
@@ -190,16 +262,6 @@ impl Dsn {
             pending_out_connections: PendingOutConnections(max_pending_outgoing_connections),
             boot_nodes,
         } = self;
-        let DsnOptions {
-            segment_header_cache,
-            base_path,
-            keypair,
-            piece_cache,
-            farmer_provider_storage,
-            farmer_readers_and_pieces,
-            farmer_piece_store,
-            piece_memory_cache,
-        } = options;
 
         let peer_id = subspace_networking::peer_id(&keypair);
         let bootstrap_nodes = boot_nodes
@@ -235,9 +297,10 @@ impl Dsn {
 
         let node_provider_storage =
             NodeProviderStorage::new(peer_id, piece_cache.clone(), external_provider_storage);
-        let provider_storage = ProviderStorage::new(farmer_provider_storage, node_provider_storage);
+        let provider_storage =
+            ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
 
-        Ok(subspace_networking::Config {
+        let config = subspace_networking::Config {
             keypair,
             listen_on,
             allow_non_global_addresses_in_dht,
@@ -246,6 +309,8 @@ impl Dsn {
                 PieceByHashRequestHandler::create({
                     let weak_readers_and_pieces = Arc::downgrade(&farmer_readers_and_pieces);
                     let farmer_piece_store = Arc::clone(&farmer_piece_store);
+                    let piece_cache = piece_cache.clone();
+                    let piece_memory_cache = piece_memory_cache.clone();
 
                     move |&PieceByHashRequest { piece_index_hash }| {
                         let weak_readers_and_pieces = weak_readers_and_pieces.clone();
@@ -275,11 +340,14 @@ impl Dsn {
                         }
                     }
                 }),
-                SegmentHeaderBySegmentIndexesRequestHandler::create(move |req| {
-                    futures::future::ready(node::get_segment_header_by_segment_indexes(
-                        req,
-                        &segment_header_cache,
-                    ))
+                SegmentHeaderBySegmentIndexesRequestHandler::create({
+                    let segment_header_cache = SegmentHeaderCache::new(client);
+                    move |req| {
+                        futures::future::ready(node::get_segment_header_by_segment_indexes(
+                            req,
+                            &segment_header_cache,
+                        ))
+                    }
                 }),
             ],
             provider_storage,
@@ -297,6 +365,36 @@ impl Dsn {
             max_pending_incoming_connections,
             max_pending_outgoing_connections,
             ..subspace_networking::Config::default()
-        })
+        };
+
+        let (node, runner) = subspace_networking::create(config)?;
+
+        let mut drop_collection = DropCollection::new();
+        let on_new_listener = node.on_new_listener(Arc::new({
+            let node = node.clone();
+
+            move |address| {
+                tracing::info!(
+                    "DSN listening on {}",
+                    address.clone().with(subspace_networking::libp2p::multiaddr::Protocol::P2p(
+                        node.id().into()
+                    ))
+                );
+            }
+        }));
+        drop_collection.push(on_new_listener);
+
+        Ok((
+            DsnShared {
+                node,
+                farmer_piece_store,
+                farmer_provider_storage,
+                farmer_readers_and_pieces,
+                piece_cache,
+                piece_memory_cache,
+                _drop: drop_collection,
+            },
+            runner,
+        ))
     }
 }

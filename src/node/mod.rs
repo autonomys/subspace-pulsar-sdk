@@ -17,9 +17,6 @@ use sp_consensus::SyncOracle;
 use sp_core::H256;
 use subspace_core_primitives::{PieceIndexHash, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
-use subspace_farmer::utils::parity_db_store::ParityDbStore;
-use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
-use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{PieceByHashResponse, SegmentHeaderRequest, SegmentHeaderResponse};
 use subspace_runtime::RuntimeApi;
@@ -29,8 +26,7 @@ use subspace_service::SubspaceConfiguration;
 use substrate::Base;
 use tracing_futures::Instrument;
 
-use crate::dsn::provider_storage_utils::MaybeProviderStorage;
-use crate::dsn::{FarmerProviderStorage, NodePieceCache};
+use crate::dsn::NodePieceCache;
 use crate::utils::DropCollection;
 
 mod builder;
@@ -68,12 +64,8 @@ impl Config {
         let partial_components =
             subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&base)
                 .context("Failed to build a partial subspace node")?;
-        let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
-        let farmer_piece_store = Arc::new(tokio::sync::Mutex::new(None));
-        let farmer_provider_storage = MaybeProviderStorage::none();
-        let piece_memory_cache = PieceMemoryCache::default();
 
-        let (subspace_networking, (node, mut node_runner, piece_cache)) = {
+        let (subspace_networking, dsn, mut runner) = {
             let keypair = {
                 let keypair = base
                     .network
@@ -88,46 +80,6 @@ impl Config {
                     .expect("Address is correct")
             };
 
-            let piece_cache = NodePieceCache::new(
-                partial_components.client.clone(),
-                piece_cache_size.as_u64() / subspace_core_primitives::Piece::SIZE as u64,
-                subspace_networking::peer_id(&keypair),
-            );
-
-            // Start before archiver below, so we don't have potential race condition and
-            // miss pieces
-            tokio::task::Builder::new()
-                .name(format!("subspace-sdk-node-{name}-piece-caching").as_ref())
-                .spawn({
-                    let mut piece_cache = piece_cache.clone();
-                    let mut archived_segment_notification_stream = partial_components
-                        .other
-                        .1
-                        .archived_segment_notification_stream()
-                        .subscribe();
-
-                    async move {
-                        while let Some(archived_segment_notification) =
-                            archived_segment_notification_stream.next().await
-                        {
-                            let segment_index = archived_segment_notification
-                                .archived_segment
-                                .segment_header
-                                .segment_index();
-                            if let Err(error) = piece_cache.add_pieces(
-                                segment_index.first_piece_index(),
-                                &archived_segment_notification.archived_segment.pieces,
-                            ) {
-                                tracing::error!(
-                                    %segment_index,
-                                    %error,
-                                    "Failed to store pieces for segment in cache"
-                                );
-                            }
-                        }
-                    }
-                })?;
-
             let chain_spec_boot_nodes = base
                 .chain_spec
                 .properties()
@@ -138,60 +90,44 @@ impl Config {
                 .context("Failed to decode DSN bootsrap nodes")?
                 .unwrap_or_default();
 
-            let (node, node_runner, bootstrap_nodes) = {
-                tracing::trace!("Subspace networking starting.");
+            tracing::trace!("Subspace networking starting.");
 
-                dsn.boot_nodes.extend(chain_spec_boot_nodes);
-                let bootstrap_nodes = dsn
-                    .boot_nodes
-                    .clone()
-                    .into_iter()
-                    .map(|a| {
-                        a.to_string()
-                            .parse()
-                            .expect("Convertion between 2 libp2p version. Never panics")
-                    })
-                    .collect::<Vec<_>>();
+            dsn.boot_nodes.extend(chain_spec_boot_nodes);
+            let bootstrap_nodes = dsn
+                .boot_nodes
+                .clone()
+                .into_iter()
+                .map(|a| {
+                    a.to_string()
+                        .parse()
+                        .expect("Convertion between 2 libp2p version. Never panics")
+                })
+                .collect::<Vec<_>>();
 
-                let networking_config = dsn.build_config(DsnOptions {
-                    segment_header_cache: SegmentHeaderCache::new(
-                        partial_components.client.clone(),
-                    ),
-                    keypair,
-                    base_path: directory.as_ref().to_path_buf(),
-                    piece_cache: piece_cache.clone(),
-                    farmer_piece_store: farmer_piece_store.clone(),
-                    farmer_provider_storage: farmer_provider_storage.clone(),
-                    farmer_readers_and_pieces: farmer_readers_and_pieces.clone(),
-                    piece_memory_cache: piece_memory_cache.clone(),
-                })?;
+            let (dsn, runner) = dsn.build_dsn(DsnOptions {
+                client: partial_components.client.clone(),
+                node_name: name.clone(),
+                archived_segment_notification_stream: partial_components
+                    .other
+                    .1
+                    .archived_segment_notification_stream()
+                    .subscribe(),
+                piece_cache_size,
+                keypair,
+                base_path: directory.as_ref().to_path_buf(),
+            })?;
 
-                subspace_networking::create(networking_config)
-                    .map(|(a, b)| (a, b, bootstrap_nodes))?
-            };
-
-            tracing::debug!("Subspace networking initialized: Node ID is {}", node.id());
+            tracing::debug!("Subspace networking initialized: Node ID is {}", dsn.node.id());
 
             (
-                subspace_service::SubspaceNetworking::Reuse { node: node.clone(), bootstrap_nodes },
-                (node, node_runner, piece_cache),
+                subspace_service::SubspaceNetworking::Reuse {
+                    node: dsn.node.clone(),
+                    bootstrap_nodes,
+                },
+                dsn,
+                runner,
             )
         };
-
-        let mut drop_collection = DropCollection::new();
-        let on_new_listener = node.on_new_listener(Arc::new({
-            let node = node.clone();
-
-            move |address| {
-                tracing::info!(
-                    "DSN listening on {}",
-                    address.clone().with(subspace_networking::libp2p::multiaddr::Protocol::P2p(
-                        node.id().into()
-                    ))
-                );
-            }
-        }));
-        drop_collection.push(on_new_listener);
 
         // Default value are used for many of parameters
         let configuration = SubspaceConfiguration {
@@ -203,9 +139,11 @@ impl Config {
         };
 
         let node_runner_future = subspace_farmer::utils::run_future_in_dedicated_thread(
-            Box::pin(async move {
-                node_runner.run().await;
-                tracing::error!("Exited from node runner future");
+            Box::pin({
+                async move {
+                    runner.run().await;
+                    tracing::error!("Exited from node runner future");
+                }
             }),
             format!("subspace-sdk-networking-{name}"),
         )
@@ -289,6 +227,7 @@ impl Config {
                 opt_stop_sender.map(|stop_sender| stop_sender.send(()));
             })?;
 
+        let mut drop_collection = DropCollection::new();
         drop_collection.defer(move || {
             const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -307,13 +246,8 @@ impl Config {
             network,
             name,
             rpc_handle,
-            dsn_node: node,
+            dsn,
             stop_sender,
-            farmer_readers_and_pieces,
-            farmer_piece_store,
-            farmer_provider_storage,
-            piece_cache,
-            piece_memory_cache,
             _drop_at_exit: drop_collection,
         })
     }
@@ -368,26 +302,8 @@ pub struct Node {
     network: Arc<NetworkService<RuntimeBlock, Hash>>,
     pub(crate) rpc_handle: crate::utils::Rpc,
     pub(crate) stop_sender: mpsc::Sender<oneshot::Sender<()>>,
-    pub(crate) dsn_node: subspace_networking::Node,
     pub(crate) name: String,
-    pub(crate) farmer_readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
-    #[derivative(Debug = "ignore")]
-    pub(crate) farmer_piece_store: Arc<
-        tokio::sync::Mutex<
-            Option<
-                ParityDbStore<
-                    subspace_networking::libp2p::kad::record::Key,
-                    subspace_core_primitives::Piece,
-                >,
-            >,
-        >,
-    >,
-    pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
-    #[derivative(Debug = "ignore")]
-    pub(crate) piece_cache: NodePieceCache<FullClient>,
-    #[derivative(Debug = "ignore")]
-    pub(crate) piece_memory_cache: PieceMemoryCache,
-
+    pub(crate) dsn: DsnShared<FullClient>,
     #[derivative(Debug = "ignore")]
     _drop_at_exit: DropCollection,
 }
@@ -544,9 +460,10 @@ impl Node {
 
     /// Get listening addresses of the node
     pub async fn dsn_listen_addresses(&self) -> anyhow::Result<Vec<MultiaddrWithPeerId>> {
-        let peer_id = self.dsn_node.id();
+        let peer_id = self.dsn.node.id();
         Ok(self
-            .dsn_node
+            .dsn
+            .node
             .listeners()
             .into_iter()
             .map(|mut multiaddr| {
