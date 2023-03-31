@@ -5,7 +5,7 @@ use subspace_sdk::node::{chain_spec, Node, Role};
 use tempfile::TempDir;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_get_info() {
+async fn get_info() {
     crate::common::setup();
 
     let dir = TempDir::new().unwrap();
@@ -36,7 +36,7 @@ async fn test_get_info() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_track_progress() {
+async fn track_progress() {
     crate::common::setup();
 
     let dir = TempDir::new().unwrap();
@@ -78,7 +78,7 @@ async fn test_track_progress() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_new_solution() {
+async fn new_solution() {
     crate::common::setup();
 
     let dir = TempDir::new().unwrap();
@@ -114,7 +114,7 @@ async fn test_new_solution() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_progress_restart() {
+async fn progress_restart() {
     crate::common::setup();
 
     let dir = TempDir::new().unwrap();
@@ -150,7 +150,7 @@ async fn test_progress_restart() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_farmer_restart() {
+async fn farmer_restart() {
     crate::common::setup();
 
     let dir = TempDir::new().unwrap();
@@ -179,7 +179,7 @@ async fn test_farmer_restart() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_farmer_drop() {
+async fn farmer_drop() {
     crate::common::setup();
 
     let dir = TempDir::new().unwrap();

@@ -6,7 +6,7 @@ use subspace_sdk::{Farmer, Node, PlotDescription};
 use tempfile::TempDir;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_core() {
+async fn core_start() {
     crate::common::setup();
 
     let dir = TempDir::new().unwrap();
