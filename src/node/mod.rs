@@ -6,8 +6,6 @@ use std::time::Duration;
 
 use anyhow::Context;
 use derivative::Derivative;
-use derive_builder::Builder;
-use derive_more::{Deref, DerefMut, Display, From};
 use either::*;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
@@ -16,7 +14,6 @@ use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider, SyncState};
 use sc_network_common::config::MultiaddrWithPeerId;
 use sc_rpc_api::state::StateApiClient;
-use serde::{Deserialize, Serialize};
 use sp_consensus::SyncOracle;
 use sp_core::H256;
 use subspace_core_primitives::{PieceIndexHash, SegmentIndex};
@@ -40,148 +37,17 @@ use crate::dsn::provider_storage_utils::MaybeProviderStorage;
 use crate::dsn::{FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage};
 use crate::utils::DropCollection;
 
+mod builder;
 pub mod chain_spec;
 pub mod domains;
 mod farmer_rpc_client;
 mod substrate;
 
+pub use builder::*;
 pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
 pub use substrate::*;
 
 pub use crate::dsn::builder::*;
-
-/// Wrapper with default value for piece cache size
-#[derive(
-    Debug, Clone, Derivative, Deserialize, Serialize, PartialEq, Eq, From, Deref, DerefMut, Display,
-)]
-#[derivative(Default)]
-#[serde(transparent)]
-pub struct PieceCacheSize(
-    #[derivative(Default(value = "bytesize::ByteSize::gib(1)"))]
-    #[serde(with = "bytesize_serde")]
-    pub(crate) bytesize::ByteSize,
-);
-
-/// Wrapper with default value for segment publish concurent jobs
-#[derive(
-    Debug, Clone, Derivative, Deserialize, Serialize, PartialEq, Eq, From, Deref, DerefMut, Display,
-)]
-#[derivative(Default)]
-#[serde(transparent)]
-pub struct SegmentPublishConcurrency(
-    #[derivative(Default(value = "NonZeroUsize::new(10).expect(\"10 > 0\")"))]
-    pub(crate)  NonZeroUsize,
-);
-
-/// Node builder
-#[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
-#[derivative(Default)]
-#[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "Builder")]
-#[non_exhaustive]
-pub struct Config {
-    /// Set piece cache size
-    #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-    pub piece_cache_size: PieceCacheSize,
-    /// Max number of segments that can be published concurrently, impacts
-    /// RAM usage and network bandwidth.
-    #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-    pub segment_publish_concurrency: SegmentPublishConcurrency,
-    /// Should we sync blocks from the DSN?
-    #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-    pub sync_from_dsn: bool,
-    #[doc(hidden)]
-    #[builder(
-        setter(into, strip_option),
-        field(type = "BaseBuilder", build = "self.base.build()")
-    )]
-    #[serde(flatten, skip_serializing_if = "crate::utils::is_default")]
-    pub base: Base,
-    /// System domain settings
-    #[builder(setter(into, strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-    pub system_domain: Option<domains::Config>,
-    /// DSN settings
-    #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-    pub dsn: Dsn,
-    /// Storage monitor settings
-    #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-    pub storage_monitor: Option<StorageMonitor>,
-}
-
-impl Config {
-    /// Dev configuraiton
-    pub fn dev() -> Builder {
-        Builder::dev()
-    }
-
-    /// Gemini 3d configuraiton
-    pub fn gemini_3d() -> Builder {
-        Builder::gemini_3d()
-    }
-
-    /// Devnet configuraiton
-    pub fn devnet() -> Builder {
-        Builder::devnet()
-    }
-}
-
-impl Builder {
-    /// Dev chain configuration
-    pub fn dev() -> Self {
-        Self::new()
-            .force_authoring(true)
-            .network(NetworkBuilder::dev())
-            .dsn(DsnBuilder::dev())
-            .rpc(RpcBuilder::dev())
-            .offchain_worker(OffchainWorkerBuilder::dev())
-    }
-
-    /// Gemini 3d configuration
-    pub fn gemini_3d() -> Self {
-        Self::new()
-            .execution_strategy(ExecutionStrategy::AlwaysWasm)
-            .network(NetworkBuilder::gemini_3d())
-            .dsn(DsnBuilder::gemini_3d())
-            .rpc(RpcBuilder::gemini_3d())
-            .offchain_worker(OffchainWorkerBuilder::gemini_3d())
-    }
-
-    /// Devnet chain configuration
-    pub fn devnet() -> Self {
-        Self::new()
-            .execution_strategy(ExecutionStrategy::AlwaysWasm)
-            .network(NetworkBuilder::devnet())
-            .dsn(DsnBuilder::devnet())
-            .rpc(RpcBuilder::devnet())
-            .offchain_worker(OffchainWorkerBuilder::devnet())
-    }
-
-    /// Get configuration for saving on disk
-    pub fn configuration(&self) -> Config {
-        self._build().expect("Build is infallible")
-    }
-
-    /// New builder
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Start a node with supplied parameters
-    pub async fn build(
-        self,
-        directory: impl AsRef<Path>,
-        chain_spec: ChainSpec,
-    ) -> anyhow::Result<Node> {
-        self.configuration().build(directory, chain_spec).await
-    }
-}
-
-crate::derive_base!(Base => Builder);
 
 const MAX_PROVIDER_RECORDS_LIMIT: NonZeroUsize = NonZeroUsize::new(100000).expect("100000 > 0"); // ~ 10 MB
 
