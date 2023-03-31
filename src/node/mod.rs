@@ -1,12 +1,11 @@
 use std::io;
-use std::num::{NonZeroU64, NonZeroUsize};
+use std::num::NonZeroU64;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
 use derivative::Derivative;
-use either::*;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 use sc_consensus_subspace_rpc::SegmentHeaderProvider;
@@ -22,10 +21,7 @@ use subspace_farmer::utils::parity_db_store::ParityDbStore;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_farmer_components::FarmerProtocolInfo;
-use subspace_networking::{
-    PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
-    SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
-};
+use subspace_networking::{PieceByHashResponse, SegmentHeaderRequest, SegmentHeaderResponse};
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::segment_headers::SegmentHeaderCache;
@@ -34,7 +30,7 @@ use substrate::Base;
 use tracing_futures::Instrument;
 
 use crate::dsn::provider_storage_utils::MaybeProviderStorage;
-use crate::dsn::{FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage};
+use crate::dsn::{FarmerProviderStorage, NodePieceCache};
 use crate::utils::DropCollection;
 
 mod builder;
@@ -49,8 +45,6 @@ pub use substrate::*;
 
 pub use crate::dsn::builder::*;
 
-const MAX_PROVIDER_RECORDS_LIMIT: NonZeroUsize = NonZeroUsize::new(100000).expect("100000 > 0"); // ~ 10 MB
-
 impl Config {
     /// Start a node with supplied parameters
     pub async fn build(
@@ -61,7 +55,7 @@ impl Config {
         let Self {
             base,
             piece_cache_size,
-            dsn,
+            mut dsn,
             system_domain,
             segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
             sync_from_dsn,
@@ -147,23 +141,11 @@ impl Config {
             let (node, node_runner, bootstrap_nodes) = {
                 tracing::trace!("Subspace networking starting.");
 
-                let Dsn {
-                    listen_addresses,
-                    boot_nodes,
-                    reserved_nodes,
-                    allow_non_global_addresses_in_dht,
-                    provider_storage_path,
-                    in_connections: InConnections(max_established_incoming_connections),
-                    out_connections: OutConnections(max_established_outgoing_connections),
-                    target_connections: TargetConnections(target_connections),
-                    pending_in_connections: PendingInConnections(max_pending_incoming_connections),
-                    pending_out_connections: PendingOutConnections(max_pending_outgoing_connections),
-                } = dsn;
-
-                let peer_id = subspace_networking::peer_id(&keypair);
-                let bootstrap_nodes = chain_spec_boot_nodes
+                dsn.boot_nodes.extend(chain_spec_boot_nodes);
+                let bootstrap_nodes = dsn
+                    .boot_nodes
+                    .clone()
                     .into_iter()
-                    .chain(boot_nodes)
                     .map(|a| {
                         a.to_string()
                             .parse()
@@ -171,111 +153,18 @@ impl Config {
                     })
                     .collect::<Vec<_>>();
 
-                let listen_on = listen_addresses
-                    .0
-                    .into_iter()
-                    .map(|a| {
-                        a.to_string()
-                            .parse()
-                            .expect("Convertion between 2 libp2p version. Never panics")
-                    })
-                    .collect();
-
-                let networking_parameters_registry =
-                    subspace_networking::NetworkingParametersManager::new(
-                        &directory.as_ref().join("known_addresses_db"),
-                        bootstrap_nodes.clone(),
-                    )
-                    .context("Failed to open known addresses database for DSN")?
-                    .boxed();
-
-                let external_provider_storage = match provider_storage_path {
-                    Some(path) => Either::Left(subspace_networking::ParityDbProviderStorage::new(
-                        &path,
-                        MAX_PROVIDER_RECORDS_LIMIT,
-                        peer_id,
-                    )?),
-                    None => Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id)),
-                };
-
-                let node_provider_storage = NodeProviderStorage::new(
-                    peer_id,
-                    piece_cache.clone(),
-                    external_provider_storage,
-                );
-                let provider_storage =
-                    ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
-
-                let networking_config = subspace_networking::Config {
+                let networking_config = dsn.build_config(DsnOptions {
+                    segment_header_cache: SegmentHeaderCache::new(
+                        partial_components.client.clone(),
+                    ),
                     keypair,
-                    listen_on,
-                    allow_non_global_addresses_in_dht,
-                    networking_parameters_registry,
-                    request_response_protocols: vec![
-                        PieceByHashRequestHandler::create({
-                            let weak_readers_and_pieces =
-                                Arc::downgrade(&farmer_readers_and_pieces);
-                            let farmer_piece_store = Arc::clone(&farmer_piece_store);
-                            let piece_cache = piece_cache.clone();
-                            let piece_memory_cache = piece_memory_cache.clone();
-
-                            move |&PieceByHashRequest { piece_index_hash }| {
-                                let weak_readers_and_pieces = weak_readers_and_pieces.clone();
-                                let farmer_piece_store = Arc::clone(&farmer_piece_store);
-                                let piece_cache = piece_cache.clone();
-                                let node_piece_by_hash =
-                                    get_piece_by_hash(piece_index_hash, &piece_cache);
-                                let piece_memory_cache = piece_memory_cache.clone();
-
-                                async move {
-                                    match node_piece_by_hash {
-                                        Some(PieceByHashResponse { piece: None }) | None => (),
-                                        result => return result,
-                                    }
-
-                                    if let Some(piece_store) =
-                                        farmer_piece_store.lock().await.as_ref()
-                                    {
-                                        crate::farmer::get_piece_by_hash(
-                                            piece_index_hash,
-                                            piece_store,
-                                            &weak_readers_and_pieces,
-                                            &piece_memory_cache,
-                                        )
-                                        .await
-                                    } else {
-                                        None
-                                    }
-                                }
-                            }
-                        }),
-                        SegmentHeaderBySegmentIndexesRequestHandler::create({
-                            let segment_header_cache =
-                                SegmentHeaderCache::new(partial_components.client.clone());
-                            move |req| {
-                                futures::future::ready(get_segment_header_by_segment_indexes(
-                                    req,
-                                    &segment_header_cache,
-                                ))
-                            }
-                        }),
-                    ],
-                    provider_storage,
-                    reserved_peers: reserved_nodes
-                        .into_iter()
-                        .map(|addr| {
-                            addr.to_string()
-                                .parse()
-                                .expect("Conversion between 2 libp2p versions is always right")
-                        })
-                        .collect(),
-                    max_established_incoming_connections,
-                    max_established_outgoing_connections,
-                    target_connections,
-                    max_pending_incoming_connections,
-                    max_pending_outgoing_connections,
-                    ..subspace_networking::Config::default()
-                };
+                    base_path: directory.as_ref().to_path_buf(),
+                    piece_cache: piece_cache.clone(),
+                    farmer_piece_store: farmer_piece_store.clone(),
+                    farmer_provider_storage: farmer_provider_storage.clone(),
+                    farmer_readers_and_pieces: farmer_readers_and_pieces.clone(),
+                    piece_memory_cache: piece_memory_cache.clone(),
+                })?;
 
                 subspace_networking::create(networking_config)
                     .map(|(a, b)| (a, b, bootstrap_nodes))?
