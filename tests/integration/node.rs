@@ -4,7 +4,7 @@ use subspace_sdk::node::*;
 use tempfile::TempDir;
 use tracing_futures::Instrument;
 
-async fn test_sync_block_inner() {
+async fn sync_block_inner() {
     crate::common::setup();
 
     let dir = TempDir::new().unwrap();
@@ -61,13 +61,11 @@ async fn test_sync_block_inner() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
-async fn test_sync_block() {
-    tokio::time::timeout(std::time::Duration::from_secs(60 * 60), test_sync_block_inner())
-        .await
-        .unwrap()
+async fn sync_block() {
+    tokio::time::timeout(std::time::Duration::from_secs(60 * 60), sync_block_inner()).await.unwrap()
 }
 
-async fn test_sync_plot_inner() {
+async fn sync_plot_inner() {
     crate::common::setup();
 
     let node_span = tracing::trace_span!("node 1");
@@ -150,14 +148,12 @@ async fn test_sync_plot_inner() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
-async fn test_sync_plot() {
-    tokio::time::timeout(std::time::Duration::from_secs(60 * 60), test_sync_plot_inner())
-        .await
-        .unwrap()
+async fn sync_plot() {
+    tokio::time::timeout(std::time::Duration::from_secs(60 * 60), sync_plot_inner()).await.unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_node_restart() {
+async fn node_restart() {
     crate::common::setup();
     let dir = TempDir::new().unwrap();
 
