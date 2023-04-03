@@ -641,7 +641,12 @@ impl Node {
     pub async fn subscribe_new_blocks(
         &self,
     ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
-        self.rpc_handle.subscribe_new_blocks().await.context("Failed to subscribe to new blocks")
+        Ok(self
+            .rpc_handle
+            .subscribe_new_blocks::<subspace_runtime::Runtime>()
+            .await
+            .context("Failed to subscribe to new blocks")?
+            .map(Into::into))
     }
 
     /// Get events at some block or at tip of the chain
