@@ -5,7 +5,7 @@ use bytesize::ByteSize;
 use clap::{Parser, Subcommand};
 use futures::prelude::*;
 use subspace_sdk::farmer::CacheDescription;
-use subspace_sdk::node::{self, Node};
+use subspace_sdk::node::{self, Event, Node, RewardsEvent};
 use subspace_sdk::{Farmer, PlotDescription, PublicKey};
 use tracing_subscriber::prelude::*;
 
@@ -103,21 +103,42 @@ async fn main() -> anyhow::Result<()> {
             CacheDescription::new(base_path.join("cache"), cache_size).unwrap(),
         )
         .await?;
-    let plot = farmer.iter_plots().await.next().unwrap();
 
-    let subscriptions = async move {
-        plot.subscribe_initial_plotting_progress()
-            .await
-            .for_each(|progress| async move {
-                tracing::info!(?progress, "Plotting!");
-            })
-            .await;
-        plot.subscribe_new_solutions()
-            .await
-            .for_each(|_| async move {
-                tracing::info!("Farmed another solution!");
-            })
-            .await;
+    let subscriptions = {
+        let plot = farmer.iter_plots().await.next().unwrap();
+
+        let node = &node;
+
+        async move {
+            plot.subscribe_initial_plotting_progress()
+                .await
+                .for_each(|progress| async move {
+                    tracing::info!(?progress, "Plotting!");
+                })
+                .await;
+
+            node.subscribe_new_blocks()
+                .await?
+                .then(|block| async move {
+                    node.get_events(Some(block.hash)).await.expect("Rpc call never fails")
+                })
+                .flat_map(futures::stream::iter)
+                .filter_map(|ev| {
+                    futures::future::ready(match ev {
+                        Event::Rewards(
+                            RewardsEvent::VoteReward { reward, voter: author }
+                            | RewardsEvent::BlockReward { reward, block_author: author },
+                        ) if author == reward_address.into() => Some(reward),
+                        _ => None,
+                    })
+                })
+                .for_each(|reward| async move {
+                    tracing::info!(%reward, "Farmed!");
+                })
+                .await;
+
+            anyhow::Ok(())
+        }
     };
 
     tokio::select! {
