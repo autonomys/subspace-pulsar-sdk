@@ -1,33 +1,21 @@
-use bytesize::ByteSize;
 use futures::prelude::*;
-use subspace_sdk::farmer::*;
-use tempfile::TempDir;
+use subspace_sdk::farmer::{Info, PlotDescription};
 
-use crate::common::Node;
+use crate::common::{Farmer, Node};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_info() {
     crate::common::setup();
 
     let node = Node::dev().build().await;
-    let plot_dir = TempDir::new().unwrap();
-    let cache_dir = TempDir::new().unwrap();
-    let farmer = Farmer::builder()
-        .build(
-            Default::default(),
-            &node,
-            &[PlotDescription::minimal(plot_dir.as_ref())],
-            CacheDescription::minimal(cache_dir.as_ref()),
-        )
-        .await
-        .unwrap();
+    let farmer: Farmer = Farmer::dev().build(&node).await;
 
     let Info { reward_address, plots_info, .. } = farmer.get_info().await.unwrap();
     assert_eq!(reward_address, Default::default());
     assert_eq!(plots_info.len(), 1);
-    assert_eq!(plots_info[plot_dir.as_ref()].allocated_space, PlotDescription::MIN_SIZE);
+    assert_eq!(plots_info[&farmer.plot_dir()].allocated_space, PlotDescription::MIN_SIZE);
 
-    farmer.close().await.unwrap();
+    farmer.close().await;
     node.close().await;
 }
 
@@ -36,21 +24,8 @@ async fn track_progress() {
     crate::common::setup();
 
     let node = Node::dev().build().await;
-    let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
     let n_sectors = 2;
-    let farmer = Farmer::builder()
-        .build(
-            Default::default(),
-            &node,
-            &[PlotDescription::new(
-                plot_dir.as_ref(),
-                ByteSize::b(PlotDescription::MIN_SIZE.as_u64() * n_sectors),
-            )
-            .unwrap()],
-            CacheDescription::minimal(cache_dir.as_ref()),
-        )
-        .await
-        .unwrap();
+    let farmer = Farmer::dev().n_sectors(n_sectors).build(&node).await;
 
     let progress = farmer
         .iter_plots()
@@ -59,12 +34,11 @@ async fn track_progress() {
         .unwrap()
         .subscribe_initial_plotting_progress()
         .await
-        .take(n_sectors as usize)
         .collect::<Vec<_>>()
         .await;
     assert_eq!(progress.len(), n_sectors as usize);
 
-    farmer.close().await.unwrap();
+    farmer.close().await;
     node.close().await;
 }
 
@@ -73,16 +47,7 @@ async fn new_solution() {
     crate::common::setup();
 
     let node = Node::dev().build().await;
-    let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-    let farmer = Farmer::builder()
-        .build(
-            Default::default(),
-            &node,
-            &[PlotDescription::minimal(plot_dir.as_ref())],
-            CacheDescription::minimal(cache_dir.as_ref()),
-        )
-        .await
-        .unwrap();
+    let farmer = Farmer::dev().build(&node).await;
 
     farmer
         .iter_plots()
@@ -95,7 +60,7 @@ async fn new_solution() {
         .await
         .expect("Farmer should send new solutions");
 
-    farmer.close().await.unwrap();
+    farmer.close().await;
     node.close().await;
 }
 
@@ -104,16 +69,7 @@ async fn progress_restart() {
     crate::common::setup();
 
     let node = Node::dev().build().await;
-    let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-    let farmer = Farmer::builder()
-        .build(
-            Default::default(),
-            &node,
-            &[PlotDescription::minimal(plot_dir.as_ref())],
-            CacheDescription::minimal(cache_dir.as_ref()),
-        )
-        .await
-        .unwrap();
+    let farmer = Farmer::dev().build(&node).await;
 
     let plot = farmer.iter_plots().await.next().unwrap();
 
@@ -126,7 +82,7 @@ async fn progress_restart() {
     .await
     .unwrap();
 
-    farmer.close().await.unwrap();
+    farmer.close().await;
     node.close().await;
 }
 
@@ -135,21 +91,9 @@ async fn farmer_restart() {
     crate::common::setup();
 
     let node = Node::dev().build().await;
-    let dir = TempDir::new().unwrap();
 
     for _ in 0..10 {
-        Farmer::builder()
-            .build(
-                Default::default(),
-                &node,
-                &[PlotDescription::minimal(dir.path().join("plot"))],
-                CacheDescription::minimal(dir.path().join("cache")),
-            )
-            .await
-            .unwrap()
-            .close()
-            .await
-            .unwrap();
+        Farmer::dev().build(&node).await.close().await;
     }
 
     node.close().await;
@@ -160,17 +104,6 @@ async fn farmer_drop() {
     crate::common::setup();
 
     let node = Node::dev().build().await;
-    let dir = TempDir::new().unwrap();
 
-    drop(
-        Farmer::builder()
-            .build(
-                Default::default(),
-                &node,
-                &[PlotDescription::minimal(dir.path().join("plot"))],
-                CacheDescription::minimal(dir.path().join("cache")),
-            )
-            .await
-            .unwrap(),
-    )
+    drop(Farmer::dev().build(&node).await)
 }

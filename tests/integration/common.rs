@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use derive_builder::Builder;
@@ -82,5 +83,56 @@ impl Node {
 
     pub async fn close(self) {
         self.node.close().await.unwrap()
+    }
+}
+
+#[derive(Builder)]
+#[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "FarmerBuilder")]
+pub struct InnerFarmer {
+    #[builder(default)]
+    reward_address: subspace_sdk::PublicKey,
+    #[builder(default = "1")]
+    n_sectors: u64,
+}
+
+#[derive(Deref, DerefMut)]
+pub struct Farmer {
+    #[deref]
+    #[deref_mut]
+    farmer: subspace_sdk::Farmer,
+    pub path: Arc<TempDir>,
+}
+
+impl FarmerBuilder {
+    pub async fn build(self, node: &Node) -> Farmer {
+        let InnerFarmer { reward_address, n_sectors } = self._build().expect("Infallible");
+        let farmer = subspace_sdk::Farmer::builder()
+            .build(
+                reward_address,
+                node,
+                &[PlotDescription::new(
+                    node.path().path().join("plot"),
+                    bytesize::ByteSize::b(PlotDescription::MIN_SIZE.as_u64() * n_sectors),
+                )
+                .unwrap()],
+                CacheDescription::minimal(node.path().path().join("cache")),
+            )
+            .await
+            .unwrap();
+        Farmer { farmer, path: node.path() }
+    }
+}
+
+impl Farmer {
+    pub fn dev() -> FarmerBuilder {
+        FarmerBuilder::default()
+    }
+
+    pub fn plot_dir(&self) -> PathBuf {
+        self.path.path().join("plot")
+    }
+
+    pub async fn close(self) {
+        self.farmer.close().await.unwrap()
     }
 }

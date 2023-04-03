@@ -1,26 +1,16 @@
 use std::sync::Arc;
 
 use futures::prelude::*;
-use subspace_sdk::farmer::{CacheDescription, Farmer, PlotDescription};
 use tempfile::TempDir;
 use tracing_futures::Instrument;
 
-use crate::common::Node;
+use crate::common::{Farmer, Node};
 
 async fn sync_block_inner() {
     crate::common::setup();
 
     let node = Node::dev().build().await;
-    let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-    let farmer = Farmer::builder()
-        .build(
-            Default::default(),
-            &node,
-            &[PlotDescription::minimal(plot_dir.as_ref())],
-            CacheDescription::minimal(cache_dir.as_ref()),
-        )
-        .await
-        .unwrap();
+    let farmer = Farmer::dev().build(&node).await;
 
     let farm_blocks = 4;
 
@@ -32,7 +22,7 @@ async fn sync_block_inner() {
         .await
         .unwrap();
 
-    farmer.close().await.unwrap();
+    farmer.close().await;
 
     let other_node = Node::dev()
         .chain(node.chain.clone())
@@ -61,17 +51,7 @@ async fn sync_plot_inner() {
     let node_span = tracing::trace_span!("node 1");
     let node = Node::dev().build().instrument(node_span.clone()).await;
 
-    let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-    let farmer = Farmer::builder()
-        .build(
-            Default::default(),
-            &node,
-            &[PlotDescription::minimal(plot_dir.as_ref())],
-            CacheDescription::minimal(cache_dir.as_ref()),
-        )
-        .instrument(node_span.clone())
-        .await
-        .unwrap();
+    let farmer = Farmer::dev().build(&node).instrument(node_span.clone()).await;
 
     let farm_blocks = 4;
 
@@ -100,27 +80,17 @@ async fn sync_plot_inner() {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 
-    let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-    let other_farmer = Farmer::builder()
-        .build(
-            Default::default(),
-            &node,
-            &[PlotDescription::minimal(plot_dir.as_ref())],
-            CacheDescription::minimal(cache_dir.as_ref()),
-        )
-        .instrument(other_node_span.clone())
-        .await
-        .unwrap();
+    let other_farmer = Farmer::dev().build(&node).instrument(other_node_span.clone()).await;
 
     let plot = other_farmer.iter_plots().await.next().unwrap();
     plot.subscribe_initial_plotting_progress().await.for_each(|_| async {}).await;
-    farmer.close().await.unwrap();
+    farmer.close().await;
 
     plot.subscribe_new_solutions().await.next().await.expect("Solution stream never ends");
 
     node.close().await;
     other_node.close().await;
-    other_farmer.close().await.unwrap();
+    other_farmer.close().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -145,17 +115,8 @@ async fn node_restart() {
 async fn node_events() {
     crate::common::setup();
 
-    let dir = TempDir::new().unwrap();
     let node = Node::dev().build().await;
-    let farmer = Farmer::builder()
-        .build(
-            Default::default(),
-            &node,
-            &[PlotDescription::minimal(dir.path().join("plot"))],
-            CacheDescription::minimal(dir.path().join("cache")),
-        )
-        .await
-        .unwrap();
+    let farmer = Farmer::dev().build(&node).await;
 
     let events = node
         .subscribe_new_blocks()
@@ -172,29 +133,20 @@ async fn node_events() {
 
     assert!(!events.is_empty());
 
-    farmer.close().await.unwrap();
+    farmer.close().await;
     node.close().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
 async fn fetch_block_author() {
-    let dir = TempDir::new().unwrap();
     let node = Node::dev().build().await;
     let reward_address = Default::default();
-    let farmer = Farmer::builder()
-        .build(
-            reward_address,
-            &node,
-            &[PlotDescription::minimal(dir.path().join("plot"))],
-            CacheDescription::minimal(dir.path().join("cache")),
-        )
-        .await
-        .unwrap();
+    let farmer = Farmer::dev().reward_address(reward_address).build(&node).await;
 
     let block = node.subscribe_new_blocks().await.unwrap().skip(1).take(1).next().await.unwrap();
     assert_eq!(block.pre_digest.unwrap().solution.reward_address, reward_address);
 
-    farmer.close().await.unwrap();
+    farmer.close().await;
     node.close().await;
 }
