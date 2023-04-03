@@ -1,22 +1,16 @@
+use std::sync::Arc;
+
 use futures::prelude::*;
 use subspace_sdk::farmer::{CacheDescription, Farmer, PlotDescription};
-use subspace_sdk::node::*;
 use tempfile::TempDir;
 use tracing_futures::Instrument;
+
+use crate::common::Node;
 
 async fn sync_block_inner() {
     crate::common::setup();
 
-    let dir = TempDir::new().unwrap();
-    let chain = chain_spec::dev_config();
-    let node = Node::dev()
-        .role(Role::Authority)
-        .network(
-            NetworkBuilder::dev().listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()]),
-        )
-        .build(dir.path(), chain.clone())
-        .await
-        .unwrap();
+    let node = Node::dev().build().await;
     let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
     let farmer = Farmer::builder()
         .build(
@@ -40,22 +34,19 @@ async fn sync_block_inner() {
 
     farmer.close().await.unwrap();
 
-    let dir = TempDir::new().unwrap();
     let other_node = Node::dev()
-        .network(
-            NetworkBuilder::dev()
-                .force_synced(false)
-                .boot_nodes(node.listen_addresses().await.unwrap()),
-        )
-        .build(dir.path(), chain)
-        .await
-        .unwrap();
+        .chain(node.chain.clone())
+        .boot_nodes(node.listen_addresses().await.unwrap())
+        .not_force_synced(true)
+        .not_authority(true)
+        .build()
+        .await;
 
     other_node.subscribe_syncing_progress().await.unwrap().for_each(|_| async {}).await;
     assert_eq!(other_node.get_info().await.unwrap().best_block.1, farm_blocks);
 
-    node.close().await.unwrap();
-    other_node.close().await.unwrap();
+    node.close().await;
+    other_node.close().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -68,18 +59,8 @@ async fn sync_plot_inner() {
     crate::common::setup();
 
     let node_span = tracing::trace_span!("node 1");
-    let dir = TempDir::new().unwrap();
-    let chain = chain_spec::dev_config();
-    let node = Node::dev()
-        .dsn(DsnBuilder::dev().listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()]))
-        .network(
-            NetworkBuilder::dev().listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()]),
-        )
-        .role(Role::Authority)
-        .build(dir.path(), chain.clone())
-        .instrument(node_span.clone())
-        .await
-        .unwrap();
+    let node = Node::dev().build().instrument(node_span.clone()).await;
+
     let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
     let farmer = Farmer::builder()
         .build(
@@ -103,18 +84,15 @@ async fn sync_plot_inner() {
         .unwrap();
 
     let other_node_span = tracing::trace_span!("node 2");
-    let dir = TempDir::new().unwrap();
     let other_node = Node::dev()
-        .dsn(DsnBuilder::dev().boot_nodes(node.dsn_listen_addresses().await.unwrap()))
-        .network(
-            NetworkBuilder::dev()
-                .force_synced(false)
-                .boot_nodes(node.listen_addresses().await.unwrap()),
-        )
-        .build(dir.path(), chain)
+        .dsn_boot_nodes(node.dsn_listen_addresses().await.unwrap())
+        .boot_nodes(node.listen_addresses().await.unwrap())
+        .not_force_synced(true)
+        .not_authority(true)
+        .chain(node.chain.clone())
+        .build()
         .instrument(other_node_span.clone())
-        .await
-        .unwrap();
+        .await;
 
     while other_node.get_info().await.unwrap().best_block.1
         < node.get_info().await.unwrap().best_block.1
@@ -140,8 +118,8 @@ async fn sync_plot_inner() {
 
     plot.subscribe_new_solutions().await.next().await.expect("Solution stream never ends");
 
-    node.close().await.unwrap();
-    other_node.close().await.unwrap();
+    node.close().await;
+    other_node.close().await;
     other_farmer.close().await.unwrap();
 }
 
@@ -154,17 +132,11 @@ async fn sync_plot() {
 #[tokio::test(flavor = "multi_thread")]
 async fn node_restart() {
     crate::common::setup();
-    let dir = TempDir::new().unwrap();
+    let dir = Arc::new(TempDir::new().unwrap());
 
     for i in 0..4 {
         tracing::error!(i, "Running new node");
-        Node::dev()
-            .build(dir.path(), chain_spec::dev_config())
-            .await
-            .unwrap()
-            .close()
-            .await
-            .unwrap();
+        Node::dev().path(dir.clone()).build().await.close().await;
     }
 }
 
@@ -174,11 +146,7 @@ async fn node_events() {
     crate::common::setup();
 
     let dir = TempDir::new().unwrap();
-    let node = Node::dev()
-        .role(Role::Authority)
-        .build(dir.path().join("node"), chain_spec::dev_config())
-        .await
-        .unwrap();
+    let node = Node::dev().build().await;
     let farmer = Farmer::builder()
         .build(
             Default::default(),
@@ -205,18 +173,14 @@ async fn node_events() {
     assert!(!events.is_empty());
 
     farmer.close().await.unwrap();
-    node.close().await.unwrap();
+    node.close().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
 async fn fetch_block_author() {
     let dir = TempDir::new().unwrap();
-    let node = Node::dev()
-        .role(Role::Authority)
-        .build(dir.path().join("node"), chain_spec::dev_config())
-        .await
-        .unwrap();
+    let node = Node::dev().build().await;
     let reward_address = Default::default();
     let farmer = Farmer::builder()
         .build(
@@ -232,5 +196,5 @@ async fn fetch_block_author() {
     assert_eq!(block.pre_digest.unwrap().solution.reward_address, reward_address);
 
     farmer.close().await.unwrap();
-    node.close().await.unwrap();
+    node.close().await;
 }

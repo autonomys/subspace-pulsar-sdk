@@ -1,19 +1,15 @@
 use bytesize::ByteSize;
 use futures::prelude::*;
 use subspace_sdk::farmer::*;
-use subspace_sdk::node::{chain_spec, Node, Role};
 use tempfile::TempDir;
+
+use crate::common::Node;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_info() {
     crate::common::setup();
 
-    let dir = TempDir::new().unwrap();
-    let node = Node::dev()
-        .role(Role::Authority)
-        .build(dir.path(), chain_spec::dev_config())
-        .await
-        .unwrap();
+    let node = Node::dev().build().await;
     let plot_dir = TempDir::new().unwrap();
     let cache_dir = TempDir::new().unwrap();
     let farmer = Farmer::builder()
@@ -32,19 +28,14 @@ async fn get_info() {
     assert_eq!(plots_info[plot_dir.as_ref()].allocated_space, PlotDescription::MIN_SIZE);
 
     farmer.close().await.unwrap();
-    node.close().await.unwrap();
+    node.close().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn track_progress() {
     crate::common::setup();
 
-    let dir = TempDir::new().unwrap();
-    let node = Node::dev()
-        .role(Role::Authority)
-        .build(dir.path(), chain_spec::dev_config())
-        .await
-        .unwrap();
+    let node = Node::dev().build().await;
     let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
     let n_sectors = 2;
     let farmer = Farmer::builder()
@@ -74,19 +65,14 @@ async fn track_progress() {
     assert_eq!(progress.len(), n_sectors as usize);
 
     farmer.close().await.unwrap();
-    node.close().await.unwrap();
+    node.close().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn new_solution() {
     crate::common::setup();
 
-    let dir = TempDir::new().unwrap();
-    let node = Node::dev()
-        .role(Role::Authority)
-        .build(dir.path(), chain_spec::dev_config())
-        .await
-        .unwrap();
+    let node = Node::dev().build().await;
     let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
     let farmer = Farmer::builder()
         .build(
@@ -110,19 +96,14 @@ async fn new_solution() {
         .expect("Farmer should send new solutions");
 
     farmer.close().await.unwrap();
-    node.close().await.unwrap();
+    node.close().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn progress_restart() {
     crate::common::setup();
 
-    let dir = TempDir::new().unwrap();
-    let node = Node::dev()
-        .role(Role::Authority)
-        .build(dir.path(), chain_spec::dev_config())
-        .await
-        .unwrap();
+    let node = Node::dev().build().await;
     let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
     let farmer = Farmer::builder()
         .build(
@@ -146,19 +127,15 @@ async fn progress_restart() {
     .unwrap();
 
     farmer.close().await.unwrap();
-    node.close().await.unwrap();
+    node.close().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn farmer_restart() {
     crate::common::setup();
 
+    let node = Node::dev().build().await;
     let dir = TempDir::new().unwrap();
-    let node = Node::dev()
-        .role(Role::Authority)
-        .build(dir.path(), chain_spec::dev_config())
-        .await
-        .unwrap();
 
     for _ in 0..10 {
         Farmer::builder()
@@ -175,19 +152,15 @@ async fn farmer_restart() {
             .unwrap();
     }
 
-    node.close().await.unwrap();
+    node.close().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn farmer_drop() {
     crate::common::setup();
 
+    let node = Node::dev().build().await;
     let dir = TempDir::new().unwrap();
-    let node = Node::dev()
-        .role(Role::Authority)
-        .build(dir.path(), chain_spec::dev_config())
-        .await
-        .unwrap();
 
     drop(
         Farmer::builder()
