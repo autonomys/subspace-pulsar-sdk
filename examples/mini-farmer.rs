@@ -5,7 +5,7 @@ use bytesize::ByteSize;
 use clap::{Parser, Subcommand};
 use futures::prelude::*;
 use subspace_sdk::farmer::CacheDescription;
-use subspace_sdk::node::{self, Event, Node, RewardsEvent};
+use subspace_sdk::node::{self, Event, Node, RewardsEvent, SubspaceEvent};
 use subspace_sdk::{Farmer, PlotDescription, PublicKey};
 use tracing_subscriber::prelude::*;
 
@@ -88,11 +88,11 @@ async fn main() -> anyhow::Result<()> {
     tokio::select! {
         result = node.sync() => result?,
         _ = tokio::signal::ctrl_c() => {
-            tracing::info!("Exitting...");
+            tracing::error!("Exitting...");
             return node.close().await.context("Failed to close node")
         }
     }
-    tracing::info!("Node was synced!");
+    tracing::error!("Node was synced!");
 
     let farmer = Farmer::builder()
         .build(
@@ -113,27 +113,34 @@ async fn main() -> anyhow::Result<()> {
             plot.subscribe_initial_plotting_progress()
                 .await
                 .for_each(|progress| async move {
-                    tracing::info!(?progress, "Plotting!");
+                    tracing::error!(?progress, "Plotting!");
                 })
                 .await;
+            tracing::error!("Finished initial plotting!");
 
             node.subscribe_new_blocks()
                 .await?
                 .then(|block| async move {
-                    node.get_events(Some(block.hash)).await.expect("Rpc call never fails")
+                    node.get_events(Some(block.hash))
+                        .await
+                        .expect("Fetching events should never fail")
                 })
                 .flat_map(futures::stream::iter)
-                .filter_map(|ev| {
-                    futures::future::ready(match ev {
+                .for_each(|ev| {
+                    match ev {
                         Event::Rewards(
                             RewardsEvent::VoteReward { reward, voter: author }
                             | RewardsEvent::BlockReward { reward, block_author: author },
-                        ) if author == reward_address.into() => Some(reward),
-                        _ => None,
-                    })
-                })
-                .for_each(|reward| async move {
-                    tracing::info!(%reward, "Farmed!");
+                        ) if author == reward_address.into() => tracing::error!(%reward, "Farmed!"),
+                        Event::Subspace(SubspaceEvent::FarmerVote {
+                            reward_address: author,
+                            height: block_number,
+                            ..
+                        }) if author == reward_address.into() =>
+                            tracing::error!(block_number, "Vote counted for block"),
+                        _ => (),
+                    };
+                    futures::future::ready(())
                 })
                 .await;
 
@@ -144,7 +151,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::select! {
         _ = subscriptions => {},
         _ = tokio::signal::ctrl_c() => {
-            tracing::info!("Exitting...");
+            tracing::error!("Exitting...");
         }
     }
 
