@@ -68,7 +68,6 @@ async fn sync_plot_inner() {
         .dsn_boot_nodes(node.dsn_listen_addresses().await.unwrap())
         .boot_nodes(node.listen_addresses().await.unwrap())
         .not_force_synced(true)
-        .not_authority(true)
         .chain(node.chain.clone())
         .build()
         .instrument(other_node_span.clone())
@@ -80,7 +79,7 @@ async fn sync_plot_inner() {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 
-    let other_farmer = Farmer::dev().build(&node).instrument(other_node_span.clone()).await;
+    let other_farmer = Farmer::dev().build(&other_node).instrument(other_node_span.clone()).await;
 
     let plot = other_farmer.iter_plots().await.next().unwrap();
     plot.subscribe_initial_plotting_progress().await.for_each(|_| async {}).await;
