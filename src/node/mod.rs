@@ -14,7 +14,9 @@ use sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider, SyncSt
 use sc_network_common::config::MultiaddrWithPeerId;
 use sc_rpc_api::state::StateApiClient;
 use sp_consensus::SyncOracle;
+use sp_consensus_subspace::digests::PreDigest;
 use sp_core::H256;
+use sp_runtime::DigestItem;
 use subspace_core_primitives::{PieceIndexHash, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
 use subspace_farmer_components::FarmerProtocolInfo;
@@ -362,13 +364,21 @@ pub struct BlockNotification {
     pub state_root: Hash,
     /// Extrinsics root
     pub extrinsics_root: Hash,
+    /// Block pre digest
+    pub pre_digest: Option<PreDigest<crate::PublicKey, crate::PublicKey>>,
 }
 
 impl From<Header> for BlockNotification {
     fn from(header: Header) -> Self {
         let hash = header.hash();
-        let Header { number, parent_hash, state_root, extrinsics_root, digest: _ } = header;
-        Self { hash, number, parent_hash, state_root, extrinsics_root }
+        let Header { number, parent_hash, state_root, extrinsics_root, digest } = header;
+        let pre_digest = digest
+            .log(|it| if let DigestItem::PreRuntime(_, digest) = it { Some(digest) } else { None })
+            .map(|pre_digest| {
+                parity_scale_codec::Decode::decode(&mut pre_digest.as_ref())
+                    .expect("Pre digest is always scale encoded")
+            });
+        Self { hash, number, parent_hash, state_root, extrinsics_root, pre_digest }
     }
 }
 

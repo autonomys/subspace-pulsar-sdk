@@ -207,3 +207,29 @@ async fn node_events() {
     farmer.close().await.unwrap();
     node.close().await.unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn fetch_block_author() {
+    let dir = TempDir::new().unwrap();
+    let node = Node::dev()
+        .role(Role::Authority)
+        .build(dir.path().join("node"), chain_spec::dev_config())
+        .await
+        .unwrap();
+    let reward_address = Default::default();
+    let farmer = Farmer::builder()
+        .build(
+            reward_address,
+            &node,
+            &[PlotDescription::minimal(dir.path().join("plot"))],
+            CacheDescription::minimal(dir.path().join("cache")),
+        )
+        .await
+        .unwrap();
+
+    let block = node.subscribe_new_blocks().await.unwrap().skip(1).take(1).next().await.unwrap();
+    assert_eq!(block.pre_digest.unwrap().solution.reward_address, reward_address);
+
+    farmer.close().await.unwrap();
+    node.close().await.unwrap();
+}
