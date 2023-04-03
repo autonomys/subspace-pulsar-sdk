@@ -131,7 +131,7 @@ jobs:
         run: cargo cache
 
       - name: Build and run tests
-        run: cargo test --locked --lib --tests --release -- --test-threads=1
+        run: cargo test --locked --test integration --release -- --test-threads=1
 
       - name: Clean unused artifacts
         run: cargo sweep --maxsize ${{ env.MAX_TARGET_SIZE }}

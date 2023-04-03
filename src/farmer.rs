@@ -32,7 +32,7 @@ use tokio::sync::{oneshot, watch, Mutex};
 use tracing_futures::Instrument;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
-use crate::networking::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
+use crate::dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
 use crate::utils::{AsyncDropFutures, DropCollection};
 use crate::{Node, PublicKey};
 
@@ -471,7 +471,7 @@ impl Config {
             Arc::new(tokio::sync::Semaphore::new(max_concurrent_plots.get()));
 
         let base_path = cache.directory;
-        let readers_and_pieces = Arc::clone(&node.farmer_readers_and_pieces);
+        let readers_and_pieces = Arc::clone(&node.dsn.farmer_readers_and_pieces);
 
         let node_name = node.name.clone();
 
@@ -495,7 +495,7 @@ impl Config {
                 "Initializing provider storage..."
             );
 
-            let peer_id = node.dsn_node.id();
+            let peer_id = node.dsn.node.id();
 
             let db_provider_storage =
                 ParityDbProviderStorage::new(&provider_db_path, provided_keys_limit, peer_id)
@@ -530,9 +530,9 @@ impl Config {
         let kzg = kzg::Kzg::new(kzg::embedded_kzg_settings());
 
         let piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
-            node.dsn_node.clone(),
+            node.dsn.node.clone(),
             Some(SegmentCommitmentPieceValidator::new(
-                node.dsn_node.clone(),
+                node.dsn.node.clone(),
                 node.rpc_handle.clone(),
                 kzg.clone(),
                 // TODO: Consider introducing and using global in-memory segment commitments cache
@@ -540,9 +540,9 @@ impl Config {
             )),
         );
         let piece_getter = Arc::new(FarmerPieceGetter::new(
-            NodePieceGetter::new(DsnPieceGetter::new(piece_provider), node.piece_cache.clone()),
+            NodePieceGetter::new(DsnPieceGetter::new(piece_provider), node.dsn.piece_cache.clone()),
             Arc::clone(&piece_cache),
-            node.dsn_node.clone(),
+            node.dsn.node.clone(),
         ));
 
         for (disk_farm_idx, description) in plots.iter().enumerate() {
@@ -573,7 +573,7 @@ impl Config {
                 move || drop(dropped_sender.send(()))
             });
 
-            let node = node.dsn_node.clone();
+            let node = node.dsn.node.clone();
             let node_name = node_name.clone();
             // Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
@@ -626,12 +626,12 @@ impl Config {
             })
             .context("Failed to spawn task")?;
 
-        node.farmer_piece_store.lock().await.replace(piece_store);
-        node.farmer_provider_storage.swap(Some(farmer_provider_storage));
+        node.dsn.farmer_piece_store.lock().await.replace(piece_store);
+        node.dsn.farmer_provider_storage.swap(Some(farmer_provider_storage));
 
         drop_at_exit.push(
-            crate::networking::start_announcements_processor(
-                node.dsn_node.clone(),
+            crate::dsn::start_announcements_processor(
+                node.dsn.node.clone(),
                 Arc::clone(&piece_cache),
                 Arc::downgrade(&readers_and_pieces),
                 &node.name,
@@ -640,7 +640,7 @@ impl Config {
         );
 
         drop_at_exit.defer({
-            let provider_storage = node.farmer_provider_storage.clone();
+            let provider_storage = node.dsn.farmer_provider_storage.clone();
             move || {
                 let _ = drop_sender.send(());
                 provider_storage.swap(None);
@@ -650,7 +650,7 @@ impl Config {
         let mut async_drop = AsyncDropFutures::new();
 
         async_drop.push({
-            let piece_store = Arc::clone(&node.farmer_piece_store);
+            let piece_store = Arc::clone(&node.dsn.farmer_piece_store);
             async move {
                 piece_store.lock().await.take();
             }
@@ -862,7 +862,7 @@ impl Plot {
             kzg,
             piece_getter,
             concurrent_plotting_semaphore,
-            piece_memory_cache: node.piece_memory_cache.clone(),
+            piece_memory_cache: node.dsn.piece_memory_cache.clone(),
         };
         let single_disk_plot = SingleDiskPlot::new(description, disk_farm_idx).await?;
         let mut drop_at_exit = DropCollection::new();
@@ -1003,213 +1003,5 @@ impl Farmer {
         async_drop.await;
 
         result_receiver.await?
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #![allow(clippy::unwrap_used)]
-
-    use tempfile::TempDir;
-
-    use super::*;
-    use crate::node::{chain_spec, Node, Role};
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_get_info() {
-        crate::utils::test_init();
-
-        let dir = TempDir::new().unwrap();
-        let node = Node::dev()
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config())
-            .await
-            .unwrap();
-        let plot_dir = TempDir::new().unwrap();
-        let cache_dir = TempDir::new().unwrap();
-        let farmer = Farmer::builder()
-            .build(
-                Default::default(),
-                &node,
-                &[PlotDescription::minimal(plot_dir.as_ref())],
-                CacheDescription::minimal(cache_dir.as_ref()),
-            )
-            .await
-            .unwrap();
-
-        let Info { reward_address, plots_info, .. } = farmer.get_info().await.unwrap();
-        assert_eq!(reward_address, Default::default());
-        assert_eq!(plots_info.len(), 1);
-        assert_eq!(plots_info[plot_dir.as_ref()].allocated_space, PlotDescription::MIN_SIZE);
-
-        farmer.close().await.unwrap();
-        node.close().await.unwrap();
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_track_progress() {
-        crate::utils::test_init();
-
-        let dir = TempDir::new().unwrap();
-        let node = Node::dev()
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config())
-            .await
-            .unwrap();
-        let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let n_sectors = 2;
-        let farmer = Farmer::builder()
-            .build(
-                Default::default(),
-                &node,
-                &[PlotDescription::new(
-                    plot_dir.as_ref(),
-                    ByteSize::b(PlotDescription::MIN_SIZE.as_u64() * n_sectors),
-                )
-                .unwrap()],
-                CacheDescription::minimal(cache_dir.as_ref()),
-            )
-            .await
-            .unwrap();
-
-        let progress = farmer
-            .iter_plots()
-            .await
-            .next()
-            .unwrap()
-            .subscribe_initial_plotting_progress()
-            .await
-            .take(n_sectors as usize)
-            .collect::<Vec<_>>()
-            .await;
-        assert_eq!(progress.len(), n_sectors as usize);
-
-        farmer.close().await.unwrap();
-        node.close().await.unwrap();
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_new_solution() {
-        crate::utils::test_init();
-
-        let dir = TempDir::new().unwrap();
-        let node = Node::dev()
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config())
-            .await
-            .unwrap();
-        let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let farmer = Farmer::builder()
-            .build(
-                Default::default(),
-                &node,
-                &[PlotDescription::minimal(plot_dir.as_ref())],
-                CacheDescription::minimal(cache_dir.as_ref()),
-            )
-            .await
-            .unwrap();
-
-        farmer
-            .iter_plots()
-            .await
-            .next()
-            .unwrap()
-            .subscribe_new_solutions()
-            .await
-            .next()
-            .await
-            .expect("Farmer should send new solutions");
-
-        farmer.close().await.unwrap();
-        node.close().await.unwrap();
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_progress_restart() {
-        crate::utils::test_init();
-
-        let dir = TempDir::new().unwrap();
-        let node = Node::dev()
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config())
-            .await
-            .unwrap();
-        let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let farmer = Farmer::builder()
-            .build(
-                Default::default(),
-                &node,
-                &[PlotDescription::minimal(plot_dir.as_ref())],
-                CacheDescription::minimal(cache_dir.as_ref()),
-            )
-            .await
-            .unwrap();
-
-        let plot = farmer.iter_plots().await.next().unwrap();
-
-        plot.subscribe_initial_plotting_progress().await.for_each(|_| async {}).await;
-
-        tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            plot.subscribe_initial_plotting_progress().await.for_each(|_| async {}),
-        )
-        .await
-        .unwrap();
-
-        farmer.close().await.unwrap();
-        node.close().await.unwrap();
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_farmer_restart() {
-        crate::utils::test_init();
-
-        let dir = TempDir::new().unwrap();
-        let node = Node::dev()
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config())
-            .await
-            .unwrap();
-
-        for _ in 0..10 {
-            Farmer::builder()
-                .build(
-                    Default::default(),
-                    &node,
-                    &[PlotDescription::minimal(dir.path().join("plot"))],
-                    CacheDescription::minimal(dir.path().join("cache")),
-                )
-                .await
-                .unwrap()
-                .close()
-                .await
-                .unwrap();
-        }
-
-        node.close().await.unwrap();
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_farmer_drop() {
-        crate::utils::test_init();
-
-        let dir = TempDir::new().unwrap();
-        let node = Node::dev()
-            .role(Role::Authority)
-            .build(dir.path(), chain_spec::dev_config())
-            .await
-            .unwrap();
-
-        drop(
-            Farmer::builder()
-                .build(
-                    Default::default(),
-                    &node,
-                    &[PlotDescription::minimal(dir.path().join("plot"))],
-                    CacheDescription::minimal(dir.path().join("cache")),
-                )
-                .await
-                .unwrap(),
-        )
     }
 }

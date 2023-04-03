@@ -1,3 +1,4 @@
+pub(crate) mod builder;
 pub(crate) mod provider_storage_utils;
 
 use std::num::NonZeroUsize;
