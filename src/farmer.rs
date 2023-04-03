@@ -926,19 +926,15 @@ impl Plot {
                     let initial_plotting_progress = Arc::clone(&initial_plotting_progress);
                     async move {
                         let mut guard = initial_plotting_progress.lock().await;
+                        let plotting_progress = *guard;
                         guard.current_sector += 1;
-                        Some(*guard)
+                        Some(plotting_progress)
                     }
                 }
             })
             .take_while(|InitialPlottingProgress { current_sector, total_sectors, .. }| {
-                futures::future::ready(current_sector <= total_sectors)
-            })
-            .chain(futures::stream::once({
-                let mut initial_progress = *self.initial_plotting_progress.lock().await;
-                initial_progress.current_sector = initial_progress.total_sectors;
-                futures::future::ready(initial_progress)
-            }));
+                futures::future::ready(current_sector < total_sectors)
+            });
         let last_initial_plotting_progress = *self.initial_plotting_progress.lock().await;
 
         InitialPlottingProgressStream {
