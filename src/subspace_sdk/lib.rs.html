@@ -193,17 +193,14 @@
 <a href="#193" id="193">193</a>
 <a href="#194" id="194">194</a>
 <a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Subspace SDK for easy running of both Subspace node and farmer
 
 </span><span class="attr">#![warn(missing_docs, clippy::dbg_macro, clippy::unwrap_used, clippy::disallowed_types)]
 #![feature(type_changing_struct_update, concat_idents, const_option)]
 
-</span><span class="doccomment">/// Module related to the farmer
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>dsn;
+<span class="doccomment">/// Module related to the farmer
 </span><span class="kw">pub mod </span>farmer;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>networking;
 <span class="doccomment">/// Module related to the node
 </span><span class="kw">pub mod </span>node;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>utils;
@@ -383,10 +380,7 @@
         state.finalize_fixed().into()
     }
 
-    <span class="doccomment">/// ```
-    /// &quot;5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY&quot;.parse::&lt;subspace_sdk::PublicKey&gt;().unwrap();
-    /// ```
-    </span><span class="kw">impl </span>std::str::FromStr <span class="kw">for </span><span class="kw">super</span>::PublicKey {
+    <span class="kw">impl </span>std::str::FromStr <span class="kw">for </span><span class="kw">super</span>::PublicKey {
         <span class="kw">type </span><span class="prelude-val">Err </span>= Ss58ParsingError;
 
         <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
