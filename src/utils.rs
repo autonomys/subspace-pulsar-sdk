@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
+use anyhow::Context;
 use futures::prelude::*;
 use jsonrpsee_core::client::{
     BatchResponse, ClientT, Subscription, SubscriptionClientT, SubscriptionKind,
@@ -41,6 +42,27 @@ impl Rpc {
         .map(Into::into);
 
         Ok(stream)
+    }
+
+    pub(crate) async fn get_events<T>(
+        &self,
+        block: Option<T::Hash>,
+    ) -> anyhow::Result<Vec<frame_system::EventRecord<T::RuntimeEvent, T::Hash>>>
+    where
+        T: frame_system::Config,
+        T::Hash: serde::ser::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
+        Vec<frame_system::EventRecord<T::RuntimeEvent, T::Hash>>: parity_scale_codec::Decode,
+    {
+        match self
+            .get_storage::<T::Hash>(crate::node::StorageKey::events(), block)
+            .await
+            .context("Failed to get events from storage")?
+        {
+            Some(sp_storage::StorageData(events)) =>
+                parity_scale_codec::DecodeAll::decode_all(&mut events.as_ref())
+                    .context("Failed to decode events"),
+            None => Ok(vec![]),
+        }
     }
 }
 

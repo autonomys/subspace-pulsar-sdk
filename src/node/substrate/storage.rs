@@ -1,7 +1,6 @@
 use anyhow::Context;
 use sc_rpc_api::state::StateApiClient;
 
-use crate::node::Hash;
 use crate::utils::Rpc;
 
 pub struct StorageKey(pub Vec<u8>);
@@ -21,11 +20,14 @@ impl StorageKey {
 }
 
 impl Rpc {
-    pub(crate) async fn get_storage(
+    pub(crate) async fn get_storage<H>(
         &self,
         StorageKey(key): StorageKey,
-        block: Option<Hash>,
-    ) -> anyhow::Result<Option<sp_storage::StorageData>> {
+        block: Option<H>,
+    ) -> anyhow::Result<Option<sp_storage::StorageData>>
+    where
+        H: Send + Sync + 'static + serde::ser::Serialize + serde::de::DeserializeOwned,
+    {
         self.storage(sp_storage::StorageKey(key), block)
             .await
             .context("Failed to fetch storage entry")

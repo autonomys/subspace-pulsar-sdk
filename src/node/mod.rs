@@ -644,27 +644,11 @@ impl Node {
         self.rpc_handle.subscribe_new_blocks().await.context("Failed to subscribe to new blocks")
     }
 
-    pub(crate) async fn get_events_inner(
-        &self,
-        block: Option<Hash>,
-    ) -> anyhow::Result<Vec<frame_system::EventRecord<Event, Hash>>> {
-        match self
-            .rpc_handle
-            .get_storage(StorageKey::events(), block)
-            .await
-            .context("Failed to get events from storage")?
-        {
-            Some(sp_storage::StorageData(events)) =>
-                parity_scale_codec::DecodeAll::decode_all(&mut events.as_ref())
-                    .context("Failed to decode events"),
-            None => Ok(vec![]),
-        }
-    }
-
     /// Get events at some block or at tip of the chain
     pub async fn get_events(&self, block: Option<Hash>) -> anyhow::Result<Vec<Event>> {
         Ok(self
-            .get_events_inner(block)
+            .rpc_handle
+            .get_events::<subspace_runtime::Runtime>(block)
             .await?
             .into_iter()
             .map(|event_record| event_record.event)
