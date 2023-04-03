@@ -37,6 +37,8 @@ pub struct InnerNode {
     chain: ChainSpec,
     #[builder(default = "TempDir::new().map(Arc::new).unwrap()")]
     path: Arc<TempDir>,
+    #[builder(default)]
+    enable_core: bool,
 }
 
 #[derive(Deref, DerefMut)]
@@ -50,8 +52,15 @@ pub struct Node {
 
 impl NodeBuilder {
     pub async fn build(self) -> Node {
-        let InnerNode { not_force_synced, boot_nodes, dsn_boot_nodes, not_authority, chain, path } =
-            self._build().expect("Infallible");
+        let InnerNode {
+            not_force_synced,
+            boot_nodes,
+            dsn_boot_nodes,
+            not_authority,
+            chain,
+            path,
+            enable_core,
+        } = self._build().expect("Infallible");
         let node = subspace_sdk::Node::dev()
             .dsn(
                 DsnBuilder::dev()
@@ -64,10 +73,20 @@ impl NodeBuilder {
                     .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
                     .boot_nodes(boot_nodes),
             )
-            .role(if not_authority { Role::Full } else { Role::Authority })
-            .build(path.path().join("node"), chain.clone())
-            .await
-            .unwrap();
+            .role(if not_authority { Role::Full } else { Role::Authority });
+
+        let node = if enable_core {
+            node.system_domain(
+                subspace_sdk::node::domains::ConfigBuilder::new()
+                    .core(subspace_sdk::node::domains::core::ConfigBuilder::new().build()),
+            )
+        } else {
+            node
+        }
+        .build(path.path().join("node"), chain.clone())
+        .await
+        .unwrap();
+
         Node { node, path, chain }
     }
 }
