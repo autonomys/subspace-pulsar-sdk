@@ -77,6 +77,18 @@ impl From<[u8; PUBLIC_KEY_LENGTH]> for PublicKey {
     }
 }
 
+impl From<sp_core::crypto::AccountId32> for PublicKey {
+    fn from(account_id: sp_core::crypto::AccountId32) -> Self {
+        From::<[u8; PUBLIC_KEY_LENGTH]>::from(*account_id.as_ref())
+    }
+}
+
+impl From<PublicKey> for sp_core::crypto::AccountId32 {
+    fn from(account_id: PublicKey) -> Self {
+        Self::new(*account_id.0)
+    }
+}
+
 impl std::fmt::Display for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         self.0.fmt(f)
