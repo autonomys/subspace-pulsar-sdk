@@ -3,7 +3,7 @@
 use domain_runtime_primitives::RelayerId;
 use frame_support::weights::Weight;
 use sc_service::ChainType;
-use sc_subspace_chain_specs::{ChainSpecExtensions, SerializableChainSpec};
+use sc_subspace_chain_specs::SerializableChainSpec;
 use sp_core::crypto::Ss58Codec;
 use sp_domains::ExecutorPublicKey;
 use sp_runtime::Percent;
@@ -20,11 +20,15 @@ use crate::utils::chain_spec::{
 
 type DomainConfig = sp_domains::DomainConfig<Hash, Balance, Weight>;
 
+/// The extensions for the [`ConsensusChainSpec`].
+#[derive(Clone, serde::Serialize, serde::Deserialize, sc_chain_spec::ChainSpecExtension)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ChainSpecExtensions {
+    pub core: Option<SerializableChainSpec<core_payments_domain_runtime::GenesisConfig>>,
+}
+
 /// Chain spec type for the system domain
-pub type ChainSpec = SerializableChainSpec<
-    GenesisConfig,
-    ChainSpecExtensions<core_payments_domain_runtime::GenesisConfig>,
->;
+pub type ChainSpec = SerializableChainSpec<GenesisConfig, ChainSpecExtensions>;
 
 /// Development config
 pub fn development_config() -> ChainSpec {
@@ -74,7 +78,7 @@ pub fn development_config() -> ChainSpec {
         None,
         None,
         Some(chain_spec_properties()),
-        ChainSpecExtensions { execution_chain_spec: super::core::chain_spec::development_config() },
+        ChainSpecExtensions { core: Some(super::core::chain_spec::development_config()) },
     )
 }
 
@@ -142,9 +146,7 @@ pub fn local_testnet_config() -> ChainSpec {
         // Properties
         Some(chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions {
-            execution_chain_spec: super::core::chain_spec::local_testnet_config(),
-        },
+        ChainSpecExtensions { core: Some(super::core::chain_spec::local_testnet_config()) },
     )
 }
 
@@ -211,7 +213,7 @@ pub fn gemini_3d_config() -> ChainSpec {
         // Properties
         Some(chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions { execution_chain_spec: super::core::chain_spec::gemini_3d_config() },
+        ChainSpecExtensions { core: Some(super::core::chain_spec::gemini_3d_config()) },
     )
 }
 
@@ -281,7 +283,7 @@ pub fn devnet_config() -> ChainSpec {
         // Properties
         Some(chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions { execution_chain_spec: super::core::chain_spec::devnet_config() },
+        ChainSpecExtensions { core: Some(super::core::chain_spec::devnet_config()) },
     )
 }
 
