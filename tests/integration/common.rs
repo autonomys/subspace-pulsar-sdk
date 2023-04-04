@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut};
-use sc_network_common::config::MultiaddrWithPeerId;
+use sc_service::config::MultiaddrWithPeerId;
 use subspace_sdk::farmer::{CacheDescription, PlotDescription};
 use subspace_sdk::node::{chain_spec, ChainSpec, DsnBuilder, NetworkBuilder, Role};
 use tempfile::TempDir;
