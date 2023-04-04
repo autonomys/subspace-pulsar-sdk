@@ -14,10 +14,12 @@ use sc_service::ChainSpecExtension;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
 use subspace_runtime::Block;
+use system_domain_runtime::Header;
 use tracing_futures::Instrument;
 
 use self::core::CoreDomainNode;
-use crate::node::{Base, BaseBuilder, BlockNotification};
+use super::{BlockNumber, Hash};
+use crate::node::{Base, BaseBuilder};
 
 pub(crate) mod chain_spec;
 pub mod core;
@@ -37,6 +39,30 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 
     fn native_version() -> sc_executor::NativeVersion {
         system_domain_runtime::native_version()
+    }
+}
+
+/// New block notification
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct BlockNotification {
+    /// Block hash
+    pub hash: Hash,
+    /// Block number
+    pub number: BlockNumber,
+    /// Parent block hash
+    pub parent_hash: Hash,
+    /// Block state root
+    pub state_root: Hash,
+    /// Extrinsics root
+    pub extrinsics_root: Hash,
+}
+
+impl From<Header> for BlockNotification {
+    fn from(header: Header) -> Self {
+        let hash = header.hash();
+        let Header { number, parent_hash, state_root, extrinsics_root, digest: _ } = header;
+        Self { hash, number, parent_hash, state_root, extrinsics_root }
     }
 }
 
@@ -212,7 +238,12 @@ impl SystemDomainNode {
     pub async fn subscribe_new_blocks(
         &self,
     ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
-        self.rpc_handlers.subscribe_new_blocks().await.context("Failed to subscribe to new blocks")
+        Ok(self
+            .rpc_handlers
+            .subscribe_new_blocks::<system_domain_runtime::Runtime>()
+            .await
+            .context("Failed to subscribe to new blocks")?
+            .map(Into::into))
     }
 }
 

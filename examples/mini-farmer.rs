@@ -118,20 +118,17 @@ async fn main() -> anyhow::Result<()> {
                 .await;
             tracing::error!("Finished initial plotting!");
 
-            node.subscribe_new_blocks()
-                .await?
-                .then(|block| async move {
-                    node.get_events(Some(block.hash))
-                        .await
-                        .expect("Fetching events should never fail")
-                })
-                .flat_map(futures::stream::iter)
-                .for_each(|ev| {
-                    match ev {
+            let mut new_blocks = node.subscribe_new_blocks().await?;
+            while let Some(new_block) = new_blocks.next().await {
+                let events = node.get_events(Some(new_block.hash)).await?;
+
+                for event in events {
+                    match event {
                         Event::Rewards(
                             RewardsEvent::VoteReward { reward, voter: author }
                             | RewardsEvent::BlockReward { reward, block_author: author },
-                        ) if author == reward_address.into() => tracing::error!(%reward, "Farmed!"),
+                        ) if author == reward_address.into() =>
+                            tracing::error!(%reward, "Received a reward!"),
                         Event::Subspace(SubspaceEvent::FarmerVote {
                             reward_address: author,
                             height: block_number,
@@ -140,9 +137,14 @@ async fn main() -> anyhow::Result<()> {
                             tracing::error!(block_number, "Vote counted for block"),
                         _ => (),
                     };
-                    futures::future::ready(())
-                })
-                .await;
+                }
+
+                if let Some(pre_digest) = new_block.pre_digest {
+                    if pre_digest.solution.reward_address == reward_address {
+                        tracing::error!("We authored a block");
+                    }
+                }
+            }
 
             anyhow::Ok(())
         }
