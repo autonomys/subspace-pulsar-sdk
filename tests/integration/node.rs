@@ -169,6 +169,7 @@ async fn node_restart() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
 async fn node_events() {
     crate::common::setup();
 
