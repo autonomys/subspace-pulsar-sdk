@@ -1,32 +1,13 @@
 use futures::prelude::*;
-use subspace_sdk::farmer::CacheDescription;
-use subspace_sdk::node::domains::core::*;
-use subspace_sdk::node::{chain_spec, domains, Role};
-use subspace_sdk::{Farmer, Node, PlotDescription};
-use tempfile::TempDir;
+
+use crate::common::{Farmer, Node};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn core_start() {
     crate::common::setup();
 
-    let dir = TempDir::new().unwrap();
-    let core = ConfigBuilder::new().build();
-    let node = Node::dev()
-        .role(Role::Authority)
-        .system_domain(domains::ConfigBuilder::new().core(core))
-        .build(dir.path(), chain_spec::dev_config())
-        .await
-        .unwrap();
-    let (plot_dir, cache_dir) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-    let farmer = Farmer::builder()
-        .build(
-            Default::default(),
-            &node,
-            &[PlotDescription::minimal(plot_dir.as_ref())],
-            CacheDescription::minimal(cache_dir.as_ref()),
-        )
-        .await
-        .unwrap();
+    let node = Node::dev().enable_core(true).build().await;
+    let farmer = Farmer::dev().build(&node).await;
 
     node.system_domain()
         .unwrap()
@@ -39,6 +20,6 @@ async fn core_start() {
         .await
         .unwrap();
 
-    farmer.close().await.unwrap();
-    node.close().await.unwrap();
+    farmer.close().await;
+    node.close().await;
 }
