@@ -438,7 +438,7 @@
     GenesisConfig,
     ChainSpecExtensions&lt;
         system_domain_runtime::GenesisConfig,
-        ChainSpecExtensions&lt;core_payments_domain_runtime::GenesisConfig&gt;,
+        <span class="kw">super</span>::domains::chain_spec::ChainSpecExtensions,
     &gt;,
 &gt;;
 
