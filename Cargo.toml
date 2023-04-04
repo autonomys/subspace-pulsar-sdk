@@ -68,6 +68,7 @@ sp-storage = { version = "7.0.0", git = "https://github.com/subspace/substrate",
 sp-transaction-pool = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "456cfad45a178617f6886ec400c312f2fea59232" }
 sp-version = { version = "5.0.0", git = "https://github.com/subspace/substrate", rev = "456cfad45a178617f6886ec400c312f2fea59232" }
 
+core-eth-relay-runtime = { git = "https://github.com/subspace/subspace", rev = "ccd4d35defdf57d62472687f491a42a7ec8e93b6" }
 core-payments-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "ccd4d35defdf57d62472687f491a42a7ec8e93b6" }
 cross-domain-message-gossip = { git = "https://github.com/subspace/subspace", rev = "ccd4d35defdf57d62472687f491a42a7ec8e93b6" }
 domain-client-executor = { git = "https://github.com/subspace/subspace", rev = "ccd4d35defdf57d62472687f491a42a7ec8e93b6" }
@@ -170,3 +171,13 @@ x25519-dalek = { opt-level = 3 }
 yamux = { opt-level = 3 }
 zeroize = { opt-level = 3 }
 
+# Reason: We need to patch substrate dependency of snowfork libraries to our fork
+# TODO: Remove when we are using upstream substrate instead of fork
+[patch."https://github.com/paritytech/substrate.git"]
+frame-benchmarking = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "456cfad45a178617f6886ec400c312f2fea59232" }
+frame-support = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "456cfad45a178617f6886ec400c312f2fea59232" }
+frame-system = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "456cfad45a178617f6886ec400c312f2fea59232" }
+sp-core = { version = "7.0.0", git = "https://github.com/subspace/substrate", rev = "456cfad45a178617f6886ec400c312f2fea59232" }
+sp-std = { version = "5.0.0", git = "https://github.com/subspace/substrate", rev = "456cfad45a178617f6886ec400c312f2fea59232" }
+sp-io = { version = "7.0.0", git = "https://github.com/subspace/substrate", rev = "456cfad45a178617f6886ec400c312f2fea59232" }
+sp-runtime = { version = "7.0.0", git = "https://github.com/subspace/substrate", rev = "456cfad45a178617f6886ec400c312f2fea59232" }

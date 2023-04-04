@@ -18,11 +18,13 @@ use system_domain_runtime::Header;
 use tracing_futures::Instrument;
 
 use self::core::CoreDomainNode;
+use self::eth::EthDomainNode;
 use super::{BlockNumber, Hash};
 use crate::node::{Base, BaseBuilder};
 
 pub(crate) mod chain_spec;
 pub mod core;
+pub mod eth;
 
 /// System domain executor instance.
 pub(crate) struct ExecutorDispatch;
@@ -87,6 +89,10 @@ pub struct Config {
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "crate::utils::is_default")]
     pub core: Option<core::Config>,
+    /// The eth domain config
+    #[builder(setter(strip_option), default)]
+    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    pub eth: Option<eth::Config>,
 }
 
 crate::derive_base!(crate::node::Base => ConfigBuilder);
@@ -111,6 +117,7 @@ pub struct SystemDomainNode {
     #[derivative(Debug = "ignore")]
     _client: Weak<FullClient>,
     core: Option<CoreDomainNode>,
+    eth: Option<EthDomainNode>,
     rpc_handlers: crate::utils::Rpc,
 }
 
@@ -121,13 +128,8 @@ impl SystemDomainNode {
         chain_spec: ChainSpec,
         primary_new_full: &mut crate::node::NewFull,
     ) -> anyhow::Result<Self> {
-        let Config { base, relayer_id: maybe_relayer_id, core } = cfg;
-        let maybe_core_domain_spec = chain_spec
-            .extensions()
-            .get_any(std::any::TypeId::of::<core::ChainSpec>())
-            .downcast_ref()
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Core domain is not supported"));
+        let Config { base, relayer_id: maybe_relayer_id, core, eth } = cfg;
+        let extensions = chain_spec.extensions().clone();
         let service_config =
             base.configuration(directory.as_ref().join("system"), chain_spec).await;
 
@@ -187,7 +189,36 @@ impl SystemDomainNode {
             CoreDomainNode::new(
                 core,
                 directory.as_ref().join(format!("core-{core_domain_id}")),
-                maybe_core_domain_spec?,
+                extensions
+                    .get_any(std::any::TypeId::of::<Option<core::ChainSpec>>())
+                    .downcast_ref()
+                    .cloned()
+                    .flatten()
+                    .ok_or_else(|| anyhow::anyhow!("Core domain is not supported"))?,
+                primary_new_full,
+                &system_domain_node,
+                gossip_msg_sink.clone(),
+                &mut domain_tx_pool_sinks,
+            )
+            .instrument(span)
+            .await
+            .map(Some)?
+        } else {
+            None
+        };
+
+        let eth = if let Some(eth) = eth {
+            let span = tracing::info_span!("EthDomain");
+            let eth_domain_id = u32::from(DomainId::CORE_ETH_RELAY);
+            EthDomainNode::new(
+                eth,
+                directory.as_ref().join(format!("eth-{eth_domain_id}")),
+                extensions
+                    .get_any(std::any::TypeId::of::<Option<eth::ChainSpec>>())
+                    .downcast_ref()
+                    .cloned()
+                    .flatten()
+                    .ok_or_else(|| anyhow::anyhow!("Eth domain is not supported"))?,
                 primary_new_full,
                 &system_domain_node,
                 gossip_msg_sink.clone(),
@@ -221,6 +252,7 @@ impl SystemDomainNode {
         Ok(Self {
             _client: Arc::downgrade(&client),
             core,
+            eth,
             rpc_handlers: crate::utils::Rpc::new(&rpc_handlers),
         })
     }

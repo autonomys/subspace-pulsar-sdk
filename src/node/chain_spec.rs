@@ -53,7 +53,7 @@ pub type ChainSpec = SerializableChainSpec<
     GenesisConfig,
     ChainSpecExtensions<
         system_domain_runtime::GenesisConfig,
-        ChainSpecExtensions<core_payments_domain_runtime::GenesisConfig>,
+        super::domains::chain_spec::ChainSpecExtensions,
     >,
 >;
 
