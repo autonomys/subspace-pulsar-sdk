@@ -106,13 +106,13 @@ impl SystemDomainNode {
             base.configuration(directory.as_ref().join("system"), chain_spec).await;
 
         let system_domain_config = DomainConfiguration { service_config, maybe_relayer_id };
-        let imported_block_notification_stream = primary_new_full
-            .imported_block_notification_stream
+        let block_importing_notification_stream = primary_new_full
+            .block_importing_notification_stream
             .subscribe()
-            .then(|imported_block_notification| async move {
+            .then(|block_importing_notification| async move {
                 (
-                    imported_block_notification.block_number,
-                    imported_block_notification.block_import_acknowledgement_sender,
+                    block_importing_notification.block_number,
+                    block_importing_notification.acknowledgement_sender,
                 )
             });
 
@@ -135,8 +135,8 @@ impl SystemDomainNode {
 
         let executor_streams = domain_client_executor::ExecutorStreams {
             primary_block_import_throttling_buffer_size: block_import_throttling_buffer_size,
-            subspace_imported_block_notification_stream: imported_block_notification_stream,
-            client_imported_block_notification_stream: primary_new_full
+            block_importing_notification_stream,
+            imported_block_notification_stream: primary_new_full
                 .client
                 .every_import_notification_stream(),
             new_slot_notification_stream,

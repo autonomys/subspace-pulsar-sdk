@@ -202,7 +202,7 @@ impl Config {
             reward_signing_notification_stream: _,
             archived_segment_notification_stream: _,
             transaction_pool: _,
-            imported_block_notification_stream: _,
+            block_importing_notification_stream: _,
             new_slot_notification_stream: _,
         } = full_client;
 
