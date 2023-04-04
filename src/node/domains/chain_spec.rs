@@ -25,6 +25,7 @@ type DomainConfig = sp_domains::DomainConfig<Hash, Balance, Weight>;
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ChainSpecExtensions {
     pub core: Option<SerializableChainSpec<core_payments_domain_runtime::GenesisConfig>>,
+    pub eth: Option<SerializableChainSpec<core_eth_relay_runtime::GenesisConfig>>,
 }
 
 /// Chain spec type for the system domain
@@ -78,7 +79,10 @@ pub fn development_config() -> ChainSpec {
         None,
         None,
         Some(chain_spec_properties()),
-        ChainSpecExtensions { core: Some(super::core::chain_spec::development_config()) },
+        ChainSpecExtensions {
+            core: Some(super::core::chain_spec::development_config()),
+            eth: Some(super::eth::chain_spec::development_config()),
+        },
     )
 }
 
@@ -146,7 +150,10 @@ pub fn local_testnet_config() -> ChainSpec {
         // Properties
         Some(chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions { core: Some(super::core::chain_spec::local_testnet_config()) },
+        ChainSpecExtensions {
+            core: Some(super::core::chain_spec::local_testnet_config()),
+            eth: Some(super::eth::chain_spec::local_testnet_config()),
+        },
     )
 }
 
@@ -213,7 +220,10 @@ pub fn gemini_3d_config() -> ChainSpec {
         // Properties
         Some(chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions { core: Some(super::core::chain_spec::gemini_3d_config()) },
+        ChainSpecExtensions {
+            core: Some(super::core::chain_spec::gemini_3d_config()),
+            eth: Some(super::eth::chain_spec::gemini_3d_config()),
+        },
     )
 }
 
@@ -283,7 +293,10 @@ pub fn devnet_config() -> ChainSpec {
         // Properties
         Some(chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions { core: Some(super::core::chain_spec::devnet_config()) },
+        ChainSpecExtensions {
+            core: Some(super::core::chain_spec::devnet_config()),
+            eth: Some(super::eth::chain_spec::devnet_config()),
+        },
     )
 }
 
