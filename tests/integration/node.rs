@@ -209,6 +209,7 @@ async fn node_events() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
 async fn fetch_block_author() {
     let dir = TempDir::new().unwrap();
     let node = Node::dev()
