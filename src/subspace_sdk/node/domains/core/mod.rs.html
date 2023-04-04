@@ -306,13 +306,13 @@
 
         <span class="comment">// TODO: proper value
         </span><span class="kw">let </span>block_import_throttling_buffer_size = <span class="number">10</span>;
-        <span class="kw">let </span>imported_block_notification_stream = primary_chain_node
-            .imported_block_notification_stream
+        <span class="kw">let </span>block_importing_notification_stream = primary_chain_node
+            .block_importing_notification_stream
             .subscribe()
-            .then(|imported_block_notification| <span class="kw">async move </span>{
+            .then(|block_importing_notification| <span class="kw">async move </span>{
                 (
-                    imported_block_notification.block_number,
-                    imported_block_notification.block_import_acknowledgement_sender,
+                    block_importing_notification.block_number,
+                    block_importing_notification.acknowledgement_sender,
                 )
             });
         <span class="kw">let </span>new_slot_notification_stream = primary_chain_node
@@ -328,8 +328,8 @@
 
         <span class="kw">let </span>executor_streams = domain_client_executor::ExecutorStreams {
             primary_block_import_throttling_buffer_size: block_import_throttling_buffer_size,
-            subspace_imported_block_notification_stream: imported_block_notification_stream,
-            client_imported_block_notification_stream: primary_chain_node
+            block_importing_notification_stream,
+            imported_block_notification_stream: primary_chain_node
                 .client
                 .every_import_notification_stream(),
             new_slot_notification_stream,
