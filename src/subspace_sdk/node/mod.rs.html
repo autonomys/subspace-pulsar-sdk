@@ -701,6 +701,32 @@
 <a href="#701" id="701">701</a>
 <a href="#702" id="702">702</a>
 <a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
@@ -717,7 +743,9 @@
 <span class="kw">use </span>sc_network_common::config::MultiaddrWithPeerId;
 <span class="kw">use </span>sc_rpc_api::state::StateApiClient;
 <span class="kw">use </span>sp_consensus::SyncOracle;
+<span class="kw">use </span>sp_consensus_subspace::digests::PreDigest;
 <span class="kw">use </span>sp_core::H256;
+<span class="kw">use </span>sp_runtime::DigestItem;
 <span class="kw">use </span>subspace_core_primitives::{PieceIndexHash, SegmentIndex};
 <span class="kw">use </span>subspace_farmer::node_client::NodeClient;
 <span class="kw">use </span>subspace_farmer_components::FarmerProtocolInfo;
@@ -1065,13 +1093,21 @@
     </span><span class="kw">pub </span>state_root: Hash,
     <span class="doccomment">/// Extrinsics root
     </span><span class="kw">pub </span>extrinsics_root: Hash,
+    <span class="doccomment">/// Block pre digest
+    </span><span class="kw">pub </span>pre_digest: <span class="prelude-ty">Option</span>&lt;PreDigest&lt;<span class="kw">crate</span>::PublicKey, <span class="kw">crate</span>::PublicKey&gt;&gt;,
 }
 
 <span class="kw">impl </span>From&lt;Header&gt; <span class="kw">for </span>BlockNotification {
     <span class="kw">fn </span>from(header: Header) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>hash = header.hash();
-        <span class="kw">let </span>Header { number, parent_hash, state_root, extrinsics_root, digest: <span class="kw">_ </span>} = header;
-        <span class="self">Self </span>{ hash, number, parent_hash, state_root, extrinsics_root }
+        <span class="kw">let </span>Header { number, parent_hash, state_root, extrinsics_root, digest } = header;
+        <span class="kw">let </span>pre_digest = digest
+            .log(|it| <span class="kw">if let </span>DigestItem::PreRuntime(<span class="kw">_</span>, digest) = it { <span class="prelude-val">Some</span>(digest) } <span class="kw">else </span>{ <span class="prelude-val">None </span>})
+            .map(|pre_digest| {
+                parity_scale_codec::Decode::decode(<span class="kw-2">&amp;mut </span>pre_digest.as_ref())
+                    .expect(<span class="string">&quot;Pre digest is always scale encoded&quot;</span>)
+            });
+        <span class="self">Self </span>{ hash, number, parent_hash, state_root, extrinsics_root, pre_digest }
     }
 }
 
@@ -1344,7 +1380,23 @@
     </span><span class="kw">pub async fn </span>subscribe_new_blocks(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; anyhow::Result&lt;<span class="kw">impl </span>Stream&lt;Item = BlockNotification&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>&gt; {
-        <span class="self">self</span>.rpc_handle.subscribe_new_blocks().<span class="kw">await</span>.context(<span class="string">&quot;Failed to subscribe to new blocks&quot;</span>)
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.rpc_handle
+            .subscribe_new_blocks::&lt;subspace_runtime::Runtime&gt;()
+            .<span class="kw">await
+            </span>.context(<span class="string">&quot;Failed to subscribe to new blocks&quot;</span>)<span class="question-mark">?
+            </span>.map(Into::into))
+    }
+
+    <span class="doccomment">/// Get events at some block or at tip of the chain
+    </span><span class="kw">pub async fn </span>get_events(<span class="kw-2">&amp;</span><span class="self">self</span>, block: <span class="prelude-ty">Option</span>&lt;Hash&gt;) -&gt; anyhow::Result&lt;Vec&lt;Event&gt;&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.rpc_handle
+            .get_events::&lt;subspace_runtime::Runtime&gt;(block)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.into_iter()
+            .map(|event_record| event_record.event)
+            .collect())
     }
 }
 

@@ -181,6 +181,13 @@
 <a href="#181" id="181">181</a>
 <a href="#182" id="182">182</a>
 <a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Core payments domain module
 
 </span><span class="kw">use </span>std::path::Path;
@@ -196,7 +203,8 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>sp_domains::DomainId;
 
-<span class="kw">use </span><span class="kw">crate</span>::node::{Base, BaseBuilder, BlockNotification};
+<span class="kw">use </span><span class="kw">super</span>::BlockNotification;
+<span class="kw">use </span><span class="kw">crate</span>::node::{Base, BaseBuilder};
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>chain_spec;
 
@@ -314,6 +322,7 @@
                 (
                     slot_notification.new_slot_info.slot,
                     slot_notification.new_slot_info.global_challenge,
+                    <span class="prelude-val">None</span>,
                 )
             });
 
@@ -361,7 +370,12 @@
     </span><span class="kw">pub async fn </span>subscribe_new_blocks(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; anyhow::Result&lt;<span class="kw">impl </span>Stream&lt;Item = BlockNotification&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>&gt; {
-        <span class="self">self</span>.rpc_handlers.subscribe_new_blocks().<span class="kw">await</span>.context(<span class="string">&quot;Failed to subscribe to new blocks&quot;</span>)
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.rpc_handlers
+            .subscribe_new_blocks::&lt;core_payments_domain_runtime::Runtime&gt;()
+            .<span class="kw">await
+            </span>.context(<span class="string">&quot;Failed to subscribe to new blocks&quot;</span>)<span class="question-mark">?
+            </span>.map(Into::into))
     }
 }
 </code></pre></div>

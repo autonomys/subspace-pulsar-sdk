@@ -226,9 +226,32 @@
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
 
+<span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>jsonrpsee_core::client::{
     BatchResponse, ClientT, Subscription, SubscriptionClientT, SubscriptionKind,
@@ -238,8 +261,6 @@
 <span class="kw">use </span>jsonrpsee_core::traits::ToRpcParams;
 <span class="kw">use </span>jsonrpsee_core::Error;
 <span class="kw">use </span>serde::de::DeserializeOwned;
-<span class="kw">use </span>sp_runtime::traits::{Block <span class="kw">as </span>BlockT, Header <span class="kw">as </span>HeaderT};
-<span class="kw">use </span>subspace_runtime_primitives::opaque::Block;
 
 <span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Rpc {
@@ -252,23 +273,46 @@
         <span class="self">Self </span>{ inner }
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>subscribe_new_blocks&lt;<span class="lifetime">&#39;a</span>: <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;b</span>&gt;(
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>subscribe_new_blocks&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, T&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;
-        <span class="kw">impl </span>Stream&lt;Item = <span class="kw">crate</span>::node::BlockNotification&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>,
-        Error,
-    &gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>Stream&lt;Item = T::Header&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>, Error&gt;
+    <span class="kw">where
+        </span>T: frame_system::Config + sp_runtime::traits::GetRuntimeBlockType,
+        T::RuntimeBlock: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + <span class="lifetime">&#39;static</span>,
+        T::Header: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + <span class="lifetime">&#39;static</span>,
+        <span class="lifetime">&#39;a</span>: <span class="lifetime">&#39;b</span>,
+    {
         <span class="kw">let </span>stream = sc_rpc::chain::ChainApiClient::&lt;
-            &lt;&lt;Block <span class="kw">as </span>BlockT&gt;::Header <span class="kw">as </span>HeaderT&gt;::Number,
-            &lt;Block <span class="kw">as </span>BlockT&gt;::Hash,
-            &lt;Block <span class="kw">as </span>BlockT&gt;::Header,
-            sp_runtime::generic::SignedBlock&lt;Block&gt;,
+            T::BlockNumber,
+            T::Hash,
+            T::Header,
+            sp_runtime::generic::SignedBlock&lt;T::RuntimeBlock&gt;,
         &gt;::subscribe_new_heads(<span class="self">self</span>)
         .<span class="kw">await</span><span class="question-mark">?
-        </span>.filter_map(|result| futures::future::ready(result.ok()))
-        .map(Into::into);
+        </span>.filter_map(|result| futures::future::ready(result.ok()));
 
         <span class="prelude-val">Ok</span>(stream)
+    }
+
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>get_events&lt;T&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        block: <span class="prelude-ty">Option</span>&lt;T::Hash&gt;,
+    ) -&gt; anyhow::Result&lt;Vec&lt;frame_system::EventRecord&lt;T::RuntimeEvent, T::Hash&gt;&gt;&gt;
+    <span class="kw">where
+        </span>T: frame_system::Config,
+        T::Hash: serde::ser::Serialize + serde::de::DeserializeOwned + Send + Sync + <span class="lifetime">&#39;static</span>,
+        Vec&lt;frame_system::EventRecord&lt;T::RuntimeEvent, T::Hash&gt;&gt;: parity_scale_codec::Decode,
+    {
+        <span class="kw">match </span><span class="self">self
+            </span>.get_storage::&lt;T::Hash&gt;(<span class="kw">crate</span>::node::StorageKey::events(), block)
+            .<span class="kw">await
+            </span>.context(<span class="string">&quot;Failed to get events from storage&quot;</span>)<span class="question-mark">?
+        </span>{
+            <span class="prelude-val">Some</span>(sp_storage::StorageData(events)) =&gt;
+                parity_scale_codec::DecodeAll::decode_all(<span class="kw-2">&amp;mut </span>events.as_ref())
+                    .context(<span class="string">&quot;Failed to decode events&quot;</span>),
+            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[]),
+        }
     }
 }
 

@@ -193,6 +193,21 @@
 <a href="#193" id="193">193</a>
 <a href="#194" id="194">194</a>
 <a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Subspace SDK for easy running of both Subspace node and farmer
 
 </span><span class="attr">#![warn(missing_docs, clippy::dbg_macro, clippy::unwrap_used, clippy::disallowed_types)]
@@ -208,6 +223,7 @@
 <span class="kw">use </span>derive_more::{Deref, DerefMut};
 <span class="kw">pub use </span>farmer::{Builder <span class="kw">as </span>FarmerBuilder, Farmer, Info <span class="kw">as </span>NodeInfo, Plot, PlotDescription};
 <span class="kw">pub use </span>node::{chain_spec, Builder <span class="kw">as </span>NodeBuilder, Info <span class="kw">as </span>FarmerInfo, Node};
+<span class="kw">use </span>parity_scale_codec::{Decode, Encode};
 <span class="kw">pub use </span>parse_ss58::Ss58ParsingError;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>subspace_core_primitives::PUBLIC_KEY_LENGTH;
@@ -244,6 +260,8 @@
 </span><span class="attr">#[derive(
     Debug,
     Default,
+    Decode,
+    Encode,
     Copy,
     Clone,
     PartialEq,
@@ -269,6 +287,18 @@
 <span class="kw">impl </span>From&lt;[u8; PUBLIC_KEY_LENGTH]&gt; <span class="kw">for </span>PublicKey {
     <span class="kw">fn </span>from(key: [u8; PUBLIC_KEY_LENGTH]) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new(key)
+    }
+}
+
+<span class="kw">impl </span>From&lt;sp_core::crypto::AccountId32&gt; <span class="kw">for </span>PublicKey {
+    <span class="kw">fn </span>from(account_id: sp_core::crypto::AccountId32) -&gt; <span class="self">Self </span>{
+        From::&lt;[u8; PUBLIC_KEY_LENGTH]&gt;::from(<span class="kw-2">*</span>account_id.as_ref())
+    }
+}
+
+<span class="kw">impl </span>From&lt;PublicKey&gt; <span class="kw">for </span>sp_core::crypto::AccountId32 {
+    <span class="kw">fn </span>from(account_id: PublicKey) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new(<span class="kw-2">*</span>account_id.<span class="number">0</span>)
     }
 }
 
