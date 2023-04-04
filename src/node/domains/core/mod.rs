@@ -13,7 +13,8 @@ use sc_client_api::BlockchainEvents;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
 
-use crate::node::{Base, BaseBuilder, BlockNotification};
+use super::BlockNotification;
+use crate::node::{Base, BaseBuilder};
 
 pub(crate) mod chain_spec;
 
@@ -179,6 +180,11 @@ impl CoreDomainNode {
     pub async fn subscribe_new_blocks(
         &self,
     ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
-        self.rpc_handlers.subscribe_new_blocks().await.context("Failed to subscribe to new blocks")
+        Ok(self
+            .rpc_handlers
+            .subscribe_new_blocks::<core_payments_domain_runtime::Runtime>()
+            .await
+            .context("Failed to subscribe to new blocks")?
+            .map(Into::into))
     }
 }
