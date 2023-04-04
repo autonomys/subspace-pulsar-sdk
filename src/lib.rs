@@ -13,6 +13,7 @@ pub(crate) mod utils;
 use derive_more::{Deref, DerefMut};
 pub use farmer::{Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotDescription};
 pub use node::{chain_spec, Builder as NodeBuilder, Info as FarmerInfo, Node};
+use parity_scale_codec::{Decode, Encode};
 pub use parse_ss58::Ss58ParsingError;
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::PUBLIC_KEY_LENGTH;
@@ -49,6 +50,8 @@ macro_rules! generate_builder {
 #[derive(
     Debug,
     Default,
+    Decode,
+    Encode,
     Copy,
     Clone,
     PartialEq,
@@ -74,6 +77,18 @@ impl PublicKey {
 impl From<[u8; PUBLIC_KEY_LENGTH]> for PublicKey {
     fn from(key: [u8; PUBLIC_KEY_LENGTH]) -> Self {
         Self::new(key)
+    }
+}
+
+impl From<sp_core::crypto::AccountId32> for PublicKey {
+    fn from(account_id: sp_core::crypto::AccountId32) -> Self {
+        From::<[u8; PUBLIC_KEY_LENGTH]>::from(*account_id.as_ref())
+    }
+}
+
+impl From<PublicKey> for sp_core::crypto::AccountId32 {
+    fn from(account_id: PublicKey) -> Self {
+        Self::new(*account_id.0)
     }
 }
 
