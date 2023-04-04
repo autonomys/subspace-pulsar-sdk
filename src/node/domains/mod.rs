@@ -148,7 +148,7 @@ impl SystemDomainNode {
         let system_domain_node = domain_service::new_full_system(
             system_domain_config,
             primary_new_full.client.clone(),
-            primary_new_full.network.clone(),
+            primary_new_full.sync_service.clone(),
             &primary_new_full.select_chain,
             executor_streams,
             gossip_msg_sink.clone(),
@@ -210,7 +210,8 @@ impl SystemDomainNode {
 
         let cross_domain_message_gossip_worker =
             cross_domain_message_gossip::GossipWorker::<Block>::new(
-                primary_new_full.network.clone(),
+                primary_new_full.network_service.clone(),
+                primary_new_full.sync_service.clone(),
                 domain_tx_pool_sinks,
             );
 

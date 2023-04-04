@@ -9,7 +9,7 @@ use derive_more::{Deref, DerefMut, Display, From};
 use either::*;
 use futures::prelude::*;
 use libp2p_core::Multiaddr;
-use sc_network_common::config::MultiaddrWithPeerId;
+use sc_service::config::MultiaddrWithPeerId;
 use serde::{Deserialize, Serialize};
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::piece_caching::PieceMemoryCache;

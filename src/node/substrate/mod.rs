@@ -7,8 +7,9 @@ use libp2p_core::Multiaddr;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
 use sc_network::ProtocolName;
-use sc_network_common::config::{MultiaddrWithPeerId, NonDefaultSetConfig, TransportConfig};
-use sc_service::config::{KeystoreConfig, NetworkConfiguration};
+use sc_service::config::{
+    KeystoreConfig, MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, TransportConfig,
+};
 use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use serde::{Deserialize, Serialize};
 pub use types::*;
@@ -225,7 +226,7 @@ impl Base {
         network.default_peers_set.out_peers = 50;
         // Full + Light clients
         network.default_peers_set.in_peers = 25 + 100;
-        let (keystore_remote, keystore) = (None, KeystoreConfig::InMemory);
+        let keystore = KeystoreConfig::InMemory;
 
         // HACK: Tricky way to add extra endpoints as we can't push into telemetry
         // endpoints
@@ -255,7 +256,6 @@ impl Base {
             tokio_handle: tokio::runtime::Handle::current(),
             transaction_pool: Default::default(),
             network,
-            keystore_remote,
             keystore,
             database: DatabaseSource::ParityDb { path: config_dir.join("paritydb").join("full") },
             trie_cache_maximum_size: Some(67_108_864),
