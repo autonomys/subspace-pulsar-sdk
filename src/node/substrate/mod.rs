@@ -12,8 +12,11 @@ use sc_service::config::{
 };
 use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use serde::{Deserialize, Serialize};
+pub(crate) use storage::StorageKey;
+pub use subspace_runtime::RuntimeEvent as Event;
 pub use types::*;
 
+mod storage;
 mod types;
 
 #[doc(hidden)]

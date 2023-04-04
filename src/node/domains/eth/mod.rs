@@ -178,6 +178,11 @@ impl EthDomainNode {
     pub async fn subscribe_new_blocks(
         &self,
     ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
-        self.rpc_handlers.subscribe_new_blocks().await.context("Failed to subscribe to new blocks")
+        Ok(self
+            .rpc_handlers
+            .subscribe_new_blocks::<core_eth_relay_runtime::Runtime>()
+            .await
+            .context("Failed to subscribe to new blocks")?
+            .map(Into::into))
     }
 }

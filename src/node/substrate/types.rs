@@ -3,6 +3,12 @@ use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
 use serde::{Deserialize, Serialize};
 
+/// Events from subspace pallet
+pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
+
+/// Events from subspace pallet
+pub type RewardsEvent = pallet_rewards::Event<subspace_runtime::Runtime>;
+
 /// Block pruning settings.
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, Eq, PartialOrd, Ord)]
 pub enum BlocksPruning {

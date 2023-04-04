@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
+use anyhow::Context;
 use futures::prelude::*;
 use jsonrpsee_core::client::{
     BatchResponse, ClientT, Subscription, SubscriptionClientT, SubscriptionKind,
@@ -10,8 +11,6 @@ use jsonrpsee_core::server::rpc_module::RpcModule;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::Error;
 use serde::de::DeserializeOwned;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use subspace_runtime_primitives::opaque::Block;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Rpc {
@@ -24,23 +23,46 @@ impl Rpc {
         Self { inner }
     }
 
-    pub(crate) async fn subscribe_new_blocks<'a: 'b, 'b>(
+    pub(crate) async fn subscribe_new_blocks<'a, 'b, T>(
         &'a self,
-    ) -> Result<
-        impl Stream<Item = crate::node::BlockNotification> + Send + Sync + Unpin + 'static,
-        Error,
-    > {
+    ) -> Result<impl Stream<Item = T::Header> + Send + Sync + Unpin + 'static, Error>
+    where
+        T: frame_system::Config + sp_runtime::traits::GetRuntimeBlockType,
+        T::RuntimeBlock: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
+        T::Header: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
+        'a: 'b,
+    {
         let stream = sc_rpc::chain::ChainApiClient::<
-            <<Block as BlockT>::Header as HeaderT>::Number,
-            <Block as BlockT>::Hash,
-            <Block as BlockT>::Header,
-            sp_runtime::generic::SignedBlock<Block>,
+            T::BlockNumber,
+            T::Hash,
+            T::Header,
+            sp_runtime::generic::SignedBlock<T::RuntimeBlock>,
         >::subscribe_new_heads(self)
         .await?
-        .filter_map(|result| futures::future::ready(result.ok()))
-        .map(Into::into);
+        .filter_map(|result| futures::future::ready(result.ok()));
 
         Ok(stream)
+    }
+
+    pub(crate) async fn get_events<T>(
+        &self,
+        block: Option<T::Hash>,
+    ) -> anyhow::Result<Vec<frame_system::EventRecord<T::RuntimeEvent, T::Hash>>>
+    where
+        T: frame_system::Config,
+        T::Hash: serde::ser::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
+        Vec<frame_system::EventRecord<T::RuntimeEvent, T::Hash>>: parity_scale_codec::Decode,
+    {
+        match self
+            .get_storage::<T::Hash>(crate::node::StorageKey::events(), block)
+            .await
+            .context("Failed to get events from storage")?
+        {
+            Some(sp_storage::StorageData(events)) =>
+                parity_scale_codec::DecodeAll::decode_all(&mut events.as_ref())
+                    .context("Failed to decode events"),
+            None => Ok(vec![]),
+        }
     }
 }
 
