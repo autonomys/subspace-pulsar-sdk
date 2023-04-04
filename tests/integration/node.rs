@@ -14,7 +14,6 @@ async fn sync_block_inner() {
         .network(
             NetworkBuilder::dev().listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()]),
         )
-        .role(Role::Authority)
         .build(dir.path(), chain.clone())
         .await
         .unwrap();
@@ -167,4 +166,44 @@ async fn node_restart() {
             .await
             .unwrap();
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
+async fn node_events() {
+    crate::common::setup();
+
+    let dir = TempDir::new().unwrap();
+    let node = Node::dev()
+        .role(Role::Authority)
+        .build(dir.path().join("node"), chain_spec::dev_config())
+        .await
+        .unwrap();
+    let farmer = Farmer::builder()
+        .build(
+            Default::default(),
+            &node,
+            &[PlotDescription::minimal(dir.path().join("plot"))],
+            CacheDescription::minimal(dir.path().join("cache")),
+        )
+        .await
+        .unwrap();
+
+    let events = node
+        .subscribe_new_blocks()
+        .await
+        .unwrap()
+        // Skip genesis
+        .skip(1)
+        .then(|_| node.get_events(None).boxed())
+        .take(1)
+        .next()
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(!events.is_empty());
+
+    farmer.close().await.unwrap();
+    node.close().await.unwrap();
 }

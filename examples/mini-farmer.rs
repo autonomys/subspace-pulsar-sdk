@@ -5,7 +5,7 @@ use bytesize::ByteSize;
 use clap::{Parser, Subcommand};
 use futures::prelude::*;
 use subspace_sdk::farmer::CacheDescription;
-use subspace_sdk::node::{self, Node};
+use subspace_sdk::node::{self, Event, Node, RewardsEvent, SubspaceEvent};
 use subspace_sdk::{Farmer, PlotDescription, PublicKey};
 use tracing_subscriber::prelude::*;
 
@@ -88,11 +88,11 @@ async fn main() -> anyhow::Result<()> {
     tokio::select! {
         result = node.sync() => result?,
         _ = tokio::signal::ctrl_c() => {
-            tracing::info!("Exitting...");
+            tracing::error!("Exitting...");
             return node.close().await.context("Failed to close node")
         }
     }
-    tracing::info!("Node was synced!");
+    tracing::error!("Node was synced!");
 
     let farmer = Farmer::builder()
         .build(
@@ -103,27 +103,55 @@ async fn main() -> anyhow::Result<()> {
             CacheDescription::new(base_path.join("cache"), cache_size).unwrap(),
         )
         .await?;
-    let plot = farmer.iter_plots().await.next().unwrap();
 
-    let subscriptions = async move {
-        plot.subscribe_initial_plotting_progress()
-            .await
-            .for_each(|progress| async move {
-                tracing::info!(?progress, "Plotting!");
-            })
-            .await;
-        plot.subscribe_new_solutions()
-            .await
-            .for_each(|_| async move {
-                tracing::info!("Farmed another solution!");
-            })
-            .await;
+    let subscriptions = {
+        let plot = farmer.iter_plots().await.next().unwrap();
+
+        let node = &node;
+
+        async move {
+            plot.subscribe_initial_plotting_progress()
+                .await
+                .for_each(|progress| async move {
+                    tracing::error!(?progress, "Plotting!");
+                })
+                .await;
+            tracing::error!("Finished initial plotting!");
+
+            node.subscribe_new_blocks()
+                .await?
+                .then(|block| async move {
+                    node.get_events(Some(block.hash))
+                        .await
+                        .expect("Fetching events should never fail")
+                })
+                .flat_map(futures::stream::iter)
+                .for_each(|ev| {
+                    match ev {
+                        Event::Rewards(
+                            RewardsEvent::VoteReward { reward, voter: author }
+                            | RewardsEvent::BlockReward { reward, block_author: author },
+                        ) if author == reward_address.into() => tracing::error!(%reward, "Farmed!"),
+                        Event::Subspace(SubspaceEvent::FarmerVote {
+                            reward_address: author,
+                            height: block_number,
+                            ..
+                        }) if author == reward_address.into() =>
+                            tracing::error!(block_number, "Vote counted for block"),
+                        _ => (),
+                    };
+                    futures::future::ready(())
+                })
+                .await;
+
+            anyhow::Ok(())
+        }
     };
 
     tokio::select! {
         _ = subscriptions => {},
         _ = tokio::signal::ctrl_c() => {
-            tracing::info!("Exitting...");
+            tracing::error!("Exitting...");
         }
     }
 

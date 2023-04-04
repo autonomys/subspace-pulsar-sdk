@@ -643,6 +643,17 @@ impl Node {
     ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
         self.rpc_handle.subscribe_new_blocks().await.context("Failed to subscribe to new blocks")
     }
+
+    /// Get events at some block or at tip of the chain
+    pub async fn get_events(&self, block: Option<Hash>) -> anyhow::Result<Vec<Event>> {
+        Ok(self
+            .rpc_handle
+            .get_events::<subspace_runtime::Runtime>(block)
+            .await?
+            .into_iter()
+            .map(|event_record| event_record.event)
+            .collect())
+    }
 }
 
 const ROOT_BLOCK_NUMBER_LIMIT: u64 = 100;
