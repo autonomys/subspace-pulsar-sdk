@@ -10413,6 +10413,7 @@ dependencies = [
  "frame-system-rpc-runtime-api",
  "futures",
  "hex-literal 0.4.0",
+ "jemallocator",
  "jsonrpsee-core",
  "libp2p-core 0.39.1",
  "lru 0.10.0",
