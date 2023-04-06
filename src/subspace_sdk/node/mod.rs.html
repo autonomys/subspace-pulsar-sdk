@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/node/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c4dbdcde0fbd8430.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-db279b6232be9c13.css"><link rel="stylesheet" disabled href="../../../static.files/dark-cf923f49f397b216.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-be46fdc453a55015.css"><script src="../../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../../static.files/source-script-1b95b7cca98b26e5.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-98a684e84ae5b08b.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../subspace_sdk/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/node/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-fbd14db5c88ed452.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="subspace_sdk" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (0599b6b93 2023-04-01)" data-search-js="search-bc5a112813b5d712.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" data-theme-light-css="light-db279b6232be9c13.css" data-theme-dark-css="dark-cf923f49f397b216.css" data-theme-ayu-css="ayu-be46fdc453a55015.css" ></div><script src="../../../static.files/storage-d4a1a279bad1a0c0.js"></script><script defer src="../../../static.files/source-script-1b95b7cca98b26e5.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-8e6affb8c73a5ff1.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-db279b6232be9c13.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-cf923f49f397b216.css"><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../subspace_sdk/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -727,6 +727,13 @@
 <a href="#727" id="727">727</a>
 <a href="#728" id="728">728</a>
 <a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
@@ -739,9 +746,9 @@
 <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
 <span class="kw">use </span>sc_consensus_subspace_rpc::SegmentHeaderProvider;
 <span class="kw">use </span>sc_network::network_state::NetworkState;
-<span class="kw">use </span>sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider, SyncState};
-<span class="kw">use </span>sc_network_common::config::MultiaddrWithPeerId;
+<span class="kw">use </span>sc_network::{NetworkService, NetworkStateInfo, SyncState};
 <span class="kw">use </span>sc_rpc_api::state::StateApiClient;
+<span class="kw">use </span>sc_service::config::MultiaddrWithPeerId;
 <span class="kw">use </span>sp_consensus::SyncOracle;
 <span class="kw">use </span>sp_consensus_subspace::digests::PreDigest;
 <span class="kw">use </span>sp_core::H256;
@@ -926,9 +933,10 @@
             client,
             rpc_handlers,
             network_starter,
-            network,
-            backend,
+            sync_service,
+            network_service,
 
+            backend: <span class="kw">_</span>,
             select_chain: <span class="kw">_</span>,
             reward_signing_notification_stream: <span class="kw">_</span>,
             archived_segment_notification_stream: <span class="kw">_</span>,
@@ -958,23 +966,28 @@
                 opt_stop_sender.map(|stop_sender| stop_sender.send(()));
             })<span class="question-mark">?</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>drop_collection = DropCollection::new();
-        drop_collection.defer(<span class="kw">move </span>|| {
-            <span class="kw">const </span>BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(<span class="number">100</span>);
+        <span class="kw">let </span>drop_collection = DropCollection::new();
 
-            <span class="comment">// Busy wait till backend exits
-            // TODO: is it the only wait to check that substrate node exited?
-            </span><span class="kw">while </span>Arc::strong_count(<span class="kw-2">&amp;</span>backend) != <span class="number">1 </span>{
-                std::thread::sleep(BUSY_WAIT_INTERVAL);
-            }
-        });
+        <span class="comment">// Disable propper exit for now. Because RPC server looses waker and can&#39;t exit
+        // in background.
+        //
+        // drop_collection.defer(move || {
+        //     const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
+        //
+        //     // Busy wait till backend exits
+        //     // TODO: is it the only wait to check that substrate node exited?
+        //     while Arc::strong_count(&amp;backend) != 1 {
+        //         std::thread::sleep(BUSY_WAIT_INTERVAL);
+        //     }
+        // });
 
-        <span class="macro">tracing::debug!</span>(<span class="string">&quot;Started node&quot;</span>);
+        </span><span class="macro">tracing::debug!</span>(<span class="string">&quot;Started node&quot;</span>);
 
         <span class="prelude-val">Ok</span>(Node {
             client,
             system_domain,
-            network,
+            network_service,
+            sync_service,
             name,
             rpc_handle,
             dsn,
@@ -1030,7 +1043,10 @@
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
     </span>client: Arc&lt;FullClient&gt;,
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
-    </span>network: Arc&lt;NetworkService&lt;RuntimeBlock, Hash&gt;&gt;,
+    </span>sync_service: Arc&lt;sc_network_sync::service::chain_sync::SyncingService&lt;RuntimeBlock&gt;&gt;,
+    <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
+    </span>network_service: Arc&lt;NetworkService&lt;RuntimeBlock, Hash&gt;&gt;,
+
     <span class="kw">pub</span>(<span class="kw">crate</span>) rpc_handle: <span class="kw">crate</span>::utils::Rpc,
     <span class="kw">pub</span>(<span class="kw">crate</span>) stop_sender: mpsc::Sender&lt;oneshot::Sender&lt;()&gt;&gt;,
     <span class="kw">pub</span>(<span class="kw">crate</span>) name: String,
@@ -1183,8 +1199,8 @@
 
     <span class="doccomment">/// Get listening addresses of the node
     </span><span class="kw">pub async fn </span>listen_addresses(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Vec&lt;MultiaddrWithPeerId&gt;&gt; {
-        <span class="kw">let </span>peer_id = <span class="self">self</span>.network.local_peer_id();
-        <span class="self">self</span>.network
+        <span class="kw">let </span>peer_id = <span class="self">self</span>.network_service.local_peer_id();
+        <span class="self">self</span>.network_service
             .network_state()
             .<span class="kw">await
             </span>.map(|state| {
@@ -1231,7 +1247,7 @@
             .build();
 
         backoff::future::retry(check_offline_backoff, || {
-            futures::future::ready(<span class="kw">if </span><span class="self">self</span>.network.is_offline() {
+            futures::future::ready(<span class="kw">if </span><span class="self">self</span>.sync_service.is_offline() {
                 <span class="prelude-val">Err</span>(backoff::Error::transient(()))
             } <span class="kw">else </span>{
                 <span class="prelude-val">Ok</span>(())
@@ -1244,10 +1260,10 @@
         <span class="kw">let </span>inner = tokio_stream::wrappers::ReceiverStream::new(receiver);
 
         <span class="kw">let </span>result = backoff::future::retry(check_synced_backoff.clone(), || {
-            <span class="self">self</span>.network.status().map(|result| <span class="kw">match </span>result.map(|status| status.sync_state) {
+            <span class="self">self</span>.sync_service.status().map(|result| <span class="kw">match </span>result.map(|status| status.state) {
                 <span class="prelude-val">Ok</span>(SyncState::Importing { target }) =&gt; <span class="prelude-val">Ok</span>((target, SyncStatus::Importing)),
                 <span class="prelude-val">Ok</span>(SyncState::Downloading { target }) =&gt; <span class="prelude-val">Ok</span>((target, SyncStatus::Downloading)),
-                <span class="kw">_ if </span><span class="self">self</span>.network.is_offline() =&gt;
+                <span class="kw">_ if </span><span class="self">self</span>.sync_service.is_offline() =&gt;
                     <span class="prelude-val">Err</span>(backoff::Error::transient(<span class="prelude-val">Some</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Node went offline&quot;</span>)))),
                 <span class="prelude-val">Err</span>(()) =&gt; <span class="prelude-val">Err</span>(backoff::Error::transient(<span class="prelude-val">Some</span>(<span class="macro">anyhow::anyhow!</span>(
                     <span class="string">&quot;Failed to fetch networking status&quot;
@@ -1271,24 +1287,22 @@
             </span>.expect(<span class="string">&quot;We are holding receiver, so it will never panic&quot;</span>);
 
         tokio::spawn({
-            <span class="kw">let </span>network = Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.network);
+            <span class="kw">let </span>sync = Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.sync_service);
             <span class="kw">let </span>client = Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.client);
             <span class="kw">async move </span>{
                 <span class="kw">loop </span>{
                     tokio::time::sleep(CHECK_SYNCED_EVERY).<span class="kw">await</span>;
 
                     <span class="kw">let </span>result = backoff::future::retry(check_synced_backoff.clone(), || {
-                        network.status().map(|result| {
-                            <span class="kw">match </span>result.map(|status| status.sync_state) {
-                                <span class="prelude-val">Ok</span>(SyncState::Importing { target }) =&gt;
-                                    <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((target, SyncStatus::Importing))),
-                                <span class="prelude-val">Ok</span>(SyncState::Downloading { target }) =&gt;
-                                    <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((target, SyncStatus::Downloading))),
-                                <span class="prelude-val">Err</span>(()) =&gt;
-                                    <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Failed to fetch networking status&quot;</span>))),
-                                <span class="prelude-val">Ok</span>(SyncState::Idle | SyncState::Pending) =&gt;
-                                    <span class="prelude-val">Err</span>(backoff::Error::transient(())),
-                            }
+                        sync.status().map(|result| <span class="kw">match </span>result.map(|status| status.state) {
+                            <span class="prelude-val">Ok</span>(SyncState::Importing { target }) =&gt;
+                                <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((target, SyncStatus::Importing))),
+                            <span class="prelude-val">Ok</span>(SyncState::Downloading { target }) =&gt;
+                                <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((target, SyncStatus::Downloading))),
+                            <span class="prelude-val">Err</span>(()) =&gt;
+                                <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Failed to fetch networking status&quot;</span>))),
+                            <span class="prelude-val">Ok</span>(SyncState::Idle | SyncState::Pending) =&gt;
+                                <span class="prelude-val">Err</span>(backoff::Error::transient(())),
                         })
                     })
                     .<span class="kw">await</span>;
@@ -1347,7 +1361,7 @@
     <span class="doccomment">/// Get node info
     </span><span class="kw">pub async fn </span>get_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Info&gt; {
         <span class="kw">let </span>NetworkState { connected_peers, not_connected_peers, .. } = <span class="self">self
-            </span>.network
+            </span>.network_service
             .network_state()
             .<span class="kw">await
             </span>.map_err(|()| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Failed to fetch node info: node already exited&quot;</span>))<span class="question-mark">?</span>;
@@ -1456,5 +1470,4 @@
 
     <span class="prelude-val">Some</span>(PieceByHashResponse { piece: result })
 }
-</code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="subspace_sdk" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (e3dfeeaa4 2023-03-07)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</code></pre></div></section></main></body></html>

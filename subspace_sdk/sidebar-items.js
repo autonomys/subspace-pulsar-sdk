@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Ss58ParsingError"],"mod":["farmer","node"],"struct":["FarmerBuilder","NodeBuilder","PublicKey"]};
+window.SIDEBAR_ITEMS = {"enum":["Ss58ParsingError"],"mod":["farmer","node"],"struct":["NodeBuilder","PublicKey"]};
