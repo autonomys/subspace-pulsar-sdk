@@ -215,19 +215,29 @@ impl Config {
 
         tokio::task::Builder::new()
             .name(format!("subspace-sdk-node-{name}-task-manager").as_ref())
-            .spawn(async move {
-                let opt_stop_sender = async move {
-                    futures::select! {
-                        opt_sender = stop_receiver.next() => opt_sender,
-                        result = task_manager.future().fuse() => {
-                            result.expect("Task from manager paniced");
-                            None
+            .spawn({
+                let dsn_informer = subspace_networking::utils::online_status_informer(&dsn.node);
+                async move {
+                    let opt_stop_sender = async move {
+                        futures::select! {
+                            opt_sender = stop_receiver.next() => opt_sender,
+                            result = task_manager.future().fuse() => {
+                                result.expect("Task from manager paniced");
+                                None
+                            }
+                            _ = node_runner_future.fuse() => {
+                                tracing::info!("Node runner exited");
+                                None
+                            }
+                            _ = dsn_informer.fuse() => {
+                                tracing::info!("DSN online status observer exited");
+                                None
+                            }
                         }
-                        _ = node_runner_future.fuse() => None,
                     }
+                    .await;
+                    opt_stop_sender.map(|stop_sender| stop_sender.send(()));
                 }
-                .await;
-                opt_stop_sender.map(|stop_sender| stop_sender.send(()));
             })?;
 
         let drop_collection = DropCollection::new();
