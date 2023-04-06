@@ -9,6 +9,15 @@ use subspace_sdk::node::{self, Event, Node, RewardsEvent, SubspaceEvent};
 use subspace_sdk::{Farmer, PlotDescription, PublicKey};
 use tracing_subscriber::prelude::*;
 
+#[cfg(all(
+    target_arch = "x86_64",
+    target_vendor = "unknown",
+    target_os = "linux",
+    target_env = "gnu"
+))]
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 #[derive(Subcommand, Debug)]
 enum Chain {
     Gemini3D,
