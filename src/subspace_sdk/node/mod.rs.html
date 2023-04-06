@@ -734,6 +734,16 @@
 <a href="#734" id="734">734</a>
 <a href="#735" id="735">735</a>
 <a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
@@ -951,19 +961,29 @@
 
         tokio::task::Builder::new()
             .name(<span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-node-{name}-task-manager&quot;</span>).as_ref())
-            .spawn(<span class="kw">async move </span>{
-                <span class="kw">let </span>opt_stop_sender = <span class="kw">async move </span>{
-                    <span class="macro">futures::select! </span>{
-                        opt_sender = stop_receiver.next() =&gt; opt_sender,
-                        result = task_manager.future().fuse() =&gt; {
-                            result.expect(<span class="string">&quot;Task from manager paniced&quot;</span>);
-                            <span class="prelude-val">None
-                        </span>}
-                        <span class="kw">_ </span>= node_runner_future.fuse() =&gt; <span class="prelude-val">None</span>,
+            .spawn({
+                <span class="kw">let </span>dsn_informer = subspace_networking::utils::online_status_informer(<span class="kw-2">&amp;</span>dsn.node);
+                <span class="kw">async move </span>{
+                    <span class="kw">let </span>opt_stop_sender = <span class="kw">async move </span>{
+                        <span class="macro">futures::select! </span>{
+                            opt_sender = stop_receiver.next() =&gt; opt_sender,
+                            result = task_manager.future().fuse() =&gt; {
+                                result.expect(<span class="string">&quot;Task from manager paniced&quot;</span>);
+                                <span class="prelude-val">None
+                            </span>}
+                            <span class="kw">_ </span>= node_runner_future.fuse() =&gt; {
+                                <span class="macro">tracing::info!</span>(<span class="string">&quot;Node runner exited&quot;</span>);
+                                <span class="prelude-val">None
+                            </span>}
+                            <span class="kw">_ </span>= dsn_informer.fuse() =&gt; {
+                                <span class="macro">tracing::info!</span>(<span class="string">&quot;DSN online status observer exited&quot;</span>);
+                                <span class="prelude-val">None
+                            </span>}
+                        }
                     }
+                    .<span class="kw">await</span>;
+                    opt_stop_sender.map(|stop_sender| stop_sender.send(()));
                 }
-                .<span class="kw">await</span>;
-                opt_stop_sender.map(|stop_sender| stop_sender.send(()));
             })<span class="question-mark">?</span>;
 
         <span class="kw">let </span>drop_collection = DropCollection::new();
