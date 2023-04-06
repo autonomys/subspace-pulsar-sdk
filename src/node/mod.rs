@@ -10,9 +10,9 @@ use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 use sc_consensus_subspace_rpc::SegmentHeaderProvider;
 use sc_network::network_state::NetworkState;
-use sc_network::{NetworkService, NetworkStateInfo, NetworkStatusProvider, SyncState};
-use sc_network_common::config::MultiaddrWithPeerId;
+use sc_network::{NetworkService, NetworkStateInfo, SyncState};
 use sc_rpc_api::state::StateApiClient;
+use sc_service::config::MultiaddrWithPeerId;
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
 use sp_core::H256;
@@ -197,9 +197,10 @@ impl Config {
             client,
             rpc_handlers,
             network_starter,
-            network,
-            backend,
+            sync_service,
+            network_service,
 
+            backend: _,
             select_chain: _,
             reward_signing_notification_stream: _,
             archived_segment_notification_stream: _,
@@ -229,23 +230,28 @@ impl Config {
                 opt_stop_sender.map(|stop_sender| stop_sender.send(()));
             })?;
 
-        let mut drop_collection = DropCollection::new();
-        drop_collection.defer(move || {
-            const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
+        let drop_collection = DropCollection::new();
 
-            // Busy wait till backend exits
-            // TODO: is it the only wait to check that substrate node exited?
-            while Arc::strong_count(&backend) != 1 {
-                std::thread::sleep(BUSY_WAIT_INTERVAL);
-            }
-        });
+        // Disable propper exit for now. Because RPC server looses waker and can't exit
+        // in background.
+        //
+        // drop_collection.defer(move || {
+        //     const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
+        //
+        //     // Busy wait till backend exits
+        //     // TODO: is it the only wait to check that substrate node exited?
+        //     while Arc::strong_count(&backend) != 1 {
+        //         std::thread::sleep(BUSY_WAIT_INTERVAL);
+        //     }
+        // });
 
         tracing::debug!("Started node");
 
         Ok(Node {
             client,
             system_domain,
-            network,
+            network_service,
+            sync_service,
             name,
             rpc_handle,
             dsn,
@@ -301,7 +307,10 @@ pub struct Node {
     #[derivative(Debug = "ignore")]
     client: Arc<FullClient>,
     #[derivative(Debug = "ignore")]
-    network: Arc<NetworkService<RuntimeBlock, Hash>>,
+    sync_service: Arc<sc_network_sync::service::chain_sync::SyncingService<RuntimeBlock>>,
+    #[derivative(Debug = "ignore")]
+    network_service: Arc<NetworkService<RuntimeBlock, Hash>>,
+
     pub(crate) rpc_handle: crate::utils::Rpc,
     pub(crate) stop_sender: mpsc::Sender<oneshot::Sender<()>>,
     pub(crate) name: String,
@@ -454,8 +463,8 @@ impl Node {
 
     /// Get listening addresses of the node
     pub async fn listen_addresses(&self) -> anyhow::Result<Vec<MultiaddrWithPeerId>> {
-        let peer_id = self.network.local_peer_id();
-        self.network
+        let peer_id = self.network_service.local_peer_id();
+        self.network_service
             .network_state()
             .await
             .map(|state| {
@@ -502,7 +511,7 @@ impl Node {
             .build();
 
         backoff::future::retry(check_offline_backoff, || {
-            futures::future::ready(if self.network.is_offline() {
+            futures::future::ready(if self.sync_service.is_offline() {
                 Err(backoff::Error::transient(()))
             } else {
                 Ok(())
@@ -515,10 +524,10 @@ impl Node {
         let inner = tokio_stream::wrappers::ReceiverStream::new(receiver);
 
         let result = backoff::future::retry(check_synced_backoff.clone(), || {
-            self.network.status().map(|result| match result.map(|status| status.sync_state) {
+            self.sync_service.status().map(|result| match result.map(|status| status.state) {
                 Ok(SyncState::Importing { target }) => Ok((target, SyncStatus::Importing)),
                 Ok(SyncState::Downloading { target }) => Ok((target, SyncStatus::Downloading)),
-                _ if self.network.is_offline() =>
+                _ if self.sync_service.is_offline() =>
                     Err(backoff::Error::transient(Some(anyhow::anyhow!("Node went offline")))),
                 Err(()) => Err(backoff::Error::transient(Some(anyhow::anyhow!(
                     "Failed to fetch networking status"
@@ -542,24 +551,22 @@ impl Node {
             .expect("We are holding receiver, so it will never panic");
 
         tokio::spawn({
-            let network = Arc::clone(&self.network);
+            let sync = Arc::clone(&self.sync_service);
             let client = Arc::clone(&self.client);
             async move {
                 loop {
                     tokio::time::sleep(CHECK_SYNCED_EVERY).await;
 
                     let result = backoff::future::retry(check_synced_backoff.clone(), || {
-                        network.status().map(|result| {
-                            match result.map(|status| status.sync_state) {
-                                Ok(SyncState::Importing { target }) =>
-                                    Ok(Ok((target, SyncStatus::Importing))),
-                                Ok(SyncState::Downloading { target }) =>
-                                    Ok(Ok((target, SyncStatus::Downloading))),
-                                Err(()) =>
-                                    Ok(Err(anyhow::anyhow!("Failed to fetch networking status"))),
-                                Ok(SyncState::Idle | SyncState::Pending) =>
-                                    Err(backoff::Error::transient(())),
-                            }
+                        sync.status().map(|result| match result.map(|status| status.state) {
+                            Ok(SyncState::Importing { target }) =>
+                                Ok(Ok((target, SyncStatus::Importing))),
+                            Ok(SyncState::Downloading { target }) =>
+                                Ok(Ok((target, SyncStatus::Downloading))),
+                            Err(()) =>
+                                Ok(Err(anyhow::anyhow!("Failed to fetch networking status"))),
+                            Ok(SyncState::Idle | SyncState::Pending) =>
+                                Err(backoff::Error::transient(())),
                         })
                     })
                     .await;
@@ -618,7 +625,7 @@ impl Node {
     /// Get node info
     pub async fn get_info(&self) -> anyhow::Result<Info> {
         let NetworkState { connected_peers, not_connected_peers, .. } = self
-            .network
+            .network_service
             .network_state()
             .await
             .map_err(|()| anyhow::anyhow!("Failed to fetch node info: node already exited"))?;

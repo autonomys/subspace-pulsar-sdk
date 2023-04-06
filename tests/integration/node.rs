@@ -99,6 +99,7 @@ async fn sync_plot() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[ignore = "Substrate rpc server doesn't let node to properly exit"]
 async fn node_restart() {
     crate::common::setup();
     let dir = Arc::new(TempDir::new().unwrap());

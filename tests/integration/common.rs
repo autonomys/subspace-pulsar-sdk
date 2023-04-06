@@ -3,23 +3,28 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut};
-use sc_network_common::config::MultiaddrWithPeerId;
+use sc_service::config::MultiaddrWithPeerId;
 use subspace_sdk::farmer::{CacheDescription, PlotDescription};
 use subspace_sdk::node::{chain_spec, ChainSpec, DsnBuilder, NetworkBuilder, Role};
 use tempfile::TempDir;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::Layer;
 
 pub fn setup() {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
-            "debug,parity-db=info,cranelift_codegen=info,wasmtime_cranelift=info,\
-             subspace_sdk=trace,subspace_farmer=trace,subspace_service=trace,\
-             subspace_farmer::utils::parity_db_store=debug,trie-cache=info,wasm_overrides=info,\
-             jsonrpsee_core=info,libp2p_gossipsub::behaviour=info,wasmtime_jit=info,\
-             wasm-runtime=info"
-                .parse::<tracing_subscriber::EnvFilter>()
-                .expect("Env filter directives are correct"),
+    let _ = tracing_subscriber::registry()
+        .with(console_subscriber::spawn())
+        .with(
+            tracing_subscriber::fmt::layer().with_test_writer().with_filter(
+                "debug,parity-db=info,cranelift_codegen=info,wasmtime_cranelift=info,\
+                 subspace_sdk=trace,subspace_farmer=trace,subspace_service=trace,\
+                 subspace_farmer::utils::parity_db_store=debug,trie-cache=info,\
+                 wasm_overrides=info,jsonrpsee_core=info,libp2p_gossipsub::behaviour=info,\
+                 wasmtime_jit=info,wasm-runtime=info"
+                    .parse::<tracing_subscriber::EnvFilter>()
+                    .expect("Env filter directives are correct"),
+            ),
         )
-        .with_test_writer()
         .try_init();
 }
 
