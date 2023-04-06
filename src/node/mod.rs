@@ -198,9 +198,9 @@ impl Config {
             rpc_handlers,
             network_starter,
             sync_service,
-            backend,
             network_service,
 
+            backend: _,
             select_chain: _,
             reward_signing_notification_stream: _,
             archived_segment_notification_stream: _,
@@ -230,16 +230,20 @@ impl Config {
                 opt_stop_sender.map(|stop_sender| stop_sender.send(()));
             })?;
 
-        let mut drop_collection = DropCollection::new();
-        drop_collection.defer(move || {
-            const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
+        let drop_collection = DropCollection::new();
 
-            // Busy wait till backend exits
-            // TODO: is it the only wait to check that substrate node exited?
-            while Arc::strong_count(&backend) != 1 {
-                std::thread::sleep(BUSY_WAIT_INTERVAL);
-            }
-        });
+        // Disable propper exit for now. Because RPC server looses waker and can't exit
+        // in background.
+        //
+        // drop_collection.defer(move || {
+        //     const BUSY_WAIT_INTERVAL: Duration = Duration::from_millis(100);
+        //
+        //     // Busy wait till backend exits
+        //     // TODO: is it the only wait to check that substrate node exited?
+        //     while Arc::strong_count(&backend) != 1 {
+        //         std::thread::sleep(BUSY_WAIT_INTERVAL);
+        //     }
+        // });
 
         tracing::debug!("Started node");
 
