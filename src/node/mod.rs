@@ -15,7 +15,6 @@ use sc_rpc_api::state::StateApiClient;
 use sc_service::config::MultiaddrWithPeerId;
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
-use sp_core::H256;
 use sp_runtime::DigestItem;
 use subspace_core_primitives::{PieceIndexHash, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
@@ -333,9 +332,9 @@ static_assertions::assert_impl_all!(Node: Send, Sync);
 static_assertions::assert_impl_all!(SystemDomainNode: Send, Sync);
 
 /// Hash type
-pub type Hash = H256;
+pub type Hash = <subspace_runtime::Runtime as frame_system::Config>::Hash;
 /// Block number
-pub type BlockNumber = u32;
+pub type BlockNumber = <subspace_runtime::Runtime as frame_system::Config>::BlockNumber;
 
 /// Chain info
 #[derive(Debug, Clone)]
@@ -662,6 +661,13 @@ impl Node {
             not_connected_peers: not_connected_peers.len() as u64,
             total_pieces,
         })
+    }
+
+    /// Get block hash by block number
+    pub fn block_hash(&self, number: BlockNumber) -> anyhow::Result<Option<Hash>> {
+        use sc_client_api::client::BlockBackend;
+
+        self.client.block_hash(number).context("Failed to get primary node block hash by number")
     }
 
     /// Subscribe to new blocks imported
