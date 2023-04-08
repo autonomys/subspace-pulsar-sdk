@@ -744,6 +744,12 @@
 <a href="#744" id="744">744</a>
 <a href="#745" id="745">745</a>
 <a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
@@ -761,7 +767,6 @@
 <span class="kw">use </span>sc_service::config::MultiaddrWithPeerId;
 <span class="kw">use </span>sp_consensus::SyncOracle;
 <span class="kw">use </span>sp_consensus_subspace::digests::PreDigest;
-<span class="kw">use </span>sp_core::H256;
 <span class="kw">use </span>sp_runtime::DigestItem;
 <span class="kw">use </span>subspace_core_primitives::{PieceIndexHash, SegmentIndex};
 <span class="kw">use </span>subspace_farmer::node_client::NodeClient;
@@ -1079,9 +1084,9 @@
 <span class="macro">static_assertions::assert_impl_all!</span>(SystemDomainNode: Send, Sync);
 
 <span class="doccomment">/// Hash type
-</span><span class="kw">pub type </span>Hash = H256;
+</span><span class="kw">pub type </span>Hash = &lt;subspace_runtime::Runtime <span class="kw">as </span>frame_system::Config&gt;::Hash;
 <span class="doccomment">/// Block number
-</span><span class="kw">pub type </span>BlockNumber = u32;
+</span><span class="kw">pub type </span>BlockNumber = &lt;subspace_runtime::Runtime <span class="kw">as </span>frame_system::Config&gt;::BlockNumber;
 
 <span class="doccomment">/// Chain info
 </span><span class="attr">#[derive(Debug, Clone)]
@@ -1408,6 +1413,13 @@
             not_connected_peers: not_connected_peers.len() <span class="kw">as </span>u64,
             total_pieces,
         })
+    }
+
+    <span class="doccomment">/// Get block hash by block number
+    </span><span class="kw">pub fn </span>block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, number: BlockNumber) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;Hash&gt;&gt; {
+        <span class="kw">use </span>sc_client_api::client::BlockBackend;
+
+        <span class="self">self</span>.client.block_hash(number).context(<span class="string">&quot;Failed to get primary node block hash by number&quot;</span>)
     }
 
     <span class="doccomment">/// Subscribe to new blocks imported
