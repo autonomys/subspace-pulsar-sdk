@@ -2,7 +2,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::Context;
-use derive_more::{Deref, DerefMut, Display, From, FromStr};
+use derive_more::{Deref, DerefMut, Display, From, FromStr, Into};
 use futures::prelude::*;
 use jsonrpsee_core::client::{
     BatchResponse, ClientT, Subscription, SubscriptionClientT, SubscriptionKind,
@@ -226,6 +226,7 @@ impl AsyncDropFutures {
     Display,
     Eq,
     From,
+    Into,
     FromStr,
     Ord,
     PartialEq,
@@ -261,6 +262,24 @@ impl ByteSize {
         Self(bytesize::ByteSize::gib(n))
     }
 }
+
+/// Multiaddr is a wrapper around libp2p one
+#[derive(
+    Debug,
+    Clone,
+    Deserialize,
+    Serialize,
+    PartialEq,
+    Eq,
+    From,
+    Into,
+    FromStr,
+    Deref,
+    DerefMut,
+    Display,
+)]
+#[serde(transparent)]
+pub struct Multiaddr(pub libp2p_core::Multiaddr);
 
 pub mod chain_spec {
     use frame_support::traits::Get;

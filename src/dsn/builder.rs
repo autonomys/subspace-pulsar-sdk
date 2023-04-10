@@ -8,7 +8,6 @@ use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
 use either::*;
 use futures::prelude::*;
-use libp2p_core::Multiaddr;
 use sc_service::config::MultiaddrWithPeerId;
 use serde::{Deserialize, Serialize};
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
@@ -22,7 +21,7 @@ use subspace_service::segment_headers::SegmentHeaderCache;
 use super::provider_storage_utils::MaybeProviderStorage;
 use super::{FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage};
 use crate::node::PieceCacheSize;
-use crate::utils::DropCollection;
+use crate::utils::{DropCollection, Multiaddr};
 use crate::{farmer, node};
 
 /// Wrapper with default value for listen address
@@ -271,13 +270,7 @@ impl Dsn {
             })
             .collect::<Vec<_>>();
 
-        let listen_on = listen_addresses
-            .0
-            .into_iter()
-            .map(|a| {
-                a.to_string().parse().expect("Convertion between 2 libp2p version. Never panics")
-            })
-            .collect();
+        let listen_on = listen_addresses.0.into_iter().map(Into::into).collect();
 
         let networking_parameters_registry = subspace_networking::NetworkingParametersManager::new(
             &base_path.join("known_addresses_db"),
@@ -351,14 +344,7 @@ impl Dsn {
                 }),
             ],
             provider_storage,
-            reserved_peers: reserved_nodes
-                .into_iter()
-                .map(|addr| {
-                    addr.to_string()
-                        .parse()
-                        .expect("Conversion between 2 libp2p versions is always right")
-                })
-                .collect(),
+            reserved_peers: reserved_nodes.into_iter().map(Into::into).collect(),
             max_established_incoming_connections,
             max_established_outgoing_connections,
             target_connections,

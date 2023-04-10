@@ -3,7 +3,6 @@ use std::path::Path;
 
 use derivative::Derivative;
 use derive_builder::Builder;
-use libp2p_core::Multiaddr;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
 use sc_network::ProtocolName;
@@ -15,6 +14,8 @@ use serde::{Deserialize, Serialize};
 pub(crate) use storage::StorageKey;
 pub use subspace_runtime::RuntimeEvent as Event;
 pub use types::*;
+
+use crate::utils::Multiaddr;
 
 mod storage;
 mod types;
@@ -123,7 +124,7 @@ macro_rules! derive_base {
                 /// Enable color for substrate informant
                 informant_enable_color: bool,
                 /// Additional telemetry endpoints
-                telemetry: Vec<(libp2p_core::Multiaddr, u8)>,
+                telemetry: Vec<($crate::utils::Multiaddr, u8)>,
             });
         }
     }
