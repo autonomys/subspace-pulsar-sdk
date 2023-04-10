@@ -7,7 +7,7 @@ use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
 use sc_network::ProtocolName;
 use sc_service::config::{
-    KeystoreConfig, MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, TransportConfig,
+    KeystoreConfig, NetworkConfiguration, NonDefaultSetConfig, TransportConfig,
 };
 use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ pub(crate) use storage::StorageKey;
 pub use subspace_runtime::RuntimeEvent as Event;
 pub use types::*;
 
-use crate::utils::Multiaddr;
+use crate::utils::{Multiaddr, MultiaddrWithPeerId};
 
 mod storage;
 mod types;
@@ -198,18 +198,16 @@ impl Base {
 
             let client_id = client_id.unwrap_or_else(|| format!("{impl_name}/v{impl_version}"));
             let config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
-            let listen_addresses = listen_addresses
-                .into_iter()
-                .map(|addr| {
-                    addr.to_string()
-                        .parse()
-                        .expect("Conversion between 2 libp2p versions is always right")
-                })
-                .collect::<Vec<_>>();
+            let listen_addresses = listen_addresses.into_iter().map(Into::into).collect::<Vec<_>>();
 
             NetworkConfiguration {
                 listen_addresses,
-                boot_nodes: chain_spec.boot_nodes().iter().cloned().chain(boot_nodes).collect(),
+                boot_nodes: chain_spec
+                    .boot_nodes()
+                    .iter()
+                    .cloned()
+                    .chain(boot_nodes.into_iter().map(Into::into))
+                    .collect(),
                 force_synced,
                 transport: TransportConfig::Normal { enable_mdns, allow_private_ip },
                 extra_sets: vec![NonDefaultSetConfig::new(
@@ -237,11 +235,11 @@ impl Base {
         let telemetry_endpoints = match chain_spec.telemetry_endpoints() {
             Some(endpoints) => {
                 let Ok(serde_json::Value::Array(extra_telemetry)) = serde_json::to_value(&telemetry) else {
-                        unreachable!("Will always return an array")
-                    };
+                    unreachable!("Will always return an array")
+                };
                 let Ok(serde_json::Value::Array(telemetry)) = serde_json::to_value(endpoints) else {
-                        unreachable!("Will always return an array")
-                    };
+                    unreachable!("Will always return an array")
+                };
 
                 serde_json::from_value(serde_json::Value::Array(
                     telemetry.into_iter().chain(extra_telemetry).collect::<Vec<_>>(),

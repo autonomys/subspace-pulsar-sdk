@@ -8,7 +8,6 @@ use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
 use either::*;
 use futures::prelude::*;
-use sc_service::config::MultiaddrWithPeerId;
 use serde::{Deserialize, Serialize};
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::piece_caching::PieceMemoryCache;
@@ -21,7 +20,7 @@ use subspace_service::segment_headers::SegmentHeaderCache;
 use super::provider_storage_utils::MaybeProviderStorage;
 use super::{FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage};
 use crate::node::PieceCacheSize;
-use crate::utils::{DropCollection, Multiaddr};
+use crate::utils::{DropCollection, Multiaddr, MultiaddrWithPeerId};
 use crate::{farmer, node};
 
 /// Wrapper with default value for listen address
@@ -263,12 +262,7 @@ impl Dsn {
         } = self;
 
         let peer_id = subspace_networking::peer_id(&keypair);
-        let bootstrap_nodes = boot_nodes
-            .into_iter()
-            .map(|a| {
-                a.to_string().parse().expect("Convertion between 2 libp2p version. Never panics")
-            })
-            .collect::<Vec<_>>();
+        let bootstrap_nodes = boot_nodes.into_iter().map(Into::into).collect::<Vec<_>>();
 
         let listen_on = listen_addresses.0.into_iter().map(Into::into).collect();
 

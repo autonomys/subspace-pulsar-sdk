@@ -281,6 +281,53 @@ impl ByteSize {
 #[serde(transparent)]
 pub struct Multiaddr(pub libp2p_core::Multiaddr);
 
+impl From<sc_network::Multiaddr> for Multiaddr {
+    fn from(multiaddr: sc_network::Multiaddr) -> Self {
+        multiaddr.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
+    }
+}
+
+impl From<Multiaddr> for sc_network::Multiaddr {
+    fn from(multiaddr: Multiaddr) -> Self {
+        multiaddr.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
+    }
+}
+
+/// Multiaddr with peer id
+#[derive(
+    Debug, Clone, Deserialize, Serialize, PartialEq, From, Into, FromStr, Deref, DerefMut, Display,
+)]
+#[serde(transparent)]
+pub struct MultiaddrWithPeerId(pub sc_service::config::MultiaddrWithPeerId);
+
+impl MultiaddrWithPeerId {
+    /// Constructor for peer id
+    pub fn new(multiaddr: impl Into<Multiaddr>, peer_id: sc_network::PeerId) -> Self {
+        Self(sc_service::config::MultiaddrWithPeerId {
+            multiaddr: multiaddr.into().into(),
+            peer_id,
+        })
+    }
+}
+
+impl From<MultiaddrWithPeerId> for sc_network::Multiaddr {
+    fn from(multiaddr: MultiaddrWithPeerId) -> Self {
+        multiaddr.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
+    }
+}
+
+impl From<MultiaddrWithPeerId> for libp2p_core::Multiaddr {
+    fn from(multiaddr: MultiaddrWithPeerId) -> Self {
+        multiaddr.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
+    }
+}
+
+impl From<MultiaddrWithPeerId> for Multiaddr {
+    fn from(multiaddr: MultiaddrWithPeerId) -> Self {
+        multiaddr.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
+    }
+}
+
 pub mod chain_spec {
     use frame_support::traits::Get;
     use sc_service::Properties;
