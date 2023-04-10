@@ -104,6 +104,6 @@ async fn farmer_drop() {
     crate::common::setup();
 
     let node = Node::dev().build().await;
-
-    drop(Farmer::dev().build(&node).await)
+    drop(Farmer::dev().build(&node).await);
+    node.close().await;
 }
