@@ -2,6 +2,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::Context;
+use derive_more::{Deref, DerefMut, Display, From, FromStr};
 use futures::prelude::*;
 use jsonrpsee_core::client::{
     BatchResponse, ClientT, Subscription, SubscriptionClientT, SubscriptionKind,
@@ -11,6 +12,7 @@ use jsonrpsee_core::server::rpc_module::RpcModule;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::Error;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Rpc {
@@ -210,6 +212,53 @@ impl AsyncDropFutures {
         for f in self.vec {
             f.await;
         }
+    }
+}
+
+/// Container for number of bytes.
+#[derive(
+    Clone,
+    Debug,
+    Default,
+    Deref,
+    DerefMut,
+    Deserialize,
+    Display,
+    Eq,
+    From,
+    FromStr,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+)]
+#[serde(transparent)]
+pub struct ByteSize(#[serde(with = "bytesize_serde")] pub bytesize::ByteSize);
+
+impl ByteSize {
+    /// Constructor for bytes
+    pub const fn b(n: u64) -> Self {
+        Self(bytesize::ByteSize::b(n))
+    }
+
+    /// Constructor for megabytes
+    pub const fn mb(n: u64) -> Self {
+        Self(bytesize::ByteSize::mb(n))
+    }
+
+    /// Constructor for mibibytes
+    pub const fn mib(n: u64) -> Self {
+        Self(bytesize::ByteSize::mib(n))
+    }
+
+    /// Constructor for gigabytes
+    pub const fn gb(n: u64) -> Self {
+        Self(bytesize::ByteSize::gb(n))
+    }
+
+    /// Constructor for gibibytes
+    pub const fn gib(n: u64) -> Self {
+        Self(bytesize::ByteSize::gib(n))
     }
 }
 

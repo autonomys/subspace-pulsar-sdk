@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use anyhow::Context;
 pub use builder::{Builder, Config};
-use bytesize::ByteSize;
 use derivative::Derivative;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
@@ -33,7 +32,7 @@ use tracing_futures::Instrument;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
 use crate::dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
-use crate::utils::{AsyncDropFutures, DropCollection};
+use crate::utils::{AsyncDropFutures, ByteSize, DropCollection};
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -43,7 +42,6 @@ pub struct CacheDescription {
     /// Path to the cache description
     pub directory: PathBuf,
     /// Space which you want to dedicate
-    #[serde(with = "bytesize_serde")]
     pub space_dedicated: ByteSize,
 }
 
@@ -85,7 +83,6 @@ pub struct PlotDescription {
     /// Path of the plot
     pub directory: PathBuf,
     /// Space which you want to pledge
-    #[serde(with = "bytesize_serde")]
     pub space_pledged: ByteSize,
 }
 
@@ -96,7 +93,7 @@ pub struct PlotConstructionError;
 
 impl PlotDescription {
     /// Minimal plot size
-    pub const MIN_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE + Self::SECTOR_OVERHEAD.0);
+    pub const MIN_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE + Self::SECTOR_OVERHEAD.0 .0);
     // TODO: Account for prefix and metadata sizes
     const SECTOR_OVERHEAD: ByteSize = ByteSize::mb(2);
 
@@ -131,6 +128,7 @@ mod builder {
     use serde::{Deserialize, Serialize};
 
     use super::{BuildError, CacheDescription};
+    use crate::utils::ByteSize;
     use crate::{Farmer, Node, PlotDescription, PublicKey};
 
     #[derive(
@@ -169,9 +167,7 @@ mod builder {
     #[derivative(Default)]
     #[serde(transparent)]
     pub struct PieceCacheSize(
-        #[derivative(Default(value = "bytesize::ByteSize::mib(10)"))]
-        #[serde(with = "bytesize_serde")]
-        pub(crate) bytesize::ByteSize,
+        #[derivative(Default(value = "ByteSize::mib(10)"))] pub(crate) ByteSize,
     );
 
     #[derive(

@@ -1,8 +1,7 @@
-use bytesize::ByteSize;
 use futures::StreamExt;
 use subspace_sdk::farmer::CacheDescription;
 use subspace_sdk::node::NetworkBuilder;
-use subspace_sdk::{chain_spec, node, Farmer, Node, PlotDescription, PublicKey};
+use subspace_sdk::{chain_spec, node, ByteSize, Farmer, Node, PlotDescription, PublicKey};
 
 #[tokio::main]
 async fn main() {

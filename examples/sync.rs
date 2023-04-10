@@ -1,12 +1,11 @@
 use std::path::PathBuf;
 
-use bytesize::ByteSize;
 use clap::Parser;
 use futures::stream::StreamExt;
-use sc_network_common::config::MultiaddrWithPeerId;
+use sc_service::config::MultiaddrWithPeerId;
 use subspace_sdk::farmer::CacheDescription;
 use subspace_sdk::node::NetworkBuilder;
-use subspace_sdk::{chain_spec, Farmer, Node, PlotDescription, PublicKey};
+use subspace_sdk::{chain_spec, ByteSize, Farmer, Node, PlotDescription, PublicKey};
 use tempfile::TempDir;
 
 #[derive(clap::Parser, Debug)]

@@ -12,9 +12,11 @@ async fn main() {
         .await
         .unwrap();
 
-    let plots = [subspace_sdk::PlotDescription::new("plot", bytesize::ByteSize::mb(100)).unwrap()];
+    let plots =
+        [subspace_sdk::PlotDescription::new("plot", subspace_sdk::ByteSize::mb(100)).unwrap()];
     let cache =
-        subspace_sdk::farmer::CacheDescription::new("cache", bytesize::ByteSize::mb(10)).unwrap();
+        subspace_sdk::farmer::CacheDescription::new("cache", subspace_sdk::ByteSize::mb(10))
+            .unwrap();
     let farmer = subspace_sdk::Farmer::builder()
         .build(subspace_sdk::PublicKey::from([0; 32]), &node, &plots, cache)
         .await
