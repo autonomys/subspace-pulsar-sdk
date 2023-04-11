@@ -17,6 +17,7 @@ use parity_scale_codec::{Decode, Encode};
 pub use parse_ss58::Ss58ParsingError;
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::PUBLIC_KEY_LENGTH;
+pub use utils::{ByteSize, Multiaddr, MultiaddrWithPeerId};
 
 #[doc(hidden)]
 #[macro_export]

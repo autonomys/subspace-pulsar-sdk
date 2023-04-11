@@ -1,12 +1,11 @@
 use std::path::PathBuf;
 
 use anyhow::Context;
-use bytesize::ByteSize;
 use clap::{Parser, Subcommand};
 use futures::prelude::*;
 use subspace_sdk::farmer::CacheDescription;
 use subspace_sdk::node::{self, Event, Node, RewardsEvent, SubspaceEvent};
-use subspace_sdk::{Farmer, PlotDescription, PublicKey};
+use subspace_sdk::{ByteSize, Farmer, PlotDescription, PublicKey};
 use tracing_subscriber::prelude::*;
 
 #[cfg(all(

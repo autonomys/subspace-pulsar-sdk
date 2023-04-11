@@ -3,6 +3,8 @@ use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
 use serde::{Deserialize, Serialize};
 
+use crate::utils::ByteSize;
+
 /// Events from subspace pallet
 pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
 
@@ -172,8 +174,7 @@ pub struct ImplVersion(
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct StorageMonitor {
     /// How much space do we want to reserve
-    #[serde(with = "bytesize_serde")]
-    pub threshold: bytesize::ByteSize,
+    pub threshold: ByteSize,
     /// Polling period for threshold
     pub polling_period: std::time::Duration,
 }

@@ -2,6 +2,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::Context;
+use derive_more::{Deref, DerefMut, Display, From, FromStr, Into};
 use futures::prelude::*;
 use jsonrpsee_core::client::{
     BatchResponse, ClientT, Subscription, SubscriptionClientT, SubscriptionKind,
@@ -11,6 +12,7 @@ use jsonrpsee_core::server::rpc_module::RpcModule;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::Error;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Rpc {
@@ -210,6 +212,119 @@ impl AsyncDropFutures {
         for f in self.vec {
             f.await;
         }
+    }
+}
+
+/// Container for number of bytes.
+#[derive(
+    Clone,
+    Debug,
+    Default,
+    Deref,
+    DerefMut,
+    Deserialize,
+    Display,
+    Eq,
+    From,
+    Into,
+    FromStr,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+)]
+#[serde(transparent)]
+pub struct ByteSize(#[serde(with = "bytesize_serde")] pub bytesize::ByteSize);
+
+impl ByteSize {
+    /// Constructor for bytes
+    pub const fn b(n: u64) -> Self {
+        Self(bytesize::ByteSize::b(n))
+    }
+
+    /// Constructor for megabytes
+    pub const fn mb(n: u64) -> Self {
+        Self(bytesize::ByteSize::mb(n))
+    }
+
+    /// Constructor for mibibytes
+    pub const fn mib(n: u64) -> Self {
+        Self(bytesize::ByteSize::mib(n))
+    }
+
+    /// Constructor for gigabytes
+    pub const fn gb(n: u64) -> Self {
+        Self(bytesize::ByteSize::gb(n))
+    }
+
+    /// Constructor for gibibytes
+    pub const fn gib(n: u64) -> Self {
+        Self(bytesize::ByteSize::gib(n))
+    }
+}
+
+/// Multiaddr is a wrapper around libp2p one
+#[derive(
+    Debug,
+    Clone,
+    Deserialize,
+    Serialize,
+    PartialEq,
+    Eq,
+    From,
+    Into,
+    FromStr,
+    Deref,
+    DerefMut,
+    Display,
+)]
+#[serde(transparent)]
+pub struct Multiaddr(pub libp2p_core::Multiaddr);
+
+impl From<sc_network::Multiaddr> for Multiaddr {
+    fn from(multiaddr: sc_network::Multiaddr) -> Self {
+        multiaddr.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
+    }
+}
+
+impl From<Multiaddr> for sc_network::Multiaddr {
+    fn from(multiaddr: Multiaddr) -> Self {
+        multiaddr.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
+    }
+}
+
+/// Multiaddr with peer id
+#[derive(
+    Debug, Clone, Deserialize, Serialize, PartialEq, From, Into, FromStr, Deref, DerefMut, Display,
+)]
+#[serde(transparent)]
+pub struct MultiaddrWithPeerId(pub sc_service::config::MultiaddrWithPeerId);
+
+impl MultiaddrWithPeerId {
+    /// Constructor for peer id
+    pub fn new(multiaddr: impl Into<Multiaddr>, peer_id: sc_network::PeerId) -> Self {
+        Self(sc_service::config::MultiaddrWithPeerId {
+            multiaddr: multiaddr.into().into(),
+            peer_id,
+        })
+    }
+}
+
+impl From<MultiaddrWithPeerId> for sc_network::Multiaddr {
+    fn from(multiaddr: MultiaddrWithPeerId) -> Self {
+        multiaddr.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
+    }
+}
+
+impl From<MultiaddrWithPeerId> for libp2p_core::Multiaddr {
+    fn from(multiaddr: MultiaddrWithPeerId) -> Self {
+        multiaddr.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
+    }
+}
+
+impl From<MultiaddrWithPeerId> for Multiaddr {
+    fn from(multiaddr: MultiaddrWithPeerId) -> Self {
+        multiaddr.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
     }
 }
 

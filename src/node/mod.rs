@@ -12,7 +12,6 @@ use sc_consensus_subspace_rpc::SegmentHeaderProvider;
 use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, SyncState};
 use sc_rpc_api::state::StateApiClient;
-use sc_service::config::MultiaddrWithPeerId;
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
 use sp_runtime::DigestItem;
@@ -28,7 +27,7 @@ use substrate::Base;
 use tracing_futures::Instrument;
 
 use crate::dsn::NodePieceCache;
-use crate::utils::DropCollection;
+use crate::utils::{DropCollection, MultiaddrWithPeerId};
 
 mod builder;
 pub mod chain_spec;
@@ -94,16 +93,8 @@ impl Config {
             tracing::trace!("Subspace networking starting.");
 
             dsn.boot_nodes.extend(chain_spec_boot_nodes);
-            let bootstrap_nodes = dsn
-                .boot_nodes
-                .clone()
-                .into_iter()
-                .map(|a| {
-                    a.to_string()
-                        .parse()
-                        .expect("Convertion between 2 libp2p version. Never panics")
-                })
-                .collect::<Vec<_>>();
+            let bootstrap_nodes =
+                dsn.boot_nodes.clone().into_iter().map(Into::into).collect::<Vec<_>>();
 
             let (dsn, runner) = dsn.build_dsn(DsnOptions {
                 client: partial_components.client.clone(),
@@ -480,7 +471,7 @@ impl Node {
                 state
                     .listened_addresses
                     .into_iter()
-                    .map(|multiaddr| MultiaddrWithPeerId { multiaddr, peer_id })
+                    .map(|multiaddr| MultiaddrWithPeerId::new(multiaddr, peer_id))
                     .collect()
             })
             .map_err(|()| anyhow::anyhow!("Network worker exited"))
@@ -488,20 +479,14 @@ impl Node {
 
     /// Get listening addresses of the node
     pub async fn dsn_listen_addresses(&self) -> anyhow::Result<Vec<MultiaddrWithPeerId>> {
-        let peer_id = self.dsn.node.id();
+        let peer_id =
+            self.dsn.node.id().to_string().parse().expect("Conversion between 2 libp2p versions");
         Ok(self
             .dsn
             .node
             .listeners()
             .into_iter()
-            .map(|mut multiaddr| {
-                multiaddr
-                    .push(subspace_networking::libp2p::multiaddr::Protocol::P2p(peer_id.into()));
-                multiaddr
-                    .to_string()
-                    .parse()
-                    .expect("Convertion between 2 libp2p version. Never panics")
-            })
+            .map(|multiaddr| MultiaddrWithPeerId::new(multiaddr, peer_id))
             .collect())
     }
 

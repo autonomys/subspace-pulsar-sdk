@@ -3,9 +3,9 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut};
-use sc_service::config::MultiaddrWithPeerId;
 use subspace_sdk::farmer::{CacheDescription, PlotDescription};
 use subspace_sdk::node::{chain_spec, ChainSpec, DsnBuilder, NetworkBuilder, Role};
+use subspace_sdk::MultiaddrWithPeerId;
 use tempfile::TempDir;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -137,7 +137,7 @@ impl FarmerBuilder {
                 node,
                 &[PlotDescription::new(
                     node.path().path().join("plot"),
-                    bytesize::ByteSize::b(PlotDescription::MIN_SIZE.as_u64() * n_sectors),
+                    subspace_sdk::ByteSize::b(PlotDescription::MIN_SIZE.as_u64() * n_sectors),
                 )
                 .unwrap()],
                 CacheDescription::minimal(node.path().path().join("cache")),

@@ -12,6 +12,7 @@ use super::substrate::{
 };
 use super::{domains, ChainSpec, Node};
 use crate::dsn::builder::{Dsn, DsnBuilder};
+use crate::utils::ByteSize;
 
 /// Wrapper with default value for piece cache size
 #[derive(
@@ -19,11 +20,7 @@ use crate::dsn::builder::{Dsn, DsnBuilder};
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct PieceCacheSize(
-    #[derivative(Default(value = "bytesize::ByteSize::gib(1)"))]
-    #[serde(with = "bytesize_serde")]
-    pub(crate) bytesize::ByteSize,
-);
+pub struct PieceCacheSize(#[derivative(Default(value = "ByteSize::gib(1)"))] pub(crate) ByteSize);
 
 /// Wrapper with default value for segment publish concurent jobs
 #[derive(
