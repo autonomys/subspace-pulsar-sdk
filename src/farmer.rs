@@ -423,7 +423,7 @@ fn handler_on_sector_plotted(
         drop(plotting_permit);
     };
 
-    let _ = utils::task_spawn(
+    drop(utils::task_spawn(
         format!("subspace-sdk-farmer-{node_name}-piece-publishing"),
         async move {
             use futures::future::{select, Either};
@@ -433,7 +433,7 @@ fn handler_on_sector_plotted(
                 tracing::debug!("Piece publishing was cancelled due to shutdown.");
             }
         },
-    );
+    ));
 }
 
 impl Config {
