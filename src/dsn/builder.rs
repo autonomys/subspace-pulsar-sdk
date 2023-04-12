@@ -189,12 +189,13 @@ pub(crate) struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> 
 }
 
 impl Dsn {
-    pub(crate) fn build_dsn<C, ASNS>(
+    pub(crate) fn build_dsn<B, C, ASNS>(
         self,
         options: DsnOptions<C, ASNS>,
     ) -> anyhow::Result<(DsnShared<C>, subspace_networking::NodeRunner<ProviderStorage<C>>)>
     where
-        C: sc_client_api::AuxStore + Send + Sync + 'static,
+        B: sp_runtime::traits::Block<Hash = crate::node::Hash>,
+        C: sc_client_api::AuxStore + sp_blockchain::HeaderBackend<B> + Send + Sync + 'static,
         ASNS: Stream<Item = sc_consensus_subspace::ArchivedSegmentNotification>
             + Unpin
             + Send
@@ -212,6 +213,9 @@ impl Dsn {
         let farmer_piece_store = Arc::new(tokio::sync::Mutex::new(None));
         let farmer_provider_storage = MaybeProviderStorage::none();
         let piece_memory_cache = PieceMemoryCache::default();
+        let protocol_prefix = hex::encode(client.info().genesis_hash);
+
+        tracing::info!(genesis_hash = protocol_prefix, "Setting DSN protocol prefix...");
 
         let piece_cache = NodePieceCache::new(
             client.clone(),
@@ -288,7 +292,7 @@ impl Dsn {
             ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
 
         let config = subspace_networking::Config {
-            keypair,
+            keypair: keypair.clone(),
             listen_on,
             allow_non_global_addresses_in_dht,
             networking_parameters_registry,
@@ -337,14 +341,13 @@ impl Dsn {
                     }
                 }),
             ],
-            provider_storage,
             reserved_peers: reserved_nodes.into_iter().map(Into::into).collect(),
             max_established_incoming_connections,
             max_established_outgoing_connections,
             target_connections,
             max_pending_incoming_connections,
             max_pending_outgoing_connections,
-            ..subspace_networking::Config::default()
+            ..subspace_networking::Config::new(protocol_prefix, keypair, provider_storage)
         };
 
         let (node, runner) = subspace_networking::create(config)?;
