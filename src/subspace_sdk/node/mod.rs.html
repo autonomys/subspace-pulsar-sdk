@@ -735,21 +735,6 @@
 <a href="#735" id="735">735</a>
 <a href="#736" id="736">736</a>
 <a href="#737" id="737">737</a>
-<a href="#738" id="738">738</a>
-<a href="#739" id="739">739</a>
-<a href="#740" id="740">740</a>
-<a href="#741" id="741">741</a>
-<a href="#742" id="742">742</a>
-<a href="#743" id="743">743</a>
-<a href="#744" id="744">744</a>
-<a href="#745" id="745">745</a>
-<a href="#746" id="746">746</a>
-<a href="#747" id="747">747</a>
-<a href="#748" id="748">748</a>
-<a href="#749" id="749">749</a>
-<a href="#750" id="750">750</a>
-<a href="#751" id="751">751</a>
-<a href="#752" id="752">752</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
@@ -764,7 +749,6 @@
 <span class="kw">use </span>sc_network::network_state::NetworkState;
 <span class="kw">use </span>sc_network::{NetworkService, NetworkStateInfo, SyncState};
 <span class="kw">use </span>sc_rpc_api::state::StateApiClient;
-<span class="kw">use </span>sc_service::config::MultiaddrWithPeerId;
 <span class="kw">use </span>sp_consensus::SyncOracle;
 <span class="kw">use </span>sp_consensus_subspace::digests::PreDigest;
 <span class="kw">use </span>sp_runtime::DigestItem;
@@ -780,7 +764,7 @@
 <span class="kw">use </span>tracing_futures::Instrument;
 
 <span class="kw">use </span><span class="kw">crate</span>::dsn::NodePieceCache;
-<span class="kw">use </span><span class="kw">crate</span>::utils::DropCollection;
+<span class="kw">use </span><span class="kw">crate</span>::utils::{DropCollection, MultiaddrWithPeerId};
 
 <span class="kw">mod </span>builder;
 <span class="kw">pub mod </span>chain_spec;
@@ -846,16 +830,8 @@
             <span class="macro">tracing::trace!</span>(<span class="string">&quot;Subspace networking starting.&quot;</span>);
 
             dsn.boot_nodes.extend(chain_spec_boot_nodes);
-            <span class="kw">let </span>bootstrap_nodes = dsn
-                .boot_nodes
-                .clone()
-                .into_iter()
-                .map(|a| {
-                    a.to_string()
-                        .parse()
-                        .expect(<span class="string">&quot;Convertion between 2 libp2p version. Never panics&quot;</span>)
-                })
-                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+            <span class="kw">let </span>bootstrap_nodes =
+                dsn.boot_nodes.clone().into_iter().map(Into::into).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
             <span class="kw">let </span>(dsn, runner) = dsn.build_dsn(DsnOptions {
                 client: partial_components.client.clone(),
@@ -1232,7 +1208,7 @@
                 state
                     .listened_addresses
                     .into_iter()
-                    .map(|multiaddr| MultiaddrWithPeerId { multiaddr, peer_id })
+                    .map(|multiaddr| MultiaddrWithPeerId::new(multiaddr, peer_id))
                     .collect()
             })
             .map_err(|()| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Network worker exited&quot;</span>))
@@ -1240,20 +1216,14 @@
 
     <span class="doccomment">/// Get listening addresses of the node
     </span><span class="kw">pub async fn </span>dsn_listen_addresses(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Vec&lt;MultiaddrWithPeerId&gt;&gt; {
-        <span class="kw">let </span>peer_id = <span class="self">self</span>.dsn.node.id();
+        <span class="kw">let </span>peer_id =
+            <span class="self">self</span>.dsn.node.id().to_string().parse().expect(<span class="string">&quot;Conversion between 2 libp2p versions&quot;</span>);
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.dsn
             .node
             .listeners()
             .into_iter()
-            .map(|<span class="kw-2">mut </span>multiaddr| {
-                multiaddr
-                    .push(subspace_networking::libp2p::multiaddr::Protocol::P2p(peer_id.into()));
-                multiaddr
-                    .to_string()
-                    .parse()
-                    .expect(<span class="string">&quot;Convertion between 2 libp2p version. Never panics&quot;</span>)
-            })
+            .map(|multiaddr| MultiaddrWithPeerId::new(multiaddr, peer_id))
             .collect())
     }
 

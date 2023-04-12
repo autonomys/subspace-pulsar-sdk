@@ -460,24 +460,24 @@
 <a href="#460" id="460">460</a>
 <a href="#461" id="461">461</a>
 <a href="#462" id="462">462</a>
-<a href="#463" id="463">463</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>derivative::Derivative;
 <span class="kw">use </span>derive_builder::Builder;
-<span class="kw">use </span>libp2p_core::Multiaddr;
 <span class="kw">use </span>sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 <span class="kw">use </span>sc_network::config::{NodeKeyConfig, Secret};
 <span class="kw">use </span>sc_network::ProtocolName;
 <span class="kw">use </span>sc_service::config::{
-    KeystoreConfig, MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, TransportConfig,
+    KeystoreConfig, NetworkConfiguration, NonDefaultSetConfig, TransportConfig,
 };
 <span class="kw">use </span>sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>storage::StorageKey;
 <span class="kw">pub use </span>subspace_runtime::RuntimeEvent <span class="kw">as </span>Event;
 <span class="kw">pub use </span>types::<span class="kw-2">*</span>;
+
+<span class="kw">use </span><span class="kw">crate</span>::utils::{Multiaddr, MultiaddrWithPeerId};
 
 <span class="kw">mod </span>storage;
 <span class="kw">mod </span>types;
@@ -586,7 +586,7 @@
                 <span class="doccomment">/// Enable color for substrate informant
                 </span>informant_enable_color: bool,
                 <span class="doccomment">/// Additional telemetry endpoints
-                </span>telemetry: Vec&lt;(libp2p_core::Multiaddr, u8)&gt;,
+                </span>telemetry: Vec&lt;(<span class="macro-nonterminal">$crate::utils::Multiaddr</span>, u8)&gt;,
             });
         }
     }
@@ -660,18 +660,16 @@
 
             <span class="kw">let </span>client_id = client_id.unwrap_or_else(|| <span class="macro">format!</span>(<span class="string">&quot;{impl_name}/v{impl_version}&quot;</span>));
             <span class="kw">let </span>config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
-            <span class="kw">let </span>listen_addresses = listen_addresses
-                .into_iter()
-                .map(|addr| {
-                    addr.to_string()
-                        .parse()
-                        .expect(<span class="string">&quot;Conversion between 2 libp2p versions is always right&quot;</span>)
-                })
-                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+            <span class="kw">let </span>listen_addresses = listen_addresses.into_iter().map(Into::into).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
             NetworkConfiguration {
                 listen_addresses,
-                boot_nodes: chain_spec.boot_nodes().iter().cloned().chain(boot_nodes).collect(),
+                boot_nodes: chain_spec
+                    .boot_nodes()
+                    .iter()
+                    .cloned()
+                    .chain(boot_nodes.into_iter().map(Into::into))
+                    .collect(),
                 force_synced,
                 transport: TransportConfig::Normal { enable_mdns, allow_private_ip },
                 extra_sets: <span class="macro">vec!</span>[NonDefaultSetConfig::new(
@@ -699,11 +697,11 @@
         </span><span class="kw">let </span>telemetry_endpoints = <span class="kw">match </span>chain_spec.telemetry_endpoints() {
             <span class="prelude-val">Some</span>(endpoints) =&gt; {
                 <span class="kw">let </span><span class="prelude-val">Ok</span>(serde_json::Value::Array(extra_telemetry)) = serde_json::to_value(<span class="kw-2">&amp;</span>telemetry) <span class="kw">else </span>{
-                        <span class="macro">unreachable!</span>(<span class="string">&quot;Will always return an array&quot;</span>)
-                    };
+                    <span class="macro">unreachable!</span>(<span class="string">&quot;Will always return an array&quot;</span>)
+                };
                 <span class="kw">let </span><span class="prelude-val">Ok</span>(serde_json::Value::Array(telemetry)) = serde_json::to_value(endpoints) <span class="kw">else </span>{
-                        <span class="macro">unreachable!</span>(<span class="string">&quot;Will always return an array&quot;</span>)
-                    };
+                    <span class="macro">unreachable!</span>(<span class="string">&quot;Will always return an array&quot;</span>)
+                };
 
                 serde_json::from_value(serde_json::Value::Array(
                     telemetry.into_iter().chain(extra_telemetry).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),

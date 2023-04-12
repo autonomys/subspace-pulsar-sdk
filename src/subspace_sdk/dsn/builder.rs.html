@@ -381,23 +381,6 @@
 <a href="#381" id="381">381</a>
 <a href="#382" id="382">382</a>
 <a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -408,8 +391,6 @@
 <span class="kw">use </span>derive_more::{Deref, DerefMut, Display, From};
 <span class="kw">use </span>either::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
-<span class="kw">use </span>libp2p_core::Multiaddr;
-<span class="kw">use </span>sc_service::config::MultiaddrWithPeerId;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 <span class="kw">use </span>subspace_farmer_components::piece_caching::PieceMemoryCache;
@@ -422,7 +403,7 @@
 <span class="kw">use </span><span class="kw">super</span>::provider_storage_utils::MaybeProviderStorage;
 <span class="kw">use super</span>::{FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage};
 <span class="kw">use </span><span class="kw">crate</span>::node::PieceCacheSize;
-<span class="kw">use </span><span class="kw">crate</span>::utils::DropCollection;
+<span class="kw">use </span><span class="kw">crate</span>::utils::{DropCollection, Multiaddr, MultiaddrWithPeerId};
 <span class="kw">use crate</span>::{farmer, node};
 
 <span class="doccomment">/// Wrapper with default value for listen address
@@ -591,12 +572,13 @@
 }
 
 <span class="kw">impl </span>Dsn {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>build_dsn&lt;C, ASNS&gt;(
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>build_dsn&lt;B, C, ASNS&gt;(
         <span class="self">self</span>,
         options: DsnOptions&lt;C, ASNS&gt;,
     ) -&gt; anyhow::Result&lt;(DsnShared&lt;C&gt;, subspace_networking::NodeRunner&lt;ProviderStorage&lt;C&gt;&gt;)&gt;
     <span class="kw">where
-        </span>C: sc_client_api::AuxStore + Send + Sync + <span class="lifetime">&#39;static</span>,
+        </span>B: sp_runtime::traits::Block&lt;Hash = <span class="kw">crate</span>::node::Hash&gt;,
+        C: sc_client_api::AuxStore + sp_blockchain::HeaderBackend&lt;B&gt; + Send + Sync + <span class="lifetime">&#39;static</span>,
         ASNS: Stream&lt;Item = sc_consensus_subspace::ArchivedSegmentNotification&gt;
             + Unpin
             + Send
@@ -614,6 +596,9 @@
         <span class="kw">let </span>farmer_piece_store = Arc::new(tokio::sync::Mutex::new(<span class="prelude-val">None</span>));
         <span class="kw">let </span>farmer_provider_storage = MaybeProviderStorage::none();
         <span class="kw">let </span>piece_memory_cache = PieceMemoryCache::default();
+        <span class="kw">let </span>protocol_prefix = hex::encode(client.info().genesis_hash);
+
+        <span class="macro">tracing::info!</span>(genesis_hash = protocol_prefix, <span class="string">&quot;Setting DSN protocol prefix...&quot;</span>);
 
         <span class="kw">let </span>piece_cache = NodePieceCache::new(
             client.clone(),
@@ -664,20 +649,9 @@
         } = <span class="self">self</span>;
 
         <span class="kw">let </span>peer_id = subspace_networking::peer_id(<span class="kw-2">&amp;</span>keypair);
-        <span class="kw">let </span>bootstrap_nodes = boot_nodes
-            .into_iter()
-            .map(|a| {
-                a.to_string().parse().expect(<span class="string">&quot;Convertion between 2 libp2p version. Never panics&quot;</span>)
-            })
-            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span>bootstrap_nodes = boot_nodes.into_iter().map(Into::into).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let </span>listen_on = listen_addresses
-            .<span class="number">0
-            </span>.into_iter()
-            .map(|a| {
-                a.to_string().parse().expect(<span class="string">&quot;Convertion between 2 libp2p version. Never panics&quot;</span>)
-            })
-            .collect();
+        <span class="kw">let </span>listen_on = listen_addresses.<span class="number">0</span>.into_iter().map(Into::into).collect();
 
         <span class="kw">let </span>networking_parameters_registry = subspace_networking::NetworkingParametersManager::new(
             <span class="kw-2">&amp;</span>base_path.join(<span class="string">&quot;known_addresses_db&quot;</span>),
@@ -701,7 +675,7 @@
             ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
 
         <span class="kw">let </span>config = subspace_networking::Config {
-            keypair,
+            keypair: keypair.clone(),
             listen_on,
             allow_non_global_addresses_in_dht,
             networking_parameters_registry,
@@ -750,21 +724,13 @@
                     }
                 }),
             ],
-            provider_storage,
-            reserved_peers: reserved_nodes
-                .into_iter()
-                .map(|addr| {
-                    addr.to_string()
-                        .parse()
-                        .expect(<span class="string">&quot;Conversion between 2 libp2p versions is always right&quot;</span>)
-                })
-                .collect(),
+            reserved_peers: reserved_nodes.into_iter().map(Into::into).collect(),
             max_established_incoming_connections,
             max_established_outgoing_connections,
             target_connections,
             max_pending_incoming_connections,
             max_pending_outgoing_connections,
-            ..subspace_networking::Config::default()
+            ..subspace_networking::Config::new(protocol_prefix, keypair, provider_storage)
         };
 
         <span class="kw">let </span>(node, runner) = subspace_networking::create(config)<span class="question-mark">?</span>;

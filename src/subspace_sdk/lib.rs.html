@@ -208,6 +208,7 @@
 <a href="#208" id="208">208</a>
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Subspace SDK for easy running of both Subspace node and farmer
 
 </span><span class="attr">#![warn(missing_docs, clippy::dbg_macro, clippy::unwrap_used, clippy::disallowed_types)]
@@ -227,6 +228,7 @@
 <span class="kw">pub use </span>parse_ss58::Ss58ParsingError;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>subspace_core_primitives::PUBLIC_KEY_LENGTH;
+<span class="kw">pub use </span>utils::{ByteSize, Multiaddr, MultiaddrWithPeerId};
 
 <span class="attr">#[doc(hidden)]
 #[macro_export]

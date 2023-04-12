@@ -142,9 +142,6 @@
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::path::Path;
 
@@ -159,6 +156,7 @@
 };
 <span class="kw">use super</span>::{domains, ChainSpec, Node};
 <span class="kw">use </span><span class="kw">crate</span>::dsn::builder::{Dsn, DsnBuilder};
+<span class="kw">use </span><span class="kw">crate</span>::utils::ByteSize;
 
 <span class="doccomment">/// Wrapper with default value for piece cache size
 </span><span class="attr">#[derive(
@@ -166,11 +164,7 @@
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-</span><span class="kw">pub struct </span>PieceCacheSize(
-    <span class="attr">#[derivative(Default(value = <span class="string">&quot;bytesize::ByteSize::gib(1)&quot;</span>))]
-    #[serde(with = <span class="string">&quot;bytesize_serde&quot;</span>)]
-    </span><span class="kw">pub</span>(<span class="kw">crate</span>) bytesize::ByteSize,
-);
+</span><span class="kw">pub struct </span>PieceCacheSize(<span class="attr">#[derivative(Default(value = <span class="string">&quot;ByteSize::gib(1)&quot;</span>))] </span><span class="kw">pub</span>(<span class="kw">crate</span>) ByteSize);
 
 <span class="doccomment">/// Wrapper with default value for segment publish concurent jobs
 </span><span class="attr">#[derive(

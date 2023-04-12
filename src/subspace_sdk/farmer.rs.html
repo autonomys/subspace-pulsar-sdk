@@ -997,10 +997,6 @@
 <a href="#997" id="997">997</a>
 <a href="#998" id="998">998</a>
 <a href="#999" id="999">999</a>
-<a href="#1000" id="1000">1000</a>
-<a href="#1001" id="1001">1001</a>
-<a href="#1002" id="1002">1002</a>
-<a href="#1003" id="1003">1003</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1010,7 +1006,6 @@
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">pub use </span>builder::{Builder, Config};
-<span class="kw">use </span>bytesize::ByteSize;
 <span class="kw">use </span>derivative::Derivative;
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
@@ -1036,7 +1031,7 @@
 
 <span class="kw">use </span><span class="self">self</span>::builder::{PieceCacheSize, ProvidedKeysLimit};
 <span class="kw">use </span><span class="kw">crate</span>::dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
-<span class="kw">use </span><span class="kw">crate</span>::utils::{AsyncDropFutures, DropCollection};
+<span class="kw">use </span><span class="kw">crate</span>::utils::{AsyncDropFutures, ByteSize, DropCollection};
 <span class="kw">use crate</span>::{Node, PublicKey};
 
 <span class="doccomment">/// Description of the cache
@@ -1046,7 +1041,6 @@
     <span class="doccomment">/// Path to the cache description
     </span><span class="kw">pub </span>directory: PathBuf,
     <span class="doccomment">/// Space which you want to dedicate
-    </span><span class="attr">#[serde(with = <span class="string">&quot;bytesize_serde&quot;</span>)]
     </span><span class="kw">pub </span>space_dedicated: ByteSize,
 }
 
@@ -1088,7 +1082,6 @@
     <span class="doccomment">/// Path of the plot
     </span><span class="kw">pub </span>directory: PathBuf,
     <span class="doccomment">/// Space which you want to pledge
-    </span><span class="attr">#[serde(with = <span class="string">&quot;bytesize_serde&quot;</span>)]
     </span><span class="kw">pub </span>space_pledged: ByteSize,
 }
 
@@ -1099,7 +1092,7 @@
 
 <span class="kw">impl </span>PlotDescription {
     <span class="doccomment">/// Minimal plot size
-    </span><span class="kw">pub const </span>MIN_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE + <span class="self">Self</span>::SECTOR_OVERHEAD.<span class="number">0</span>);
+    </span><span class="kw">pub const </span>MIN_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE + <span class="self">Self</span>::SECTOR_OVERHEAD.<span class="number">0 </span>.<span class="number">0</span>);
     <span class="comment">// TODO: Account for prefix and metadata sizes
     </span><span class="kw">const </span>SECTOR_OVERHEAD: ByteSize = ByteSize::mb(<span class="number">2</span>);
 
@@ -1134,6 +1127,7 @@
     <span class="kw">use </span>serde::{Deserialize, Serialize};
 
     <span class="kw">use super</span>::{BuildError, CacheDescription};
+    <span class="kw">use </span><span class="kw">crate</span>::utils::ByteSize;
     <span class="kw">use crate</span>::{Farmer, Node, PlotDescription, PublicKey};
 
     <span class="attr">#[derive(
@@ -1172,9 +1166,7 @@
     #[derivative(Default)]
     #[serde(transparent)]
     </span><span class="kw">pub struct </span>PieceCacheSize(
-        <span class="attr">#[derivative(Default(value = <span class="string">&quot;bytesize::ByteSize::mib(10)&quot;</span>))]
-        #[serde(with = <span class="string">&quot;bytesize_serde&quot;</span>)]
-        </span><span class="kw">pub</span>(<span class="kw">crate</span>) bytesize::ByteSize,
+        <span class="attr">#[derivative(Default(value = <span class="string">&quot;ByteSize::mib(10)&quot;</span>))] </span><span class="kw">pub</span>(<span class="kw">crate</span>) ByteSize,
     );
 
     <span class="attr">#[derive(
