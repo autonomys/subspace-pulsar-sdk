@@ -32,7 +32,7 @@ use tracing_futures::Instrument;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
 use crate::dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
-use crate::utils::{AsyncDropFutures, ByteSize, DropCollection};
+use crate::utils::{self, AsyncDropFutures, ByteSize, DropCollection};
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -424,16 +424,17 @@ fn handler_on_sector_plotted(
         drop(plotting_permit);
     };
 
-    let _ = tokio::task::Builder::new()
-        .name(format!("subspace-sdk-farmer-{node_name}-piece-publishing").as_ref())
-        .spawn(async move {
+    let _ = utils::task_spawn(
+        format!("subspace-sdk-farmer-{node_name}-piece-publishing"),
+        async move {
             use futures::future::{select, Either};
 
             let result = select(Box::pin(publish_fut), Box::pin(dropped_receiver.recv())).await;
             if !matches!(result, Either::Right(_)) {
                 tracing::debug!("Piece publishing was cancelled due to shutdown.");
             }
-        });
+        },
+    );
 }
 
 impl Config {
@@ -597,30 +598,27 @@ impl Config {
         let (drop_sender, drop_receiver) = oneshot::channel::<()>();
         let (result_sender, result_receiver) = oneshot::channel::<_>();
 
-        tokio::task::Builder::new()
-            .name(format!("subspace-sdk-farmer-{node_name}-single-disk-plots-driver").as_ref())
-            .spawn_blocking({
-                let handle = tokio::runtime::Handle::current();
-                let is_node_closed = {
-                    let stop_sender = node.stop_sender.clone();
-                    move || stop_sender.is_closed()
+        utils::task_spawn_blocking(format!("subspace-sdk-farmer-{node_name}-plots-driver"), {
+            let handle = tokio::runtime::Handle::current();
+            let is_node_closed = {
+                let stop_sender = node.stop_sender.clone();
+                move || stop_sender.is_closed()
+            };
+
+            move || {
+                use future::Either::*;
+
+                let result = match handle
+                    .block_on(future::select(single_disk_plots_stream.next(), drop_receiver))
+                {
+                    Left((_, _)) if is_node_closed() => Ok(()),
+                    Left((maybe_result, _)) =>
+                        maybe_result.expect("there is always at least one plot"),
+                    Right((_, _)) => Ok(()),
                 };
-
-                move || {
-                    use future::Either::*;
-
-                    let result = match handle
-                        .block_on(future::select(single_disk_plots_stream.next(), drop_receiver))
-                    {
-                        Left((_, _)) if is_node_closed() => Ok(()),
-                        Left((maybe_result, _)) =>
-                            maybe_result.expect("there is always at least one plot"),
-                        Right((_, _)) => Ok(()),
-                    };
-                    let _ = result_sender.send(result);
-                }
-            })
-            .context("Failed to spawn task")?;
+                let _ = result_sender.send(result);
+            }
+        });
 
         node.dsn.farmer_piece_store.lock().await.replace(piece_store);
         node.dsn.farmer_provider_storage.swap(Some(farmer_provider_storage));

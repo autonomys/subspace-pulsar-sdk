@@ -51,8 +51,12 @@ pub struct Args {
 async fn main() -> anyhow::Result<()> {
     fdlimit::raise_fd_limit();
 
-    tracing_subscriber::registry()
-        .with(console_subscriber::spawn())
+    #[cfg(tokio_unstable)]
+    let registry = tracing_subscriber::registry().with(console_subscriber::spawn());
+    #[cfg(not(tokio_unstable))]
+    let registry = tracing_subscriber::registry();
+
+    registry
         .with(tracing_subscriber::fmt::layer())
         .with(
             tracing_subscriber::EnvFilter::from_default_env()

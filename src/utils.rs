@@ -328,6 +328,50 @@ impl From<MultiaddrWithPeerId> for Multiaddr {
     }
 }
 
+#[cfg(not(tokio_unstable))]
+pub fn task_spawn<F>(name: impl AsRef<str>, future: F) -> tokio::task::JoinHandle<F::Output>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    let _ = name;
+    tokio::task::spawn(future)
+}
+
+#[cfg(tokio_unstable)]
+pub fn task_spawn<F>(name: impl AsRef<str>, future: F) -> tokio::task::JoinHandle<F::Output>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    tokio::task::Builder::new()
+        .name(name.as_ref())
+        .spawn(future)
+        .expect("Spawning task never fails")
+}
+
+#[cfg(not(tokio_unstable))]
+pub fn task_spawn_blocking<F, R>(name: impl AsRef<str>, f: F) -> tokio::task::JoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    let _ = name;
+    tokio::task::spawn_blocking(f)
+}
+
+#[cfg(tokio_unstable)]
+pub fn task_spawn_blocking<F, R>(name: impl AsRef<str>, f: F) -> tokio::task::JoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    tokio::task::Builder::new()
+        .name(name.as_ref())
+        .spawn_blocking(f)
+        .expect("Spawning task never fails")
+}
+
 pub mod chain_spec {
     use frame_support::traits::Get;
     use sc_service::Properties;

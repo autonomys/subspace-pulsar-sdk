@@ -102,12 +102,14 @@ system-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "3
 [target.'cfg(all(target_arch = "x86_64", target_vendor = "unknown", target_os = "linux", target_env = "gnu"))'.dev-dependencies]
 jemallocator = "0.5.0"
 
+[target.'cfg(tokio_unstable)'.dev-dependencies]
+console-subscriber = "0.1"
+
 [dev-dependencies]
 clap = { version = "4", features = ["derive"] }
 tempfile = "3"
 tokio = { version = "1.26", features = ["rt-multi-thread", "macros"] }
 tracing-subscriber = "0.3"
-console-subscriber = "0.1"
 fdlimit = "0.2"
 
 [patch.crates-io]
