@@ -112,10 +112,6 @@ tokio = { version = "1.26", features = ["rt-multi-thread", "macros"] }
 tracing-subscriber = "0.3"
 fdlimit = "0.2"
 
-[patch.crates-io]
-# TODO: Remove once chacha20poly1305 0.10 appears in libp2p's dependencies
-chacha20poly1305 = { git = "https://github.com/RustCrypto/AEADs", rev = "06dbfb5571687fd1bbe9d3c9b2193a1ba17f8e99" }
-
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
 # that are suspected to be CPU-intensive, and that are unlikely to require debugging (as some of
 # their debug info might be missing) or to require to be frequently recompiled. We compile these

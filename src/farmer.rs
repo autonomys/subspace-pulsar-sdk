@@ -270,30 +270,29 @@ pub(crate) fn get_piece_by_hash(
 
     debug!(?piece_index_hash, "No piece in the cache. Trying archival storage...");
 
-    let read_piece_fut = {
-        let readers_and_pieces = match weak_readers_and_pieces.upgrade() {
-            Some(readers_and_pieces) => readers_and_pieces,
-            None => {
-                debug!("A readers and pieces are already dropped");
-                return Either::Left(ready(None));
-            }
-        };
-        let readers_and_pieces = readers_and_pieces.lock();
-        let readers_and_pieces = match readers_and_pieces.as_ref() {
-            Some(readers_and_pieces) => readers_and_pieces,
-            None => {
-                debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
-                return Either::Left(ready(None));
-            }
-        };
-
-        match readers_and_pieces.read_piece(&piece_index_hash) {
-            Some(fut) => fut.instrument(tracing::Span::current()),
-            None => return Either::Left(ready(None)),
+    let readers_and_pieces = match weak_readers_and_pieces.upgrade() {
+        Some(readers_and_pieces) => readers_and_pieces,
+        None => {
+            debug!("A readers and pieces are already dropped");
+            return Either::Left(ready(None));
+        }
+    };
+    let readers_and_pieces = readers_and_pieces.lock();
+    let readers_and_pieces = match readers_and_pieces.as_ref() {
+        Some(readers_and_pieces) => readers_and_pieces,
+        None => {
+            debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
+            return Either::Left(ready(None));
         }
     };
 
-    Either::Right(read_piece_fut.map(|piece| Some(PieceByHashResponse { piece })))
+    match readers_and_pieces.read_piece(&piece_index_hash) {
+        Some(fut) => Either::Right(
+            fut.map(|piece| Some(PieceByHashResponse { piece }))
+                .instrument(tracing::Span::current()),
+        ),
+        None => Either::Left(ready(None)),
+    }
 }
 
 const SEGMENT_COMMITMENTS_CACHE_SIZE: NonZeroUsize =
