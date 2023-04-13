@@ -379,8 +379,6 @@
 <a href="#379" id="379">379</a>
 <a href="#380" id="380">380</a>
 <a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -403,7 +401,7 @@
 <span class="kw">use </span><span class="kw">super</span>::provider_storage_utils::MaybeProviderStorage;
 <span class="kw">use super</span>::{FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage};
 <span class="kw">use </span><span class="kw">crate</span>::node::PieceCacheSize;
-<span class="kw">use </span><span class="kw">crate</span>::utils::{DropCollection, Multiaddr, MultiaddrWithPeerId};
+<span class="kw">use </span><span class="kw">crate</span>::utils::{<span class="self">self</span>, DropCollection, Multiaddr, MultiaddrWithPeerId};
 <span class="kw">use crate</span>::{farmer, node};
 
 <span class="doccomment">/// Wrapper with default value for listen address
@@ -608,32 +606,30 @@
 
         <span class="comment">// Start before archiver, so we don&#39;t have potential race condition and
         // miss pieces
-        </span>tokio::task::Builder::new()
-            .name(<span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-node-{node_name}-piece-caching&quot;</span>).as_ref())
-            .spawn({
-                <span class="kw">let </span><span class="kw-2">mut </span>piece_cache = piece_cache.clone();
+        </span>utils::task_spawn(<span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-node-{node_name}-piece-caching&quot;</span>), {
+            <span class="kw">let </span><span class="kw-2">mut </span>piece_cache = piece_cache.clone();
 
-                <span class="kw">async move </span>{
-                    <span class="kw">while let </span><span class="prelude-val">Some</span>(archived_segment_notification) =
-                        archived_segment_notification_stream.next().<span class="kw">await
-                    </span>{
-                        <span class="kw">let </span>segment_index = archived_segment_notification
-                            .archived_segment
-                            .segment_header
-                            .segment_index();
-                        <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = piece_cache.add_pieces(
-                            segment_index.first_piece_index(),
-                            <span class="kw-2">&amp;</span>archived_segment_notification.archived_segment.pieces,
-                        ) {
-                            <span class="macro">tracing::error!</span>(
-                                %segment_index,
-                                %error,
-                                <span class="string">&quot;Failed to store pieces for segment in cache&quot;
-                            </span>);
-                        }
+            <span class="kw">async move </span>{
+                <span class="kw">while let </span><span class="prelude-val">Some</span>(archived_segment_notification) =
+                    archived_segment_notification_stream.next().<span class="kw">await
+                </span>{
+                    <span class="kw">let </span>segment_index = archived_segment_notification
+                        .archived_segment
+                        .segment_header
+                        .segment_index();
+                    <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = piece_cache.add_pieces(
+                        segment_index.first_piece_index(),
+                        <span class="kw-2">&amp;</span>archived_segment_notification.archived_segment.pieces,
+                    ) {
+                        <span class="macro">tracing::error!</span>(
+                            %segment_index,
+                            %error,
+                            <span class="string">&quot;Failed to store pieces for segment in cache&quot;
+                        </span>);
                     }
                 }
-            })<span class="question-mark">?</span>;
+            }
+        });
 
         <span class="kw">let </span><span class="self">Self </span>{
             listen_addresses,

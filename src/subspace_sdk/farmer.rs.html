@@ -994,9 +994,6 @@
 <a href="#994" id="994">994</a>
 <a href="#995" id="995">995</a>
 <a href="#996" id="996">996</a>
-<a href="#997" id="997">997</a>
-<a href="#998" id="998">998</a>
-<a href="#999" id="999">999</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1031,7 +1028,7 @@
 
 <span class="kw">use </span><span class="self">self</span>::builder::{PieceCacheSize, ProvidedKeysLimit};
 <span class="kw">use </span><span class="kw">crate</span>::dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
-<span class="kw">use </span><span class="kw">crate</span>::utils::{AsyncDropFutures, ByteSize, DropCollection};
+<span class="kw">use </span><span class="kw">crate</span>::utils::{<span class="self">self</span>, AsyncDropFutures, ByteSize, DropCollection};
 <span class="kw">use crate</span>::{Node, PublicKey};
 
 <span class="doccomment">/// Description of the cache
@@ -1269,30 +1266,29 @@
 
     <span class="macro">debug!</span>(<span class="question-mark">?</span>piece_index_hash, <span class="string">&quot;No piece in the cache. Trying archival storage...&quot;</span>);
 
-    <span class="kw">let </span>read_piece_fut = {
-        <span class="kw">let </span>readers_and_pieces = <span class="kw">match </span>weak_readers_and_pieces.upgrade() {
-            <span class="prelude-val">Some</span>(readers_and_pieces) =&gt; readers_and_pieces,
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="macro">debug!</span>(<span class="string">&quot;A readers and pieces are already dropped&quot;</span>);
-                <span class="kw">return </span>Either::Left(ready(<span class="prelude-val">None</span>));
-            }
-        };
-        <span class="kw">let </span>readers_and_pieces = readers_and_pieces.lock();
-        <span class="kw">let </span>readers_and_pieces = <span class="kw">match </span>readers_and_pieces.as_ref() {
-            <span class="prelude-val">Some</span>(readers_and_pieces) =&gt; readers_and_pieces,
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="macro">debug!</span>(<span class="question-mark">?</span>piece_index_hash, <span class="string">&quot;Readers and pieces are not initialized yet&quot;</span>);
-                <span class="kw">return </span>Either::Left(ready(<span class="prelude-val">None</span>));
-            }
-        };
-
-        <span class="kw">match </span>readers_and_pieces.read_piece(<span class="kw-2">&amp;</span>piece_index_hash) {
-            <span class="prelude-val">Some</span>(fut) =&gt; fut.instrument(tracing::Span::current()),
-            <span class="prelude-val">None </span>=&gt; <span class="kw">return </span>Either::Left(ready(<span class="prelude-val">None</span>)),
+    <span class="kw">let </span>readers_and_pieces = <span class="kw">match </span>weak_readers_and_pieces.upgrade() {
+        <span class="prelude-val">Some</span>(readers_and_pieces) =&gt; readers_and_pieces,
+        <span class="prelude-val">None </span>=&gt; {
+            <span class="macro">debug!</span>(<span class="string">&quot;A readers and pieces are already dropped&quot;</span>);
+            <span class="kw">return </span>Either::Left(ready(<span class="prelude-val">None</span>));
+        }
+    };
+    <span class="kw">let </span>readers_and_pieces = readers_and_pieces.lock();
+    <span class="kw">let </span>readers_and_pieces = <span class="kw">match </span>readers_and_pieces.as_ref() {
+        <span class="prelude-val">Some</span>(readers_and_pieces) =&gt; readers_and_pieces,
+        <span class="prelude-val">None </span>=&gt; {
+            <span class="macro">debug!</span>(<span class="question-mark">?</span>piece_index_hash, <span class="string">&quot;Readers and pieces are not initialized yet&quot;</span>);
+            <span class="kw">return </span>Either::Left(ready(<span class="prelude-val">None</span>));
         }
     };
 
-    Either::Right(read_piece_fut.map(|piece| <span class="prelude-val">Some</span>(PieceByHashResponse { piece })))
+    <span class="kw">match </span>readers_and_pieces.read_piece(<span class="kw-2">&amp;</span>piece_index_hash) {
+        <span class="prelude-val">Some</span>(fut) =&gt; Either::Right(
+            fut.map(|piece| <span class="prelude-val">Some</span>(PieceByHashResponse { piece }))
+                .instrument(tracing::Span::current()),
+        ),
+        <span class="prelude-val">None </span>=&gt; Either::Left(ready(<span class="prelude-val">None</span>)),
+    }
 }
 
 <span class="kw">const </span>SEGMENT_COMMITMENTS_CACHE_SIZE: NonZeroUsize =
@@ -1423,16 +1419,17 @@
         </span>drop(plotting_permit);
     };
 
-    <span class="kw">let _ </span>= tokio::task::Builder::new()
-        .name(<span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-farmer-{node_name}-piece-publishing&quot;</span>).as_ref())
-        .spawn(<span class="kw">async move </span>{
+    drop(utils::task_spawn(
+        <span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-farmer-{node_name}-piece-publishing&quot;</span>),
+        <span class="kw">async move </span>{
             <span class="kw">use </span>futures::future::{select, Either};
 
             <span class="kw">let </span>result = select(Box::pin(publish_fut), Box::pin(dropped_receiver.recv())).<span class="kw">await</span>;
             <span class="kw">if </span>!<span class="macro">matches!</span>(result, Either::Right(<span class="kw">_</span>)) {
                 <span class="macro">tracing::debug!</span>(<span class="string">&quot;Piece publishing was cancelled due to shutdown.&quot;</span>);
             }
-        });
+        },
+    ));
 }
 
 <span class="kw">impl </span>Config {
@@ -1596,30 +1593,27 @@
         <span class="kw">let </span>(drop_sender, drop_receiver) = oneshot::channel::&lt;()&gt;();
         <span class="kw">let </span>(result_sender, result_receiver) = oneshot::channel::&lt;<span class="kw">_</span>&gt;();
 
-        tokio::task::Builder::new()
-            .name(<span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-farmer-{node_name}-single-disk-plots-driver&quot;</span>).as_ref())
-            .spawn_blocking({
-                <span class="kw">let </span>handle = tokio::runtime::Handle::current();
-                <span class="kw">let </span>is_node_closed = {
-                    <span class="kw">let </span>stop_sender = node.stop_sender.clone();
-                    <span class="kw">move </span>|| stop_sender.is_closed()
+        utils::task_spawn_blocking(<span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-farmer-{node_name}-plots-driver&quot;</span>), {
+            <span class="kw">let </span>handle = tokio::runtime::Handle::current();
+            <span class="kw">let </span>is_node_closed = {
+                <span class="kw">let </span>stop_sender = node.stop_sender.clone();
+                <span class="kw">move </span>|| stop_sender.is_closed()
+            };
+
+            <span class="kw">move </span>|| {
+                <span class="kw">use </span>future::Either::<span class="kw-2">*</span>;
+
+                <span class="kw">let </span>result = <span class="kw">match </span>handle
+                    .block_on(future::select(single_disk_plots_stream.next(), drop_receiver))
+                {
+                    Left((<span class="kw">_</span>, <span class="kw">_</span>)) <span class="kw">if </span>is_node_closed() =&gt; <span class="prelude-val">Ok</span>(()),
+                    Left((maybe_result, <span class="kw">_</span>)) =&gt;
+                        maybe_result.expect(<span class="string">&quot;there is always at least one plot&quot;</span>),
+                    Right((<span class="kw">_</span>, <span class="kw">_</span>)) =&gt; <span class="prelude-val">Ok</span>(()),
                 };
-
-                <span class="kw">move </span>|| {
-                    <span class="kw">use </span>future::Either::<span class="kw-2">*</span>;
-
-                    <span class="kw">let </span>result = <span class="kw">match </span>handle
-                        .block_on(future::select(single_disk_plots_stream.next(), drop_receiver))
-                    {
-                        Left((<span class="kw">_</span>, <span class="kw">_</span>)) <span class="kw">if </span>is_node_closed() =&gt; <span class="prelude-val">Ok</span>(()),
-                        Left((maybe_result, <span class="kw">_</span>)) =&gt;
-                            maybe_result.expect(<span class="string">&quot;there is always at least one plot&quot;</span>),
-                        Right((<span class="kw">_</span>, <span class="kw">_</span>)) =&gt; <span class="prelude-val">Ok</span>(()),
-                    };
-                    <span class="kw">let _ </span>= result_sender.send(result);
-                }
-            })
-            .context(<span class="string">&quot;Failed to spawn task&quot;</span>)<span class="question-mark">?</span>;
+                <span class="kw">let _ </span>= result_sender.send(result);
+            }
+        });
 
         node.dsn.farmer_piece_store.lock().<span class="kw">await</span>.replace(piece_store);
         node.dsn.farmer_provider_storage.swap(<span class="prelude-val">Some</span>(farmer_provider_storage));
