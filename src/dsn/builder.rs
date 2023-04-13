@@ -20,7 +20,7 @@ use subspace_service::segment_headers::SegmentHeaderCache;
 use super::provider_storage_utils::MaybeProviderStorage;
 use super::{FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage};
 use crate::node::PieceCacheSize;
-use crate::utils::{DropCollection, Multiaddr, MultiaddrWithPeerId};
+use crate::utils::{self, DropCollection, Multiaddr, MultiaddrWithPeerId};
 use crate::{farmer, node};
 
 /// Wrapper with default value for listen address
@@ -225,32 +225,30 @@ impl Dsn {
 
         // Start before archiver, so we don't have potential race condition and
         // miss pieces
-        tokio::task::Builder::new()
-            .name(format!("subspace-sdk-node-{node_name}-piece-caching").as_ref())
-            .spawn({
-                let mut piece_cache = piece_cache.clone();
+        utils::task_spawn(format!("subspace-sdk-node-{node_name}-piece-caching"), {
+            let mut piece_cache = piece_cache.clone();
 
-                async move {
-                    while let Some(archived_segment_notification) =
-                        archived_segment_notification_stream.next().await
-                    {
-                        let segment_index = archived_segment_notification
-                            .archived_segment
-                            .segment_header
-                            .segment_index();
-                        if let Err(error) = piece_cache.add_pieces(
-                            segment_index.first_piece_index(),
-                            &archived_segment_notification.archived_segment.pieces,
-                        ) {
-                            tracing::error!(
-                                %segment_index,
-                                %error,
-                                "Failed to store pieces for segment in cache"
-                            );
-                        }
+            async move {
+                while let Some(archived_segment_notification) =
+                    archived_segment_notification_stream.next().await
+                {
+                    let segment_index = archived_segment_notification
+                        .archived_segment
+                        .segment_header
+                        .segment_index();
+                    if let Err(error) = piece_cache.add_pieces(
+                        segment_index.first_piece_index(),
+                        &archived_segment_notification.archived_segment.pieces,
+                    ) {
+                        tracing::error!(
+                            %segment_index,
+                            %error,
+                            "Failed to store pieces for segment in cache"
+                        );
                     }
                 }
-            })?;
+            }
+        });
 
         let Self {
             listen_addresses,

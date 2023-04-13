@@ -32,7 +32,7 @@ use tracing_futures::Instrument;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
 use crate::dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
-use crate::utils::{AsyncDropFutures, ByteSize, DropCollection};
+use crate::utils::{self, AsyncDropFutures, ByteSize, DropCollection};
 use crate::{Node, PublicKey};
 
 /// Description of the cache
@@ -270,30 +270,29 @@ pub(crate) fn get_piece_by_hash(
 
     debug!(?piece_index_hash, "No piece in the cache. Trying archival storage...");
 
-    let read_piece_fut = {
-        let readers_and_pieces = match weak_readers_and_pieces.upgrade() {
-            Some(readers_and_pieces) => readers_and_pieces,
-            None => {
-                debug!("A readers and pieces are already dropped");
-                return Either::Left(ready(None));
-            }
-        };
-        let readers_and_pieces = readers_and_pieces.lock();
-        let readers_and_pieces = match readers_and_pieces.as_ref() {
-            Some(readers_and_pieces) => readers_and_pieces,
-            None => {
-                debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
-                return Either::Left(ready(None));
-            }
-        };
-
-        match readers_and_pieces.read_piece(&piece_index_hash) {
-            Some(fut) => fut.instrument(tracing::Span::current()),
-            None => return Either::Left(ready(None)),
+    let readers_and_pieces = match weak_readers_and_pieces.upgrade() {
+        Some(readers_and_pieces) => readers_and_pieces,
+        None => {
+            debug!("A readers and pieces are already dropped");
+            return Either::Left(ready(None));
+        }
+    };
+    let readers_and_pieces = readers_and_pieces.lock();
+    let readers_and_pieces = match readers_and_pieces.as_ref() {
+        Some(readers_and_pieces) => readers_and_pieces,
+        None => {
+            debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
+            return Either::Left(ready(None));
         }
     };
 
-    Either::Right(read_piece_fut.map(|piece| Some(PieceByHashResponse { piece })))
+    match readers_and_pieces.read_piece(&piece_index_hash) {
+        Some(fut) => Either::Right(
+            fut.map(|piece| Some(PieceByHashResponse { piece }))
+                .instrument(tracing::Span::current()),
+        ),
+        None => Either::Left(ready(None)),
+    }
 }
 
 const SEGMENT_COMMITMENTS_CACHE_SIZE: NonZeroUsize =
@@ -424,16 +423,17 @@ fn handler_on_sector_plotted(
         drop(plotting_permit);
     };
 
-    let _ = tokio::task::Builder::new()
-        .name(format!("subspace-sdk-farmer-{node_name}-piece-publishing").as_ref())
-        .spawn(async move {
+    drop(utils::task_spawn(
+        format!("subspace-sdk-farmer-{node_name}-piece-publishing"),
+        async move {
             use futures::future::{select, Either};
 
             let result = select(Box::pin(publish_fut), Box::pin(dropped_receiver.recv())).await;
             if !matches!(result, Either::Right(_)) {
                 tracing::debug!("Piece publishing was cancelled due to shutdown.");
             }
-        });
+        },
+    ));
 }
 
 impl Config {
@@ -597,30 +597,27 @@ impl Config {
         let (drop_sender, drop_receiver) = oneshot::channel::<()>();
         let (result_sender, result_receiver) = oneshot::channel::<_>();
 
-        tokio::task::Builder::new()
-            .name(format!("subspace-sdk-farmer-{node_name}-single-disk-plots-driver").as_ref())
-            .spawn_blocking({
-                let handle = tokio::runtime::Handle::current();
-                let is_node_closed = {
-                    let stop_sender = node.stop_sender.clone();
-                    move || stop_sender.is_closed()
+        utils::task_spawn_blocking(format!("subspace-sdk-farmer-{node_name}-plots-driver"), {
+            let handle = tokio::runtime::Handle::current();
+            let is_node_closed = {
+                let stop_sender = node.stop_sender.clone();
+                move || stop_sender.is_closed()
+            };
+
+            move || {
+                use future::Either::*;
+
+                let result = match handle
+                    .block_on(future::select(single_disk_plots_stream.next(), drop_receiver))
+                {
+                    Left((_, _)) if is_node_closed() => Ok(()),
+                    Left((maybe_result, _)) =>
+                        maybe_result.expect("there is always at least one plot"),
+                    Right((_, _)) => Ok(()),
                 };
-
-                move || {
-                    use future::Either::*;
-
-                    let result = match handle
-                        .block_on(future::select(single_disk_plots_stream.next(), drop_receiver))
-                    {
-                        Left((_, _)) if is_node_closed() => Ok(()),
-                        Left((maybe_result, _)) =>
-                            maybe_result.expect("there is always at least one plot"),
-                        Right((_, _)) => Ok(()),
-                    };
-                    let _ = result_sender.send(result);
-                }
-            })
-            .context("Failed to spawn task")?;
+                let _ = result_sender.send(result);
+            }
+        });
 
         node.dsn.farmer_piece_store.lock().await.replace(piece_store);
         node.dsn.farmer_provider_storage.swap(Some(farmer_provider_storage));

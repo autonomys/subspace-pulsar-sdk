@@ -27,7 +27,7 @@ use substrate::Base;
 use tracing_futures::Instrument;
 
 use crate::dsn::NodePieceCache;
-use crate::utils::{DropCollection, MultiaddrWithPeerId};
+use crate::utils::{self, DropCollection, MultiaddrWithPeerId};
 
 mod builder;
 pub mod chain_spec;
@@ -203,32 +203,30 @@ impl Config {
         network_starter.start_network();
         let (stop_sender, mut stop_receiver) = mpsc::channel::<oneshot::Sender<()>>(1);
 
-        tokio::task::Builder::new()
-            .name(format!("subspace-sdk-node-{name}-task-manager").as_ref())
-            .spawn({
-                let dsn_informer = subspace_networking::utils::online_status_informer(&dsn.node);
-                async move {
-                    let opt_stop_sender = async move {
-                        futures::select! {
-                            opt_sender = stop_receiver.next() => opt_sender,
-                            result = task_manager.future().fuse() => {
-                                result.expect("Task from manager paniced");
-                                None
-                            }
-                            _ = node_runner_future.fuse() => {
-                                tracing::info!("Node runner exited");
-                                None
-                            }
-                            _ = dsn_informer.fuse() => {
-                                tracing::info!("DSN online status observer exited");
-                                None
-                            }
+        utils::task_spawn(format!("subspace-sdk-node-{name}-task-manager"), {
+            let dsn_informer = subspace_networking::utils::online_status_informer(&dsn.node);
+            async move {
+                let opt_stop_sender = async move {
+                    futures::select! {
+                        opt_sender = stop_receiver.next() => opt_sender,
+                        result = task_manager.future().fuse() => {
+                            result.expect("Task from manager paniced");
+                            None
+                        }
+                        _ = node_runner_future.fuse() => {
+                            tracing::info!("Node runner exited");
+                            None
+                        }
+                        _ = dsn_informer.fuse() => {
+                            tracing::info!("DSN online status observer exited");
+                            None
                         }
                     }
-                    .await;
-                    opt_stop_sender.map(|stop_sender| stop_sender.send(()));
                 }
-            })?;
+                .await;
+                opt_stop_sender.map(|stop_sender| stop_sender.send(()));
+            }
+        });
 
         let drop_collection = DropCollection::new();
 
