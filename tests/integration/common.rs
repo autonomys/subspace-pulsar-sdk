@@ -12,8 +12,12 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::Layer;
 
 pub fn setup() {
-    let _ = tracing_subscriber::registry()
-        .with(console_subscriber::spawn())
+    #[cfg(tokio_unstable)]
+    let registry = tracing_subscriber::registry().with(console_subscriber::spawn());
+    #[cfg(not(tokio_unstable))]
+    let registry = tracing_subscriber::registry();
+
+    let _ = registry
         .with(
             tracing_subscriber::fmt::layer().with_test_writer().with_filter(
                 "debug,parity-db=info,cranelift_codegen=info,wasmtime_cranelift=info,\
