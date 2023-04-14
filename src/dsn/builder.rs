@@ -213,9 +213,9 @@ impl Dsn {
         let farmer_piece_store = Arc::new(tokio::sync::Mutex::new(None));
         let farmer_provider_storage = MaybeProviderStorage::none();
         let piece_memory_cache = PieceMemoryCache::default();
-        let protocol_prefix = hex::encode(client.info().genesis_hash);
+        let protocol_version = hex::encode(client.info().genesis_hash);
 
-        tracing::info!(genesis_hash = protocol_prefix, "Setting DSN protocol prefix...");
+        tracing::debug!(genesis_hash = protocol_version, "Setting DSN protocol version...");
 
         let piece_cache = NodePieceCache::new(
             client.clone(),
@@ -345,7 +345,7 @@ impl Dsn {
             target_connections,
             max_pending_incoming_connections,
             max_pending_outgoing_connections,
-            ..subspace_networking::Config::new(protocol_prefix, keypair, provider_storage)
+            ..subspace_networking::Config::new(protocol_version, keypair, provider_storage)
         };
 
         let (node, runner) = subspace_networking::create(config)?;
