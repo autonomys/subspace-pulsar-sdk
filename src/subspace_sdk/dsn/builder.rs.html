@@ -594,9 +594,9 @@
         <span class="kw">let </span>farmer_piece_store = Arc::new(tokio::sync::Mutex::new(<span class="prelude-val">None</span>));
         <span class="kw">let </span>farmer_provider_storage = MaybeProviderStorage::none();
         <span class="kw">let </span>piece_memory_cache = PieceMemoryCache::default();
-        <span class="kw">let </span>protocol_prefix = hex::encode(client.info().genesis_hash);
+        <span class="kw">let </span>protocol_version = hex::encode(client.info().genesis_hash);
 
-        <span class="macro">tracing::info!</span>(genesis_hash = protocol_prefix, <span class="string">&quot;Setting DSN protocol prefix...&quot;</span>);
+        <span class="macro">tracing::debug!</span>(genesis_hash = protocol_version, <span class="string">&quot;Setting DSN protocol version...&quot;</span>);
 
         <span class="kw">let </span>piece_cache = NodePieceCache::new(
             client.clone(),
@@ -726,7 +726,7 @@
             target_connections,
             max_pending_incoming_connections,
             max_pending_outgoing_connections,
-            ..subspace_networking::Config::new(protocol_prefix, keypair, provider_storage)
+            ..subspace_networking::Config::new(protocol_version, keypair, provider_storage)
         };
 
         <span class="kw">let </span>(node, runner) = subspace_networking::create(config)<span class="question-mark">?</span>;
