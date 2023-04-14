@@ -251,7 +251,7 @@ pub fn dev_config() -> ChainSpec {
                     enable_storage_access: false,
                     allow_authoring_by: AllowAuthoringBy::Anyone,
                     enable_executor: true,
-                    confirmation_depth_k: 1,
+                    confirmation_depth_k: 100,
                 },
             )
         },
