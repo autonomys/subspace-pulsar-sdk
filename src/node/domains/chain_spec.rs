@@ -80,8 +80,8 @@ pub fn development_config() -> ChainSpec {
         None,
         Some(chain_spec_properties()),
         ChainSpecExtensions {
-            core: Some(super::core::chain_spec::development_config()),
-            eth: Some(super::eth::chain_spec::development_config()),
+            core: Some(super::core_payments::chain_spec::development_config()),
+            eth: Some(super::eth_relayer::chain_spec::development_config()),
         },
     )
 }
@@ -151,8 +151,8 @@ pub fn local_testnet_config() -> ChainSpec {
         Some(chain_spec_properties()),
         // Extensions
         ChainSpecExtensions {
-            core: Some(super::core::chain_spec::local_testnet_config()),
-            eth: Some(super::eth::chain_spec::local_testnet_config()),
+            core: Some(super::core_payments::chain_spec::local_testnet_config()),
+            eth: Some(super::eth_relayer::chain_spec::local_testnet_config()),
         },
     )
 }
@@ -221,8 +221,8 @@ pub fn gemini_3d_config() -> ChainSpec {
         Some(chain_spec_properties()),
         // Extensions
         ChainSpecExtensions {
-            core: Some(super::core::chain_spec::gemini_3d_config()),
-            eth: Some(super::eth::chain_spec::gemini_3d_config()),
+            core: Some(super::core_payments::chain_spec::gemini_3d_config()),
+            eth: Some(super::eth_relayer::chain_spec::gemini_3d_config()),
         },
     )
 }
@@ -294,8 +294,8 @@ pub fn devnet_config() -> ChainSpec {
         Some(chain_spec_properties()),
         // Extensions
         ChainSpecExtensions {
-            core: Some(super::core::chain_spec::devnet_config()),
-            eth: Some(super::eth::chain_spec::devnet_config()),
+            core: Some(super::core_payments::chain_spec::devnet_config()),
+            eth: Some(super::eth_relayer::chain_spec::devnet_config()),
         },
     )
 }

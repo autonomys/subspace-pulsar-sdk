@@ -86,10 +86,9 @@ impl NodeBuilder {
             .role(if not_authority { Role::Full } else { Role::Authority });
 
         let node = if enable_core {
-            node.system_domain(
-                subspace_sdk::node::domains::ConfigBuilder::new()
-                    .core(subspace_sdk::node::domains::core::ConfigBuilder::new().build()),
-            )
+            node.system_domain(subspace_sdk::node::domains::ConfigBuilder::new().core_payments(
+                subspace_sdk::node::domains::core_payments::ConfigBuilder::new().build(),
+            ))
         } else {
             node
         }

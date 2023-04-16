@@ -17,14 +17,14 @@ use subspace_runtime::Block;
 use system_domain_runtime::Header;
 use tracing_futures::Instrument;
 
-use self::core::CoreDomainNode;
-use self::eth::EthDomainNode;
+use self::core_payments::CoreDomainNode;
+use self::eth_relayer::EthDomainNode;
 use super::{BlockNumber, Hash};
 use crate::node::{Base, BaseBuilder};
 
 pub(crate) mod chain_spec;
-pub mod core;
-pub mod eth;
+pub mod core_payments;
+pub mod eth_relayer;
 
 /// System domain executor instance.
 pub(crate) struct ExecutorDispatch;
@@ -85,14 +85,14 @@ pub struct Config {
     )]
     #[serde(default, skip_serializing_if = "crate::utils::is_default")]
     pub base: Base,
-    /// The core config
+    /// The core payments domain config
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-    pub core: Option<core::Config>,
-    /// The eth domain config
+    pub core_payments: Option<core_payments::Config>,
+    /// The eth relayer domain config
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-    pub eth: Option<eth::Config>,
+    pub eth_relayer: Option<eth_relayer::Config>,
 }
 
 crate::derive_base!(crate::node::Base => ConfigBuilder);
@@ -128,7 +128,7 @@ impl SystemDomainNode {
         chain_spec: ChainSpec,
         primary_new_full: &mut crate::node::NewFull,
     ) -> anyhow::Result<Self> {
-        let Config { base, relayer_id: maybe_relayer_id, core, eth } = cfg;
+        let Config { base, relayer_id: maybe_relayer_id, core_payments, eth_relayer } = cfg;
         let extensions = chain_spec.extensions().clone();
         let service_config =
             base.configuration(directory.as_ref().join("system"), chain_spec).await;
@@ -183,14 +183,14 @@ impl SystemDomainNode {
 
         let mut domain_tx_pool_sinks = std::collections::BTreeMap::new();
 
-        let core = if let Some(core) = core {
+        let core = if let Some(core_payments) = core_payments {
             let span = tracing::info_span!("CoreDomain");
-            let core_domain_id = u32::from(DomainId::CORE_PAYMENTS);
+            let core_payments_domain_id = u32::from(DomainId::CORE_PAYMENTS);
             CoreDomainNode::new(
-                core,
-                directory.as_ref().join(format!("core-{core_domain_id}")),
+                core_payments,
+                directory.as_ref().join(format!("core-{core_payments_domain_id}")),
                 extensions
-                    .get_any(std::any::TypeId::of::<Option<core::ChainSpec>>())
+                    .get_any(std::any::TypeId::of::<Option<core_payments::ChainSpec>>())
                     .downcast_ref()
                     .cloned()
                     .flatten()
@@ -207,14 +207,14 @@ impl SystemDomainNode {
             None
         };
 
-        let eth = if let Some(eth) = eth {
+        let eth = if let Some(eth_relayer) = eth_relayer {
             let span = tracing::info_span!("EthDomain");
-            let eth_domain_id = u32::from(DomainId::CORE_ETH_RELAY);
+            let eth_relayer_domain_id = u32::from(DomainId::CORE_ETH_RELAY);
             EthDomainNode::new(
-                eth,
-                directory.as_ref().join(format!("eth-{eth_domain_id}")),
+                eth_relayer,
+                directory.as_ref().join(format!("eth-{eth_relayer_domain_id}")),
                 extensions
-                    .get_any(std::any::TypeId::of::<Option<eth::ChainSpec>>())
+                    .get_any(std::any::TypeId::of::<Option<eth_relayer::ChainSpec>>())
                     .downcast_ref()
                     .cloned()
                     .flatten()
