@@ -23,19 +23,19 @@ use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::SubspaceConfiguration;
-use substrate::Base;
-use tracing_futures::Instrument;
 
 use crate::dsn::NodePieceCache;
 use crate::utils::{self, DropCollection, MultiaddrWithPeerId};
 
 mod builder;
 pub mod chain_spec;
+#[cfg(feature = "executor")]
 pub mod domains;
 mod farmer_rpc_client;
 mod substrate;
 
 pub use builder::*;
+#[cfg(feature = "executor")]
 pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
 pub use substrate::*;
 
@@ -52,6 +52,7 @@ impl Config {
             base,
             piece_cache_size,
             mut dsn,
+            #[cfg(feature = "executor")]
             system_domain,
             segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
             sync_from_dsn,
@@ -142,7 +143,7 @@ impl Config {
         .context("Failed to run node runner future")?;
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);
-        let mut full_client =
+        let full_client =
             subspace_service::new_full(configuration, partial_components, true, slot_proportion)
                 .await
                 .context("Failed to build a full subspace node")?;
@@ -156,9 +157,13 @@ impl Config {
             .context("Failed to start storage monitor")?;
         }
 
-        let system_domain = if let Some(config) = system_domain {
+        #[cfg(feature = "executor")]
+        let (system_domain, full_client) = if let Some(config) = system_domain {
             use sc_service::ChainSpecExtension;
+            use tracing_futures::Instrument;
+
             let span = tracing::info_span!("SystemDomain");
+            let mut full_client = full_client;
 
             let system_domain_spec = chain_spec
                 .extensions()
@@ -169,7 +174,7 @@ impl Config {
                     anyhow::anyhow!("Primary chain spec must contain system domain chain spec")
                 })?;
 
-            SystemDomainNode::new(
+            let node = SystemDomainNode::new(
                 config,
                 directory.as_ref().join("domains"),
                 system_domain_spec,
@@ -177,9 +182,11 @@ impl Config {
             )
             .instrument(span)
             .await
-            .map(Some)?
+            .map(Some)?;
+
+            (node, full_client)
         } else {
-            None
+            (None, full_client)
         };
 
         let NewFull {
@@ -247,6 +254,7 @@ impl Config {
 
         Ok(Node {
             client,
+            #[cfg(feature = "executor")]
             system_domain,
             network_service,
             sync_service,
@@ -301,6 +309,7 @@ pub(crate) type NewFull = subspace_service::NewFull<
 #[derivative(Debug)]
 #[must_use = "Node should be closed"]
 pub struct Node {
+    #[cfg(feature = "executor")]
     system_domain: Option<SystemDomainNode>,
     #[derivative(Debug = "ignore")]
     client: Arc<FullClient>,
@@ -318,7 +327,6 @@ pub struct Node {
 }
 
 static_assertions::assert_impl_all!(Node: Send, Sync);
-static_assertions::assert_impl_all!(SystemDomainNode: Send, Sync);
 
 /// Hash type
 pub type Hash = <subspace_runtime::Runtime as frame_system::Config>::Hash;
@@ -610,6 +618,7 @@ impl Node {
     }
 
     /// Returns system domain node if one was setted up
+    #[cfg(feature = "executor")]
     pub fn system_domain(&self) -> Option<SystemDomainNode> {
         self.system_domain.as_ref().cloned()
     }

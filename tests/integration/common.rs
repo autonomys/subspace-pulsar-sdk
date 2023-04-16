@@ -87,7 +87,7 @@ impl NodeBuilder {
             )
             .role(if not_authority { Role::Full } else { Role::Authority });
 
-        #[cfg(feature = "core-payments")]
+        #[cfg(all(feature = "core-payments", feature = "executor"))]
         let node = if enable_core {
             node.system_domain(subspace_sdk::node::domains::ConfigBuilder::new().core_payments(
                 subspace_sdk::node::domains::core_payments::ConfigBuilder::new().build(),

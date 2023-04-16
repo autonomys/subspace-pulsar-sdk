@@ -1,7 +1,9 @@
 //! Subspace chain configurations.
 
 use sc_service::ChainType;
-use sc_subspace_chain_specs::{ChainSpecExtensions, SerializableChainSpec};
+#[cfg(feature = "executor")]
+use sc_subspace_chain_specs::ChainSpecExtensions;
+use sc_subspace_chain_specs::SerializableChainSpec;
 use sc_telemetry::TelemetryEndpoints;
 use sp_core::crypto::{Ss58Codec, UncheckedFrom};
 use subspace_runtime::{
@@ -49,6 +51,7 @@ pub struct GenesisParams {
 }
 
 /// Chain spec type for the subspace
+#[cfg(feature = "executor")]
 pub type ChainSpec = SerializableChainSpec<
     GenesisConfig,
     ChainSpecExtensions<
@@ -56,6 +59,10 @@ pub type ChainSpec = SerializableChainSpec<
         super::domains::chain_spec::ChainSpecExtensions,
     >,
 >;
+
+/// Chain spec type for the subspace
+#[cfg(not(feature = "executor"))]
+pub type ChainSpec = SerializableChainSpec<GenesisConfig>;
 
 /// Gemini 3d chain spec
 pub fn gemini_3d() -> ChainSpec {
@@ -135,9 +142,12 @@ pub fn gemini_3d_compiled() -> ChainSpec {
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
+        #[cfg(feature = "executor")]
         ChainSpecExtensions {
             execution_chain_spec: super::domains::chain_spec::gemini_3d_config(),
         },
+        #[cfg(not(feature = "executor"))]
+        None,
     )
 }
 
@@ -218,7 +228,10 @@ pub fn devnet_config_compiled() -> ChainSpec {
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
+        #[cfg(feature = "executor")]
         ChainSpecExtensions { execution_chain_spec: super::domains::chain_spec::devnet_config() },
+        #[cfg(not(feature = "executor"))]
+        None,
     )
 }
 
@@ -265,9 +278,12 @@ pub fn dev_config() -> ChainSpec {
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
+        #[cfg(feature = "executor")]
         ChainSpecExtensions {
             execution_chain_spec: super::domains::chain_spec::development_config(),
         },
+        #[cfg(not(feature = "executor"))]
+        None,
     )
 }
 
@@ -322,9 +338,12 @@ pub fn local_config() -> ChainSpec {
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
+        #[cfg(feature = "executor")]
         ChainSpecExtensions {
             execution_chain_spec: super::domains::chain_spec::local_testnet_config(),
         },
+        #[cfg(not(feature = "executor"))]
+        None,
     )
 }
 

@@ -125,6 +125,8 @@ pub struct SystemDomainNode {
     rpc_handlers: crate::utils::Rpc,
 }
 
+static_assertions::assert_impl_all!(SystemDomainNode: Send, Sync);
+
 impl SystemDomainNode {
     pub(crate) async fn new(
         cfg: Config,

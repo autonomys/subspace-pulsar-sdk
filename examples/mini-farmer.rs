@@ -30,6 +30,7 @@ pub struct Args {
     /// Set the chain
     #[command(subcommand)]
     chain: Chain,
+    #[cfg(feature = "executor")]
     /// Should we run the executor?
     #[arg(short, long)]
     executor: bool,
@@ -64,7 +65,15 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let Args { chain, executor, reward_address, base_path, plot_size, cache_size } = Args::parse();
+    let Args {
+        chain,
+        #[cfg(feature = "executor")]
+        executor,
+        reward_address,
+        base_path,
+        plot_size,
+        cache_size,
+    } = Args::parse();
     let (base_path, _tmp_dir) = base_path.map(|x| (x, None)).unwrap_or_else(|| {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
         (tmp.as_ref().to_owned(), Some(tmp))
@@ -83,19 +92,22 @@ async fn main() -> anyhow::Result<()> {
     }
     .role(node::Role::Authority);
 
+    #[cfg(feature = "executor")]
     let node = if executor {
         node.system_domain(subspace_sdk::node::domains::ConfigBuilder::new())
     } else {
         node
-    }
-    .build(
-        &node_dir,
-        match chain {
-            Chain::Gemini3D => node::chain_spec::gemini_3d(),
-            Chain::Devnet => node::chain_spec::devnet_config(),
-        },
-    )
-    .await?;
+    };
+
+    let node = node
+        .build(
+            &node_dir,
+            match chain {
+                Chain::Gemini3D => node::chain_spec::gemini_3d(),
+                Chain::Devnet => node::chain_spec::devnet_config(),
+            },
+        )
+        .await?;
 
     tokio::select! {
         result = node.sync() => result?,
