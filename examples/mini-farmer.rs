@@ -116,20 +116,23 @@ async fn main() -> anyhow::Result<()> {
         )
         .await?;
 
-    let subscriptions = {
-        let plot = farmer.iter_plots().await.next().unwrap();
-
-        let node = &node;
-
+    tokio::spawn({
+        let initial_plotting =
+            farmer.iter_plots().await.next().unwrap().subscribe_initial_plotting_progress().await;
         async move {
-            plot.subscribe_initial_plotting_progress()
-                .await
+            initial_plotting
                 .for_each(|progress| async move {
                     tracing::error!(?progress, "Plotting!");
                 })
                 .await;
             tracing::error!("Finished initial plotting!");
+        }
+    });
 
+    let rewards_sub = {
+        let node = &node;
+
+        async move {
             let mut new_blocks = node.subscribe_new_blocks().await?;
             while let Some(new_block) = new_blocks.next().await {
                 let events = node.get_events(Some(new_block.hash)).await?;
@@ -163,7 +166,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     tokio::select! {
-        _ = subscriptions => {},
+        _ = rewards_sub => {},
         _ = tokio::signal::ctrl_c() => {
             tracing::error!("Exitting...");
         }
