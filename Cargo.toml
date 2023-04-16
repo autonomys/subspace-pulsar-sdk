@@ -70,8 +70,8 @@ sp-storage = { version = "7.0.0", git = "https://github.com/subspace/substrate",
 sp-transaction-pool = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "fdb68194ab6995447610b3dbdee70559711dbd63" }
 sp-version = { version = "5.0.0", git = "https://github.com/subspace/substrate", rev = "fdb68194ab6995447610b3dbdee70559711dbd63" }
 
-core-eth-relay-runtime = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749" }
-core-payments-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749" }
+core-eth-relay-runtime = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749", optional = true }
+core-payments-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749", optional = true }
 cross-domain-message-gossip = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749" }
 domain-client-executor = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749" }
 domain-client-message-relayer = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749" }
@@ -104,6 +104,11 @@ jemallocator = "0.5.0"
 
 [target.'cfg(tokio_unstable)'.dev-dependencies]
 console-subscriber = "0.1"
+
+[features]
+default = ["eth-relayer", "core-payments"]
+eth-relayer = ["core-eth-relay-runtime"]
+core-payments = ["core-payments-domain-runtime"]
 
 [dev-dependencies]
 clap = { version = "4", features = ["derive"] }
