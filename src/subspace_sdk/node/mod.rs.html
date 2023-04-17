@@ -733,6 +733,15 @@
 <a href="#733" id="733">733</a>
 <a href="#734" id="734">734</a>
 <a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
@@ -758,20 +767,20 @@
 <span class="kw">use </span>subspace_runtime_primitives::opaque::{Block <span class="kw">as </span>RuntimeBlock, Header};
 <span class="kw">use </span>subspace_service::segment_headers::SegmentHeaderCache;
 <span class="kw">use </span>subspace_service::SubspaceConfiguration;
-<span class="kw">use </span>substrate::Base;
-<span class="kw">use </span>tracing_futures::Instrument;
 
 <span class="kw">use </span><span class="kw">crate</span>::dsn::NodePieceCache;
 <span class="kw">use </span><span class="kw">crate</span>::utils::{<span class="self">self</span>, DropCollection, MultiaddrWithPeerId};
 
 <span class="kw">mod </span>builder;
 <span class="kw">pub mod </span>chain_spec;
-<span class="kw">pub mod </span>domains;
+<span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
+</span><span class="kw">pub mod </span>domains;
 <span class="kw">mod </span>farmer_rpc_client;
 <span class="kw">mod </span>substrate;
 
 <span class="kw">pub use </span>builder::<span class="kw-2">*</span>;
-<span class="kw">pub use </span>domains::{ConfigBuilder <span class="kw">as </span>SystemDomainBuilder, SystemDomainNode};
+<span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
+</span><span class="kw">pub use </span>domains::{ConfigBuilder <span class="kw">as </span>SystemDomainBuilder, SystemDomainNode};
 <span class="kw">pub use </span>substrate::<span class="kw-2">*</span>;
 
 <span class="kw">pub use </span><span class="kw">crate</span>::dsn::builder::<span class="kw-2">*</span>;
@@ -787,7 +796,8 @@
             base,
             piece_cache_size,
             <span class="kw-2">mut </span>dsn,
-            system_domain,
+            <span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
+            </span>system_domain,
             segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
             sync_from_dsn,
             storage_monitor,
@@ -877,7 +887,7 @@
         .context(<span class="string">&quot;Failed to run node runner future&quot;</span>)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>slot_proportion = sc_consensus_slots::SlotProportion::new(<span class="number">2f32 </span>/ <span class="number">3f32</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>full_client =
+        <span class="kw">let </span>full_client =
             subspace_service::new_full(configuration, partial_components, <span class="bool-val">true</span>, slot_proportion)
                 .<span class="kw">await
                 </span>.context(<span class="string">&quot;Failed to build a full subspace node&quot;</span>)<span class="question-mark">?</span>;
@@ -891,9 +901,13 @@
             .context(<span class="string">&quot;Failed to start storage monitor&quot;</span>)<span class="question-mark">?</span>;
         }
 
-        <span class="kw">let </span>system_domain = <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = system_domain {
+        <span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
+        </span><span class="kw">let </span>(system_domain, full_client) = <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = system_domain {
             <span class="kw">use </span>sc_service::ChainSpecExtension;
+            <span class="kw">use </span>tracing_futures::Instrument;
+
             <span class="kw">let </span>span = <span class="macro">tracing::info_span!</span>(<span class="string">&quot;SystemDomain&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>full_client = full_client;
 
             <span class="kw">let </span>system_domain_spec = chain_spec
                 .extensions()
@@ -904,7 +918,7 @@
                     <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Primary chain spec must contain system domain chain spec&quot;</span>)
                 })<span class="question-mark">?</span>;
 
-            SystemDomainNode::new(
+            <span class="kw">let </span>node = SystemDomainNode::new(
                 config,
                 directory.as_ref().join(<span class="string">&quot;domains&quot;</span>),
                 system_domain_spec,
@@ -912,10 +926,12 @@
             )
             .instrument(span)
             .<span class="kw">await
-            </span>.map(<span class="prelude-val">Some</span>)<span class="question-mark">?
-        </span>} <span class="kw">else </span>{
-            <span class="prelude-val">None
-        </span>};
+            </span>.map(<span class="prelude-val">Some</span>)<span class="question-mark">?</span>;
+
+            (node, full_client)
+        } <span class="kw">else </span>{
+            (<span class="prelude-val">None</span>, full_client)
+        };
 
         <span class="kw">let </span>NewFull {
             <span class="kw-2">mut </span>task_manager,
@@ -982,7 +998,8 @@
 
         <span class="prelude-val">Ok</span>(Node {
             client,
-            system_domain,
+            <span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
+            </span>system_domain,
             network_service,
             sync_service,
             name,
@@ -1036,7 +1053,8 @@
 #[derivative(Debug)]
 #[must_use = <span class="string">&quot;Node should be closed&quot;</span>]
 </span><span class="kw">pub struct </span>Node {
-    system_domain: <span class="prelude-ty">Option</span>&lt;SystemDomainNode&gt;,
+    <span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
+    </span>system_domain: <span class="prelude-ty">Option</span>&lt;SystemDomainNode&gt;,
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
     </span>client: Arc&lt;FullClient&gt;,
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
@@ -1053,7 +1071,6 @@
 }
 
 <span class="macro">static_assertions::assert_impl_all!</span>(Node: Send, Sync);
-<span class="macro">static_assertions::assert_impl_all!</span>(SystemDomainNode: Send, Sync);
 
 <span class="doccomment">/// Hash type
 </span><span class="kw">pub type </span>Hash = &lt;subspace_runtime::Runtime <span class="kw">as </span>frame_system::Config&gt;::Hash;
@@ -1345,6 +1362,7 @@
     </span>}
 
     <span class="doccomment">/// Returns system domain node if one was setted up
+    </span><span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
     </span><span class="kw">pub fn </span>system_domain(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;SystemDomainNode&gt; {
         <span class="self">self</span>.system_domain.as_ref().cloned()
     }

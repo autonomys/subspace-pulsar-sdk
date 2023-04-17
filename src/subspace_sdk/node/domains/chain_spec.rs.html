@@ -324,6 +324,22 @@
 <a href="#324" id="324">324</a>
 <a href="#325" id="325">325</a>
 <a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
 </pre><pre class="rust"><code><span class="doccomment">//! System domain chain specs
 
 </span><span class="kw">use </span>domain_runtime_primitives::RelayerId;
@@ -350,8 +366,12 @@
 </span><span class="attr">#[derive(Clone, serde::Serialize, serde::Deserialize, sc_chain_spec::ChainSpecExtension)]
 #[serde(deny_unknown_fields, rename_all = <span class="string">&quot;camelCase&quot;</span>)]
 </span><span class="kw">pub struct </span>ChainSpecExtensions {
-    <span class="kw">pub </span>core: <span class="prelude-ty">Option</span>&lt;SerializableChainSpec&lt;core_payments_domain_runtime::GenesisConfig&gt;&gt;,
-    <span class="kw">pub </span>eth: <span class="prelude-ty">Option</span>&lt;SerializableChainSpec&lt;core_eth_relay_runtime::GenesisConfig&gt;&gt;,
+    <span class="attr">#[cfg(feature = <span class="string">&quot;core-payments&quot;</span>)]
+    </span><span class="kw">pub </span>core: <span class="prelude-ty">Option</span>&lt;SerializableChainSpec&lt;core_payments_domain_runtime::GenesisConfig&gt;&gt;,
+    <span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
+    </span><span class="kw">pub </span>eth: <span class="prelude-ty">Option</span>&lt;SerializableChainSpec&lt;core_eth_relay_runtime::GenesisConfig&gt;&gt;,
+    <span class="attr">#[serde(skip)]
+    </span><span class="kw">pub </span>_if_no_fields_in_extension_macro_panics: (),
 }
 
 <span class="doccomment">/// Chain spec type for the system domain
@@ -406,8 +426,11 @@
         <span class="prelude-val">None</span>,
         <span class="prelude-val">Some</span>(chain_spec_properties()),
         ChainSpecExtensions {
-            core: <span class="prelude-val">Some</span>(<span class="kw">super</span>::core::chain_spec::development_config()),
-            eth: <span class="prelude-val">Some</span>(<span class="kw">super</span>::eth::chain_spec::development_config()),
+            <span class="attr">#[cfg(feature = <span class="string">&quot;core-payments&quot;</span>)]
+            </span>core: <span class="prelude-val">Some</span>(<span class="kw">super</span>::core_payments::chain_spec::development_config()),
+            <span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
+            </span>eth: <span class="prelude-val">Some</span>(<span class="kw">super</span>::eth_relayer::chain_spec::development_config()),
+            _if_no_fields_in_extension_macro_panics: (),
         },
     )
 }
@@ -477,8 +500,11 @@
         </span><span class="prelude-val">Some</span>(chain_spec_properties()),
         <span class="comment">// Extensions
         </span>ChainSpecExtensions {
-            core: <span class="prelude-val">Some</span>(<span class="kw">super</span>::core::chain_spec::local_testnet_config()),
-            eth: <span class="prelude-val">Some</span>(<span class="kw">super</span>::eth::chain_spec::local_testnet_config()),
+            <span class="attr">#[cfg(feature = <span class="string">&quot;core-payments&quot;</span>)]
+            </span>core: <span class="prelude-val">Some</span>(<span class="kw">super</span>::core_payments::chain_spec::local_testnet_config()),
+            <span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
+            </span>eth: <span class="prelude-val">Some</span>(<span class="kw">super</span>::eth_relayer::chain_spec::local_testnet_config()),
+            _if_no_fields_in_extension_macro_panics: (),
         },
     )
 }
@@ -547,8 +573,11 @@
         </span><span class="prelude-val">Some</span>(chain_spec_properties()),
         <span class="comment">// Extensions
         </span>ChainSpecExtensions {
-            core: <span class="prelude-val">Some</span>(<span class="kw">super</span>::core::chain_spec::gemini_3d_config()),
-            eth: <span class="prelude-val">Some</span>(<span class="kw">super</span>::eth::chain_spec::gemini_3d_config()),
+            <span class="attr">#[cfg(feature = <span class="string">&quot;core-payments&quot;</span>)]
+            </span>core: <span class="prelude-val">Some</span>(<span class="kw">super</span>::core_payments::chain_spec::gemini_3d_config()),
+            <span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
+            </span>eth: <span class="prelude-val">Some</span>(<span class="kw">super</span>::eth_relayer::chain_spec::gemini_3d_config()),
+            _if_no_fields_in_extension_macro_panics: (),
         },
     )
 }
@@ -620,8 +649,11 @@
         </span><span class="prelude-val">Some</span>(chain_spec_properties()),
         <span class="comment">// Extensions
         </span>ChainSpecExtensions {
-            core: <span class="prelude-val">Some</span>(<span class="kw">super</span>::core::chain_spec::devnet_config()),
-            eth: <span class="prelude-val">Some</span>(<span class="kw">super</span>::eth::chain_spec::devnet_config()),
+            <span class="attr">#[cfg(feature = <span class="string">&quot;core-payments&quot;</span>)]
+            </span>core: <span class="prelude-val">Some</span>(<span class="kw">super</span>::core_payments::chain_spec::devnet_config()),
+            <span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
+            </span>eth: <span class="prelude-val">Some</span>(<span class="kw">super</span>::eth_relayer::chain_spec::devnet_config()),
+            _if_no_fields_in_extension_macro_panics: (),
         },
     )
 }

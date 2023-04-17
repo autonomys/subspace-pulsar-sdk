@@ -407,6 +407,17 @@
 <a href="#407" id="407">407</a>
 <a href="#408" id="408">408</a>
 <a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -627,6 +638,7 @@
 <span class="doccomment">/// Container for number of bytes.
 </span><span class="attr">#[derive(
     Clone,
+    Copy,
     Debug,
     Default,
     Deref,
@@ -635,8 +647,8 @@
     Display,
     Eq,
     From,
-    Into,
     FromStr,
+    Into,
     Ord,
     PartialEq,
     PartialOrd,
@@ -649,6 +661,16 @@
     <span class="doccomment">/// Constructor for bytes
     </span><span class="kw">pub const fn </span>b(n: u64) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(bytesize::ByteSize::b(n))
+    }
+
+    <span class="doccomment">/// Constructor for kilobytes
+    </span><span class="kw">pub const fn </span>kb(n: u64) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>(bytesize::ByteSize::kb(n))
+    }
+
+    <span class="doccomment">/// Constructor for kibibytes
+    </span><span class="kw">pub const fn </span>kib(n: u64) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>(bytesize::ByteSize::kib(n))
     }
 
     <span class="doccomment">/// Constructor for megabytes
@@ -674,18 +696,18 @@
 
 <span class="doccomment">/// Multiaddr is a wrapper around libp2p one
 </span><span class="attr">#[derive(
-    Debug,
     Clone,
-    Deserialize,
-    Serialize,
-    PartialEq,
-    Eq,
-    From,
-    Into,
-    FromStr,
+    Debug,
     Deref,
     DerefMut,
+    Deserialize,
     Display,
+    Eq,
+    From,
+    FromStr,
+    Into,
+    PartialEq,
+    Serialize,
 )]
 #[serde(transparent)]
 </span><span class="kw">pub struct </span>Multiaddr(<span class="kw">pub </span>libp2p_core::Multiaddr);

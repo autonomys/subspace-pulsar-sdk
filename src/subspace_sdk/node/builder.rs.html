@@ -142,6 +142,7 @@
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::path::Path;
 
@@ -154,7 +155,7 @@
     Base, BaseBuilder, ExecutionStrategy, NetworkBuilder, OffchainWorkerBuilder, RpcBuilder,
     StorageMonitor,
 };
-<span class="kw">use super</span>::{domains, ChainSpec, Node};
+<span class="kw">use super</span>::{ChainSpec, Node};
 <span class="kw">use </span><span class="kw">crate</span>::dsn::builder::{Dsn, DsnBuilder};
 <span class="kw">use </span><span class="kw">crate</span>::utils::ByteSize;
 
@@ -204,9 +205,10 @@
     #[serde(flatten, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
     </span><span class="kw">pub </span>base: Base,
     <span class="doccomment">/// System domain settings
-    </span><span class="attr">#[builder(setter(into, strip_option), default)]
+    </span><span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
+    #[builder(setter(into, strip_option), default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
-    </span><span class="kw">pub </span>system_domain: <span class="prelude-ty">Option</span>&lt;domains::Config&gt;,
+    </span><span class="kw">pub </span>system_domain: <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::node::domains::Config&gt;,
     <span class="doccomment">/// DSN settings
     </span><span class="attr">#[builder(setter(into), default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]

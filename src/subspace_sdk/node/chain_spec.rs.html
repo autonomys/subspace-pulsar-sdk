@@ -383,10 +383,31 @@
 <a href="#383" id="383">383</a>
 <a href="#384" id="384">384</a>
 <a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Subspace chain configurations.
 
 </span><span class="kw">use </span>sc_service::ChainType;
-<span class="kw">use </span>sc_subspace_chain_specs::{ChainSpecExtensions, SerializableChainSpec};
+<span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
+</span><span class="kw">use </span>sc_subspace_chain_specs::ChainSpecExtensions;
+<span class="kw">use </span>sc_subspace_chain_specs::SerializableChainSpec;
 <span class="kw">use </span>sc_telemetry::TelemetryEndpoints;
 <span class="kw">use </span>sp_core::crypto::{Ss58Codec, UncheckedFrom};
 <span class="kw">use </span>subspace_runtime::{
@@ -434,6 +455,7 @@
 }
 
 <span class="doccomment">/// Chain spec type for the subspace
+</span><span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
 </span><span class="kw">pub type </span>ChainSpec = SerializableChainSpec&lt;
     GenesisConfig,
     ChainSpecExtensions&lt;
@@ -441,6 +463,10 @@
         <span class="kw">super</span>::domains::chain_spec::ChainSpecExtensions,
     &gt;,
 &gt;;
+
+<span class="doccomment">/// Chain spec type for the subspace
+</span><span class="attr">#[cfg(not(feature = <span class="string">&quot;executor&quot;</span>))]
+</span><span class="kw">pub type </span>ChainSpec = SerializableChainSpec&lt;GenesisConfig&gt;;
 
 <span class="doccomment">/// Gemini 3d chain spec
 </span><span class="kw">pub fn </span>gemini_3d() -&gt; ChainSpec {
@@ -520,9 +546,12 @@
         <span class="comment">// Properties
         </span><span class="prelude-val">Some</span>(utils::chain_spec_properties()),
         <span class="comment">// Extensions
+        </span><span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
         </span>ChainSpecExtensions {
             execution_chain_spec: <span class="kw">super</span>::domains::chain_spec::gemini_3d_config(),
         },
+        <span class="attr">#[cfg(not(feature = <span class="string">&quot;executor&quot;</span>))]
+        </span><span class="prelude-val">None</span>,
     )
 }
 
@@ -603,7 +632,10 @@
         <span class="comment">// Properties
         </span><span class="prelude-val">Some</span>(utils::chain_spec_properties()),
         <span class="comment">// Extensions
+        </span><span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
         </span>ChainSpecExtensions { execution_chain_spec: <span class="kw">super</span>::domains::chain_spec::devnet_config() },
+        <span class="attr">#[cfg(not(feature = <span class="string">&quot;executor&quot;</span>))]
+        </span><span class="prelude-val">None</span>,
     )
 }
 
@@ -650,9 +682,12 @@
         <span class="comment">// Properties
         </span><span class="prelude-val">Some</span>(utils::chain_spec_properties()),
         <span class="comment">// Extensions
+        </span><span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
         </span>ChainSpecExtensions {
             execution_chain_spec: <span class="kw">super</span>::domains::chain_spec::development_config(),
         },
+        <span class="attr">#[cfg(not(feature = <span class="string">&quot;executor&quot;</span>))]
+        </span><span class="prelude-val">None</span>,
     )
 }
 
@@ -707,9 +742,12 @@
         <span class="comment">// Properties
         </span><span class="prelude-val">Some</span>(utils::chain_spec_properties()),
         <span class="comment">// Extensions
+        </span><span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
         </span>ChainSpecExtensions {
             execution_chain_spec: <span class="kw">super</span>::domains::chain_spec::local_testnet_config(),
         },
+        <span class="attr">#[cfg(not(feature = <span class="string">&quot;executor&quot;</span>))]
+        </span><span class="prelude-val">None</span>,
     )
 }
 

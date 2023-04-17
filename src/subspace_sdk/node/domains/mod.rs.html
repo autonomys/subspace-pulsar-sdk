@@ -281,15 +281,33 @@
 <a href="#281" id="281">281</a>
 <a href="#282" id="282">282</a>
 <a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Module for executor and its domains
 
 </span><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::sync::{Arc, Weak};
 
 <span class="kw">use </span>anyhow::Context;
-<span class="kw">use </span>core_payments_domain_runtime::RelayerId;
 <span class="kw">use </span>derivative::Derivative;
 <span class="kw">use </span>derive_builder::Builder;
+<span class="kw">use </span>domain_runtime_primitives::RelayerId;
 <span class="kw">use </span>domain_service::DomainConfiguration;
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>sc_client_api::BlockchainEvents;
@@ -300,14 +318,14 @@
 <span class="kw">use </span>system_domain_runtime::Header;
 <span class="kw">use </span>tracing_futures::Instrument;
 
-<span class="kw">use </span><span class="self">self</span>::core::CoreDomainNode;
-<span class="kw">use </span><span class="self">self</span>::eth::EthDomainNode;
 <span class="kw">use super</span>::{BlockNumber, Hash};
 <span class="kw">use </span><span class="kw">crate</span>::node::{Base, BaseBuilder};
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>chain_spec;
-<span class="kw">pub mod </span>core;
-<span class="kw">pub mod </span>eth;
+<span class="attr">#[cfg(feature = <span class="string">&quot;core-payments&quot;</span>)]
+</span><span class="kw">pub mod </span>core_payments;
+<span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
+</span><span class="kw">pub mod </span>eth_relayer;
 
 <span class="doccomment">/// System domain executor instance.
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ExecutorDispatch;
@@ -368,14 +386,16 @@
     )]
     #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
     </span><span class="kw">pub </span>base: Base,
-    <span class="doccomment">/// The core config
-    </span><span class="attr">#[builder(setter(strip_option), default)]
+    <span class="doccomment">/// The core payments domain config
+    </span><span class="attr">#[cfg(feature = <span class="string">&quot;core-payments&quot;</span>)]
+    #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
-    </span><span class="kw">pub </span>core: <span class="prelude-ty">Option</span>&lt;core::Config&gt;,
-    <span class="doccomment">/// The eth domain config
-    </span><span class="attr">#[builder(setter(strip_option), default)]
+    </span><span class="kw">pub </span>core_payments: <span class="prelude-ty">Option</span>&lt;core_payments::Config&gt;,
+    <span class="doccomment">/// The eth relayer domain config
+    </span><span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
+    #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
-    </span><span class="kw">pub </span>eth: <span class="prelude-ty">Option</span>&lt;eth::Config&gt;,
+    </span><span class="kw">pub </span>eth_relayer: <span class="prelude-ty">Option</span>&lt;eth_relayer::Config&gt;,
 }
 
 <span class="macro">crate::derive_base!</span>(<span class="kw">crate</span>::node::Base =&gt; ConfigBuilder);
@@ -399,10 +419,14 @@
 </span><span class="kw">pub struct </span>SystemDomainNode {
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
     </span>_client: Weak&lt;FullClient&gt;,
-    core: <span class="prelude-ty">Option</span>&lt;CoreDomainNode&gt;,
-    eth: <span class="prelude-ty">Option</span>&lt;EthDomainNode&gt;,
+    <span class="attr">#[cfg(feature = <span class="string">&quot;core-payments&quot;</span>)]
+    </span>core: <span class="prelude-ty">Option</span>&lt;core_payments::CoreDomainNode&gt;,
+    <span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
+    </span>eth: <span class="prelude-ty">Option</span>&lt;eth_relayer::EthDomainNode&gt;,
     rpc_handlers: <span class="kw">crate</span>::utils::Rpc,
 }
+
+<span class="macro">static_assertions::assert_impl_all!</span>(SystemDomainNode: Send, Sync);
 
 <span class="kw">impl </span>SystemDomainNode {
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(
@@ -411,7 +435,14 @@
         chain_spec: ChainSpec,
         primary_new_full: <span class="kw-2">&amp;mut </span><span class="kw">crate</span>::node::NewFull,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>Config { base, relayer_id: maybe_relayer_id, core, eth } = cfg;
+        <span class="kw">let </span>Config {
+            base,
+            relayer_id: maybe_relayer_id,
+            <span class="attr">#[cfg(feature = <span class="string">&quot;core-payments&quot;</span>)]
+            </span>core_payments,
+            <span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
+            </span>eth_relayer,
+        } = cfg;
         <span class="kw">let </span>extensions = chain_spec.extensions().clone();
         <span class="kw">let </span>service_config =
             base.configuration(directory.as_ref().join(<span class="string">&quot;system&quot;</span>), chain_spec).<span class="kw">await</span>;
@@ -466,14 +497,15 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>domain_tx_pool_sinks = std::collections::BTreeMap::new();
 
-        <span class="kw">let </span>core = <span class="kw">if let </span><span class="prelude-val">Some</span>(core) = core {
+        <span class="attr">#[cfg(feature = <span class="string">&quot;core-payments&quot;</span>)]
+        </span><span class="kw">let </span>core = <span class="kw">if let </span><span class="prelude-val">Some</span>(core_payments) = core_payments {
             <span class="kw">let </span>span = <span class="macro">tracing::info_span!</span>(<span class="string">&quot;CoreDomain&quot;</span>);
-            <span class="kw">let </span>core_domain_id = u32::from(DomainId::CORE_PAYMENTS);
-            CoreDomainNode::new(
-                core,
-                directory.as_ref().join(<span class="macro">format!</span>(<span class="string">&quot;core-{core_domain_id}&quot;</span>)),
+            <span class="kw">let </span>core_payments_domain_id = u32::from(DomainId::CORE_PAYMENTS);
+            core_payments::CoreDomainNode::new(
+                core_payments,
+                directory.as_ref().join(<span class="macro">format!</span>(<span class="string">&quot;core-{core_payments_domain_id}&quot;</span>)),
                 extensions
-                    .get_any(std::any::TypeId::of::&lt;<span class="prelude-ty">Option</span>&lt;core::ChainSpec&gt;&gt;())
+                    .get_any(std::any::TypeId::of::&lt;<span class="prelude-ty">Option</span>&lt;core_payments::ChainSpec&gt;&gt;())
                     .downcast_ref()
                     .cloned()
                     .flatten()
@@ -490,14 +522,15 @@
             <span class="prelude-val">None
         </span>};
 
-        <span class="kw">let </span>eth = <span class="kw">if let </span><span class="prelude-val">Some</span>(eth) = eth {
+        <span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
+        </span><span class="kw">let </span>eth = <span class="kw">if let </span><span class="prelude-val">Some</span>(eth_relayer) = eth_relayer {
             <span class="kw">let </span>span = <span class="macro">tracing::info_span!</span>(<span class="string">&quot;EthDomain&quot;</span>);
-            <span class="kw">let </span>eth_domain_id = u32::from(DomainId::CORE_ETH_RELAY);
-            EthDomainNode::new(
-                eth,
-                directory.as_ref().join(<span class="macro">format!</span>(<span class="string">&quot;eth-{eth_domain_id}&quot;</span>)),
+            <span class="kw">let </span>eth_relayer_domain_id = u32::from(DomainId::CORE_ETH_RELAY);
+            eth_relayer::EthDomainNode::new(
+                eth_relayer,
+                directory.as_ref().join(<span class="macro">format!</span>(<span class="string">&quot;eth-{eth_relayer_domain_id}&quot;</span>)),
                 extensions
-                    .get_any(std::any::TypeId::of::&lt;<span class="prelude-ty">Option</span>&lt;eth::ChainSpec&gt;&gt;())
+                    .get_any(std::any::TypeId::of::&lt;<span class="prelude-ty">Option</span>&lt;eth_relayer::ChainSpec&gt;&gt;())
                     .downcast_ref()
                     .cloned()
                     .flatten()
@@ -535,8 +568,10 @@
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             _client: Arc::downgrade(<span class="kw-2">&amp;</span>client),
-            core,
-            eth,
+            <span class="attr">#[cfg(feature = <span class="string">&quot;core-payments&quot;</span>)]
+            </span>core,
+            <span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
+            </span>eth,
             rpc_handlers: <span class="kw">crate</span>::utils::Rpc::new(<span class="kw-2">&amp;</span>rpc_handlers),
         })
     }
@@ -546,7 +581,8 @@
     }
 
     <span class="doccomment">/// Get the core node handler
-    </span><span class="kw">pub fn </span>core(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;CoreDomainNode&gt; {
+    </span><span class="attr">#[cfg(feature = <span class="string">&quot;core-payments&quot;</span>)]
+    </span><span class="kw">pub fn </span>core(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;core_payments::CoreDomainNode&gt; {
         <span class="self">self</span>.core.clone()
     }
 
