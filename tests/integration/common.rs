@@ -47,6 +47,7 @@ pub struct InnerNode {
     chain: ChainSpec,
     #[builder(default = "TempDir::new().map(Arc::new).unwrap()")]
     path: Arc<TempDir>,
+    #[cfg(feature = "core-payments")]
     #[builder(default)]
     enable_core: bool,
 }
@@ -69,6 +70,7 @@ impl NodeBuilder {
             not_authority,
             chain,
             path,
+            #[cfg(feature = "core-payments")]
             enable_core,
         } = self._build().expect("Infallible");
         let node = subspace_sdk::Node::dev()
@@ -85,17 +87,16 @@ impl NodeBuilder {
             )
             .role(if not_authority { Role::Full } else { Role::Authority });
 
+        #[cfg(all(feature = "core-payments", feature = "executor"))]
         let node = if enable_core {
-            node.system_domain(
-                subspace_sdk::node::domains::ConfigBuilder::new()
-                    .core(subspace_sdk::node::domains::core::ConfigBuilder::new().build()),
-            )
+            node.system_domain(subspace_sdk::node::domains::ConfigBuilder::new().core_payments(
+                subspace_sdk::node::domains::core_payments::ConfigBuilder::new().build(),
+            ))
         } else {
             node
-        }
-        .build(path.path().join("node"), chain.clone())
-        .await
-        .unwrap();
+        };
+
+        let node = node.build(path.path().join("node"), chain.clone()).await.unwrap();
 
         Node { node, path, chain }
     }

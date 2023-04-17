@@ -24,8 +24,12 @@ type DomainConfig = sp_domains::DomainConfig<Hash, Balance, Weight>;
 #[derive(Clone, serde::Serialize, serde::Deserialize, sc_chain_spec::ChainSpecExtension)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ChainSpecExtensions {
+    #[cfg(feature = "core-payments")]
     pub core: Option<SerializableChainSpec<core_payments_domain_runtime::GenesisConfig>>,
+    #[cfg(feature = "eth-relayer")]
     pub eth: Option<SerializableChainSpec<core_eth_relay_runtime::GenesisConfig>>,
+    #[serde(skip)]
+    pub _if_no_fields_in_extension_macro_panics: (),
 }
 
 /// Chain spec type for the system domain
@@ -80,8 +84,11 @@ pub fn development_config() -> ChainSpec {
         None,
         Some(chain_spec_properties()),
         ChainSpecExtensions {
-            core: Some(super::core::chain_spec::development_config()),
-            eth: Some(super::eth::chain_spec::development_config()),
+            #[cfg(feature = "core-payments")]
+            core: Some(super::core_payments::chain_spec::development_config()),
+            #[cfg(feature = "eth-relayer")]
+            eth: Some(super::eth_relayer::chain_spec::development_config()),
+            _if_no_fields_in_extension_macro_panics: (),
         },
     )
 }
@@ -151,8 +158,11 @@ pub fn local_testnet_config() -> ChainSpec {
         Some(chain_spec_properties()),
         // Extensions
         ChainSpecExtensions {
-            core: Some(super::core::chain_spec::local_testnet_config()),
-            eth: Some(super::eth::chain_spec::local_testnet_config()),
+            #[cfg(feature = "core-payments")]
+            core: Some(super::core_payments::chain_spec::local_testnet_config()),
+            #[cfg(feature = "eth-relayer")]
+            eth: Some(super::eth_relayer::chain_spec::local_testnet_config()),
+            _if_no_fields_in_extension_macro_panics: (),
         },
     )
 }
@@ -221,8 +231,11 @@ pub fn gemini_3d_config() -> ChainSpec {
         Some(chain_spec_properties()),
         // Extensions
         ChainSpecExtensions {
-            core: Some(super::core::chain_spec::gemini_3d_config()),
-            eth: Some(super::eth::chain_spec::gemini_3d_config()),
+            #[cfg(feature = "core-payments")]
+            core: Some(super::core_payments::chain_spec::gemini_3d_config()),
+            #[cfg(feature = "eth-relayer")]
+            eth: Some(super::eth_relayer::chain_spec::gemini_3d_config()),
+            _if_no_fields_in_extension_macro_panics: (),
         },
     )
 }
@@ -294,8 +307,11 @@ pub fn devnet_config() -> ChainSpec {
         Some(chain_spec_properties()),
         // Extensions
         ChainSpecExtensions {
-            core: Some(super::core::chain_spec::devnet_config()),
-            eth: Some(super::eth::chain_spec::devnet_config()),
+            #[cfg(feature = "core-payments")]
+            core: Some(super::core_payments::chain_spec::devnet_config()),
+            #[cfg(feature = "eth-relayer")]
+            eth: Some(super::eth_relayer::chain_spec::devnet_config()),
+            _if_no_fields_in_extension_macro_panics: (),
         },
     )
 }

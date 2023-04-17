@@ -70,8 +70,8 @@ sp-storage = { version = "7.0.0", git = "https://github.com/subspace/substrate",
 sp-transaction-pool = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "fdb68194ab6995447610b3dbdee70559711dbd63" }
 sp-version = { version = "5.0.0", git = "https://github.com/subspace/substrate", rev = "fdb68194ab6995447610b3dbdee70559711dbd63" }
 
-core-eth-relay-runtime = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749" }
-core-payments-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749" }
+core-eth-relay-runtime = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749", optional = true }
+core-payments-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749", optional = true }
 cross-domain-message-gossip = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749" }
 domain-client-executor = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749" }
 domain-client-message-relayer = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749" }
@@ -96,7 +96,7 @@ subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "236005
 subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749" }
 subspace-service = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749" }
 subspace-transaction-pool = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749" }
-system-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749" }
+system-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "2360052b08f1ce17f15256f7d6d1cd398f07f749", optional = true }
 
 # The only triple tested and confirmed as working in `jemallocator` crate is `x86_64-unknown-linux-gnu`
 [target.'cfg(all(target_arch = "x86_64", target_vendor = "unknown", target_os = "linux", target_env = "gnu"))'.dev-dependencies]
@@ -104,6 +104,13 @@ jemallocator = "0.5.0"
 
 [target.'cfg(tokio_unstable)'.dev-dependencies]
 console-subscriber = "0.1"
+
+[features]
+default = ["all"]
+all = ["executor", "eth-relayer", "core-payments"]
+executor = ["system-domain-runtime"]
+eth-relayer = ["core-eth-relay-runtime"]
+core-payments = ["core-payments-domain-runtime"]
 
 [dev-dependencies]
 clap = { version = "4", features = ["derive"] }

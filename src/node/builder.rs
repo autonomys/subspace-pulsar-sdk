@@ -10,7 +10,7 @@ use super::substrate::{
     Base, BaseBuilder, ExecutionStrategy, NetworkBuilder, OffchainWorkerBuilder, RpcBuilder,
     StorageMonitor,
 };
-use super::{domains, ChainSpec, Node};
+use super::{ChainSpec, Node};
 use crate::dsn::builder::{Dsn, DsnBuilder};
 use crate::utils::ByteSize;
 
@@ -60,9 +60,10 @@ pub struct Config {
     #[serde(flatten, skip_serializing_if = "crate::utils::is_default")]
     pub base: Base,
     /// System domain settings
+    #[cfg(feature = "executor")]
     #[builder(setter(into, strip_option), default)]
     #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-    pub system_domain: Option<domains::Config>,
+    pub system_domain: Option<crate::node::domains::Config>,
     /// DSN settings
     #[builder(setter(into), default)]
     #[serde(default, skip_serializing_if = "crate::utils::is_default")]

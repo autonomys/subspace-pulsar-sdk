@@ -218,6 +218,7 @@ impl AsyncDropFutures {
 /// Container for number of bytes.
 #[derive(
     Clone,
+    Copy,
     Debug,
     Default,
     Deref,
@@ -226,8 +227,8 @@ impl AsyncDropFutures {
     Display,
     Eq,
     From,
-    Into,
     FromStr,
+    Into,
     Ord,
     PartialEq,
     PartialOrd,
@@ -240,6 +241,16 @@ impl ByteSize {
     /// Constructor for bytes
     pub const fn b(n: u64) -> Self {
         Self(bytesize::ByteSize::b(n))
+    }
+
+    /// Constructor for kilobytes
+    pub const fn kb(n: u64) -> Self {
+        Self(bytesize::ByteSize::kb(n))
+    }
+
+    /// Constructor for kibibytes
+    pub const fn kib(n: u64) -> Self {
+        Self(bytesize::ByteSize::kib(n))
     }
 
     /// Constructor for megabytes
@@ -265,18 +276,18 @@ impl ByteSize {
 
 /// Multiaddr is a wrapper around libp2p one
 #[derive(
-    Debug,
     Clone,
-    Deserialize,
-    Serialize,
-    PartialEq,
-    Eq,
-    From,
-    Into,
-    FromStr,
+    Debug,
     Deref,
     DerefMut,
+    Deserialize,
     Display,
+    Eq,
+    From,
+    FromStr,
+    Into,
+    PartialEq,
+    Serialize,
 )]
 #[serde(transparent)]
 pub struct Multiaddr(pub libp2p_core::Multiaddr);

@@ -1,4 +1,5 @@
 pub mod common;
+#[cfg(all(feature = "core-payments", feature = "executor"))]
 mod domains;
 mod farmer;
 mod node;
