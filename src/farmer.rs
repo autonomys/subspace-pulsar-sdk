@@ -429,7 +429,7 @@ fn handler_on_sector_plotted(
             use futures::future::{select, Either};
 
             let result = select(Box::pin(publish_fut), Box::pin(dropped_receiver.recv())).await;
-            if !matches!(result, Either::Right(_)) {
+            if matches!(result, Either::Right(_)) {
                 tracing::debug!("Piece publishing was cancelled due to shutdown.");
             }
         },
