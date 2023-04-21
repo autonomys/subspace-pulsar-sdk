@@ -47,24 +47,6 @@ pub struct CoreDomainNode<
     _account_id: PhantomData<AccountId>,
 }
 
-type BoxedStream<I> = Box<dyn Stream<Item = I> + Send + Sync + Unpin>;
-
-type CoreDomainParams<AccountId> = domain_service::CoreDomainParams<
-    SBlock,
-    PBlock,
-    super::FullClient,
-    crate::node::FullClient,
-    sc_consensus::LongestChain<sc_client_db::Backend<PBlock>, PBlock>,
-    BoxedStream<(NumberFor<PBlock>, futures::channel::mpsc::Sender<()>)>,
-    BoxedStream<sc_client_api::BlockImportNotification<PBlock>>,
-    BoxedStream<(
-        sp_consensus_slots::Slot,
-        subspace_core_primitives::Blake2b256Hash,
-        Option<futures::channel::mpsc::Sender<()>>,
-    )>,
-    AccountId,
->;
-
 /// Internal config for core domains
 pub(crate) struct Config<'a, AccountId, CS, DTXS> {
     pub base: Base,
@@ -164,16 +146,15 @@ where
 
         let executor_streams = domain_client_executor::ExecutorStreams {
             primary_block_import_throttling_buffer_size: block_import_throttling_buffer_size,
-            imported_block_notification_stream: Box::new(
-                primary_chain_node.client.every_import_notification_stream(),
-            ) as BoxedStream<_>,
-            block_importing_notification_stream: Box::new(block_importing_notification_stream)
-                as BoxedStream<_>,
-            new_slot_notification_stream: Box::new(new_slot_notification_stream) as BoxedStream<_>,
+            imported_block_notification_stream: primary_chain_node
+                .client
+                .every_import_notification_stream(),
+            block_importing_notification_stream,
+            new_slot_notification_stream,
             _phantom: Default::default(),
         };
 
-        let core_domain_params = CoreDomainParams {
+        let core_domain_params = domain_service::CoreDomainParams {
             domain_id,
             core_domain_config,
             system_domain_client: system_domain_node.client.clone(),
