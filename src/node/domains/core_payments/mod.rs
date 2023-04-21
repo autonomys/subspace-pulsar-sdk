@@ -74,11 +74,7 @@ pub type ChainSpec = chain_spec::ChainSpec;
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct CorePaymentsDomainNode {
-    core: CoreDomainNode<
-        domain_runtime_primitives::AccountId,
-        core_payments_domain_runtime::RuntimeApi,
-        ExecutorDispatch,
-    >,
+    core: CoreDomainNode<core_payments_domain_runtime::RuntimeApi, ExecutorDispatch>,
 }
 
 impl CorePaymentsDomainNode {

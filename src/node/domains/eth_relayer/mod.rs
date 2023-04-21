@@ -71,11 +71,7 @@ pub type ChainSpec = chain_spec::ChainSpec;
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct EthDomainNode {
-    core: CoreDomainNode<
-        domain_runtime_primitives::AccountId,
-        core_eth_relay_runtime::RuntimeApi,
-        ExecutorDispatch,
-    >,
+    core: CoreDomainNode<core_eth_relay_runtime::RuntimeApi, ExecutorDispatch>,
 }
 
 impl EthDomainNode {

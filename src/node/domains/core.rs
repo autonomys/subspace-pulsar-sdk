@@ -1,6 +1,5 @@
 //! Core domain template module
 
-use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 
@@ -35,16 +34,10 @@ pub(crate) type FullClient<RuntimeApi, ExecutorDispatch> =
 /// Core domain node
 #[derive(Derivative)]
 #[derivative(Debug, Clone(bound = ""))]
-pub struct CoreDomainNode<
-    AccountId,
-    RuntimeApi,
-    ExecutorDispatch: sc_executor::NativeExecutionDispatch,
-> {
+pub struct CoreDomainNode<RuntimeApi, ExecutorDispatch: sc_executor::NativeExecutionDispatch> {
     #[derivative(Debug = "ignore")]
     client: Weak<FullClient<RuntimeApi, ExecutorDispatch>>,
     rpc_handlers: crate::utils::Rpc,
-    #[derivative(Debug = "ignore")]
-    _account_id: PhantomData<AccountId>,
 }
 
 /// Internal config for core domains
@@ -60,19 +53,8 @@ pub(crate) struct Config<'a, AccountId, CS, DTXS> {
     pub domain_tx_pool_sinks: &'a mut DTXS,
 }
 
-impl<AccountId, RuntimeApi, ExecutorDispatch>
-    CoreDomainNode<AccountId, RuntimeApi, ExecutorDispatch>
+impl<RuntimeApi, ExecutorDispatch> CoreDomainNode<RuntimeApi, ExecutorDispatch>
 where
-    AccountId: serde::de::DeserializeOwned
-        + Encode
-        + Decode
-        + Clone
-        + std::fmt::Debug
-        + std::fmt::Display
-        + std::str::FromStr
-        + Sync
-        + Send
-        + 'static,
     ExecutorDispatch: sc_executor::NativeExecutionDispatch + 'static,
     RuntimeApi: sp_api::ConstructRuntimeApi<Block, FullClient<RuntimeApi, ExecutorDispatch>>
         + Send
@@ -90,24 +72,37 @@ where
         + sp_session::SessionKeys<Block>
         + domain_runtime_primitives::DomainCoreApi<Block>
         + sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>
-        + frame_system_rpc_runtime_api::AccountNonceApi<
-            Block,
-            AccountId,
-            subspace_runtime_primitives::Index,
-        > + pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi<
+        + pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi<
             Block,
             domain_runtime_primitives::Balance,
-        > + sp_messenger::MessengerApi<Block, NumberFor<Block>>
-        + sp_messenger::RelayerApi<Block, AccountId, NumberFor<Block>>,
+        > + sp_messenger::MessengerApi<Block, NumberFor<Block>>,
 {
-    pub(crate) async fn new<CS, DTXS>(cfg: Config<'_, AccountId, CS, DTXS>) -> anyhow::Result<Self>
+    pub(crate) async fn new<CS, DTXS, AccountId>(
+        cfg: Config<'_, AccountId, CS, DTXS>,
+    ) -> anyhow::Result<Self>
     where
+        AccountId: serde::de::DeserializeOwned
+            + Encode
+            + Decode
+            + Clone
+            + std::fmt::Debug
+            + std::fmt::Display
+            + std::str::FromStr
+            + Sync
+            + Send
+            + 'static,
         CS: sc_chain_spec::ChainSpec
             + serde::Serialize
             + serde::de::DeserializeOwned
             + sp_runtime::BuildStorage
             + 'static,
         DTXS: Extend<(DomainId, cross_domain_message_gossip::DomainTxPoolSink)>,
+        RuntimeApi::RuntimeApi: sp_messenger::RelayerApi<Block, AccountId, NumberFor<Block>>
+            + frame_system_rpc_runtime_api::AccountNonceApi<
+                Block,
+                AccountId,
+                subspace_runtime_primitives::Index,
+            >,
     {
         let Config {
             base,
@@ -177,7 +172,6 @@ where
         Ok(Self {
             client: Arc::downgrade(&client),
             rpc_handlers: crate::utils::Rpc::new(&rpc_handlers),
-            _account_id: PhantomData,
         })
     }
 

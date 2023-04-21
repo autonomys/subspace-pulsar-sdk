@@ -71,8 +71,7 @@ pub type ChainSpec = chain_spec::ChainSpec;
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct EvmDomainNode {
-    core:
-        CoreDomainNode<core_evm_runtime::AccountId, core_evm_runtime::RuntimeApi, ExecutorDispatch>,
+    core: CoreDomainNode<core_evm_runtime::RuntimeApi, ExecutorDispatch>,
 }
 
 impl EvmDomainNode {
