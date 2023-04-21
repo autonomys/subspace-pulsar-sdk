@@ -1,17 +1,15 @@
 //! Core ethereum relay domain module
 
 use std::path::Path;
-use std::sync::{Arc, Weak};
 
 use anyhow::Context;
 use derivative::Derivative;
 use derive_builder::Builder;
-use domain_service::DomainConfiguration;
 use futures::prelude::*;
-use sc_client_api::BlockchainEvents;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
 
+use super::core::CoreDomainNode;
 use crate::node::{Base, BaseBuilder, BlockNotification};
 
 pub(crate) mod chain_spec;
@@ -66,24 +64,6 @@ impl ConfigBuilder {
     }
 }
 
-pub(crate) type FullClient = domain_service::FullClient<
-    domain_runtime_primitives::opaque::Block,
-    core_eth_relay_runtime::RuntimeApi,
-    ExecutorDispatch,
->;
-pub(crate) type NewFull = domain_service::NewFullCore<
-    Arc<FullClient>,
-    sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
-    domain_runtime_primitives::opaque::Block,
-    domain_runtime_primitives::opaque::Block,
-    subspace_runtime_primitives::opaque::Block,
-    super::FullClient,
-    crate::node::FullClient,
-    core_eth_relay_runtime::RuntimeApi,
-    ExecutorDispatch,
-    domain_runtime_primitives::AccountId,
->;
-
 /// Chain spec of the core domain
 pub type ChainSpec = chain_spec::ChainSpec;
 
@@ -91,9 +71,7 @@ pub type ChainSpec = chain_spec::ChainSpec;
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct EthDomainNode {
-    #[derivative(Debug = "ignore")]
-    _client: Weak<FullClient>,
-    rpc_handlers: crate::utils::Rpc,
+    core: CoreDomainNode<core_eth_relay_runtime::RuntimeApi, ExecutorDispatch>,
 }
 
 impl EthDomainNode {
@@ -109,70 +87,21 @@ impl EthDomainNode {
             cross_domain_message_gossip::DomainTxPoolSink,
         )>,
     ) -> anyhow::Result<Self> {
-        let Config { base, relayer_id: maybe_relayer_id } = cfg;
-        let service_config = base.configuration(directory, chain_spec).await;
-        let core_domain_config = DomainConfiguration { service_config, maybe_relayer_id };
-
-        // TODO: proper value
-        let block_import_throttling_buffer_size = 10;
-        let block_importing_notification_stream = primary_chain_node
-            .block_importing_notification_stream
-            .subscribe()
-            .then(|block_importing_notification| async move {
-                (
-                    block_importing_notification.block_number,
-                    block_importing_notification.acknowledgement_sender,
-                )
-            });
-        let new_slot_notification_stream = primary_chain_node
-            .new_slot_notification_stream
-            .subscribe()
-            .then(|slot_notification| async move {
-                (
-                    slot_notification.new_slot_info.slot,
-                    slot_notification.new_slot_info.global_challenge,
-                    None,
-                )
-            });
-
-        let executor_streams = domain_client_executor::ExecutorStreams {
-            primary_block_import_throttling_buffer_size: block_import_throttling_buffer_size,
-            block_importing_notification_stream,
-            imported_block_notification_stream: primary_chain_node
-                .client
-                .every_import_notification_stream(),
-            new_slot_notification_stream,
-            _phantom: Default::default(),
-        };
-
-        let core_domain_params = domain_service::CoreDomainParams {
-            domain_id: DomainId::CORE_ETH_RELAY,
-            core_domain_config,
-            system_domain_client: system_domain_node.client.clone(),
-            system_domain_sync_service: system_domain_node.sync_service.clone(),
-            primary_chain_client: primary_chain_node.client.clone(),
-            primary_network_sync_oracle: primary_chain_node.sync_service.clone(),
-            select_chain: primary_chain_node.select_chain.clone(),
-            executor_streams,
+        let Config { base, relayer_id } = cfg;
+        let cfg = super::core::Config {
+            base,
+            relayer_id,
+            directory: directory.as_ref().to_owned(),
+            primary_chain_node,
+            system_domain_node,
             gossip_message_sink,
+            domain_tx_pool_sinks,
+            domain_id: DomainId::CORE_PAYMENTS,
+            chain_spec,
         };
+        let core = CoreDomainNode::new(cfg).await.context("Failed to build core payments domain")?;
 
-        let NewFull { client, rpc_handlers, tx_pool_sink, task_manager, network_starter, .. } =
-            domain_service::new_full_core(core_domain_params).await?;
-
-        domain_tx_pool_sinks.extend([(DomainId::CORE_PAYMENTS, tx_pool_sink)]);
-        primary_chain_node.task_manager.add_child(task_manager);
-
-        network_starter.start_network();
-
-        Ok(Self {
-            _client: Arc::downgrade(&client),
-            rpc_handlers: crate::utils::Rpc::new(&rpc_handlers),
-        })
-    }
-
-    pub(crate) fn _client(&self) -> anyhow::Result<Arc<FullClient>> {
-        self._client.upgrade().ok_or_else(|| anyhow::anyhow!("The node was already closed"))
+        Ok(Self { core })
     }
 
     /// Subscribe to new blocks imported
@@ -180,7 +109,8 @@ impl EthDomainNode {
         &self,
     ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
         Ok(self
-            .rpc_handlers
+            .core
+            .rpc()
             .subscribe_new_blocks::<core_eth_relay_runtime::Runtime>()
             .await
             .context("Failed to subscribe to new blocks")?

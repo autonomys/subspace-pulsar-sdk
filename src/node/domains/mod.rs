@@ -19,6 +19,8 @@ use tracing_futures::Instrument;
 use super::{BlockNumber, Hash};
 use crate::node::{Base, BaseBuilder};
 
+pub(crate) mod core;
+
 pub(crate) mod chain_spec;
 #[cfg(feature = "core-payments")]
 pub mod core_payments;
@@ -121,7 +123,7 @@ pub struct SystemDomainNode {
     #[derivative(Debug = "ignore")]
     _client: Weak<FullClient>,
     #[cfg(feature = "core-payments")]
-    core: Option<core_payments::CoreDomainNode>,
+    core: Option<core_payments::CorePaymentsDomainNode>,
     #[cfg(feature = "eth-relayer")]
     eth: Option<eth_relayer::EthDomainNode>,
     rpc_handlers: crate::utils::Rpc,
@@ -202,7 +204,7 @@ impl SystemDomainNode {
         let core = if let Some(core_payments) = core_payments {
             let span = tracing::info_span!("CoreDomain");
             let core_payments_domain_id = u32::from(DomainId::CORE_PAYMENTS);
-            core_payments::CoreDomainNode::new(
+            core_payments::CorePaymentsDomainNode::new(
                 core_payments,
                 directory.as_ref().join(format!("core-{core_payments_domain_id}")),
                 extensions
@@ -283,7 +285,7 @@ impl SystemDomainNode {
 
     /// Get the core node handler
     #[cfg(feature = "core-payments")]
-    pub fn core(&self) -> Option<core_payments::CoreDomainNode> {
+    pub fn payments(&self) -> Option<core_payments::CorePaymentsDomainNode> {
         self.core.clone()
     }
 
