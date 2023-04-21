@@ -27,6 +27,8 @@ pub struct ChainSpecExtensions {
     pub core: Option<SerializableChainSpec<core_payments_domain_runtime::GenesisConfig>>,
     #[cfg(feature = "eth-relayer")]
     pub eth: Option<SerializableChainSpec<core_eth_relay_runtime::GenesisConfig>>,
+    #[cfg(feature = "core-evm")]
+    pub evm: Option<SerializableChainSpec<core_evm_runtime::GenesisConfig>>,
     #[serde(skip)]
     pub _if_no_fields_in_extension_macro_panics: (),
 }
@@ -87,6 +89,8 @@ pub fn development_config() -> ChainSpec {
             core: Some(super::core_payments::chain_spec::development_config()),
             #[cfg(feature = "eth-relayer")]
             eth: Some(super::eth_relayer::chain_spec::development_config()),
+            #[cfg(feature = "core-evm")]
+            evm: Some(super::evm::chain_spec::development_config()),
             _if_no_fields_in_extension_macro_panics: (),
         },
     )
@@ -161,6 +165,8 @@ pub fn local_testnet_config() -> ChainSpec {
             core: Some(super::core_payments::chain_spec::local_testnet_config()),
             #[cfg(feature = "eth-relayer")]
             eth: Some(super::eth_relayer::chain_spec::local_testnet_config()),
+            #[cfg(feature = "core-evm")]
+            evm: Some(super::evm::chain_spec::local_testnet_config()),
             _if_no_fields_in_extension_macro_panics: (),
         },
     )
@@ -234,6 +240,8 @@ pub fn gemini_3d_config() -> ChainSpec {
             core: Some(super::core_payments::chain_spec::gemini_3d_config()),
             #[cfg(feature = "eth-relayer")]
             eth: Some(super::eth_relayer::chain_spec::gemini_3d_config()),
+            #[cfg(feature = "core-evm")]
+            evm: Some(super::evm::chain_spec::gemini_3d_config()),
             _if_no_fields_in_extension_macro_panics: (),
         },
     )
@@ -310,6 +318,8 @@ pub fn devnet_config() -> ChainSpec {
             core: Some(super::core_payments::chain_spec::devnet_config()),
             #[cfg(feature = "eth-relayer")]
             eth: Some(super::eth_relayer::chain_spec::devnet_config()),
+            #[cfg(feature = "core-evm")]
+            evm: Some(super::evm::chain_spec::devnet_config()),
             _if_no_fields_in_extension_macro_panics: (),
         },
     )

@@ -1,22 +1,19 @@
-//! Core payments domain module
+//! Core evm domain module
 
 use std::path::Path;
 
 use anyhow::Context;
 use derivative::Derivative;
 use derive_builder::Builder;
-use domain_runtime_primitives::AccountId;
 use futures::prelude::*;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
 
 use super::core::CoreDomainNode;
-use super::BlockNotification;
-use crate::node::{Base, BaseBuilder};
+use crate::node::{Base, BaseBuilder, BlockNotification};
 
 pub(crate) mod chain_spec;
 
-/// Core payments domain instance.
 pub(crate) struct ExecutorDispatch;
 
 impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
@@ -26,11 +23,11 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     type ExtendHostFunctions = ();
 
     fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-        core_payments_domain_runtime::api::dispatch(method, data)
+        core_evm_runtime::api::dispatch(method, data)
     }
 
     fn native_version() -> sc_executor::NativeVersion {
-        core_payments_domain_runtime::native_version()
+        core_evm_runtime::native_version()
     }
 }
 
@@ -43,7 +40,7 @@ pub struct Config {
     /// Id of the relayer
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-    pub relayer_id: Option<AccountId>,
+    pub relayer_id: Option<core_evm_runtime::AccountId>,
     #[doc(hidden)]
     #[builder(
         setter(into, strip_option),
@@ -73,11 +70,12 @@ pub type ChainSpec = chain_spec::ChainSpec;
 /// Core domain node
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
-pub struct CorePaymentsDomainNode {
-    core: CoreDomainNode<domain_runtime_primitives::AccountId, core_payments_domain_runtime::RuntimeApi, ExecutorDispatch>,
+pub struct EvmDomainNode {
+    core:
+        CoreDomainNode<core_evm_runtime::AccountId, core_evm_runtime::RuntimeApi, ExecutorDispatch>,
 }
 
-impl CorePaymentsDomainNode {
+impl EvmDomainNode {
     pub(crate) async fn new(
         cfg: Config,
         directory: impl AsRef<Path>,
@@ -99,10 +97,11 @@ impl CorePaymentsDomainNode {
             system_domain_node,
             gossip_message_sink,
             domain_tx_pool_sinks,
-            domain_id: DomainId::CORE_PAYMENTS,
+            domain_id: DomainId::CORE_EVM,
             chain_spec,
         };
-        let core = CoreDomainNode::new(cfg).await.context("Failed to build core payments domain")?;
+        let core =
+            CoreDomainNode::new(cfg).await.context("Failed to build core payments domain")?;
 
         Ok(Self { core })
     }
@@ -114,7 +113,7 @@ impl CorePaymentsDomainNode {
         Ok(self
             .core
             .rpc()
-            .subscribe_new_blocks::<core_payments_domain_runtime::Runtime>()
+            .subscribe_new_blocks::<core_evm_runtime::Runtime>()
             .await
             .context("Failed to subscribe to new blocks")?
             .map(Into::into))

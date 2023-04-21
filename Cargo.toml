@@ -75,6 +75,7 @@ sp-transaction-pool = { version = "4.0.0-dev", git = "https://github.com/subspac
 sp-version = { version = "5.0.0", git = "https://github.com/subspace/substrate", rev = "fdb68194ab6995447610b3dbdee70559711dbd63" }
 
 core-eth-relay-runtime = { git = "https://github.com/subspace/subspace", rev = "f2eb3b2b5367b80fc9c66fd8452cd60fc0b7a1a1", optional = true }
+core-evm-runtime = { git = "https://github.com/subspace/subspace", rev = "f2eb3b2b5367b80fc9c66fd8452cd60fc0b7a1a1", optional = true }
 core-payments-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "f2eb3b2b5367b80fc9c66fd8452cd60fc0b7a1a1", optional = true }
 cross-domain-message-gossip = { git = "https://github.com/subspace/subspace", rev = "f2eb3b2b5367b80fc9c66fd8452cd60fc0b7a1a1" }
 domain-client-executor = { git = "https://github.com/subspace/subspace", rev = "f2eb3b2b5367b80fc9c66fd8452cd60fc0b7a1a1" }
@@ -112,10 +113,11 @@ console-subscriber = "0.1"
 
 [features]
 default = ["all"]
-all = ["executor", "eth-relayer", "core-payments"]
+all = ["executor", "eth-relayer", "core-payments", "core-evm"]
 executor = ["system-domain-runtime"]
 eth-relayer = ["core-eth-relay-runtime"]
 core-payments = ["core-payments-domain-runtime"]
+core-evm = ["core-evm-runtime"]
 
 [dev-dependencies]
 clap = { version = "4", features = ["derive"] }
@@ -193,7 +195,10 @@ zeroize = { opt-level = 3 }
 frame-benchmarking = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "fdb68194ab6995447610b3dbdee70559711dbd63" }
 frame-support = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "fdb68194ab6995447610b3dbdee70559711dbd63" }
 frame-system = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "fdb68194ab6995447610b3dbdee70559711dbd63" }
+sp-api = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "fdb68194ab6995447610b3dbdee70559711dbd63" }
 sp-core = { version = "7.0.0", git = "https://github.com/subspace/substrate", rev = "fdb68194ab6995447610b3dbdee70559711dbd63" }
+sp-inherents = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "fdb68194ab6995447610b3dbdee70559711dbd63" }
+sp-state-machine = { version = "0.13.0", git = "https://github.com/subspace/substrate", rev = "fdb68194ab6995447610b3dbdee70559711dbd63" }
 sp-std = { version = "5.0.0", git = "https://github.com/subspace/substrate", rev = "fdb68194ab6995447610b3dbdee70559711dbd63" }
 sp-io = { version = "7.0.0", git = "https://github.com/subspace/substrate", rev = "fdb68194ab6995447610b3dbdee70559711dbd63" }
 sp-runtime = { version = "7.0.0", git = "https://github.com/subspace/substrate", rev = "fdb68194ab6995447610b3dbdee70559711dbd63" }

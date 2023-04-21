@@ -1,13 +1,14 @@
 //! Core domain template module
 
+use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 
 use derivative::Derivative;
 use domain_runtime_primitives::opaque::{Block, Block as SBlock};
-use domain_runtime_primitives::AccountId;
 use domain_service::DomainConfiguration;
 use futures::prelude::*;
+use parity_scale_codec::{Decode, Encode};
 use sc_client_api::BlockchainEvents;
 use sp_api::NumberFor;
 use sp_domains::DomainId;
@@ -15,7 +16,7 @@ use subspace_runtime_primitives::opaque::Block as PBlock;
 
 use crate::node::Base;
 
-pub(crate) type NewFull<Client, RuntimeApi, ExecutorDispatch> = domain_service::NewFullCore<
+pub(crate) type NewFull<Client, RuntimeApi, ExecutorDispatch, AccountId> = domain_service::NewFullCore<
     Arc<Client>,
     sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
     Block,
@@ -33,15 +34,21 @@ pub(crate) type FullClient<RuntimeApi, ExecutorDispatch> =
 /// Core domain node
 #[derive(Derivative)]
 #[derivative(Debug, Clone(bound = ""))]
-pub struct CoreDomainNode<RuntimeApi, ExecutorDispatch: sc_executor::NativeExecutionDispatch> {
+pub struct CoreDomainNode<
+    AccountId,
+    RuntimeApi,
+    ExecutorDispatch: sc_executor::NativeExecutionDispatch,
+> {
     #[derivative(Debug = "ignore")]
     client: Weak<FullClient<RuntimeApi, ExecutorDispatch>>,
     rpc_handlers: crate::utils::Rpc,
+    #[derivative(Debug = "ignore")]
+    _account_id: PhantomData<AccountId>,
 }
 
 type BoxedStream<I> = Box<dyn Stream<Item = I> + Send + Sync + Unpin>;
 
-type CoreDomainParams = domain_service::CoreDomainParams<
+type CoreDomainParams<AccountId> = domain_service::CoreDomainParams<
     SBlock,
     PBlock,
     super::FullClient,
@@ -58,7 +65,7 @@ type CoreDomainParams = domain_service::CoreDomainParams<
 >;
 
 /// Internal config for core domains
-pub(crate) struct Config<'a, CS, DTXS> {
+pub(crate) struct Config<'a, AccountId, CS, DTXS> {
     pub base: Base,
     pub relayer_id: Option<AccountId>,
     pub directory: PathBuf,
@@ -70,8 +77,19 @@ pub(crate) struct Config<'a, CS, DTXS> {
     pub domain_tx_pool_sinks: &'a mut DTXS,
 }
 
-impl<RuntimeApi, ExecutorDispatch> CoreDomainNode<RuntimeApi, ExecutorDispatch>
+impl<AccountId, RuntimeApi, ExecutorDispatch>
+    CoreDomainNode<AccountId, RuntimeApi, ExecutorDispatch>
 where
+    AccountId: serde::de::DeserializeOwned
+        + Encode
+        + Decode
+        + Clone
+        + std::fmt::Debug
+        + std::fmt::Display
+        + std::str::FromStr
+        + Sync
+        + Send
+        + 'static,
     ExecutorDispatch: sc_executor::NativeExecutionDispatch + 'static,
     RuntimeApi: sp_api::ConstructRuntimeApi<Block, FullClient<RuntimeApi, ExecutorDispatch>>
         + Send
@@ -99,7 +117,7 @@ where
         > + sp_messenger::MessengerApi<Block, NumberFor<Block>>
         + sp_messenger::RelayerApi<Block, AccountId, NumberFor<Block>>,
 {
-    pub(crate) async fn new<CS, DTXS>(cfg: Config<'_, CS, DTXS>) -> anyhow::Result<Self>
+    pub(crate) async fn new<CS, DTXS>(cfg: Config<'_, AccountId, CS, DTXS>) -> anyhow::Result<Self>
     where
         CS: sc_chain_spec::ChainSpec
             + serde::Serialize
@@ -177,6 +195,7 @@ where
         Ok(Self {
             client: Arc::downgrade(&client),
             rpc_handlers: crate::utils::Rpc::new(&rpc_handlers),
+            _account_id: PhantomData,
         })
     }
 

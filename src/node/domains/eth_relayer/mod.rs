@@ -71,7 +71,11 @@ pub type ChainSpec = chain_spec::ChainSpec;
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct EthDomainNode {
-    core: CoreDomainNode<core_eth_relay_runtime::RuntimeApi, ExecutorDispatch>,
+    core: CoreDomainNode<
+        domain_runtime_primitives::AccountId,
+        core_eth_relay_runtime::RuntimeApi,
+        ExecutorDispatch,
+    >,
 }
 
 impl EthDomainNode {
@@ -96,7 +100,7 @@ impl EthDomainNode {
             system_domain_node,
             gossip_message_sink,
             domain_tx_pool_sinks,
-            domain_id: DomainId::CORE_PAYMENTS,
+            domain_id: DomainId::CORE_ETH_RELAY,
             chain_spec,
         };
         let core = CoreDomainNode::new(cfg).await.context("Failed to build core payments domain")?;

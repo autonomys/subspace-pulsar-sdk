@@ -11,7 +11,7 @@ async fn core_start() {
 
     node.system_domain()
         .unwrap()
-        .core()
+        .payments()
         .unwrap()
         .subscribe_new_blocks()
         .await

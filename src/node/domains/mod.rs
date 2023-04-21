@@ -26,6 +26,8 @@ pub(crate) mod chain_spec;
 pub mod core_payments;
 #[cfg(feature = "eth-relayer")]
 pub mod eth_relayer;
+#[cfg(feature = "core-evm")]
+pub mod evm;
 
 /// System domain executor instance.
 pub(crate) struct ExecutorDispatch;
@@ -96,6 +98,11 @@ pub struct Config {
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "crate::utils::is_default")]
     pub eth_relayer: Option<eth_relayer::Config>,
+    /// The evm domain config
+    #[cfg(feature = "eth-relayer")]
+    #[builder(setter(strip_option), default)]
+    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    pub evm: Option<evm::Config>,
 }
 
 crate::derive_base!(crate::node::Base => ConfigBuilder);
@@ -126,6 +133,8 @@ pub struct SystemDomainNode {
     core: Option<core_payments::CorePaymentsDomainNode>,
     #[cfg(feature = "eth-relayer")]
     eth: Option<eth_relayer::EthDomainNode>,
+    #[cfg(feature = "core-evm")]
+    evm: Option<evm::EvmDomainNode>,
     rpc_handlers: crate::utils::Rpc,
 }
 
@@ -145,6 +154,8 @@ impl SystemDomainNode {
             core_payments,
             #[cfg(feature = "eth-relayer")]
             eth_relayer,
+            #[cfg(feature = "core-evm")]
+            evm,
         } = cfg;
         let extensions = chain_spec.extensions().clone();
         let service_config =
@@ -250,6 +261,31 @@ impl SystemDomainNode {
             None
         };
 
+        #[cfg(feature = "core-evm")]
+        let evm = if let Some(evm) = evm {
+            let span = tracing::info_span!("EvmDomain");
+            let domain_id = u32::from(DomainId::CORE_EVM);
+            evm::EvmDomainNode::new(
+                evm,
+                directory.as_ref().join(format!("evm-{domain_id}")),
+                extensions
+                    .get_any(std::any::TypeId::of::<Option<evm::ChainSpec>>())
+                    .downcast_ref()
+                    .cloned()
+                    .flatten()
+                    .ok_or_else(|| anyhow::anyhow!("Evm domain is not supported"))?,
+                primary_new_full,
+                &system_domain_node,
+                gossip_msg_sink.clone(),
+                &mut domain_tx_pool_sinks,
+            )
+            .instrument(span)
+            .await
+            .map(Some)?
+        } else {
+            None
+        };
+
         domain_tx_pool_sinks.insert(DomainId::SYSTEM, system_domain_node.tx_pool_sink);
         primary_new_full.task_manager.add_child(system_domain_node.task_manager);
 
@@ -275,6 +311,8 @@ impl SystemDomainNode {
             core,
             #[cfg(feature = "eth-relayer")]
             eth,
+            #[cfg(feature = "core-evm")]
+            evm,
             rpc_handlers: crate::utils::Rpc::new(&rpc_handlers),
         })
     }
