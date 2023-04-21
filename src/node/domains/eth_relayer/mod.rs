@@ -103,7 +103,8 @@ impl EthDomainNode {
             domain_id: DomainId::CORE_ETH_RELAY,
             chain_spec,
         };
-        let core = CoreDomainNode::new(cfg).await.context("Failed to build core payments domain")?;
+        let core =
+            CoreDomainNode::new(cfg).await.context("Failed to build core payments domain")?;
 
         Ok(Self { core })
     }

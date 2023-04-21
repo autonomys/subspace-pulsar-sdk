@@ -218,20 +218,12 @@ fn testnet_genesis(
 ) -> GenesisConfig {
     GenesisConfig {
         system: SystemConfig {
-            code: WASM_BINARY
-                .expect("WASM binary was not build, please build it!")
-                .to_vec(),
+            code: WASM_BINARY.expect("WASM binary was not build, please build it!").to_vec(),
         },
-        sudo: SudoConfig {
-            key: maybe_sudo_account,
-        },
+        sudo: SudoConfig { key: maybe_sudo_account },
         transaction_payment: Default::default(),
         balances: BalancesConfig {
-            balances: endowed_accounts
-                .iter()
-                .cloned()
-                .map(|k| (k, 1_000_000 * SSC))
-                .collect(),
+            balances: endowed_accounts.iter().cloned().map(|k| (k, 1_000_000 * SSC)).collect(),
         },
         messenger: MessengerConfig { relayers },
         evm_chain_id: EVMChainIdConfig { chain_id },

@@ -16,18 +16,19 @@ use subspace_runtime_primitives::opaque::Block as PBlock;
 
 use crate::node::Base;
 
-pub(crate) type NewFull<Client, RuntimeApi, ExecutorDispatch, AccountId> = domain_service::NewFullCore<
-    Arc<Client>,
-    sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
-    Block,
-    SBlock,
-    PBlock,
-    super::FullClient,
-    crate::node::FullClient,
-    RuntimeApi,
-    ExecutorDispatch,
-    AccountId,
->;
+pub(crate) type NewFull<Client, RuntimeApi, ExecutorDispatch, AccountId> =
+    domain_service::NewFullCore<
+        Arc<Client>,
+        sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
+        Block,
+        SBlock,
+        PBlock,
+        super::FullClient,
+        crate::node::FullClient,
+        RuntimeApi,
+        ExecutorDispatch,
+        AccountId,
+    >;
 pub(crate) type FullClient<RuntimeApi, ExecutorDispatch> =
     domain_service::FullClient<Block, RuntimeApi, ExecutorDispatch>;
 

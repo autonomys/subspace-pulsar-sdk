@@ -74,7 +74,11 @@ pub type ChainSpec = chain_spec::ChainSpec;
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct CorePaymentsDomainNode {
-    core: CoreDomainNode<domain_runtime_primitives::AccountId, core_payments_domain_runtime::RuntimeApi, ExecutorDispatch>,
+    core: CoreDomainNode<
+        domain_runtime_primitives::AccountId,
+        core_payments_domain_runtime::RuntimeApi,
+        ExecutorDispatch,
+    >,
 }
 
 impl CorePaymentsDomainNode {
@@ -102,7 +106,8 @@ impl CorePaymentsDomainNode {
             domain_id: DomainId::CORE_PAYMENTS,
             chain_spec,
         };
-        let core = CoreDomainNode::new(cfg).await.context("Failed to build core payments domain")?;
+        let core =
+            CoreDomainNode::new(cfg).await.context("Failed to build core payments domain")?;
 
         Ok(Self { core })
     }
