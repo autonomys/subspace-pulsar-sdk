@@ -20,7 +20,6 @@ use core_eth_relay_runtime::{
     AccountId, BalancesConfig, EthereumBeaconClientConfig, GenesisConfig, MessengerConfig,
     SudoConfig, SystemConfig, WASM_BINARY,
 };
-use domain_runtime_primitives::RelayerId;
 use sc_service::ChainType;
 use sp_core::crypto::Ss58Codec;
 use subspace_runtime_primitives::SSC;
@@ -160,7 +159,7 @@ pub fn devnet_config() -> ChainSpec {
                 Some(sudo_account.clone()),
                 vec![(
                     sudo_account,
-                    RelayerId::from_ss58check("5D7kgfacBsP6pkMB628221HG98mz2euaytthdoeZPGceQusS")
+                    AccountId::from_ss58check("5D7kgfacBsP6pkMB628221HG98mz2euaytthdoeZPGceQusS")
                         .expect("Wrong relayer account address"),
                 )],
             )
@@ -182,7 +181,7 @@ pub fn devnet_config() -> ChainSpec {
 fn testnet_genesis(
     endowed_accounts: Vec<AccountId>,
     maybe_sudo_account: Option<AccountId>,
-    relayers: Vec<(AccountId, RelayerId)>,
+    relayers: Vec<(AccountId, AccountId)>,
 ) -> GenesisConfig {
     GenesisConfig {
         system: SystemConfig {

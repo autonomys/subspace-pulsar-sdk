@@ -1,6 +1,5 @@
 //! System domain chain specs
 
-use domain_runtime_primitives::RelayerId;
 use frame_support::weights::Weight;
 use sc_service::ChainType;
 use sc_subspace_chain_specs::SerializableChainSpec;
@@ -291,7 +290,7 @@ pub fn devnet_config() -> ChainSpec {
                 Some(sudo_account.clone()),
                 vec![(
                     sudo_account,
-                    RelayerId::from_ss58check("5D7kgfacBsP6pkMB628221HG98mz2euaytthdoeZPGceQusS")
+                    AccountId::from_ss58check("5D7kgfacBsP6pkMB628221HG98mz2euaytthdoeZPGceQusS")
                         .expect("Invalid relayer id account"),
                 )],
             )
@@ -321,7 +320,7 @@ fn testnet_genesis(
     executors: Vec<(AccountId, Balance, AccountId, ExecutorPublicKey)>,
     domains: Vec<(AccountId, Balance, DomainConfig, AccountId, Percent)>,
     maybe_sudo_account: Option<AccountId>,
-    relayers: Vec<(AccountId, RelayerId)>,
+    relayers: Vec<(AccountId, AccountId)>,
 ) -> GenesisConfig {
     GenesisConfig {
         system: SystemConfig {

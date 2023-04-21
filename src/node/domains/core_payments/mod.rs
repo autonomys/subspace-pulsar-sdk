@@ -4,9 +4,9 @@ use std::path::Path;
 use std::sync::{Arc, Weak};
 
 use anyhow::Context;
-use core_payments_domain_runtime::RelayerId;
 use derivative::Derivative;
 use derive_builder::Builder;
+use domain_runtime_primitives::AccountId;
 use domain_service::DomainConfiguration;
 use futures::prelude::*;
 use sc_client_api::BlockchainEvents;
@@ -45,7 +45,7 @@ pub struct Config {
     /// Id of the relayer
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-    pub relayer_id: Option<RelayerId>,
+    pub relayer_id: Option<AccountId>,
     #[doc(hidden)]
     #[builder(
         setter(into, strip_option),
@@ -69,11 +69,15 @@ impl ConfigBuilder {
     }
 }
 
-pub(crate) type FullClient =
-    domain_service::FullClient<core_payments_domain_runtime::RuntimeApi, ExecutorDispatch>;
+pub(crate) type FullClient = domain_service::FullClient<
+    domain_runtime_primitives::opaque::Block,
+    core_payments_domain_runtime::RuntimeApi,
+    ExecutorDispatch,
+>;
 pub(crate) type NewFull = domain_service::NewFullCore<
     Arc<FullClient>,
     sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
+    domain_runtime_primitives::opaque::Block,
     sp_runtime::generic::Block<
         sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>,
         sp_runtime::OpaqueExtrinsic,
@@ -83,6 +87,7 @@ pub(crate) type NewFull = domain_service::NewFullCore<
     crate::node::FullClient,
     core_payments_domain_runtime::RuntimeApi,
     ExecutorDispatch,
+    domain_runtime_primitives::AccountId,
 >;
 
 /// Chain spec of the core domain

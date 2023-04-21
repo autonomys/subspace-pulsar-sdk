@@ -6,14 +6,13 @@ use std::sync::{Arc, Weak};
 use anyhow::Context;
 use derivative::Derivative;
 use derive_builder::Builder;
-use domain_runtime_primitives::RelayerId;
+use domain_runtime_primitives::AccountId;
 use domain_service::DomainConfiguration;
 use futures::prelude::*;
 use sc_client_api::BlockchainEvents;
 use sc_service::ChainSpecExtension;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
-use subspace_runtime::Block;
 use system_domain_runtime::Header;
 use tracing_futures::Instrument;
 
@@ -77,7 +76,7 @@ pub struct Config {
     /// Id of the relayer
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-    pub relayer_id: Option<RelayerId>,
+    pub relayer_id: Option<AccountId>,
     #[doc(hidden)]
     #[builder(
         setter(into, strip_option),
@@ -99,8 +98,11 @@ pub struct Config {
 
 crate::derive_base!(crate::node::Base => ConfigBuilder);
 
-pub(crate) type FullClient =
-    domain_service::FullClient<system_domain_runtime::RuntimeApi, ExecutorDispatch>;
+pub(crate) type FullClient = domain_service::FullClient<
+    domain_runtime_primitives::opaque::Block,
+    system_domain_runtime::RuntimeApi,
+    ExecutorDispatch,
+>;
 pub(crate) type NewFull = domain_service::NewFullSystem<
     Arc<FullClient>,
     sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
@@ -250,7 +252,7 @@ impl SystemDomainNode {
         primary_new_full.task_manager.add_child(system_domain_node.task_manager);
 
         let cross_domain_message_gossip_worker =
-            cross_domain_message_gossip::GossipWorker::<Block>::new(
+            cross_domain_message_gossip::GossipWorker::<subspace_runtime::Block>::new(
                 primary_new_full.network_service.clone(),
                 primary_new_full.sync_service.clone(),
                 domain_tx_pool_sinks,
