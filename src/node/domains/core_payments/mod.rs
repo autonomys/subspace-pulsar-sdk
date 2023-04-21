@@ -78,10 +78,7 @@ pub(crate) type NewFull = domain_service::NewFullCore<
     Arc<FullClient>,
     sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
     domain_runtime_primitives::opaque::Block,
-    sp_runtime::generic::Block<
-        sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>,
-        sp_runtime::OpaqueExtrinsic,
-    >,
+    domain_runtime_primitives::opaque::Block,
     subspace_runtime_primitives::opaque::Block,
     super::FullClient,
     crate::node::FullClient,
