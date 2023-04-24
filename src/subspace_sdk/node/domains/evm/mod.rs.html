@@ -118,11 +118,26 @@
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Core evm domain module
 
 </span><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>anyhow::Context;
+<span class="kw">use </span>core_evm_runtime::{Runtime, RuntimeApi};
 <span class="kw">use </span>derivative::Derivative;
 <span class="kw">use </span>derive_builder::Builder;
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
@@ -130,7 +145,7 @@
 <span class="kw">use </span>sp_domains::DomainId;
 
 <span class="kw">use </span><span class="kw">super</span>::core::CoreDomainNode;
-<span class="kw">use </span><span class="kw">crate</span>::node::{Base, BaseBuilder, BlockNotification};
+<span class="kw">use </span><span class="kw">crate</span>::node::{Base, BaseBuilder, BlockHeader};
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>chain_spec;
 
@@ -191,7 +206,7 @@
 </span><span class="attr">#[derive(Clone, Derivative)]
 #[derivative(Debug)]
 </span><span class="kw">pub struct </span>EvmDomainNode {
-    core: CoreDomainNode&lt;core_evm_runtime::RuntimeApi, ExecutorDispatch&gt;,
+    core: CoreDomainNode&lt;RuntimeApi, ExecutorDispatch&gt;,
 }
 
 <span class="kw">impl </span>EvmDomainNode {
@@ -226,15 +241,28 @@
     }
 
     <span class="doccomment">/// Subscribe to new blocks imported
-    </span><span class="kw">pub async fn </span>subscribe_new_blocks(
+    </span><span class="kw">pub async fn </span>subscribe_new_heads(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-    ) -&gt; anyhow::Result&lt;<span class="kw">impl </span>Stream&lt;Item = BlockNotification&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>&gt; {
+    ) -&gt; anyhow::Result&lt;<span class="kw">impl </span>Stream&lt;Item = BlockHeader&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.core
             .rpc()
-            .subscribe_new_blocks::&lt;core_evm_runtime::Runtime&gt;()
+            .subscribe_new_heads::&lt;Runtime&gt;()
             .<span class="kw">await
             </span>.context(<span class="string">&quot;Failed to subscribe to new blocks&quot;</span>)<span class="question-mark">?
+            </span>.map(Into::into))
+    }
+
+    <span class="doccomment">/// Subscribe to finalized blocks
+    </span><span class="kw">pub async fn </span>subscribe_finalized_heads(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+    ) -&gt; anyhow::Result&lt;<span class="kw">impl </span>Stream&lt;Item = BlockHeader&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.core
+            .rpc()
+            .subscribe_finalized_heads::&lt;Runtime&gt;()
+            .<span class="kw">await
+            </span>.context(<span class="string">&quot;Failed to subscribe to finalized blocks&quot;</span>)<span class="question-mark">?
             </span>.map(Into::into))
     }
 }
