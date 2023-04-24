@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use anyhow::Context;
+use core_payments_domain_runtime::{Runtime, RuntimeApi};
 use derivative::Derivative;
 use derive_builder::Builder;
 use domain_runtime_primitives::AccountId;
@@ -11,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
 
 use super::core::CoreDomainNode;
-use super::BlockNotification;
+use super::BlockHeader;
 use crate::node::{Base, BaseBuilder};
 
 pub(crate) mod chain_spec;
@@ -74,7 +75,7 @@ pub type ChainSpec = chain_spec::ChainSpec;
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct CorePaymentsDomainNode {
-    core: CoreDomainNode<core_payments_domain_runtime::RuntimeApi, ExecutorDispatch>,
+    core: CoreDomainNode<RuntimeApi, ExecutorDispatch>,
 }
 
 impl CorePaymentsDomainNode {
@@ -109,15 +110,28 @@ impl CorePaymentsDomainNode {
     }
 
     /// Subscribe to new blocks imported
-    pub async fn subscribe_new_blocks(
+    pub async fn subscribe_new_heads(
         &self,
-    ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
+    ) -> anyhow::Result<impl Stream<Item = BlockHeader> + Send + Sync + Unpin + 'static> {
         Ok(self
             .core
             .rpc()
-            .subscribe_new_blocks::<core_payments_domain_runtime::Runtime>()
+            .subscribe_new_heads::<Runtime>()
             .await
             .context("Failed to subscribe to new blocks")?
+            .map(Into::into))
+    }
+
+    /// Subscribe to finalized blocks
+    pub async fn subscribe_finalized_heads(
+        &self,
+    ) -> anyhow::Result<impl Stream<Item = BlockHeader> + Send + Sync + Unpin + 'static> {
+        Ok(self
+            .core
+            .rpc()
+            .subscribe_finalized_heads::<Runtime>()
+            .await
+            .context("Failed to subscribe to finalized blocks")?
             .map(Into::into))
     }
 }
