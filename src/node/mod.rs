@@ -662,15 +662,27 @@ impl Node {
         self.client.block_hash(number).context("Failed to get primary node block hash by number")
     }
 
-    /// Subscribe to new blocks imported
-    pub async fn subscribe_new_blocks(
+    /// Subscribe to new heads imported
+    pub async fn subscribe_new_heads(
         &self,
     ) -> anyhow::Result<impl Stream<Item = BlockHeader> + Send + Sync + Unpin + 'static> {
         Ok(self
             .rpc_handle
-            .subscribe_new_blocks::<subspace_runtime::Runtime>()
+            .subscribe_new_heads::<subspace_runtime::Runtime>()
             .await
             .context("Failed to subscribe to new blocks")?
+            .map(Into::into))
+    }
+
+    /// Subscribe to finalized heads
+    pub async fn subscribe_finalized_heads(
+        &self,
+    ) -> anyhow::Result<impl Stream<Item = BlockHeader> + Send + Sync + Unpin + 'static> {
+        Ok(self
+            .rpc_handle
+            .subscribe_finalized_heads::<subspace_runtime::Runtime>()
+            .await
+            .context("Failed to subscribe to finalized blocks")?
             .map(Into::into))
     }
 

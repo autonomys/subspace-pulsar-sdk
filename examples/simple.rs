@@ -28,11 +28,11 @@ async fn main() {
     }
     tracing::info!("Initial plotting completed");
 
-    node.subscribe_new_blocks()
+    node.subscribe_new_heads()
         .await
         .unwrap()
         // Wait 10 blocks and exit
         .take(10)
-        .for_each(|block| async move { tracing::info!(?block, "New block!") })
+        .for_each(|header| async move { tracing::info!(?header, "New block!") })
         .await;
 }

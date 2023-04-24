@@ -13,7 +13,7 @@ async fn core_start() {
         .unwrap()
         .payments()
         .unwrap()
-        .subscribe_new_blocks()
+        .subscribe_new_heads()
         .await
         .unwrap()
         .next()

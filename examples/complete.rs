@@ -39,7 +39,7 @@ async fn main() {
         }
     });
     tokio::spawn({
-        let mut new_blocks = node.subscribe_new_blocks().await.unwrap();
+        let mut new_blocks = node.subscribe_new_heads().await.unwrap();
         async move {
             while let Some(block) = new_blocks.next().await {
                 eprintln!("New block: {block:?}");

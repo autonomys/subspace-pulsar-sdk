@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use anyhow::Context;
+use core_eth_relay_runtime::{Runtime, RuntimeApi};
 use derivative::Derivative;
 use derive_builder::Builder;
 use futures::prelude::*;
@@ -71,7 +72,7 @@ pub type ChainSpec = chain_spec::ChainSpec;
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct EthDomainNode {
-    core: CoreDomainNode<core_eth_relay_runtime::RuntimeApi, ExecutorDispatch>,
+    core: CoreDomainNode<RuntimeApi, ExecutorDispatch>,
 }
 
 impl EthDomainNode {
@@ -106,15 +107,28 @@ impl EthDomainNode {
     }
 
     /// Subscribe to new blocks imported
-    pub async fn subscribe_new_blocks(
+    pub async fn subscribe_new_heads(
         &self,
     ) -> anyhow::Result<impl Stream<Item = BlockHeader> + Send + Sync + Unpin + 'static> {
         Ok(self
             .core
             .rpc()
-            .subscribe_new_blocks::<core_eth_relay_runtime::Runtime>()
+            .subscribe_new_heads::<Runtime>()
             .await
             .context("Failed to subscribe to new blocks")?
+            .map(Into::into))
+    }
+
+    /// Subscribe to finalized blocks
+    pub async fn subscribe_finalized_heads(
+        &self,
+    ) -> anyhow::Result<impl Stream<Item = BlockHeader> + Send + Sync + Unpin + 'static> {
+        Ok(self
+            .core
+            .rpc()
+            .subscribe_finalized_heads::<Runtime>()
+            .await
+            .context("Failed to subscribe to finalized blocks")?
             .map(Into::into))
     }
 }

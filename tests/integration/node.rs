@@ -14,7 +14,7 @@ async fn sync_block_inner() {
 
     let farm_blocks = 4;
 
-    node.subscribe_new_blocks()
+    node.subscribe_new_heads()
         .await
         .unwrap()
         .skip_while(|notification| futures::future::ready(notification.number < farm_blocks))
@@ -55,7 +55,7 @@ async fn sync_plot_inner() {
 
     let farm_blocks = 4;
 
-    node.subscribe_new_blocks()
+    node.subscribe_new_heads()
         .await
         .unwrap()
         .skip_while(|notification| futures::future::ready(notification.number < farm_blocks))
@@ -119,7 +119,7 @@ async fn node_events() {
     let farmer = Farmer::dev().build(&node).await;
 
     let events = node
-        .subscribe_new_blocks()
+        .subscribe_new_heads()
         .await
         .unwrap()
         // Skip genesis
@@ -144,7 +144,7 @@ async fn fetch_block_author() {
     let reward_address = Default::default();
     let farmer = Farmer::dev().reward_address(reward_address).build(&node).await;
 
-    let block = node.subscribe_new_blocks().await.unwrap().skip(1).take(1).next().await.unwrap();
+    let block = node.subscribe_new_heads().await.unwrap().skip(1).take(1).next().await.unwrap();
     assert_eq!(block.pre_digest.unwrap().solution.reward_address, reward_address);
 
     farmer.close().await;
