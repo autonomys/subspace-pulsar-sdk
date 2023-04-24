@@ -1,4 +1,4 @@
-//! Core ethereum relay domain module
+//! Core evm domain module
 
 use std::path::Path;
 
@@ -23,11 +23,11 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     type ExtendHostFunctions = ();
 
     fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-        core_eth_relay_runtime::api::dispatch(method, data)
+        core_evm_runtime::api::dispatch(method, data)
     }
 
     fn native_version() -> sc_executor::NativeVersion {
-        core_eth_relay_runtime::native_version()
+        core_evm_runtime::native_version()
     }
 }
 
@@ -40,7 +40,7 @@ pub struct Config {
     /// Id of the relayer
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-    pub relayer_id: Option<domain_runtime_primitives::AccountId>,
+    pub relayer_id: Option<core_evm_runtime::AccountId>,
     #[doc(hidden)]
     #[builder(
         setter(into, strip_option),
@@ -70,11 +70,11 @@ pub type ChainSpec = chain_spec::ChainSpec;
 /// Core domain node
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
-pub struct EthDomainNode {
-    core: CoreDomainNode<core_eth_relay_runtime::RuntimeApi, ExecutorDispatch>,
+pub struct EvmDomainNode {
+    core: CoreDomainNode<core_evm_runtime::RuntimeApi, ExecutorDispatch>,
 }
 
-impl EthDomainNode {
+impl EvmDomainNode {
     pub(crate) async fn new(
         cfg: Config,
         directory: impl AsRef<Path>,
@@ -96,7 +96,7 @@ impl EthDomainNode {
             system_domain_node,
             gossip_message_sink,
             domain_tx_pool_sinks,
-            domain_id: DomainId::CORE_ETH_RELAY,
+            domain_id: DomainId::CORE_EVM,
             chain_spec,
         };
         let core =
@@ -112,7 +112,7 @@ impl EthDomainNode {
         Ok(self
             .core
             .rpc()
-            .subscribe_new_blocks::<core_eth_relay_runtime::Runtime>()
+            .subscribe_new_blocks::<core_evm_runtime::Runtime>()
             .await
             .context("Failed to subscribe to new blocks")?
             .map(Into::into))

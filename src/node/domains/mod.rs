@@ -6,25 +6,28 @@ use std::sync::{Arc, Weak};
 use anyhow::Context;
 use derivative::Derivative;
 use derive_builder::Builder;
-use domain_runtime_primitives::RelayerId;
+use domain_runtime_primitives::AccountId;
 use domain_service::DomainConfiguration;
 use futures::prelude::*;
 use sc_client_api::BlockchainEvents;
 use sc_service::ChainSpecExtension;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
-use subspace_runtime::Block;
 use system_domain_runtime::Header;
 use tracing_futures::Instrument;
 
 use super::{BlockNumber, Hash};
 use crate::node::{Base, BaseBuilder};
 
+pub(crate) mod core;
+
 pub(crate) mod chain_spec;
 #[cfg(feature = "core-payments")]
 pub mod core_payments;
 #[cfg(feature = "eth-relayer")]
 pub mod eth_relayer;
+#[cfg(feature = "core-evm")]
+pub mod evm;
 
 /// System domain executor instance.
 pub(crate) struct ExecutorDispatch;
@@ -77,7 +80,7 @@ pub struct Config {
     /// Id of the relayer
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "crate::utils::is_default")]
-    pub relayer_id: Option<RelayerId>,
+    pub relayer_id: Option<AccountId>,
     #[doc(hidden)]
     #[builder(
         setter(into, strip_option),
@@ -95,12 +98,20 @@ pub struct Config {
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "crate::utils::is_default")]
     pub eth_relayer: Option<eth_relayer::Config>,
+    /// The evm domain config
+    #[cfg(feature = "eth-relayer")]
+    #[builder(setter(strip_option), default)]
+    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    pub evm: Option<evm::Config>,
 }
 
 crate::derive_base!(crate::node::Base => ConfigBuilder);
 
-pub(crate) type FullClient =
-    domain_service::FullClient<system_domain_runtime::RuntimeApi, ExecutorDispatch>;
+pub(crate) type FullClient = domain_service::FullClient<
+    domain_runtime_primitives::opaque::Block,
+    system_domain_runtime::RuntimeApi,
+    ExecutorDispatch,
+>;
 pub(crate) type NewFull = domain_service::NewFullSystem<
     Arc<FullClient>,
     sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
@@ -119,9 +130,11 @@ pub struct SystemDomainNode {
     #[derivative(Debug = "ignore")]
     _client: Weak<FullClient>,
     #[cfg(feature = "core-payments")]
-    core: Option<core_payments::CoreDomainNode>,
+    core: Option<core_payments::CorePaymentsDomainNode>,
     #[cfg(feature = "eth-relayer")]
     eth: Option<eth_relayer::EthDomainNode>,
+    #[cfg(feature = "core-evm")]
+    evm: Option<evm::EvmDomainNode>,
     rpc_handlers: crate::utils::Rpc,
 }
 
@@ -141,6 +154,8 @@ impl SystemDomainNode {
             core_payments,
             #[cfg(feature = "eth-relayer")]
             eth_relayer,
+            #[cfg(feature = "core-evm")]
+            evm,
         } = cfg;
         let extensions = chain_spec.extensions().clone();
         let service_config =
@@ -200,7 +215,7 @@ impl SystemDomainNode {
         let core = if let Some(core_payments) = core_payments {
             let span = tracing::info_span!("CoreDomain");
             let core_payments_domain_id = u32::from(DomainId::CORE_PAYMENTS);
-            core_payments::CoreDomainNode::new(
+            core_payments::CorePaymentsDomainNode::new(
                 core_payments,
                 directory.as_ref().join(format!("core-{core_payments_domain_id}")),
                 extensions
@@ -246,11 +261,36 @@ impl SystemDomainNode {
             None
         };
 
+        #[cfg(feature = "core-evm")]
+        let evm = if let Some(evm) = evm {
+            let span = tracing::info_span!("EvmDomain");
+            let domain_id = u32::from(DomainId::CORE_EVM);
+            evm::EvmDomainNode::new(
+                evm,
+                directory.as_ref().join(format!("evm-{domain_id}")),
+                extensions
+                    .get_any(std::any::TypeId::of::<Option<evm::ChainSpec>>())
+                    .downcast_ref()
+                    .cloned()
+                    .flatten()
+                    .ok_or_else(|| anyhow::anyhow!("Evm domain is not supported"))?,
+                primary_new_full,
+                &system_domain_node,
+                gossip_msg_sink.clone(),
+                &mut domain_tx_pool_sinks,
+            )
+            .instrument(span)
+            .await
+            .map(Some)?
+        } else {
+            None
+        };
+
         domain_tx_pool_sinks.insert(DomainId::SYSTEM, system_domain_node.tx_pool_sink);
         primary_new_full.task_manager.add_child(system_domain_node.task_manager);
 
         let cross_domain_message_gossip_worker =
-            cross_domain_message_gossip::GossipWorker::<Block>::new(
+            cross_domain_message_gossip::GossipWorker::<subspace_runtime::Block>::new(
                 primary_new_full.network_service.clone(),
                 primary_new_full.sync_service.clone(),
                 domain_tx_pool_sinks,
@@ -271,6 +311,8 @@ impl SystemDomainNode {
             core,
             #[cfg(feature = "eth-relayer")]
             eth,
+            #[cfg(feature = "core-evm")]
+            evm,
             rpc_handlers: crate::utils::Rpc::new(&rpc_handlers),
         })
     }
@@ -281,7 +323,7 @@ impl SystemDomainNode {
 
     /// Get the core node handler
     #[cfg(feature = "core-payments")]
-    pub fn core(&self) -> Option<core_payments::CoreDomainNode> {
+    pub fn payments(&self) -> Option<core_payments::CorePaymentsDomainNode> {
         self.core.clone()
     }
 
