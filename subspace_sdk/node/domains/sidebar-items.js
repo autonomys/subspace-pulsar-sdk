@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["ConfigBuilderError"],"mod":["core_payments","eth_relayer"],"struct":["BlockNotification","Config","ConfigBuilder","SystemDomainNode"],"type":["ChainSpec"]};
+window.SIDEBAR_ITEMS = {"enum":["ConfigBuilderError"],"mod":["core_payments","eth_relayer","evm"],"struct":["BlockNotification","Config","ConfigBuilder","SystemDomainNode"],"type":["ChainSpec"]};

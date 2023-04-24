@@ -299,6 +299,48 @@
 <a href="#299" id="299">299</a>
 <a href="#300" id="300">300</a>
 <a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Module for executor and its domains
 
 </span><span class="kw">use </span>std::path::Path;
@@ -307,25 +349,28 @@
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>derivative::Derivative;
 <span class="kw">use </span>derive_builder::Builder;
-<span class="kw">use </span>domain_runtime_primitives::RelayerId;
+<span class="kw">use </span>domain_runtime_primitives::AccountId;
 <span class="kw">use </span>domain_service::DomainConfiguration;
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>sc_client_api::BlockchainEvents;
 <span class="kw">use </span>sc_service::ChainSpecExtension;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>sp_domains::DomainId;
-<span class="kw">use </span>subspace_runtime::Block;
 <span class="kw">use </span>system_domain_runtime::Header;
 <span class="kw">use </span>tracing_futures::Instrument;
 
 <span class="kw">use super</span>::{BlockNumber, Hash};
 <span class="kw">use </span><span class="kw">crate</span>::node::{Base, BaseBuilder};
 
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>core;
+
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>chain_spec;
 <span class="attr">#[cfg(feature = <span class="string">&quot;core-payments&quot;</span>)]
 </span><span class="kw">pub mod </span>core_payments;
 <span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
 </span><span class="kw">pub mod </span>eth_relayer;
+<span class="attr">#[cfg(feature = <span class="string">&quot;core-evm&quot;</span>)]
+</span><span class="kw">pub mod </span>evm;
 
 <span class="doccomment">/// System domain executor instance.
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ExecutorDispatch;
@@ -378,7 +423,7 @@
     <span class="doccomment">/// Id of the relayer
     </span><span class="attr">#[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
-    </span><span class="kw">pub </span>relayer_id: <span class="prelude-ty">Option</span>&lt;RelayerId&gt;,
+    </span><span class="kw">pub </span>relayer_id: <span class="prelude-ty">Option</span>&lt;AccountId&gt;,
     <span class="attr">#[doc(hidden)]
     #[builder(
         setter(into, strip_option),
@@ -396,12 +441,20 @@
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
     </span><span class="kw">pub </span>eth_relayer: <span class="prelude-ty">Option</span>&lt;eth_relayer::Config&gt;,
+    <span class="doccomment">/// The evm domain config
+    </span><span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
+    #[builder(setter(strip_option), default)]
+    #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
+    </span><span class="kw">pub </span>evm: <span class="prelude-ty">Option</span>&lt;evm::Config&gt;,
 }
 
 <span class="macro">crate::derive_base!</span>(<span class="kw">crate</span>::node::Base =&gt; ConfigBuilder);
 
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>FullClient =
-    domain_service::FullClient&lt;system_domain_runtime::RuntimeApi, ExecutorDispatch&gt;;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>FullClient = domain_service::FullClient&lt;
+    domain_runtime_primitives::opaque::Block,
+    system_domain_runtime::RuntimeApi,
+    ExecutorDispatch,
+&gt;;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>NewFull = domain_service::NewFullSystem&lt;
     Arc&lt;FullClient&gt;,
     sc_executor::NativeElseWasmExecutor&lt;ExecutorDispatch&gt;,
@@ -420,9 +473,11 @@
     <span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
     </span>_client: Weak&lt;FullClient&gt;,
     <span class="attr">#[cfg(feature = <span class="string">&quot;core-payments&quot;</span>)]
-    </span>core: <span class="prelude-ty">Option</span>&lt;core_payments::CoreDomainNode&gt;,
+    </span>core: <span class="prelude-ty">Option</span>&lt;core_payments::CorePaymentsDomainNode&gt;,
     <span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
     </span>eth: <span class="prelude-ty">Option</span>&lt;eth_relayer::EthDomainNode&gt;,
+    <span class="attr">#[cfg(feature = <span class="string">&quot;core-evm&quot;</span>)]
+    </span>evm: <span class="prelude-ty">Option</span>&lt;evm::EvmDomainNode&gt;,
     rpc_handlers: <span class="kw">crate</span>::utils::Rpc,
 }
 
@@ -442,6 +497,8 @@
             </span>core_payments,
             <span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
             </span>eth_relayer,
+            <span class="attr">#[cfg(feature = <span class="string">&quot;core-evm&quot;</span>)]
+            </span>evm,
         } = cfg;
         <span class="kw">let </span>extensions = chain_spec.extensions().clone();
         <span class="kw">let </span>service_config =
@@ -501,7 +558,7 @@
         </span><span class="kw">let </span>core = <span class="kw">if let </span><span class="prelude-val">Some</span>(core_payments) = core_payments {
             <span class="kw">let </span>span = <span class="macro">tracing::info_span!</span>(<span class="string">&quot;CoreDomain&quot;</span>);
             <span class="kw">let </span>core_payments_domain_id = u32::from(DomainId::CORE_PAYMENTS);
-            core_payments::CoreDomainNode::new(
+            core_payments::CorePaymentsDomainNode::new(
                 core_payments,
                 directory.as_ref().join(<span class="macro">format!</span>(<span class="string">&quot;core-{core_payments_domain_id}&quot;</span>)),
                 extensions
@@ -547,11 +604,36 @@
             <span class="prelude-val">None
         </span>};
 
+        <span class="attr">#[cfg(feature = <span class="string">&quot;core-evm&quot;</span>)]
+        </span><span class="kw">let </span>evm = <span class="kw">if let </span><span class="prelude-val">Some</span>(evm) = evm {
+            <span class="kw">let </span>span = <span class="macro">tracing::info_span!</span>(<span class="string">&quot;EvmDomain&quot;</span>);
+            <span class="kw">let </span>domain_id = u32::from(DomainId::CORE_EVM);
+            evm::EvmDomainNode::new(
+                evm,
+                directory.as_ref().join(<span class="macro">format!</span>(<span class="string">&quot;evm-{domain_id}&quot;</span>)),
+                extensions
+                    .get_any(std::any::TypeId::of::&lt;<span class="prelude-ty">Option</span>&lt;evm::ChainSpec&gt;&gt;())
+                    .downcast_ref()
+                    .cloned()
+                    .flatten()
+                    .ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Evm domain is not supported&quot;</span>))<span class="question-mark">?</span>,
+                primary_new_full,
+                <span class="kw-2">&amp;</span>system_domain_node,
+                gossip_msg_sink.clone(),
+                <span class="kw-2">&amp;mut </span>domain_tx_pool_sinks,
+            )
+            .instrument(span)
+            .<span class="kw">await
+            </span>.map(<span class="prelude-val">Some</span>)<span class="question-mark">?
+        </span>} <span class="kw">else </span>{
+            <span class="prelude-val">None
+        </span>};
+
         domain_tx_pool_sinks.insert(DomainId::SYSTEM, system_domain_node.tx_pool_sink);
         primary_new_full.task_manager.add_child(system_domain_node.task_manager);
 
         <span class="kw">let </span>cross_domain_message_gossip_worker =
-            cross_domain_message_gossip::GossipWorker::&lt;Block&gt;::new(
+            cross_domain_message_gossip::GossipWorker::&lt;subspace_runtime::Block&gt;::new(
                 primary_new_full.network_service.clone(),
                 primary_new_full.sync_service.clone(),
                 domain_tx_pool_sinks,
@@ -572,6 +654,8 @@
             </span>core,
             <span class="attr">#[cfg(feature = <span class="string">&quot;eth-relayer&quot;</span>)]
             </span>eth,
+            <span class="attr">#[cfg(feature = <span class="string">&quot;core-evm&quot;</span>)]
+            </span>evm,
             rpc_handlers: <span class="kw">crate</span>::utils::Rpc::new(<span class="kw-2">&amp;</span>rpc_handlers),
         })
     }
@@ -582,7 +666,7 @@
 
     <span class="doccomment">/// Get the core node handler
     </span><span class="attr">#[cfg(feature = <span class="string">&quot;core-payments&quot;</span>)]
-    </span><span class="kw">pub fn </span>core(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;core_payments::CoreDomainNode&gt; {
+    </span><span class="kw">pub fn </span>payments(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;core_payments::CorePaymentsDomainNode&gt; {
         <span class="self">self</span>.core.clone()
     }
 

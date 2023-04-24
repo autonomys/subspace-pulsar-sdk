@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["ConfigBuilderError"],"struct":["Config","ConfigBuilder","CoreDomainNode"],"type":["ChainSpec"]};
+window.SIDEBAR_ITEMS = {"enum":["ConfigBuilderError"],"struct":["Config","ConfigBuilder","CorePaymentsDomainNode"],"type":["ChainSpec"]};

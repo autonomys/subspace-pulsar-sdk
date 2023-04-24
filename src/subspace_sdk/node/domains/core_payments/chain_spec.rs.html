@@ -184,14 +184,12 @@
 <a href="#184" id="184">184</a>
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Core payments domain chain specs
 
 </span><span class="kw">use </span>core_payments_domain_runtime::{
     AccountId, BalancesConfig, GenesisConfig, MessengerConfig, SudoConfig, SystemConfig,
     WASM_BINARY,
 };
-<span class="kw">use </span>domain_runtime_primitives::RelayerId;
 <span class="kw">use </span>sc_service::ChainType;
 <span class="kw">use </span>sc_subspace_chain_specs::ExecutionChainSpec;
 <span class="kw">use </span>sp_core::crypto::Ss58Codec;
@@ -336,7 +334,7 @@
                 <span class="prelude-val">Some</span>(sudo_account.clone()),
                 <span class="macro">vec!</span>[(
                     sudo_account,
-                    RelayerId::from_ss58check(<span class="string">&quot;5D7kgfacBsP6pkMB628221HG98mz2euaytthdoeZPGceQusS&quot;</span>)
+                    AccountId::from_ss58check(<span class="string">&quot;5D7kgfacBsP6pkMB628221HG98mz2euaytthdoeZPGceQusS&quot;</span>)
                         .expect(<span class="string">&quot;Wrong relayer account address&quot;</span>),
                 )],
             )
@@ -358,7 +356,7 @@
 <span class="kw">fn </span>testnet_genesis(
     endowed_accounts: Vec&lt;AccountId&gt;,
     maybe_sudo_account: <span class="prelude-ty">Option</span>&lt;AccountId&gt;,
-    relayers: Vec&lt;(AccountId, RelayerId)&gt;,
+    relayers: Vec&lt;(AccountId, AccountId)&gt;,
 ) -&gt; GenesisConfig {
     GenesisConfig {
         system: SystemConfig {

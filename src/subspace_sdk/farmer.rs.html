@@ -1425,7 +1425,7 @@
             <span class="kw">use </span>futures::future::{select, Either};
 
             <span class="kw">let </span>result = select(Box::pin(publish_fut), Box::pin(dropped_receiver.recv())).<span class="kw">await</span>;
-            <span class="kw">if </span>!<span class="macro">matches!</span>(result, Either::Right(<span class="kw">_</span>)) {
+            <span class="kw">if </span><span class="macro">matches!</span>(result, Either::Right(<span class="kw">_</span>)) {
                 <span class="macro">tracing::debug!</span>(<span class="string">&quot;Piece publishing was cancelled due to shutdown.&quot;</span>);
             }
         },
