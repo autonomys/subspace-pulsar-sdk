@@ -662,6 +662,14 @@ impl Node {
         self.client.block_hash(number).context("Failed to get primary node block hash by number")
     }
 
+    /// Get block header by hash
+    pub fn block_header(&self, hash: Hash) -> anyhow::Result<Option<BlockHeader>> {
+        self.client
+            .header(hash)
+            .context("Failed to get primary node block hash by number")
+            .map(|opt| opt.map(Into::into))
+    }
+
     /// Subscribe to new heads imported
     pub async fn subscribe_new_heads(
         &self,
