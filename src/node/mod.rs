@@ -368,7 +368,7 @@ pub struct Info {
 /// New block notification
 #[derive(Debug, Clone)]
 #[non_exhaustive]
-pub struct BlockNotification {
+pub struct BlockHeader {
     /// Block hash
     pub hash: Hash,
     /// Block number
@@ -383,7 +383,7 @@ pub struct BlockNotification {
     pub pre_digest: Option<PreDigest<crate::PublicKey, crate::PublicKey>>,
 }
 
-impl From<Header> for BlockNotification {
+impl From<Header> for BlockHeader {
     fn from(header: Header) -> Self {
         let hash = header.hash();
         let Header { number, parent_hash, state_root, extrinsics_root, digest } = header;
@@ -665,7 +665,7 @@ impl Node {
     /// Subscribe to new blocks imported
     pub async fn subscribe_new_blocks(
         &self,
-    ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
+    ) -> anyhow::Result<impl Stream<Item = BlockHeader> + Send + Sync + Unpin + 'static> {
         Ok(self
             .rpc_handle
             .subscribe_new_blocks::<subspace_runtime::Runtime>()

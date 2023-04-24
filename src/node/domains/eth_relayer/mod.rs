@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
 
 use super::core::CoreDomainNode;
-use crate::node::{Base, BaseBuilder, BlockNotification};
+use crate::node::{Base, BaseBuilder, BlockHeader};
 
 pub(crate) mod chain_spec;
 
@@ -108,7 +108,7 @@ impl EthDomainNode {
     /// Subscribe to new blocks imported
     pub async fn subscribe_new_blocks(
         &self,
-    ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
+    ) -> anyhow::Result<impl Stream<Item = BlockHeader> + Send + Sync + Unpin + 'static> {
         Ok(self
             .core
             .rpc()
