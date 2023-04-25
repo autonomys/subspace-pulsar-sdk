@@ -13,6 +13,7 @@ use sp_api::NumberFor;
 use sp_domains::DomainId;
 use subspace_runtime_primitives::opaque::Block as PBlock;
 
+use super::FullClient as SClient;
 use crate::node::Base;
 
 pub(crate) type NewFull<Client, RuntimeApi, ExecutorDispatch, AccountId> =
@@ -22,7 +23,7 @@ pub(crate) type NewFull<Client, RuntimeApi, ExecutorDispatch, AccountId> =
         Block,
         SBlock,
         PBlock,
-        super::FullClient,
+        SClient,
         crate::node::FullClient,
         RuntimeApi,
         ExecutorDispatch,
@@ -41,7 +42,7 @@ pub struct CoreDomainNode<RuntimeApi, ExecutorDispatch: sc_executor::NativeExecu
 }
 
 /// Internal config for core domains
-pub(crate) struct Config<'a, AccountId, CS, DTXS> {
+pub(crate) struct Config<'a, AccountId, CS, DTXS, Provider> {
     pub base: Base,
     pub relayer_id: Option<AccountId>,
     pub directory: PathBuf,
@@ -51,6 +52,7 @@ pub(crate) struct Config<'a, AccountId, CS, DTXS> {
     pub gossip_message_sink: domain_client_message_relayer::GossipMessageSink,
     pub domain_id: DomainId,
     pub domain_tx_pool_sinks: &'a mut DTXS,
+    pub provider: Provider,
 }
 
 impl<RuntimeApi, ExecutorDispatch> CoreDomainNode<RuntimeApi, ExecutorDispatch>
@@ -77,8 +79,8 @@ where
             domain_runtime_primitives::Balance,
         > + sp_messenger::MessengerApi<Block, NumberFor<Block>>,
 {
-    pub(crate) async fn new<CS, DTXS, AccountId>(
-        cfg: Config<'_, AccountId, CS, DTXS>,
+    pub(crate) async fn new<CS, DTXS, AccountId, Provider>(
+        cfg: Config<'_, AccountId, CS, DTXS, Provider>,
     ) -> anyhow::Result<Self>
     where
         AccountId: serde::de::DeserializeOwned
@@ -103,6 +105,37 @@ where
                 AccountId,
                 subspace_runtime_primitives::Index,
             >,
+        Provider: domain_service::providers::RpcProvider<
+                Block,
+                FullClient<RuntimeApi, ExecutorDispatch>,
+                subspace_transaction_pool::FullPool<
+                    Block,
+                    FullClient<RuntimeApi, ExecutorDispatch>,
+                    domain_service::CoreDomainTxPreValidator<
+                        Block,
+                        SBlock,
+                        PBlock,
+                        FullClient<RuntimeApi, ExecutorDispatch>,
+                        SClient,
+                    >,
+                >,
+                subspace_transaction_pool::FullChainApiWrapper<
+                    Block,
+                    FullClient<RuntimeApi, ExecutorDispatch>,
+                    domain_service::CoreDomainTxPreValidator<
+                        Block,
+                        SBlock,
+                        PBlock,
+                        FullClient<RuntimeApi, ExecutorDispatch>,
+                        SClient,
+                    >,
+                >,
+                sc_service::TFullBackend<Block>,
+                AccountId,
+            > + domain_service::providers::BlockImportProvider<
+                Block,
+                FullClient<RuntimeApi, ExecutorDispatch>,
+            > + 'static,
     {
         let Config {
             base,
@@ -114,6 +147,7 @@ where
             gossip_message_sink,
             domain_id,
             domain_tx_pool_sinks,
+            provider,
         } = cfg;
         let service_config = base.configuration(directory, chain_spec).await;
         let core_domain_config = DomainConfiguration { service_config, maybe_relayer_id };
@@ -159,6 +193,7 @@ where
             select_chain: primary_chain_node.select_chain.clone(),
             executor_streams,
             gossip_message_sink,
+            provider,
         };
 
         let NewFull { client, rpc_handlers, tx_pool_sink, task_manager, network_starter, .. } =
