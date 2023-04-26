@@ -102,6 +102,7 @@ impl CorePaymentsDomainNode {
             domain_tx_pool_sinks,
             domain_id: DomainId::CORE_PAYMENTS,
             chain_spec,
+            provider: domain_service::providers::DefaultProvider,
         };
         let core =
             CoreDomainNode::new(cfg).await.context("Failed to build core payments domain")?;
