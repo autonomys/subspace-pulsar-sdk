@@ -132,6 +132,7 @@
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Core ethereum relay domain module
 
 </span><span class="kw">use </span>std::path::Path;
@@ -233,6 +234,7 @@
             domain_tx_pool_sinks,
             domain_id: DomainId::CORE_ETH_RELAY,
             chain_spec,
+            provider: domain_service::providers::DefaultProvider,
         };
         <span class="kw">let </span>core =
             CoreDomainNode::new(cfg).<span class="kw">await</span>.context(<span class="string">&quot;Failed to build core payments domain&quot;</span>)<span class="question-mark">?</span>;

@@ -183,6 +183,41 @@
 <a href="#183" id="183">183</a>
 <a href="#184" id="184">184</a>
 <a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Core domain template module
 
 </span><span class="kw">use </span>std::path::PathBuf;
@@ -198,6 +233,7 @@
 <span class="kw">use </span>sp_domains::DomainId;
 <span class="kw">use </span>subspace_runtime_primitives::opaque::Block <span class="kw">as </span>PBlock;
 
+<span class="kw">use </span><span class="kw">super</span>::FullClient <span class="kw">as </span>SClient;
 <span class="kw">use </span><span class="kw">crate</span>::node::Base;
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>NewFull&lt;Client, RuntimeApi, ExecutorDispatch, AccountId&gt; =
@@ -207,7 +243,7 @@
         Block,
         SBlock,
         PBlock,
-        <span class="kw">super</span>::FullClient,
+        SClient,
         <span class="kw">crate</span>::node::FullClient,
         RuntimeApi,
         ExecutorDispatch,
@@ -226,7 +262,7 @@
 }
 
 <span class="doccomment">/// Internal config for core domains
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Config&lt;<span class="lifetime">&#39;a</span>, AccountId, CS, DTXS&gt; {
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Config&lt;<span class="lifetime">&#39;a</span>, AccountId, CS, DTXS, Provider&gt; {
     <span class="kw">pub </span>base: Base,
     <span class="kw">pub </span>relayer_id: <span class="prelude-ty">Option</span>&lt;AccountId&gt;,
     <span class="kw">pub </span>directory: PathBuf,
@@ -236,6 +272,7 @@
     <span class="kw">pub </span>gossip_message_sink: domain_client_message_relayer::GossipMessageSink,
     <span class="kw">pub </span>domain_id: DomainId,
     <span class="kw">pub </span>domain_tx_pool_sinks: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>DTXS,
+    <span class="kw">pub </span>provider: Provider,
 }
 
 <span class="kw">impl</span>&lt;RuntimeApi, ExecutorDispatch&gt; CoreDomainNode&lt;RuntimeApi, ExecutorDispatch&gt;
@@ -262,8 +299,8 @@
             domain_runtime_primitives::Balance,
         &gt; + sp_messenger::MessengerApi&lt;Block, NumberFor&lt;Block&gt;&gt;,
 {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new&lt;CS, DTXS, AccountId&gt;(
-        cfg: Config&lt;<span class="lifetime">&#39;_</span>, AccountId, CS, DTXS&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new&lt;CS, DTXS, AccountId, Provider&gt;(
+        cfg: Config&lt;<span class="lifetime">&#39;_</span>, AccountId, CS, DTXS, Provider&gt;,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt;
     <span class="kw">where
         </span>AccountId: serde::de::DeserializeOwned
@@ -288,6 +325,37 @@
                 AccountId,
                 subspace_runtime_primitives::Index,
             &gt;,
+        Provider: domain_service::providers::RpcProvider&lt;
+                Block,
+                FullClient&lt;RuntimeApi, ExecutorDispatch&gt;,
+                subspace_transaction_pool::FullPool&lt;
+                    Block,
+                    FullClient&lt;RuntimeApi, ExecutorDispatch&gt;,
+                    domain_service::CoreDomainTxPreValidator&lt;
+                        Block,
+                        SBlock,
+                        PBlock,
+                        FullClient&lt;RuntimeApi, ExecutorDispatch&gt;,
+                        SClient,
+                    &gt;,
+                &gt;,
+                subspace_transaction_pool::FullChainApiWrapper&lt;
+                    Block,
+                    FullClient&lt;RuntimeApi, ExecutorDispatch&gt;,
+                    domain_service::CoreDomainTxPreValidator&lt;
+                        Block,
+                        SBlock,
+                        PBlock,
+                        FullClient&lt;RuntimeApi, ExecutorDispatch&gt;,
+                        SClient,
+                    &gt;,
+                &gt;,
+                sc_service::TFullBackend&lt;Block&gt;,
+                AccountId,
+            &gt; + domain_service::providers::BlockImportProvider&lt;
+                Block,
+                FullClient&lt;RuntimeApi, ExecutorDispatch&gt;,
+            &gt; + <span class="lifetime">&#39;static</span>,
     {
         <span class="kw">let </span>Config {
             base,
@@ -299,6 +367,7 @@
             gossip_message_sink,
             domain_id,
             domain_tx_pool_sinks,
+            provider,
         } = cfg;
         <span class="kw">let </span>service_config = base.configuration(directory, chain_spec).<span class="kw">await</span>;
         <span class="kw">let </span>core_domain_config = DomainConfiguration { service_config, maybe_relayer_id };
@@ -344,6 +413,7 @@
             select_chain: primary_chain_node.select_chain.clone(),
             executor_streams,
             gossip_message_sink,
+            provider,
         };
 
         <span class="kw">let </span>NewFull { client, rpc_handlers, tx_pool_sink, task_manager, network_starter, .. } =

@@ -132,6 +132,58 @@
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Core evm domain module
 
 </span><span class="kw">use </span>std::path::Path;
@@ -172,6 +224,29 @@
 #[builder(pattern = <span class="string">&quot;immutable&quot;</span>, build_fn(private, name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;ConfigBuilder&quot;</span>)]
 #[non_exhaustive]
 </span><span class="kw">pub struct </span>Config {
+    <span class="doccomment">/// Maximum number of logs in a query.
+    </span><span class="attr">#[builder(setter(strip_option), default = <span class="string">&quot;10000&quot;</span>)]
+    </span><span class="kw">pub </span>max_past_logs: u32,
+    <span class="doccomment">/// Maximum fee history cache size.
+    </span><span class="attr">#[builder(setter(strip_option), default = <span class="string">&quot;2048&quot;</span>)]
+    </span><span class="kw">pub </span>fee_history_limit: u64,
+    <span class="doccomment">/// Enable dev signer
+    </span><span class="attr">#[builder(setter(strip_option), default)]
+    </span><span class="kw">pub </span>enable_dev_signer: bool,
+    <span class="doccomment">/// The dynamic-fee pallet target gas price set by block author
+    </span><span class="attr">#[builder(setter(strip_option), default = <span class="string">&quot;1&quot;</span>)]
+    </span><span class="kw">pub </span>target_gas_price: u64,
+    <span class="doccomment">/// Maximum allowed gas limit will be `block.gas_limit *
+    /// execute_gas_limit_multiplier` when using eth_call/eth_estimateGas.
+    </span><span class="attr">#[builder(setter(strip_option), default = <span class="string">&quot;10&quot;</span>)]
+    </span><span class="kw">pub </span>execute_gas_limit_multiplier: u64,
+    <span class="doccomment">/// Size in bytes of the LRU cache for block data.
+    </span><span class="attr">#[builder(setter(strip_option), default = <span class="string">&quot;50&quot;</span>)]
+    </span><span class="kw">pub </span>eth_log_block_cache: usize,
+    <span class="doccomment">/// Size in bytes of the LRU cache for transactions statuses data.
+    </span><span class="attr">#[builder(setter(strip_option), default = <span class="string">&quot;50&quot;</span>)]
+    </span><span class="kw">pub </span>eth_statuses_cache: usize,
+
     <span class="doccomment">/// Id of the relayer
     </span><span class="attr">#[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;crate::utils::is_default&quot;</span>)]
@@ -222,7 +297,35 @@
             cross_domain_message_gossip::DomainTxPoolSink,
         )&gt;,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>Config { base, relayer_id } = cfg;
+        <span class="kw">let </span>Config {
+            max_past_logs,
+            fee_history_limit,
+            enable_dev_signer,
+            target_gas_price,
+            execute_gas_limit_multiplier,
+            eth_log_block_cache,
+            eth_statuses_cache,
+            relayer_id,
+            base,
+        } = cfg;
+        <span class="kw">let </span>provider = domain_eth_service::provider::EthProvider::&lt;
+            core_evm_runtime::TransactionConverter,
+            domain_eth_service::DefaultEthConfig&lt;
+                <span class="kw">super</span>::core::FullClient&lt;RuntimeApi, ExecutorDispatch&gt;,
+                domain_service::FullBackend&lt;domain_runtime_primitives::opaque::Block&gt;,
+            &gt;,
+        &gt;::with_configuration(
+            <span class="prelude-val">Some</span>(directory.as_ref().join(chain_spec.id()).into()),
+            domain_eth_service::EthConfiguration {
+                max_past_logs,
+                fee_history_limit,
+                enable_dev_signer,
+                target_gas_price,
+                execute_gas_limit_multiplier,
+                eth_log_block_cache,
+                eth_statuses_cache,
+            },
+        );
         <span class="kw">let </span>cfg = <span class="kw">super</span>::core::Config {
             base,
             relayer_id,
@@ -233,6 +336,7 @@
             domain_tx_pool_sinks,
             domain_id: DomainId::CORE_EVM,
             chain_spec,
+            provider,
         };
         <span class="kw">let </span>core =
             CoreDomainNode::new(cfg).<span class="kw">await</span>.context(<span class="string">&quot;Failed to build core payments domain&quot;</span>)<span class="question-mark">?</span>;
