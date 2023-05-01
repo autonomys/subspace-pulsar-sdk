@@ -27,7 +27,7 @@ use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_farmer_components::plotting::PlottedSector;
 use subspace_networking::utils::multihash::ToMultihash;
 use subspace_networking::{ParityDbProviderStorage, PieceByHashResponse};
-use subspace_rpc_primitives::SolutionResponse;
+use subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
 use tokio::sync::{oneshot, watch, Mutex};
 use tracing_futures::Instrument;
 
@@ -87,35 +87,10 @@ pub struct PlotDescription {
     pub space_pledged: ByteSize,
 }
 
-/// Error type for cache description constructor
-#[derive(Debug, Clone, Copy, thiserror::Error)]
-#[error("Cache should be larger than {}", PlotDescription::MIN_SIZE)]
-pub struct PlotConstructionError;
-
-const SECTOR_SIZE: u64 =
-    subspace_farmer_components::sector::sector_size(subspace_core_primitives::PIECES_IN_SECTOR)
-        as u64;
-
 impl PlotDescription {
-    /// Minimal plot size
-    pub const MIN_SIZE: ByteSize = ByteSize::b(SECTOR_SIZE + Self::SECTOR_OVERHEAD.0 .0);
-    // TODO: Account for prefix and metadata sizes
-    const SECTOR_OVERHEAD: ByteSize = ByteSize::mb(2);
-
     /// Construct Plot description
-    pub fn new(
-        directory: impl Into<PathBuf>,
-        space_pledged: ByteSize,
-    ) -> Result<Self, PlotConstructionError> {
-        if space_pledged < Self::MIN_SIZE {
-            return Err(PlotConstructionError);
-        }
-        Ok(Self { directory: directory.into(), space_pledged })
-    }
-
-    /// Creates a minimal plot at specified path
-    pub fn minimal(directory: impl Into<PathBuf>) -> Self {
-        Self { directory: directory.into(), space_pledged: Self::MIN_SIZE }
+    pub fn new(directory: impl Into<PathBuf>, space_pledged: ByteSize) -> Self {
+        Self { directory: directory.into(), space_pledged }
     }
 
     /// Wipe all the data from the plot
@@ -681,6 +656,7 @@ impl Config {
             result_receiver: Some(result_receiver),
             node_name,
             base_path,
+            app_info: subspace_farmer::NodeClient::farmer_app_info(&node.rpc_handle).await.expect("Node is always reachable"),
             _drop_at_exit: drop_at_exit,
             _async_drop: Some(async_drop),
         })
@@ -697,6 +673,7 @@ pub struct Farmer {
     result_receiver: Option<oneshot::Receiver<anyhow::Result<()>>>,
     base_path: PathBuf,
     node_name: String,
+    app_info: FarmerAppInfo,
     _drop_at_exit: DropCollection,
     _async_drop: Option<AsyncDropFutures>,
 }
@@ -724,6 +701,8 @@ pub struct PlotInfo {
     pub first_sector_index: SectorIndex,
     /// How much space in bytes is allocated for this plot
     pub allocated_space: ByteSize,
+    /// How many pieces are in sector
+    pub pieces_in_sector: u16,
 }
 
 impl From<SingleDiskPlotInfo> for PlotInfo {
@@ -734,6 +713,7 @@ impl From<SingleDiskPlotInfo> for PlotInfo {
             public_key,
             first_sector_index,
             allocated_space,
+            pieces_in_sector,
         } = info;
         Self {
             id,
@@ -741,6 +721,7 @@ impl From<SingleDiskPlotInfo> for PlotInfo {
             public_key: super::PublicKey(public_key),
             first_sector_index,
             allocated_space: ByteSize::b(allocated_space),
+            pieces_in_sector,
         }
     }
 }
@@ -854,10 +835,15 @@ impl Plot {
     ) -> Result<(Self, SingleDiskPlot), BuildError> {
         let directory = description.directory.clone();
         let allocated_space = description.space_pledged.as_u64();
+        let farmer_app_info = subspace_farmer::NodeClient::farmer_app_info(&node.rpc_handle)
+            .await
+            .expect("Node is always reachable");
+        let max_pieces_in_sector = farmer_app_info.protocol_info.max_pieces_in_sector;
         let description = SingleDiskPlotOptions {
             allocated_space,
             directory: directory.clone(),
-            pieces_in_sector: subspace_core_primitives::PIECES_IN_SECTOR,
+            farmer_app_info,
+            max_pieces_in_sector,
             reward_address: *reward_address,
             node_client: node.rpc_handle.clone(),
             kzg,
@@ -896,7 +882,7 @@ impl Plot {
                         .expect("Sector count is less than u64::MAX"),
                     current_sector: u64::try_from(single_disk_plot.plotted_sectors_count())
                         .expect("Sector count is less than u64::MAX"),
-                    total_sectors: allocated_space / SECTOR_SIZE,
+                    total_sectors: allocated_space / subspace_farmer_components::sector::sector_size(max_pieces_in_sector) as u64,
                 })),
                 _drop_at_exit: drop_at_exit,
             },
@@ -986,7 +972,7 @@ impl Farmer {
             plots_info,
             version: format!("{}-{}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH")),
             reward_address: self.reward_address,
-            sector_size: SECTOR_SIZE,
+            sector_size: subspace_farmer_components::sector::sector_size(self.app_info.protocol_info.max_pieces_in_sector) as _,
         })
     }
 

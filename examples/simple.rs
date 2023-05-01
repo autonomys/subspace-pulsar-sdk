@@ -13,7 +13,7 @@ async fn main() {
         .unwrap();
 
     let plots =
-        [subspace_sdk::PlotDescription::new("plot", subspace_sdk::ByteSize::mb(100)).unwrap()];
+        [subspace_sdk::PlotDescription::new("plot", subspace_sdk::ByteSize::mb(100))];
     let cache =
         subspace_sdk::farmer::CacheDescription::new("cache", subspace_sdk::ByteSize::mb(10))
             .unwrap();
