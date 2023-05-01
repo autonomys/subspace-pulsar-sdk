@@ -142,7 +142,7 @@ impl Config {
         )
         .context("Failed to run node runner future")?;
 
-        let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);
+        let slot_proportion = sc_consensus_slots::SlotProportion::new(3f32 / 4f32);
         let full_client =
             subspace_service::new_full::<PosTable, _, _, _>(configuration, partial_components, true, slot_proportion)
                 .await
