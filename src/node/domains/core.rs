@@ -14,23 +14,31 @@ use sp_domains::DomainId;
 use subspace_runtime_primitives::opaque::Block as PBlock;
 
 use super::FullClient as SClient;
-use crate::node::Base;
+use crate::node::{Base, FullClient as PClient};
 
-pub(crate) type NewFull<Client, RuntimeApi, ExecutorDispatch, AccountId> =
+type BlockImportOf<Provider, RuntimeApi, ExecutorDispatch> =
+    <Provider as domain_service::providers::BlockImportProvider<
+        Block,
+        FullClient<RuntimeApi, ExecutorDispatch>,
+    >>::BI;
+
+pub(crate) type FullClient<RuntimeApi, ExecutorDispatch> =
+    domain_service::FullClient<Block, RuntimeApi, ExecutorDispatch>;
+
+pub(crate) type NewFull<RuntimeApi, ExecutorDispatch, AccountId, Provider> =
     domain_service::NewFullCore<
-        Arc<Client>,
+        Arc<FullClient<RuntimeApi, ExecutorDispatch>>,
         sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
         Block,
         SBlock,
         PBlock,
         SClient,
-        crate::node::FullClient,
+        PClient,
         RuntimeApi,
         ExecutorDispatch,
         AccountId,
+        BlockImportOf<Provider, RuntimeApi, ExecutorDispatch>,
     >;
-pub(crate) type FullClient<RuntimeApi, ExecutorDispatch> =
-    domain_service::FullClient<Block, RuntimeApi, ExecutorDispatch>;
 
 /// Core domain node
 #[derive(Derivative)]
@@ -196,8 +204,14 @@ where
             provider,
         };
 
-        let NewFull { client, rpc_handlers, tx_pool_sink, task_manager, network_starter, .. } =
-            domain_service::new_full_core(core_domain_params).await?;
+        let NewFull::<_, _, _, Provider> {
+            client,
+            rpc_handlers,
+            tx_pool_sink,
+            task_manager,
+            network_starter,
+            ..
+        } = domain_service::new_full_core(core_domain_params).await?;
 
         domain_tx_pool_sinks.extend([(domain_id, tx_pool_sink)]);
         primary_chain_node.task_manager.add_child(task_manager);
