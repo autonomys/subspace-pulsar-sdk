@@ -143,10 +143,14 @@ impl Config {
         .context("Failed to run node runner future")?;
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(3f32 / 4f32);
-        let full_client =
-            subspace_service::new_full::<PosTable, _, _, _>(configuration, partial_components, true, slot_proportion)
-                .await
-                .context("Failed to build a full subspace node")?;
+        let full_client = subspace_service::new_full::<PosTable, _, _, _>(
+            configuration,
+            partial_components,
+            true,
+            slot_proportion,
+        )
+        .await
+        .context("Failed to build a full subspace node")?;
 
         if let Some(storage_monitor) = storage_monitor {
             sc_storage_monitor::StorageMonitorService::try_spawn(

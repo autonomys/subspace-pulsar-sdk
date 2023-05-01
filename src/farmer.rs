@@ -501,7 +501,9 @@ impl Config {
         let mut drop_at_exit = DropCollection::new();
         let kzg = kzg::Kzg::new(kzg::embedded_kzg_settings());
         let erasure_coding = ErasureCoding::new(
-            NonZeroUsize::new(Record::NUM_S_BUCKETS.next_power_of_two().ilog2() as usize).unwrap(),
+            NonZeroUsize::new(Record::NUM_S_BUCKETS.next_power_of_two().ilog2() as usize).expect(
+                "Number of buckets >= 1, therefore next power of 2 >= 2, therefore ilog2 >= 1",
+            ),
         )
         .map_err(|error| anyhow::anyhow!("Failed to create erasure coding for plot: {error}"))?;
 
@@ -522,16 +524,16 @@ impl Config {
         ));
 
         for (disk_farm_idx, description) in plots.iter().enumerate() {
-            let (plot, single_disk_plot) = Plot::new(
+            let (plot, single_disk_plot) = Plot::new(PlotOptions {
                 disk_farm_idx,
                 reward_address,
                 node,
-                Arc::clone(&piece_getter),
-                Arc::clone(&concurrent_plotting_semaphore),
+                piece_getter: Arc::clone(&piece_getter),
+                concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
                 description,
-                kzg.clone(),
-                erasure_coding.clone(),
-            )
+                kzg: kzg.clone(),
+                erasure_coding: erasure_coding.clone(),
+            })
             .await?;
             plot_info.insert(plot.directory.clone(), plot);
             single_disk_plots.push(single_disk_plot);
@@ -656,7 +658,9 @@ impl Config {
             result_receiver: Some(result_receiver),
             node_name,
             base_path,
-            app_info: subspace_farmer::NodeClient::farmer_app_info(&node.rpc_handle).await.expect("Node is always reachable"),
+            app_info: subspace_farmer::NodeClient::farmer_app_info(&node.rpc_handle)
+                .await
+                .expect("Node is always reachable"),
             _drop_at_exit: drop_at_exit,
             _async_drop: Some(async_drop),
         })
@@ -822,16 +826,32 @@ impl Stream for InitialPlottingProgressStream {
     }
 }
 
+struct PlotOptions<'a, PG> {
+    pub disk_farm_idx: usize,
+    pub reward_address: PublicKey,
+    pub node: &'a Node,
+    pub piece_getter: PG,
+    pub concurrent_plotting_semaphore: Arc<tokio::sync::Semaphore>,
+    pub description: &'a PlotDescription,
+    pub kzg: kzg::Kzg,
+    pub erasure_coding: ErasureCoding,
+}
+
 impl Plot {
     async fn new(
-        disk_farm_idx: usize,
-        reward_address: PublicKey,
-        node: &Node,
-        piece_getter: impl subspace_farmer_components::plotting::PieceGetter + Send + 'static,
-        concurrent_plotting_semaphore: Arc<tokio::sync::Semaphore>,
-        description: &PlotDescription,
-        kzg: kzg::Kzg,
-        erasure_coding: ErasureCoding,
+        PlotOptions {
+            disk_farm_idx,
+            reward_address,
+            node,
+            piece_getter,
+            concurrent_plotting_semaphore,
+            description,
+            kzg,
+            erasure_coding,
+        }: PlotOptions<
+            '_,
+            impl subspace_farmer_components::plotting::PieceGetter + Send + 'static,
+        >,
     ) -> Result<(Self, SingleDiskPlot), BuildError> {
         let directory = description.directory.clone();
         let allocated_space = description.space_pledged.as_u64();
@@ -882,7 +902,9 @@ impl Plot {
                         .expect("Sector count is less than u64::MAX"),
                     current_sector: u64::try_from(single_disk_plot.plotted_sectors_count())
                         .expect("Sector count is less than u64::MAX"),
-                    total_sectors: allocated_space / subspace_farmer_components::sector::sector_size(max_pieces_in_sector) as u64,
+                    total_sectors: allocated_space
+                        / subspace_farmer_components::sector::sector_size(max_pieces_in_sector)
+                            as u64,
                 })),
                 _drop_at_exit: drop_at_exit,
             },
@@ -972,7 +994,9 @@ impl Farmer {
             plots_info,
             version: format!("{}-{}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH")),
             reward_address: self.reward_address,
-            sector_size: subspace_farmer_components::sector::sector_size(self.app_info.protocol_info.max_pieces_in_sector) as _,
+            sector_size: subspace_farmer_components::sector::sector_size(
+                self.app_info.protocol_info.max_pieces_in_sector,
+            ) as _,
         })
     }
 
