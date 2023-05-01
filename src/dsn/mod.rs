@@ -9,7 +9,6 @@ use event_listener_primitives::HandlerId;
 use futures::StreamExt;
 use parking_lot::Mutex;
 use sc_client_api::AuxStore;
-use subspace_core_primitives::PieceIndexHash;
 use subspace_farmer::utils::farmer_provider_record_processor::FarmerProviderRecordProcessor;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::plotting::{PieceGetter, PieceGetterRetryPolicy};
@@ -122,10 +121,7 @@ impl<PV: PieceValidator, C: AuxStore + Send + Sync> PieceGetter for NodePieceGet
         Option<subspace_core_primitives::Piece>,
         Box<dyn std::error::Error + Send + Sync + 'static>,
     > {
-        let piece = self
-            .node_cache
-            .get_piece(PieceIndexHash::from_index(piece_index))
-            .map_err(|x| x.to_string())?;
+        let piece = self.node_cache.get_piece(piece_index.hash()).map_err(|x| x.to_string())?;
         if piece.is_some() {
             return Ok(piece);
         }

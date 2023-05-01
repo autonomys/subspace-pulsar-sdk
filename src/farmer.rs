@@ -352,7 +352,7 @@ fn handler_on_sector_plotted(
             .filter(|&&piece_index| {
                 // Skip pieces that are already plotted and thus were announced
                 // before
-                !readers_and_pieces.contains_piece(&PieceIndexHash::from_index(piece_index))
+                !readers_and_pieces.contains_piece(&piece_index.hash())
             })
             .copied()
             .collect::<Vec<_>>();
@@ -360,10 +360,7 @@ fn handler_on_sector_plotted(
         readers_and_pieces.add_pieces(
             (PieceOffset::ZERO..).zip(plotted_sector.piece_indexes.iter().copied()).map(
                 |(piece_offset, piece_index)| {
-                    (
-                        PieceIndexHash::from_index(piece_index),
-                        PieceDetails { plot_offset, sector_index, piece_offset },
-                    )
+                    (piece_index.hash(), PieceDetails { plot_offset, sector_index, piece_offset })
                 },
             ),
         );

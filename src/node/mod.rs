@@ -241,7 +241,7 @@ impl Config {
 
         let drop_collection = DropCollection::new();
 
-        // Disable propper exit for now. Because RPC server looses waker and can't exit
+        // Disable proper exit for now. Because RPC server looses waker and can't exit
         // in background.
         //
         // drop_collection.defer(move || {
