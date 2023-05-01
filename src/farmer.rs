@@ -12,7 +12,8 @@ use futures::prelude::*;
 use futures::stream::FuturesUnordered;
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::crypto::kzg;
-use subspace_core_primitives::{PieceIndexHash, SectorIndex, PLOT_SECTOR_SIZE};
+use subspace_core_primitives::{PieceIndexHash, PieceOffset, Record, SectorIndex};
+use subspace_erasure_coding::ErasureCoding;
 use subspace_farmer::single_disk_plot::{
     SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
     SingleDiskPlotOptions, SingleDiskPlotSummary,
@@ -26,6 +27,7 @@ use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_farmer_components::plotting::PlottedSector;
 use subspace_networking::utils::multihash::ToMultihash;
 use subspace_networking::{ParityDbProviderStorage, PieceByHashResponse};
+use subspace_proof_of_space::chia::ChiaTable;
 use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 use tracing_futures::Instrument;
@@ -91,9 +93,13 @@ pub struct PlotDescription {
 #[error("Cache should be larger than {}", PlotDescription::MIN_SIZE)]
 pub struct PlotConstructionError;
 
+const SECTOR_SIZE: u64 =
+    subspace_farmer_components::sector::sector_size(subspace_core_primitives::PIECES_IN_SECTOR)
+        as u64;
+
 impl PlotDescription {
     /// Minimal plot size
-    pub const MIN_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE + Self::SECTOR_OVERHEAD.0 .0);
+    pub const MIN_SIZE: ByteSize = ByteSize::b(SECTOR_SIZE + Self::SECTOR_OVERHEAD.0 .0);
     // TODO: Account for prefix and metadata sizes
     const SECTOR_OVERHEAD: ByteSize = ByteSize::mb(2);
 
@@ -327,14 +333,14 @@ fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAnd
                     }
                 })
                 .flat_map(move |plotted_sector| {
-                    plotted_sector.piece_indexes.into_iter().enumerate().map(
+                    (PieceOffset::ZERO..).zip(plotted_sector.piece_indexes).map(
                         move |(piece_offset, piece_index)| {
                             (
                                 PieceIndexHash::from_index(piece_index),
                                 PieceDetails {
                                     plot_offset,
                                     sector_index: plotted_sector.sector_index,
-                                    piece_offset: piece_offset as u64,
+                                    piece_offset,
                                 },
                             )
                         },
@@ -378,15 +384,11 @@ fn handler_on_sector_plotted(
             .collect::<Vec<_>>();
 
         readers_and_pieces.add_pieces(
-            plotted_sector.piece_indexes.iter().copied().enumerate().map(
+            (PieceOffset::ZERO..).zip(plotted_sector.piece_indexes.iter().copied()).map(
                 |(piece_offset, piece_index)| {
                     (
                         PieceIndexHash::from_index(piece_index),
-                        PieceDetails {
-                            plot_offset,
-                            sector_index,
-                            piece_offset: piece_offset as u64,
-                        },
+                        PieceDetails { plot_offset, sector_index, piece_offset },
                     )
                 },
             ),
@@ -524,6 +526,10 @@ impl Config {
 
         let mut drop_at_exit = DropCollection::new();
         let kzg = kzg::Kzg::new(kzg::embedded_kzg_settings());
+        let erasure_coding = ErasureCoding::new(
+            NonZeroUsize::new(Record::NUM_S_BUCKETS.next_power_of_two().ilog2() as usize).unwrap(),
+        )
+        .map_err(|error| anyhow::anyhow!("Failed to create erasure coding for plot: {error}"))?;
 
         let piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
             node.dsn.node.clone(),
@@ -550,6 +556,7 @@ impl Config {
                 Arc::clone(&concurrent_plotting_semaphore),
                 description,
                 kzg.clone(),
+                erasure_coding.clone(),
             )
             .await?;
             plot_info.insert(plot.directory.clone(), plot);
@@ -844,20 +851,24 @@ impl Plot {
         concurrent_plotting_semaphore: Arc<tokio::sync::Semaphore>,
         description: &PlotDescription,
         kzg: kzg::Kzg,
+        erasure_coding: ErasureCoding,
     ) -> Result<(Self, SingleDiskPlot), BuildError> {
         let directory = description.directory.clone();
         let allocated_space = description.space_pledged.as_u64();
         let description = SingleDiskPlotOptions {
             allocated_space,
             directory: directory.clone(),
+            pieces_in_sector: subspace_core_primitives::PIECES_IN_SECTOR,
             reward_address: *reward_address,
             node_client: node.rpc_handle.clone(),
             kzg,
+            erasure_coding,
             piece_getter,
             concurrent_plotting_semaphore,
             piece_memory_cache: node.dsn.piece_memory_cache.clone(),
         };
-        let single_disk_plot = SingleDiskPlot::new(description, disk_farm_idx).await?;
+        let single_disk_plot =
+            SingleDiskPlot::new::<_, _, ChiaTable>(description, disk_farm_idx).await?;
         let mut drop_at_exit = DropCollection::new();
 
         let progress = {
@@ -882,9 +893,11 @@ impl Plot {
                 progress,
                 solutions,
                 initial_plotting_progress: Arc::new(Mutex::new(InitialPlottingProgress {
-                    starting_sector: single_disk_plot.plotted_sectors_count(),
-                    current_sector: single_disk_plot.plotted_sectors_count(),
-                    total_sectors: allocated_space / subspace_core_primitives::PLOT_SECTOR_SIZE,
+                    starting_sector: u64::try_from(single_disk_plot.plotted_sectors_count())
+                        .expect("Sector count is less than u64::MAX"),
+                    current_sector: u64::try_from(single_disk_plot.plotted_sectors_count())
+                        .expect("Sector count is less than u64::MAX"),
+                    total_sectors: allocated_space / SECTOR_SIZE,
                 })),
                 _drop_at_exit: drop_at_exit,
             },
@@ -974,7 +987,7 @@ impl Farmer {
             plots_info,
             version: format!("{}-{}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH")),
             reward_address: self.reward_address,
-            sector_size: subspace_core_primitives::PLOT_SECTOR_SIZE,
+            sector_size: SECTOR_SIZE,
         })
     }
 
