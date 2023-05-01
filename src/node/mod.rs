@@ -1,5 +1,4 @@
 use std::io;
-use std::num::NonZeroU64;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,7 +14,7 @@ use sc_rpc_api::state::StateApiClient;
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
 use sp_runtime::DigestItem;
-use subspace_core_primitives::{PieceIndexHash, SegmentIndex};
+use subspace_core_primitives::{HistorySize, PieceIndexHash, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{PieceByHashResponse, SegmentHeaderRequest, SegmentHeaderResponse};
@@ -362,7 +361,7 @@ pub struct Info {
     /// Number of nodes that we know of but that we're not connected to
     pub not_connected_peers: u64,
     /// Total number of pieces stored on chain
-    pub total_pieces: NonZeroU64,
+    pub history_size: HistorySize,
 }
 
 /// New block notification
@@ -640,7 +639,7 @@ impl Node {
             ..
         } = self.client.chain_info();
         let version = self.rpc_handle.runtime_version(Some(best_hash)).await?;
-        let FarmerProtocolInfo { total_pieces, .. } =
+        let FarmerProtocolInfo { history_size, .. } =
             self.rpc_handle.farmer_app_info().await.map_err(anyhow::Error::msg)?.protocol_info;
         Ok(Info {
             chain: ChainInfo { genesis_hash },
@@ -651,7 +650,7 @@ impl Node {
             name: self.name.clone(),
             connected_peers: connected_peers.len() as u64,
             not_connected_peers: not_connected_peers.len() as u64,
-            total_pieces,
+            history_size,
         })
     }
 
