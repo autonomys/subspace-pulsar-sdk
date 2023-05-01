@@ -25,6 +25,7 @@ use subspace_service::SubspaceConfiguration;
 
 use crate::dsn::NodePieceCache;
 use crate::utils::{self, DropCollection, MultiaddrWithPeerId};
+use crate::PosTable;
 
 mod builder;
 pub mod chain_spec;
@@ -62,7 +63,7 @@ impl Config {
         let database_source = base.database.clone();
 
         let partial_components =
-            subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&base)
+            subspace_service::new_partial::<PosTable, RuntimeApi, ExecutorDispatch>(&base)
                 .context("Failed to build a partial subspace node")?;
 
         let (subspace_networking, dsn, mut runner) = {
@@ -143,7 +144,7 @@ impl Config {
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);
         let full_client =
-            subspace_service::new_full(configuration, partial_components, true, slot_proportion)
+            subspace_service::new_full::<PosTable, _, _, _>(configuration, partial_components, true, slot_proportion)
                 .await
                 .context("Failed to build a full subspace node")?;
 

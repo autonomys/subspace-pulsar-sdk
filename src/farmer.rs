@@ -27,7 +27,6 @@ use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_farmer_components::plotting::PlottedSector;
 use subspace_networking::utils::multihash::ToMultihash;
 use subspace_networking::{ParityDbProviderStorage, PieceByHashResponse};
-use subspace_proof_of_space::chia::ChiaTable;
 use subspace_rpc_primitives::SolutionResponse;
 use tokio::sync::{oneshot, watch, Mutex};
 use tracing_futures::Instrument;
@@ -35,7 +34,7 @@ use tracing_futures::Instrument;
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
 use crate::dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
 use crate::utils::{self, AsyncDropFutures, ByteSize, DropCollection};
-use crate::{Node, PublicKey};
+use crate::{Node, PosTable, PublicKey};
 
 /// Description of the cache
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -868,7 +867,7 @@ impl Plot {
             piece_memory_cache: node.dsn.piece_memory_cache.clone(),
         };
         let single_disk_plot =
-            SingleDiskPlot::new::<_, _, ChiaTable>(description, disk_farm_idx).await?;
+            SingleDiskPlot::new::<_, _, PosTable>(description, disk_farm_idx).await?;
         let mut drop_at_exit = DropCollection::new();
 
         let progress = {

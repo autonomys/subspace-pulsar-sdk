@@ -47,6 +47,8 @@ macro_rules! generate_builder {
     };
 }
 
+type PosTable = subspace_proof_of_space::chia::ChiaTable;
+
 /// Public key type
 #[derive(
     Debug,
