@@ -78,9 +78,9 @@ async fn main() -> anyhow::Result<()> {
             let addr = node.listen_addresses().await?.into_iter().next().unwrap();
             tracing::info!(%addr, "Node listening at");
 
-            node.subscribe_new_blocks()
+            node.subscribe_new_heads()
                 .await?
-                .for_each(|block| async move { tracing::info!(?block, "New block!") })
+                .for_each(|header| async move { tracing::info!(?header, "New block!") })
                 .await;
         }
         Args::Sync { boot_nodes, spec } => {
@@ -96,9 +96,9 @@ async fn main() -> anyhow::Result<()> {
             node.sync().await.unwrap();
             tracing::info!("Node was synced!");
 
-            node.subscribe_new_blocks()
+            node.subscribe_new_heads()
                 .await?
-                .for_each(|block| async move { tracing::info!(?block, "New block!") })
+                .for_each(|header| async move { tracing::info!(?header, "New block!") })
                 .await;
         }
     }

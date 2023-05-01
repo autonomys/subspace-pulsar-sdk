@@ -368,7 +368,7 @@ pub struct Info {
 /// New block notification
 #[derive(Debug, Clone)]
 #[non_exhaustive]
-pub struct BlockNotification {
+pub struct BlockHeader {
     /// Block hash
     pub hash: Hash,
     /// Block number
@@ -383,7 +383,7 @@ pub struct BlockNotification {
     pub pre_digest: Option<PreDigest<crate::PublicKey, crate::PublicKey>>,
 }
 
-impl From<Header> for BlockNotification {
+impl From<Header> for BlockHeader {
     fn from(header: Header) -> Self {
         let hash = header.hash();
         let Header { number, parent_hash, state_root, extrinsics_root, digest } = header;
@@ -662,15 +662,35 @@ impl Node {
         self.client.block_hash(number).context("Failed to get primary node block hash by number")
     }
 
-    /// Subscribe to new blocks imported
-    pub async fn subscribe_new_blocks(
+    /// Get block header by hash
+    pub fn block_header(&self, hash: Hash) -> anyhow::Result<Option<BlockHeader>> {
+        self.client
+            .header(hash)
+            .context("Failed to get primary node block hash by number")
+            .map(|opt| opt.map(Into::into))
+    }
+
+    /// Subscribe to new heads imported
+    pub async fn subscribe_new_heads(
         &self,
-    ) -> anyhow::Result<impl Stream<Item = BlockNotification> + Send + Sync + Unpin + 'static> {
+    ) -> anyhow::Result<impl Stream<Item = BlockHeader> + Send + Sync + Unpin + 'static> {
         Ok(self
             .rpc_handle
-            .subscribe_new_blocks::<subspace_runtime::Runtime>()
+            .subscribe_new_heads::<subspace_runtime::Runtime>()
             .await
             .context("Failed to subscribe to new blocks")?
+            .map(Into::into))
+    }
+
+    /// Subscribe to finalized heads
+    pub async fn subscribe_finalized_heads(
+        &self,
+    ) -> anyhow::Result<impl Stream<Item = BlockHeader> + Send + Sync + Unpin + 'static> {
+        Ok(self
+            .rpc_handle
+            .subscribe_finalized_heads::<subspace_runtime::Runtime>()
+            .await
+            .context("Failed to subscribe to finalized blocks")?
             .map(Into::into))
     }
 

@@ -25,7 +25,7 @@ impl Rpc {
         Self { inner }
     }
 
-    pub(crate) async fn subscribe_new_blocks<'a, 'b, T>(
+    pub(crate) async fn subscribe_new_heads<'a, 'b, T>(
         &'a self,
     ) -> Result<impl Stream<Item = T::Header> + Send + Sync + Unpin + 'static, Error>
     where
@@ -40,6 +40,27 @@ impl Rpc {
             T::Header,
             sp_runtime::generic::SignedBlock<T::RuntimeBlock>,
         >::subscribe_new_heads(self)
+        .await?
+        .filter_map(|result| futures::future::ready(result.ok()));
+
+        Ok(stream)
+    }
+
+    pub(crate) async fn subscribe_finalized_heads<'a, 'b, T>(
+        &'a self,
+    ) -> Result<impl Stream<Item = T::Header> + Send + Sync + Unpin + 'static, Error>
+    where
+        T: frame_system::Config + sp_runtime::traits::GetRuntimeBlockType,
+        T::RuntimeBlock: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
+        T::Header: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
+        'a: 'b,
+    {
+        let stream = sc_rpc::chain::ChainApiClient::<
+            T::BlockNumber,
+            T::Hash,
+            T::Header,
+            sp_runtime::generic::SignedBlock<T::RuntimeBlock>,
+        >::subscribe_finalized_heads(self)
         .await?
         .filter_map(|result| futures::future::ready(result.ok()));
 

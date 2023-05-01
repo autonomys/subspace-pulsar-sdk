@@ -144,9 +144,9 @@ async fn main() -> anyhow::Result<()> {
         let node = &node;
 
         async move {
-            let mut new_blocks = node.subscribe_new_blocks().await?;
-            while let Some(new_block) = new_blocks.next().await {
-                let events = node.get_events(Some(new_block.hash)).await?;
+            let mut new_blocks = node.subscribe_finalized_heads().await?;
+            while let Some(header) = new_blocks.next().await {
+                let events = node.get_events(Some(header.hash)).await?;
 
                 for event in events {
                     match event {
@@ -165,7 +165,7 @@ async fn main() -> anyhow::Result<()> {
                     };
                 }
 
-                if let Some(pre_digest) = new_block.pre_digest {
+                if let Some(pre_digest) = header.pre_digest {
                     if pre_digest.solution.reward_address == reward_address {
                         tracing::error!("We authored a block");
                     }
