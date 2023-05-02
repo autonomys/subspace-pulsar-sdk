@@ -2,7 +2,7 @@ use futures::prelude::*;
 
 use crate::common::{Farmer, Node};
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn core_start() {
     crate::common::setup();
 

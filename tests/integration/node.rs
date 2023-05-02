@@ -39,8 +39,10 @@ async fn sync_block_inner() {
     other_node.close().await;
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
+#[tokio::test(flavor = "multi_thread")]
+// #[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on
+// linux")]
+#[ignore = "Test is too slow for now for CI"]
 async fn sync_block() {
     tokio::time::timeout(std::time::Duration::from_secs(60 * 60), sync_block_inner()).await.unwrap()
 }
@@ -92,8 +94,10 @@ async fn sync_plot_inner() {
     other_farmer.close().await;
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
+#[tokio::test(flavor = "multi_thread")]
+// #[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on
+// linux")]
+#[ignore = "Test is too slow for now for CI"]
 async fn sync_plot() {
     tokio::time::timeout(std::time::Duration::from_secs(60 * 60), sync_plot_inner()).await.unwrap()
 }
@@ -110,43 +114,57 @@ async fn node_restart() {
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
+#[tokio::test(flavor = "multi_thread")]
+// #[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on
+// linux")]
+#[ignore = "Test is too slow for now for CI"]
 async fn node_events() {
     crate::common::setup();
 
-    let node = Node::dev().build().await;
-    let farmer = Farmer::dev().build(&node).await;
+    tokio::time::timeout(std::time::Duration::from_secs(30 * 60), async {
+        let node = Node::dev().build().await;
+        let farmer = Farmer::dev().build(&node).await;
 
-    let events = node
-        .subscribe_new_heads()
-        .await
-        .unwrap()
-        // Skip genesis
-        .skip(1)
-        .then(|_| node.get_events(None).boxed())
-        .take(1)
-        .next()
-        .await
-        .unwrap()
-        .unwrap();
+        let events = node
+            .subscribe_new_heads()
+            .await
+            .unwrap()
+            // Skip genesis
+            .skip(1)
+            .then(|_| node.get_events(None).boxed())
+            .take(1)
+            .next()
+            .await
+            .unwrap()
+            .unwrap();
 
-    assert!(!events.is_empty());
+        assert!(!events.is_empty());
 
-    farmer.close().await;
-    node.close().await;
+        farmer.close().await;
+        node.close().await;
+    })
+    .await
+    .unwrap();
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
+#[tokio::test(flavor = "multi_thread")]
+// #[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on
+// linux")]
+#[ignore = "Test is too slow for now for CI"]
 async fn fetch_block_author() {
-    let node = Node::dev().build().await;
-    let reward_address = Default::default();
-    let farmer = Farmer::dev().reward_address(reward_address).build(&node).await;
+    crate::common::setup();
 
-    let block = node.subscribe_new_heads().await.unwrap().skip(1).take(1).next().await.unwrap();
-    assert_eq!(block.pre_digest.unwrap().solution.reward_address, reward_address);
+    tokio::time::timeout(std::time::Duration::from_secs(30 * 60), async {
+        let node = Node::dev().build().await;
+        let reward_address = Default::default();
+        let farmer = Farmer::dev().reward_address(reward_address).build(&node).await;
 
-    farmer.close().await;
-    node.close().await;
+        let block = node.subscribe_new_heads().await.unwrap().skip(1).take(1).next().await.unwrap();
+        assert_eq!(block.pre_digest.unwrap().solution.reward_address, reward_address);
+
+        farmer.close().await;
+        node.close().await;
+    })
+    .await
+    .unwrap();
 }

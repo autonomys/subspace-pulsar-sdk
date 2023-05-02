@@ -2,7 +2,7 @@ use futures::prelude::*;
 
 use crate::common::{Farmer, Node};
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn track_progress() {
     crate::common::setup();
 
@@ -25,7 +25,7 @@ async fn track_progress() {
     node.close().await;
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn new_solution() {
     crate::common::setup();
 
@@ -47,7 +47,7 @@ async fn new_solution() {
     node.close().await;
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn progress_restart() {
     crate::common::setup();
 

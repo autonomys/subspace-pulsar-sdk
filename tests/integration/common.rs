@@ -138,7 +138,7 @@ impl FarmerBuilder {
         let InnerFarmer { reward_address, n_sectors } = self._build().expect("Infallible");
         let sector_size = subspace_farmer_components::sector::sector_size(
             // TODO: query node for this value
-            1300,
+            35,
         ) as u64;
 
         let farmer = subspace_sdk::Farmer::builder()
