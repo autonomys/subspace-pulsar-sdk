@@ -232,6 +232,7 @@
 <a href="#232" id="232">232</a>
 <a href="#233" id="233">233</a>
 <a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Core domain template module
 
 </span><span class="kw">use </span>std::path::PathBuf;
@@ -319,7 +320,8 @@
         + pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi&lt;
             Block,
             domain_runtime_primitives::Balance,
-        &gt; + sp_messenger::MessengerApi&lt;Block, NumberFor&lt;Block&gt;&gt;,
+        &gt; + sp_messenger::MessengerApi&lt;Block, NumberFor&lt;Block&gt;&gt;
+        + domain_runtime_primitives::InherentExtrinsicApi&lt;Block&gt;,
 {
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new&lt;CS, DTXS, AccountId, Provider&gt;(
         cfg: Config&lt;<span class="lifetime">&#39;_</span>, AccountId, CS, DTXS, Provider&gt;,
