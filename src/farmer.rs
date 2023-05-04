@@ -12,7 +12,8 @@ use futures::prelude::*;
 use futures::stream::FuturesUnordered;
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::crypto::kzg;
-use subspace_core_primitives::{PieceIndexHash, SectorIndex, PLOT_SECTOR_SIZE};
+use subspace_core_primitives::{PieceIndexHash, PieceOffset, Record, SectorIndex};
+use subspace_erasure_coding::ErasureCoding;
 use subspace_farmer::single_disk_plot::{
     SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
     SingleDiskPlotOptions, SingleDiskPlotSummary,
@@ -26,14 +27,14 @@ use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_farmer_components::plotting::PlottedSector;
 use subspace_networking::utils::multihash::ToMultihash;
 use subspace_networking::{ParityDbProviderStorage, PieceByHashResponse};
-use subspace_rpc_primitives::SolutionResponse;
+use subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
 use tokio::sync::{oneshot, watch, Mutex};
 use tracing_futures::Instrument;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
 use crate::dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
 use crate::utils::{self, AsyncDropFutures, ByteSize, DropCollection};
-use crate::{Node, PublicKey};
+use crate::{Node, PosTable, PublicKey};
 
 /// Description of the cache
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -86,31 +87,10 @@ pub struct PlotDescription {
     pub space_pledged: ByteSize,
 }
 
-/// Error type for cache description constructor
-#[derive(Debug, Clone, Copy, thiserror::Error)]
-#[error("Cache should be larger than {}", PlotDescription::MIN_SIZE)]
-pub struct PlotConstructionError;
-
 impl PlotDescription {
-    /// Minimal plot size
-    pub const MIN_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE + Self::SECTOR_OVERHEAD.0 .0);
-    // TODO: Account for prefix and metadata sizes
-    const SECTOR_OVERHEAD: ByteSize = ByteSize::mb(2);
-
     /// Construct Plot description
-    pub fn new(
-        directory: impl Into<PathBuf>,
-        space_pledged: ByteSize,
-    ) -> Result<Self, PlotConstructionError> {
-        if space_pledged < Self::MIN_SIZE {
-            return Err(PlotConstructionError);
-        }
-        Ok(Self { directory: directory.into(), space_pledged })
-    }
-
-    /// Creates a minimal plot at specified path
-    pub fn minimal(directory: impl Into<PathBuf>) -> Self {
-        Self { directory: directory.into(), space_pledged: Self::MIN_SIZE }
+    pub fn new(directory: impl Into<PathBuf>, space_pledged: ByteSize) -> Self {
+        Self { directory: directory.into(), space_pledged }
     }
 
     /// Wipe all the data from the plot
@@ -327,14 +307,14 @@ fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAnd
                     }
                 })
                 .flat_map(move |plotted_sector| {
-                    plotted_sector.piece_indexes.into_iter().enumerate().map(
+                    (PieceOffset::ZERO..).zip(plotted_sector.piece_indexes).map(
                         move |(piece_offset, piece_index)| {
                             (
                                 PieceIndexHash::from_index(piece_index),
                                 PieceDetails {
                                     plot_offset,
                                     sector_index: plotted_sector.sector_index,
-                                    piece_offset: piece_offset as u64,
+                                    piece_offset,
                                 },
                             )
                         },
@@ -372,22 +352,15 @@ fn handler_on_sector_plotted(
             .filter(|&&piece_index| {
                 // Skip pieces that are already plotted and thus were announced
                 // before
-                !readers_and_pieces.contains_piece(&PieceIndexHash::from_index(piece_index))
+                !readers_and_pieces.contains_piece(&piece_index.hash())
             })
             .copied()
             .collect::<Vec<_>>();
 
         readers_and_pieces.add_pieces(
-            plotted_sector.piece_indexes.iter().copied().enumerate().map(
+            (PieceOffset::ZERO..).zip(plotted_sector.piece_indexes.iter().copied()).map(
                 |(piece_offset, piece_index)| {
-                    (
-                        PieceIndexHash::from_index(piece_index),
-                        PieceDetails {
-                            plot_offset,
-                            sector_index,
-                            piece_offset: piece_offset as u64,
-                        },
-                    )
+                    (piece_index.hash(), PieceDetails { plot_offset, sector_index, piece_offset })
                 },
             ),
         );
@@ -524,6 +497,12 @@ impl Config {
 
         let mut drop_at_exit = DropCollection::new();
         let kzg = kzg::Kzg::new(kzg::embedded_kzg_settings());
+        let erasure_coding = ErasureCoding::new(
+            NonZeroUsize::new(Record::NUM_S_BUCKETS.next_power_of_two().ilog2() as usize).expect(
+                "Number of buckets >= 1, therefore next power of 2 >= 2, therefore ilog2 >= 1",
+            ),
+        )
+        .map_err(|error| anyhow::anyhow!("Failed to create erasure coding for plot: {error}"))?;
 
         let piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
             node.dsn.node.clone(),
@@ -542,15 +521,16 @@ impl Config {
         ));
 
         for (disk_farm_idx, description) in plots.iter().enumerate() {
-            let (plot, single_disk_plot) = Plot::new(
+            let (plot, single_disk_plot) = Plot::new(PlotOptions {
                 disk_farm_idx,
                 reward_address,
                 node,
-                Arc::clone(&piece_getter),
-                Arc::clone(&concurrent_plotting_semaphore),
+                piece_getter: Arc::clone(&piece_getter),
+                concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
                 description,
-                kzg.clone(),
-            )
+                kzg: kzg.clone(),
+                erasure_coding: erasure_coding.clone(),
+            })
             .await?;
             plot_info.insert(plot.directory.clone(), plot);
             single_disk_plots.push(single_disk_plot);
@@ -675,6 +655,9 @@ impl Config {
             result_receiver: Some(result_receiver),
             node_name,
             base_path,
+            app_info: subspace_farmer::NodeClient::farmer_app_info(&node.rpc_handle)
+                .await
+                .expect("Node is always reachable"),
             _drop_at_exit: drop_at_exit,
             _async_drop: Some(async_drop),
         })
@@ -691,6 +674,7 @@ pub struct Farmer {
     result_receiver: Option<oneshot::Receiver<anyhow::Result<()>>>,
     base_path: PathBuf,
     node_name: String,
+    app_info: FarmerAppInfo,
     _drop_at_exit: DropCollection,
     _async_drop: Option<AsyncDropFutures>,
 }
@@ -718,6 +702,8 @@ pub struct PlotInfo {
     pub first_sector_index: SectorIndex,
     /// How much space in bytes is allocated for this plot
     pub allocated_space: ByteSize,
+    /// How many pieces are in sector
+    pub pieces_in_sector: u16,
 }
 
 impl From<SingleDiskPlotInfo> for PlotInfo {
@@ -728,6 +714,7 @@ impl From<SingleDiskPlotInfo> for PlotInfo {
             public_key,
             first_sector_index,
             allocated_space,
+            pieces_in_sector,
         } = info;
         Self {
             id,
@@ -735,6 +722,7 @@ impl From<SingleDiskPlotInfo> for PlotInfo {
             public_key: super::PublicKey(public_key),
             first_sector_index,
             allocated_space: ByteSize::b(allocated_space),
+            pieces_in_sector,
         }
     }
 }
@@ -835,29 +823,54 @@ impl Stream for InitialPlottingProgressStream {
     }
 }
 
+struct PlotOptions<'a, PG> {
+    pub disk_farm_idx: usize,
+    pub reward_address: PublicKey,
+    pub node: &'a Node,
+    pub piece_getter: PG,
+    pub concurrent_plotting_semaphore: Arc<tokio::sync::Semaphore>,
+    pub description: &'a PlotDescription,
+    pub kzg: kzg::Kzg,
+    pub erasure_coding: ErasureCoding,
+}
+
 impl Plot {
     async fn new(
-        disk_farm_idx: usize,
-        reward_address: PublicKey,
-        node: &Node,
-        piece_getter: impl subspace_farmer_components::plotting::PieceGetter + Send + 'static,
-        concurrent_plotting_semaphore: Arc<tokio::sync::Semaphore>,
-        description: &PlotDescription,
-        kzg: kzg::Kzg,
+        PlotOptions {
+            disk_farm_idx,
+            reward_address,
+            node,
+            piece_getter,
+            concurrent_plotting_semaphore,
+            description,
+            kzg,
+            erasure_coding,
+        }: PlotOptions<
+            '_,
+            impl subspace_farmer_components::plotting::PieceGetter + Send + 'static,
+        >,
     ) -> Result<(Self, SingleDiskPlot), BuildError> {
         let directory = description.directory.clone();
         let allocated_space = description.space_pledged.as_u64();
+        let farmer_app_info = subspace_farmer::NodeClient::farmer_app_info(&node.rpc_handle)
+            .await
+            .expect("Node is always reachable");
+        let max_pieces_in_sector = farmer_app_info.protocol_info.max_pieces_in_sector;
         let description = SingleDiskPlotOptions {
             allocated_space,
             directory: directory.clone(),
+            farmer_app_info,
+            max_pieces_in_sector,
             reward_address: *reward_address,
             node_client: node.rpc_handle.clone(),
             kzg,
+            erasure_coding,
             piece_getter,
             concurrent_plotting_semaphore,
             piece_memory_cache: node.dsn.piece_memory_cache.clone(),
         };
-        let single_disk_plot = SingleDiskPlot::new(description, disk_farm_idx).await?;
+        let single_disk_plot =
+            SingleDiskPlot::new::<_, _, PosTable>(description, disk_farm_idx).await?;
         let mut drop_at_exit = DropCollection::new();
 
         let progress = {
@@ -882,9 +895,13 @@ impl Plot {
                 progress,
                 solutions,
                 initial_plotting_progress: Arc::new(Mutex::new(InitialPlottingProgress {
-                    starting_sector: single_disk_plot.plotted_sectors_count(),
-                    current_sector: single_disk_plot.plotted_sectors_count(),
-                    total_sectors: allocated_space / subspace_core_primitives::PLOT_SECTOR_SIZE,
+                    starting_sector: u64::try_from(single_disk_plot.plotted_sectors_count())
+                        .expect("Sector count is less than u64::MAX"),
+                    current_sector: u64::try_from(single_disk_plot.plotted_sectors_count())
+                        .expect("Sector count is less than u64::MAX"),
+                    total_sectors: allocated_space
+                        / subspace_farmer_components::sector::sector_size(max_pieces_in_sector)
+                            as u64,
                 })),
                 _drop_at_exit: drop_at_exit,
             },
@@ -974,7 +991,9 @@ impl Farmer {
             plots_info,
             version: format!("{}-{}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH")),
             reward_address: self.reward_address,
-            sector_size: subspace_core_primitives::PLOT_SECTOR_SIZE,
+            sector_size: subspace_farmer_components::sector::sector_size(
+                self.app_info.protocol_info.max_pieces_in_sector,
+            ) as _,
         })
     }
 

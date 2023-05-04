@@ -1,5 +1,4 @@
 use std::io;
-use std::num::NonZeroU64;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,7 +14,7 @@ use sc_rpc_api::state::StateApiClient;
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
 use sp_runtime::DigestItem;
-use subspace_core_primitives::{PieceIndexHash, SegmentIndex};
+use subspace_core_primitives::{HistorySize, PieceIndexHash, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{PieceByHashResponse, SegmentHeaderRequest, SegmentHeaderResponse};
@@ -26,6 +25,7 @@ use subspace_service::SubspaceConfiguration;
 
 use crate::dsn::NodePieceCache;
 use crate::utils::{self, DropCollection, MultiaddrWithPeerId};
+use crate::PosTable;
 
 mod builder;
 pub mod chain_spec;
@@ -63,7 +63,7 @@ impl Config {
         let database_source = base.database.clone();
 
         let partial_components =
-            subspace_service::new_partial::<RuntimeApi, ExecutorDispatch>(&base)
+            subspace_service::new_partial::<PosTable, RuntimeApi, ExecutorDispatch>(&base)
                 .context("Failed to build a partial subspace node")?;
 
         let (subspace_networking, dsn, mut runner) = {
@@ -142,11 +142,15 @@ impl Config {
         )
         .context("Failed to run node runner future")?;
 
-        let slot_proportion = sc_consensus_slots::SlotProportion::new(2f32 / 3f32);
-        let full_client =
-            subspace_service::new_full(configuration, partial_components, true, slot_proportion)
-                .await
-                .context("Failed to build a full subspace node")?;
+        let slot_proportion = sc_consensus_slots::SlotProportion::new(3f32 / 4f32);
+        let full_client = subspace_service::new_full::<PosTable, _, _, _>(
+            configuration,
+            partial_components,
+            true,
+            slot_proportion,
+        )
+        .await
+        .context("Failed to build a full subspace node")?;
 
         if let Some(storage_monitor) = storage_monitor {
             sc_storage_monitor::StorageMonitorService::try_spawn(
@@ -237,7 +241,7 @@ impl Config {
 
         let drop_collection = DropCollection::new();
 
-        // Disable propper exit for now. Because RPC server looses waker and can't exit
+        // Disable proper exit for now. Because RPC server looses waker and can't exit
         // in background.
         //
         // drop_collection.defer(move || {
@@ -362,7 +366,7 @@ pub struct Info {
     /// Number of nodes that we know of but that we're not connected to
     pub not_connected_peers: u64,
     /// Total number of pieces stored on chain
-    pub total_pieces: NonZeroU64,
+    pub history_size: HistorySize,
 }
 
 /// New block notification
@@ -640,7 +644,7 @@ impl Node {
             ..
         } = self.client.chain_info();
         let version = self.rpc_handle.runtime_version(Some(best_hash)).await?;
-        let FarmerProtocolInfo { total_pieces, .. } =
+        let FarmerProtocolInfo { history_size, .. } =
             self.rpc_handle.farmer_app_info().await.map_err(anyhow::Error::msg)?.protocol_info;
         Ok(Info {
             chain: ChainInfo { genesis_hash },
@@ -651,7 +655,7 @@ impl Node {
             name: self.name.clone(),
             connected_peers: connected_peers.len() as u64,
             not_connected_peers: not_connected_peers.len() as u64,
-            total_pieces,
+            history_size,
         })
     }
 

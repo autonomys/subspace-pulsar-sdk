@@ -1,25 +1,8 @@
 use futures::prelude::*;
-use subspace_sdk::farmer::{Info, PlotDescription};
 
 use crate::common::{Farmer, Node};
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn get_info() {
-    crate::common::setup();
-
-    let node = Node::dev().build().await;
-    let farmer: Farmer = Farmer::dev().build(&node).await;
-
-    let Info { reward_address, plots_info, .. } = farmer.get_info().await.unwrap();
-    assert_eq!(reward_address, Default::default());
-    assert_eq!(plots_info.len(), 1);
-    assert_eq!(plots_info[&farmer.plot_dir()].allocated_space, PlotDescription::MIN_SIZE);
-
-    farmer.close().await;
-    node.close().await;
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn track_progress() {
     crate::common::setup();
 
@@ -42,7 +25,7 @@ async fn track_progress() {
     node.close().await;
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn new_solution() {
     crate::common::setup();
 
@@ -64,7 +47,7 @@ async fn new_solution() {
     node.close().await;
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn progress_restart() {
     crate::common::setup();
 

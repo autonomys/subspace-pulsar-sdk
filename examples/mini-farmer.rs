@@ -122,8 +122,7 @@ async fn main() -> anyhow::Result<()> {
         .build(
             reward_address,
             &node,
-            &[PlotDescription::new(base_path.join("plot"), plot_size)
-                .context("Failed to create a plot")?],
+            &[PlotDescription::new(base_path.join("plot"), plot_size)],
             CacheDescription::new(base_path.join("cache"), cache_size).unwrap(),
         )
         .await?;

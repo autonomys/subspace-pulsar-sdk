@@ -16,7 +16,7 @@ async fn main() {
     node.sync().await.unwrap();
 
     let reward_address = PublicKey::from([0; 32]);
-    let plots = [PlotDescription::new("plot", ByteSize::gb(10)).unwrap()];
+    let plots = [PlotDescription::new("plot", ByteSize::gb(10))];
     let farmer: Farmer = Farmer::builder()
         // .ws_rpc("127.0.0.1:9955".parse().unwrap())
         // .listen_on("/ip4/0.0.0.0/tcp/40333".parse().unwrap())
@@ -66,7 +66,7 @@ async fn main() {
         .build(
             reward_address,
             &node,
-            &[PlotDescription::new("plot", ByteSize::gb(10)).unwrap()],
+            &[PlotDescription::new("plot", ByteSize::gb(10))],
             CacheDescription::new("cache", ByteSize::mib(100)).unwrap(),
         )
         .await

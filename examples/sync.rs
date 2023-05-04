@@ -65,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
                 .build(node, chain_spec)
                 .await?;
 
-            let plots = [PlotDescription::new(plot.join("plot"), plot_size).unwrap()];
+            let plots = [PlotDescription::new(plot.join("plot"), plot_size)];
             let _farmer: Farmer = Farmer::builder()
                 .build(
                     PublicKey::from([13; 32]),
