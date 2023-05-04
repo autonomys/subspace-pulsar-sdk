@@ -4,6 +4,11 @@ on:
     paths-ignore:
       - '**.md'
       - '.gitignore'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+
   workflow_dispatch:
     inputs:
       test-macos:
