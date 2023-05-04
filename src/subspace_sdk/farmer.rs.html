@@ -994,6 +994,25 @@
 <a href="#994" id="994">994</a>
 <a href="#995" id="995">995</a>
 <a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
+<a href="#1005" id="1005">1005</a>
+<a href="#1006" id="1006">1006</a>
+<a href="#1007" id="1007">1007</a>
+<a href="#1008" id="1008">1008</a>
+<a href="#1009" id="1009">1009</a>
+<a href="#1010" id="1010">1010</a>
+<a href="#1011" id="1011">1011</a>
+<a href="#1012" id="1012">1012</a>
+<a href="#1013" id="1013">1013</a>
+<a href="#1014" id="1014">1014</a>
+<a href="#1015" id="1015">1015</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1008,7 +1027,8 @@
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>subspace_core_primitives::crypto::kzg;
-<span class="kw">use </span>subspace_core_primitives::{PieceIndexHash, SectorIndex, PLOT_SECTOR_SIZE};
+<span class="kw">use </span>subspace_core_primitives::{PieceIndexHash, PieceOffset, Record, SectorIndex};
+<span class="kw">use </span>subspace_erasure_coding::ErasureCoding;
 <span class="kw">use </span>subspace_farmer::single_disk_plot::{
     SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
     SingleDiskPlotOptions, SingleDiskPlotSummary,
@@ -1022,14 +1042,14 @@
 <span class="kw">use </span>subspace_farmer_components::plotting::PlottedSector;
 <span class="kw">use </span>subspace_networking::utils::multihash::ToMultihash;
 <span class="kw">use </span>subspace_networking::{ParityDbProviderStorage, PieceByHashResponse};
-<span class="kw">use </span>subspace_rpc_primitives::SolutionResponse;
+<span class="kw">use </span>subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
 <span class="kw">use </span>tokio::sync::{oneshot, watch, Mutex};
 <span class="kw">use </span>tracing_futures::Instrument;
 
 <span class="kw">use </span><span class="self">self</span>::builder::{PieceCacheSize, ProvidedKeysLimit};
 <span class="kw">use </span><span class="kw">crate</span>::dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
 <span class="kw">use </span><span class="kw">crate</span>::utils::{<span class="self">self</span>, AsyncDropFutures, ByteSize, DropCollection};
-<span class="kw">use crate</span>::{Node, PublicKey};
+<span class="kw">use crate</span>::{Node, PosTable, PublicKey};
 
 <span class="doccomment">/// Description of the cache
 </span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -1082,31 +1102,10 @@
     </span><span class="kw">pub </span>space_pledged: ByteSize,
 }
 
-<span class="doccomment">/// Error type for cache description constructor
-</span><span class="attr">#[derive(Debug, Clone, Copy, thiserror::Error)]
-#[error(<span class="string">&quot;Cache should be larger than {}&quot;</span>, PlotDescription::MIN_SIZE)]
-</span><span class="kw">pub struct </span>PlotConstructionError;
-
 <span class="kw">impl </span>PlotDescription {
-    <span class="doccomment">/// Minimal plot size
-    </span><span class="kw">pub const </span>MIN_SIZE: ByteSize = ByteSize::b(PLOT_SECTOR_SIZE + <span class="self">Self</span>::SECTOR_OVERHEAD.<span class="number">0 </span>.<span class="number">0</span>);
-    <span class="comment">// TODO: Account for prefix and metadata sizes
-    </span><span class="kw">const </span>SECTOR_OVERHEAD: ByteSize = ByteSize::mb(<span class="number">2</span>);
-
     <span class="doccomment">/// Construct Plot description
-    </span><span class="kw">pub fn </span>new(
-        directory: <span class="kw">impl </span>Into&lt;PathBuf&gt;,
-        space_pledged: ByteSize,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, PlotConstructionError&gt; {
-        <span class="kw">if </span>space_pledged &lt; <span class="self">Self</span>::MIN_SIZE {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(PlotConstructionError);
-        }
-        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ directory: directory.into(), space_pledged })
-    }
-
-    <span class="doccomment">/// Creates a minimal plot at specified path
-    </span><span class="kw">pub fn </span>minimal(directory: <span class="kw">impl </span>Into&lt;PathBuf&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{ directory: directory.into(), space_pledged: <span class="self">Self</span>::MIN_SIZE }
+    </span><span class="kw">pub fn </span>new(directory: <span class="kw">impl </span>Into&lt;PathBuf&gt;, space_pledged: ByteSize) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ directory: directory.into(), space_pledged }
     }
 
     <span class="doccomment">/// Wipe all the data from the plot
@@ -1323,14 +1322,14 @@
                     }
                 })
                 .flat_map(<span class="kw">move </span>|plotted_sector| {
-                    plotted_sector.piece_indexes.into_iter().enumerate().map(
+                    (PieceOffset::ZERO..).zip(plotted_sector.piece_indexes).map(
                         <span class="kw">move </span>|(piece_offset, piece_index)| {
                             (
                                 PieceIndexHash::from_index(piece_index),
                                 PieceDetails {
                                     plot_offset,
                                     sector_index: plotted_sector.sector_index,
-                                    piece_offset: piece_offset <span class="kw">as </span>u64,
+                                    piece_offset,
                                 },
                             )
                         },
@@ -1368,22 +1367,15 @@
             .filter(|&amp;&amp;piece_index| {
                 <span class="comment">// Skip pieces that are already plotted and thus were announced
                 // before
-                </span>!readers_and_pieces.contains_piece(<span class="kw-2">&amp;</span>PieceIndexHash::from_index(piece_index))
+                </span>!readers_and_pieces.contains_piece(<span class="kw-2">&amp;</span>piece_index.hash())
             })
             .copied()
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         readers_and_pieces.add_pieces(
-            plotted_sector.piece_indexes.iter().copied().enumerate().map(
+            (PieceOffset::ZERO..).zip(plotted_sector.piece_indexes.iter().copied()).map(
                 |(piece_offset, piece_index)| {
-                    (
-                        PieceIndexHash::from_index(piece_index),
-                        PieceDetails {
-                            plot_offset,
-                            sector_index,
-                            piece_offset: piece_offset <span class="kw">as </span>u64,
-                        },
-                    )
+                    (piece_index.hash(), PieceDetails { plot_offset, sector_index, piece_offset })
                 },
             ),
         );
@@ -1520,6 +1512,12 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>drop_at_exit = DropCollection::new();
         <span class="kw">let </span>kzg = kzg::Kzg::new(kzg::embedded_kzg_settings());
+        <span class="kw">let </span>erasure_coding = ErasureCoding::new(
+            NonZeroUsize::new(Record::NUM_S_BUCKETS.next_power_of_two().ilog2() <span class="kw">as </span>usize).expect(
+                <span class="string">&quot;Number of buckets &gt;= 1, therefore next power of 2 &gt;= 2, therefore ilog2 &gt;= 1&quot;</span>,
+            ),
+        )
+        .map_err(|error| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Failed to create erasure coding for plot: {error}&quot;</span>))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
             node.dsn.node.clone(),
@@ -1538,15 +1536,16 @@
         ));
 
         <span class="kw">for </span>(disk_farm_idx, description) <span class="kw">in </span>plots.iter().enumerate() {
-            <span class="kw">let </span>(plot, single_disk_plot) = Plot::new(
+            <span class="kw">let </span>(plot, single_disk_plot) = Plot::new(PlotOptions {
                 disk_farm_idx,
                 reward_address,
                 node,
-                Arc::clone(<span class="kw-2">&amp;</span>piece_getter),
-                Arc::clone(<span class="kw-2">&amp;</span>concurrent_plotting_semaphore),
+                piece_getter: Arc::clone(<span class="kw-2">&amp;</span>piece_getter),
+                concurrent_plotting_semaphore: Arc::clone(<span class="kw-2">&amp;</span>concurrent_plotting_semaphore),
                 description,
-                kzg.clone(),
-            )
+                kzg: kzg.clone(),
+                erasure_coding: erasure_coding.clone(),
+            })
             .<span class="kw">await</span><span class="question-mark">?</span>;
             plot_info.insert(plot.directory.clone(), plot);
             single_disk_plots.push(single_disk_plot);
@@ -1671,6 +1670,9 @@
             result_receiver: <span class="prelude-val">Some</span>(result_receiver),
             node_name,
             base_path,
+            app_info: subspace_farmer::NodeClient::farmer_app_info(<span class="kw-2">&amp;</span>node.rpc_handle)
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;Node is always reachable&quot;</span>),
             _drop_at_exit: drop_at_exit,
             _async_drop: <span class="prelude-val">Some</span>(async_drop),
         })
@@ -1687,6 +1689,7 @@
     result_receiver: <span class="prelude-ty">Option</span>&lt;oneshot::Receiver&lt;anyhow::Result&lt;()&gt;&gt;&gt;,
     base_path: PathBuf,
     node_name: String,
+    app_info: FarmerAppInfo,
     _drop_at_exit: DropCollection,
     _async_drop: <span class="prelude-ty">Option</span>&lt;AsyncDropFutures&gt;,
 }
@@ -1714,6 +1717,8 @@
     </span><span class="kw">pub </span>first_sector_index: SectorIndex,
     <span class="doccomment">/// How much space in bytes is allocated for this plot
     </span><span class="kw">pub </span>allocated_space: ByteSize,
+    <span class="doccomment">/// How many pieces are in sector
+    </span><span class="kw">pub </span>pieces_in_sector: u16,
 }
 
 <span class="kw">impl </span>From&lt;SingleDiskPlotInfo&gt; <span class="kw">for </span>PlotInfo {
@@ -1724,6 +1729,7 @@
             public_key,
             first_sector_index,
             allocated_space,
+            pieces_in_sector,
         } = info;
         <span class="self">Self </span>{
             id,
@@ -1731,6 +1737,7 @@
             public_key: <span class="kw">super</span>::PublicKey(public_key),
             first_sector_index,
             allocated_space: ByteSize::b(allocated_space),
+            pieces_in_sector,
         }
     }
 }
@@ -1831,29 +1838,54 @@
     }
 }
 
+<span class="kw">struct </span>PlotOptions&lt;<span class="lifetime">&#39;a</span>, PG&gt; {
+    <span class="kw">pub </span>disk_farm_idx: usize,
+    <span class="kw">pub </span>reward_address: PublicKey,
+    <span class="kw">pub </span>node: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Node,
+    <span class="kw">pub </span>piece_getter: PG,
+    <span class="kw">pub </span>concurrent_plotting_semaphore: Arc&lt;tokio::sync::Semaphore&gt;,
+    <span class="kw">pub </span>description: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>PlotDescription,
+    <span class="kw">pub </span>kzg: kzg::Kzg,
+    <span class="kw">pub </span>erasure_coding: ErasureCoding,
+}
+
 <span class="kw">impl </span>Plot {
     <span class="kw">async fn </span>new(
-        disk_farm_idx: usize,
-        reward_address: PublicKey,
-        node: <span class="kw-2">&amp;</span>Node,
-        piece_getter: <span class="kw">impl </span>subspace_farmer_components::plotting::PieceGetter + Send + <span class="lifetime">&#39;static</span>,
-        concurrent_plotting_semaphore: Arc&lt;tokio::sync::Semaphore&gt;,
-        description: <span class="kw-2">&amp;</span>PlotDescription,
-        kzg: kzg::Kzg,
+        PlotOptions {
+            disk_farm_idx,
+            reward_address,
+            node,
+            piece_getter,
+            concurrent_plotting_semaphore,
+            description,
+            kzg,
+            erasure_coding,
+        }: PlotOptions&lt;
+            <span class="lifetime">&#39;_</span>,
+            <span class="kw">impl </span>subspace_farmer_components::plotting::PieceGetter + Send + <span class="lifetime">&#39;static</span>,
+        &gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="self">Self</span>, SingleDiskPlot), BuildError&gt; {
         <span class="kw">let </span>directory = description.directory.clone();
         <span class="kw">let </span>allocated_space = description.space_pledged.as_u64();
+        <span class="kw">let </span>farmer_app_info = subspace_farmer::NodeClient::farmer_app_info(<span class="kw-2">&amp;</span>node.rpc_handle)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;Node is always reachable&quot;</span>);
+        <span class="kw">let </span>max_pieces_in_sector = farmer_app_info.protocol_info.max_pieces_in_sector;
         <span class="kw">let </span>description = SingleDiskPlotOptions {
             allocated_space,
             directory: directory.clone(),
+            farmer_app_info,
+            max_pieces_in_sector,
             reward_address: <span class="kw-2">*</span>reward_address,
             node_client: node.rpc_handle.clone(),
             kzg,
+            erasure_coding,
             piece_getter,
             concurrent_plotting_semaphore,
             piece_memory_cache: node.dsn.piece_memory_cache.clone(),
         };
-        <span class="kw">let </span>single_disk_plot = SingleDiskPlot::new(description, disk_farm_idx).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>single_disk_plot =
+            SingleDiskPlot::new::&lt;<span class="kw">_</span>, <span class="kw">_</span>, PosTable&gt;(description, disk_farm_idx).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>drop_at_exit = DropCollection::new();
 
         <span class="kw">let </span>progress = {
@@ -1878,9 +1910,13 @@
                 progress,
                 solutions,
                 initial_plotting_progress: Arc::new(Mutex::new(InitialPlottingProgress {
-                    starting_sector: single_disk_plot.plotted_sectors_count(),
-                    current_sector: single_disk_plot.plotted_sectors_count(),
-                    total_sectors: allocated_space / subspace_core_primitives::PLOT_SECTOR_SIZE,
+                    starting_sector: u64::try_from(single_disk_plot.plotted_sectors_count())
+                        .expect(<span class="string">&quot;Sector count is less than u64::MAX&quot;</span>),
+                    current_sector: u64::try_from(single_disk_plot.plotted_sectors_count())
+                        .expect(<span class="string">&quot;Sector count is less than u64::MAX&quot;</span>),
+                    total_sectors: allocated_space
+                        / subspace_farmer_components::sector::sector_size(max_pieces_in_sector)
+                            <span class="kw">as </span>u64,
                 })),
                 _drop_at_exit: drop_at_exit,
             },
@@ -1970,7 +2006,9 @@
             plots_info,
             version: <span class="macro">format!</span>(<span class="string">&quot;{}-{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;CARGO_PKG_VERSION&quot;</span>), <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>)),
             reward_address: <span class="self">self</span>.reward_address,
-            sector_size: subspace_core_primitives::PLOT_SECTOR_SIZE,
+            sector_size: subspace_farmer_components::sector::sector_size(
+                <span class="self">self</span>.app_info.protocol_info.max_pieces_in_sector,
+            ) <span class="kw">as _</span>,
         })
     }
 

@@ -600,7 +600,7 @@
 
         <span class="kw">let </span>piece_cache = NodePieceCache::new(
             client.clone(),
-            piece_cache_size.as_u64() / subspace_core_primitives::Piece::SIZE <span class="kw">as </span>u64,
+            piece_cache_size.as_u64(),
             subspace_networking::peer_id(<span class="kw-2">&amp;</span>keypair),
         );
 

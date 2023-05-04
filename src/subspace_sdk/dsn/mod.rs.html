@@ -129,10 +129,6 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>builder;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>provider_storage_utils;
 
@@ -144,7 +140,6 @@
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>parking_lot::Mutex;
 <span class="kw">use </span>sc_client_api::AuxStore;
-<span class="kw">use </span>subspace_core_primitives::PieceIndexHash;
 <span class="kw">use </span>subspace_farmer::utils::farmer_provider_record_processor::FarmerProviderRecordProcessor;
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 <span class="kw">use </span>subspace_farmer_components::plotting::{PieceGetter, PieceGetterRetryPolicy};
@@ -257,10 +252,7 @@
         <span class="prelude-ty">Option</span>&lt;subspace_core_primitives::Piece&gt;,
         Box&lt;<span class="kw">dyn </span>std::error::Error + Send + Sync + <span class="lifetime">&#39;static</span>&gt;,
     &gt; {
-        <span class="kw">let </span>piece = <span class="self">self
-            </span>.node_cache
-            .get_piece(PieceIndexHash::from_index(piece_index))
-            .map_err(|x| x.to_string())<span class="question-mark">?</span>;
+        <span class="kw">let </span>piece = <span class="self">self</span>.node_cache.get_piece(piece_index.hash()).map_err(|x| x.to_string())<span class="question-mark">?</span>;
         <span class="kw">if </span>piece.is_some() {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(piece);
         }

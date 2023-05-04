@@ -209,6 +209,8 @@
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Subspace SDK for easy running of both Subspace node and farmer
 
 </span><span class="attr">#![warn(missing_docs, clippy::dbg_macro, clippy::unwrap_used, clippy::disallowed_types)]
@@ -257,6 +259,8 @@
         <span class="macro-nonterminal">$</span><span class="macro">crate::generate_builder!</span>($(<span class="macro-nonterminal">$rest</span>),+);
     };
 }
+
+<span class="kw">type </span>PosTable = subspace_proof_of_space::chia::ChiaTable;
 
 <span class="doccomment">/// Public key type
 </span><span class="attr">#[derive(

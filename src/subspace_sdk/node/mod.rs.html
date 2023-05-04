@@ -762,8 +762,11 @@
 <a href="#762" id="762">762</a>
 <a href="#763" id="763">763</a>
 <a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
-<span class="kw">use </span>std::num::NonZeroU64;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -779,7 +782,7 @@
 <span class="kw">use </span>sp_consensus::SyncOracle;
 <span class="kw">use </span>sp_consensus_subspace::digests::PreDigest;
 <span class="kw">use </span>sp_runtime::DigestItem;
-<span class="kw">use </span>subspace_core_primitives::{PieceIndexHash, SegmentIndex};
+<span class="kw">use </span>subspace_core_primitives::{HistorySize, PieceIndexHash, SegmentIndex};
 <span class="kw">use </span>subspace_farmer::node_client::NodeClient;
 <span class="kw">use </span>subspace_farmer_components::FarmerProtocolInfo;
 <span class="kw">use </span>subspace_networking::{PieceByHashResponse, SegmentHeaderRequest, SegmentHeaderResponse};
@@ -790,6 +793,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::dsn::NodePieceCache;
 <span class="kw">use </span><span class="kw">crate</span>::utils::{<span class="self">self</span>, DropCollection, MultiaddrWithPeerId};
+<span class="kw">use </span><span class="kw">crate</span>::PosTable;
 
 <span class="kw">mod </span>builder;
 <span class="kw">pub mod </span>chain_spec;
@@ -827,7 +831,7 @@
         <span class="kw">let </span>database_source = base.database.clone();
 
         <span class="kw">let </span>partial_components =
-            subspace_service::new_partial::&lt;RuntimeApi, ExecutorDispatch&gt;(<span class="kw-2">&amp;</span>base)
+            subspace_service::new_partial::&lt;PosTable, RuntimeApi, ExecutorDispatch&gt;(<span class="kw-2">&amp;</span>base)
                 .context(<span class="string">&quot;Failed to build a partial subspace node&quot;</span>)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>(subspace_networking, dsn, <span class="kw-2">mut </span>runner) = {
@@ -906,11 +910,15 @@
         )
         .context(<span class="string">&quot;Failed to run node runner future&quot;</span>)<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>slot_proportion = sc_consensus_slots::SlotProportion::new(<span class="number">2f32 </span>/ <span class="number">3f32</span>);
-        <span class="kw">let </span>full_client =
-            subspace_service::new_full(configuration, partial_components, <span class="bool-val">true</span>, slot_proportion)
-                .<span class="kw">await
-                </span>.context(<span class="string">&quot;Failed to build a full subspace node&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>slot_proportion = sc_consensus_slots::SlotProportion::new(<span class="number">3f32 </span>/ <span class="number">4f32</span>);
+        <span class="kw">let </span>full_client = subspace_service::new_full::&lt;PosTable, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>&gt;(
+            configuration,
+            partial_components,
+            <span class="bool-val">true</span>,
+            slot_proportion,
+        )
+        .<span class="kw">await
+        </span>.context(<span class="string">&quot;Failed to build a full subspace node&quot;</span>)<span class="question-mark">?</span>;
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(storage_monitor) = storage_monitor {
             sc_storage_monitor::StorageMonitorService::try_spawn(
@@ -1001,7 +1009,7 @@
 
         <span class="kw">let </span>drop_collection = DropCollection::new();
 
-        <span class="comment">// Disable propper exit for now. Because RPC server looses waker and can&#39;t exit
+        <span class="comment">// Disable proper exit for now. Because RPC server looses waker and can&#39;t exit
         // in background.
         //
         // drop_collection.defer(move || {
@@ -1126,7 +1134,7 @@
     <span class="doccomment">/// Number of nodes that we know of but that we&#39;re not connected to
     </span><span class="kw">pub </span>not_connected_peers: u64,
     <span class="doccomment">/// Total number of pieces stored on chain
-    </span><span class="kw">pub </span>total_pieces: NonZeroU64,
+    </span><span class="kw">pub </span>history_size: HistorySize,
 }
 
 <span class="doccomment">/// New block notification
@@ -1404,7 +1412,7 @@
             ..
         } = <span class="self">self</span>.client.chain_info();
         <span class="kw">let </span>version = <span class="self">self</span>.rpc_handle.runtime_version(<span class="prelude-val">Some</span>(best_hash)).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>FarmerProtocolInfo { total_pieces, .. } =
+        <span class="kw">let </span>FarmerProtocolInfo { history_size, .. } =
             <span class="self">self</span>.rpc_handle.farmer_app_info().<span class="kw">await</span>.map_err(anyhow::Error::msg)<span class="question-mark">?</span>.protocol_info;
         <span class="prelude-val">Ok</span>(Info {
             chain: ChainInfo { genesis_hash },
@@ -1415,7 +1423,7 @@
             name: <span class="self">self</span>.name.clone(),
             connected_peers: connected_peers.len() <span class="kw">as </span>u64,
             not_connected_peers: not_connected_peers.len() <span class="kw">as </span>u64,
-            total_pieces,
+            history_size,
         })
     }
 
