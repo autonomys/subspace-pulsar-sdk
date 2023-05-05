@@ -132,16 +132,13 @@
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Core payments domain module
 
 </span><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>core_payments_domain_runtime::{Runtime, RuntimeApi};
+<span class="kw">use </span>cross_domain_message_gossip::GossipWorkerBuilder;
 <span class="kw">use </span>derivative::Derivative;
 <span class="kw">use </span>derive_builder::Builder;
 <span class="kw">use </span>domain_runtime_primitives::AccountId;
@@ -223,11 +220,7 @@
         chain_spec: ChainSpec,
         primary_chain_node: <span class="kw-2">&amp;mut </span><span class="kw">crate</span>::node::NewFull,
         system_domain_node: <span class="kw-2">&amp;</span><span class="kw">super</span>::NewFull,
-        gossip_message_sink: domain_client_message_relayer::GossipMessageSink,
-        domain_tx_pool_sinks: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Extend&lt;(
-            DomainId,
-            cross_domain_message_gossip::DomainTxPoolSink,
-        )&gt;,
+        gossip_worker_builder: <span class="kw-2">&amp;mut </span>GossipWorkerBuilder,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>Config { base, relayer_id } = cfg;
         <span class="kw">let </span>cfg = <span class="kw">super</span>::core::Config {
@@ -236,8 +229,7 @@
             directory: directory.as_ref().to_owned(),
             primary_chain_node,
             system_domain_node,
-            gossip_message_sink,
-            domain_tx_pool_sinks,
+            gossip_worker_builder,
             domain_id: DomainId::CORE_PAYMENTS,
             chain_spec,
             provider: domain_service::providers::DefaultProvider,

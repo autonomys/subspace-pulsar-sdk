@@ -231,13 +231,12 @@
 <a href="#231" id="231">231</a>
 <a href="#232" id="232">232</a>
 <a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Core domain template module
 
 </span><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::{Arc, Weak};
 
+<span class="kw">use </span>cross_domain_message_gossip::GossipWorkerBuilder;
 <span class="kw">use </span>derivative::Derivative;
 <span class="kw">use </span>domain_runtime_primitives::opaque::{Block, Block <span class="kw">as </span>SBlock};
 <span class="kw">use </span>domain_service::DomainConfiguration;
@@ -285,16 +284,15 @@
 }
 
 <span class="doccomment">/// Internal config for core domains
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Config&lt;<span class="lifetime">&#39;a</span>, AccountId, CS, DTXS, Provider&gt; {
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Config&lt;<span class="lifetime">&#39;a</span>, AccountId, CS, Provider&gt; {
     <span class="kw">pub </span>base: Base,
     <span class="kw">pub </span>relayer_id: <span class="prelude-ty">Option</span>&lt;AccountId&gt;,
     <span class="kw">pub </span>directory: PathBuf,
     <span class="kw">pub </span>chain_spec: CS,
     <span class="kw">pub</span>(<span class="kw">crate</span>) primary_chain_node: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span><span class="kw">crate</span>::node::NewFull,
     <span class="kw">pub</span>(<span class="kw">crate</span>) system_domain_node: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">super</span>::NewFull,
-    <span class="kw">pub </span>gossip_message_sink: domain_client_message_relayer::GossipMessageSink,
+    <span class="kw">pub </span>gossip_worker_builder: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>GossipWorkerBuilder,
     <span class="kw">pub </span>domain_id: DomainId,
-    <span class="kw">pub </span>domain_tx_pool_sinks: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>DTXS,
     <span class="kw">pub </span>provider: Provider,
 }
 
@@ -323,8 +321,8 @@
         &gt; + sp_messenger::MessengerApi&lt;Block, NumberFor&lt;Block&gt;&gt;
         + domain_runtime_primitives::InherentExtrinsicApi&lt;Block&gt;,
 {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new&lt;CS, DTXS, AccountId, Provider&gt;(
-        cfg: Config&lt;<span class="lifetime">&#39;_</span>, AccountId, CS, DTXS, Provider&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new&lt;CS, AccountId, Provider&gt;(
+        cfg: Config&lt;<span class="lifetime">&#39;_</span>, AccountId, CS, Provider&gt;,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt;
     <span class="kw">where
         </span>AccountId: serde::de::DeserializeOwned
@@ -342,7 +340,6 @@
             + serde::de::DeserializeOwned
             + sp_runtime::BuildStorage
             + <span class="lifetime">&#39;static</span>,
-        DTXS: Extend&lt;(DomainId, cross_domain_message_gossip::DomainTxPoolSink)&gt;,
         RuntimeApi::RuntimeApi: sp_messenger::RelayerApi&lt;Block, AccountId, NumberFor&lt;Block&gt;&gt;
             + frame_system_rpc_runtime_api::AccountNonceApi&lt;
                 Block,
@@ -388,9 +385,8 @@
             chain_spec,
             primary_chain_node,
             system_domain_node,
-            gossip_message_sink,
+            gossip_worker_builder,
             domain_id,
-            domain_tx_pool_sinks,
             provider,
         } = cfg;
         <span class="kw">let </span>service_config = base.configuration(directory, chain_spec).<span class="kw">await</span>;
@@ -436,7 +432,7 @@
             primary_network_sync_oracle: primary_chain_node.sync_service.clone(),
             select_chain: primary_chain_node.select_chain.clone(),
             executor_streams,
-            gossip_message_sink,
+            gossip_message_sink: gossip_worker_builder.gossip_msg_sink(),
             provider,
         };
 
@@ -449,7 +445,7 @@
             ..
         } = domain_service::new_full_core(core_domain_params).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        domain_tx_pool_sinks.extend([(domain_id, tx_pool_sink)]);
+        gossip_worker_builder.push_domain_tx_pool_sink(domain_id, tx_pool_sink);
         primary_chain_node.task_manager.add_child(task_manager);
 
         network_starter.start_network();

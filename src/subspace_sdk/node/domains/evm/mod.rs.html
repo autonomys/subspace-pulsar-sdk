@@ -184,22 +184,43 @@
 <a href="#184" id="184">184</a>
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Core evm domain module
 
 </span><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>anyhow::Context;
-<span class="kw">use </span>core_evm_runtime::{Runtime, RuntimeApi};
+<span class="kw">use </span>core_evm_runtime::{AccountId <span class="kw">as </span>AccountId20, Runtime, RuntimeApi};
+<span class="kw">use </span>cross_domain_message_gossip::GossipWorkerBuilder;
 <span class="kw">use </span>derivative::Derivative;
 <span class="kw">use </span>derive_builder::Builder;
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>sp_core::crypto::AccountId32;
+<span class="kw">use </span>sp_core::ByteArray;
 <span class="kw">use </span>sp_domains::DomainId;
 
 <span class="kw">use </span><span class="kw">super</span>::core::CoreDomainNode;
 <span class="kw">use </span><span class="kw">crate</span>::node::{Base, BaseBuilder, BlockHeader};
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>chain_spec;
+
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>AccountId32ToAccountId20Converter;
+
+<span class="kw">impl </span>sp_runtime::traits::Convert&lt;AccountId32, AccountId20&gt; <span class="kw">for </span>AccountId32ToAccountId20Converter {
+    <span class="kw">fn </span>convert(acc: AccountId32) -&gt; AccountId20 {
+        <span class="comment">// Using the full hex key, truncating to the first 20 bytes (the first 40 hex
+        // chars)
+        </span>sp_core::H160::from_slice(<span class="kw-2">&amp;</span>acc.as_slice()[<span class="number">0</span>..<span class="number">20</span>]).into()
+    }
+}
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ExecutorDispatch;
 
@@ -291,11 +312,7 @@
         chain_spec: ChainSpec,
         primary_chain_node: <span class="kw-2">&amp;mut </span><span class="kw">crate</span>::node::NewFull,
         system_domain_node: <span class="kw-2">&amp;</span><span class="kw">super</span>::NewFull,
-        gossip_message_sink: domain_client_message_relayer::GossipMessageSink,
-        domain_tx_pool_sinks: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Extend&lt;(
-            DomainId,
-            cross_domain_message_gossip::DomainTxPoolSink,
-        )&gt;,
+        gossip_worker_builder: <span class="kw-2">&amp;mut </span>GossipWorkerBuilder,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>Config {
             max_past_logs,
@@ -332,8 +349,7 @@
             directory: directory.as_ref().to_owned(),
             primary_chain_node,
             system_domain_node,
-            gossip_message_sink,
-            domain_tx_pool_sinks,
+            gossip_worker_builder,
             domain_id: DomainId::CORE_EVM,
             chain_spec,
             provider,
