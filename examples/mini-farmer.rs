@@ -120,41 +120,24 @@ async fn main() -> anyhow::Result<()> {
                         .ws("127.0.0.1:9991".parse().unwrap()),
                 )
                 .role(node::Role::Authority);
+            let rpc = subspace_sdk::node::RpcBuilder::new()
+                .http("127.0.0.1:9992".parse().unwrap())
+                .ws("127.0.0.1:9993".parse().unwrap());
 
             match domain {
                 #[cfg(feature = "core-payments")]
                 Domain::Payments => system_domain.core_payments(
                     domains::core_payments::ConfigBuilder::new()
-                        .rpc(
-                            subspace_sdk::node::RpcBuilder::new()
-                                .http("127.0.0.1:9992".parse().unwrap())
-                                .ws("127.0.0.1:9993".parse().unwrap()),
-                        )
-                        .role(node::Role::Authority)
-                        .build(),
+                        .rpc(rpc)
+                        .role(node::Role::Authority),
                 ),
                 #[cfg(feature = "eth-relayer")]
                 Domain::EthRelayer => system_domain.eth_relayer(
-                    domains::eth_relayer::ConfigBuilder::new()
-                        .rpc(
-                            subspace_sdk::node::RpcBuilder::new()
-                                .http("127.0.0.1:9992".parse().unwrap())
-                                .ws("127.0.0.1:9993".parse().unwrap()),
-                        )
-                        .role(node::Role::Authority)
-                        .build(),
+                    domains::eth_relayer::ConfigBuilder::new().rpc(rpc).role(node::Role::Authority),
                 ),
                 #[cfg(feature = "core-evm")]
-                Domain::Evm => system_domain.evm(
-                    domains::evm::ConfigBuilder::new()
-                        .rpc(
-                            subspace_sdk::node::RpcBuilder::new()
-                                .http("127.0.0.1:9992".parse().unwrap())
-                                .ws("127.0.0.1:9993".parse().unwrap()),
-                        )
-                        .role(node::Role::Authority)
-                        .build(),
-                ),
+                Domain::Evm => system_domain
+                    .evm(domains::evm::ConfigBuilder::new().rpc(rpc).role(node::Role::Authority)),
             }
         }),
         None => node,

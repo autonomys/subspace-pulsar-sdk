@@ -52,19 +52,8 @@ pub struct Config {
     pub base: Base,
 }
 
+crate::generate_builder!(Config);
 crate::derive_base!(crate::node::Base => ConfigBuilder);
-
-impl ConfigBuilder {
-    /// Constructor
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Build Config
-    pub fn build(&self) -> Config {
-        self._build().expect("Infallible")
-    }
-}
 
 /// Chain spec of the core domain
 pub type ChainSpec = chain_spec::ChainSpec;
