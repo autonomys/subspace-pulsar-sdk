@@ -1,9 +1,8 @@
 use derivative::Derivative;
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
+use sdk_utils::ByteSize;
 use serde::{Deserialize, Serialize};
-
-use crate::utils::ByteSize;
 
 /// Events from subspace pallet
 pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
@@ -204,11 +203,11 @@ pub struct MaxSubsPerConn(#[derivative(Default(value = "1024"))] pub(crate) usiz
 pub struct OffchainWorker {
     /// Is enabled
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub enabled: bool,
     /// Is indexing enabled
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub indexing_enabled: bool,
 }
 

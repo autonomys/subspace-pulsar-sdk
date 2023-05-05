@@ -4,6 +4,7 @@ use std::path::Path;
 use derivative::Derivative;
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
+use sdk_utils::ByteSize;
 use serde::{Deserialize, Serialize};
 
 use super::substrate::{
@@ -12,7 +13,6 @@ use super::substrate::{
 };
 use super::{ChainSpec, Node};
 use crate::dsn::builder::{Dsn, DsnBuilder};
-use crate::utils::ByteSize;
 
 /// Wrapper with default value for piece cache size
 #[derive(
@@ -41,36 +41,36 @@ pub struct SegmentPublishConcurrency(
 pub struct Config {
     /// Set piece cache size
     #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub piece_cache_size: PieceCacheSize,
     /// Max number of segments that can be published concurrently, impacts
     /// RAM usage and network bandwidth.
     #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub segment_publish_concurrency: SegmentPublishConcurrency,
     /// Should we sync blocks from the DSN?
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub sync_from_dsn: bool,
     #[doc(hidden)]
     #[builder(
         setter(into, strip_option),
         field(type = "BaseBuilder", build = "self.base.build()")
     )]
-    #[serde(flatten, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(flatten, skip_serializing_if = "sdk_utils::is_default")]
     pub base: Base,
     /// System domain settings
     #[cfg(feature = "executor")]
     #[builder(setter(into, strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub system_domain: Option<crate::node::domains::Config>,
     /// DSN settings
     #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub dsn: Dsn,
     /// Storage monitor settings
     #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub storage_monitor: Option<StorageMonitor>,
 }
 

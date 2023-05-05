@@ -11,11 +11,14 @@ use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::Error;
+use sc_rpc_api::state::StateApiClient;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+mod rpc_client;
+
 #[derive(Clone, Debug)]
-pub(crate) struct Rpc {
+pub struct Rpc {
     inner: Arc<RpcModule<()>>,
 }
 
@@ -25,7 +28,7 @@ impl Rpc {
         Self { inner }
     }
 
-    pub(crate) async fn subscribe_new_heads<'a, 'b, T>(
+    pub async fn subscribe_new_heads<'a, 'b, T>(
         &'a self,
     ) -> Result<impl Stream<Item = T::Header> + Send + Sync + Unpin + 'static, Error>
     where
@@ -46,7 +49,7 @@ impl Rpc {
         Ok(stream)
     }
 
-    pub(crate) async fn subscribe_finalized_heads<'a, 'b, T>(
+    pub async fn subscribe_finalized_heads<'a, 'b, T>(
         &'a self,
     ) -> Result<impl Stream<Item = T::Header> + Send + Sync + Unpin + 'static, Error>
     where
@@ -67,7 +70,7 @@ impl Rpc {
         Ok(stream)
     }
 
-    pub(crate) async fn get_events<T>(
+    pub async fn get_events<T>(
         &self,
         block: Option<T::Hash>,
     ) -> anyhow::Result<Vec<frame_system::EventRecord<T::RuntimeEvent, T::Hash>>>
@@ -77,7 +80,7 @@ impl Rpc {
         Vec<frame_system::EventRecord<T::RuntimeEvent, T::Hash>>: parity_scale_codec::Decode,
     {
         match self
-            .get_storage::<T::Hash>(crate::node::StorageKey::events(), block)
+            .get_storage::<T::Hash>(StorageKey::events(), block)
             .await
             .context("Failed to get events from storage")?
         {
@@ -404,6 +407,37 @@ where
         .expect("Spawning task never fails")
 }
 
+pub struct StorageKey(pub Vec<u8>);
+
+impl StorageKey {
+    pub fn new<IT, K>(keys: IT) -> Self
+    where
+        IT: IntoIterator<Item = K>,
+        K: AsRef<[u8]>,
+    {
+        Self(keys.into_iter().flat_map(|key| sp_core_hashing::twox_128(key.as_ref())).collect())
+    }
+
+    pub fn events() -> Self {
+        Self::new(["System", "Events"])
+    }
+}
+
+impl Rpc {
+    pub(crate) async fn get_storage<H>(
+        &self,
+        StorageKey(key): StorageKey,
+        block: Option<H>,
+    ) -> anyhow::Result<Option<sp_storage::StorageData>>
+    where
+        H: Send + Sync + 'static + serde::ser::Serialize + serde::de::DeserializeOwned,
+    {
+        self.storage(sp_storage::StorageKey(key), block)
+            .await
+            .context("Failed to fetch storage entry")
+    }
+}
+
 pub mod chain_spec {
     use frame_support::traits::Get;
     use sc_service::Properties;
@@ -415,7 +449,7 @@ pub mod chain_spec {
     use subspace_runtime_primitives::DECIMAL_PLACES;
 
     /// Shared chain spec properties related to the coin.
-    pub(crate) fn chain_spec_properties() -> Properties {
+    pub fn chain_spec_properties() -> Properties {
         let mut properties = Properties::new();
 
         properties.insert("ss58Format".into(), <SS58Prefix as Get<u16>>::get().into());
@@ -426,7 +460,7 @@ pub mod chain_spec {
     }
 
     /// Get public key from keypair seed.
-    pub(crate) fn get_public_key_from_seed<TPublic: Public>(
+    pub fn get_public_key_from_seed<TPublic: Public>(
         seed: &'static str,
     ) -> <TPublic::Pair as Pair>::Public {
         TPublic::Pair::from_string(&format!("//{seed}"), None)
@@ -435,7 +469,7 @@ pub mod chain_spec {
     }
 
     /// Generate an account ID from seed.
-    pub(crate) fn get_account_id_from_seed(seed: &'static str) -> AccountId32 {
+    pub fn get_account_id_from_seed(seed: &'static str) -> AccountId32 {
         MultiSigner::from(get_public_key_from_seed::<sr25519::Public>(seed)).into_account()
     }
 }

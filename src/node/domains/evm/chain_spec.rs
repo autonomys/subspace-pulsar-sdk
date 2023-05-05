@@ -30,7 +30,7 @@ use sp_runtime::traits::Convert;
 use subspace_runtime_primitives::SSC;
 
 use super::AccountId32ToAccountId20Converter;
-use crate::utils::chain_spec::chain_spec_properties;
+use sdk_utils::chain_spec::chain_spec_properties;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {

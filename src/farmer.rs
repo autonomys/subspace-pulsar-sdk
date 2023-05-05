@@ -10,6 +10,7 @@ pub use builder::{Builder, Config};
 use derivative::Derivative;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
+use sdk_utils::{AsyncDropFutures, ByteSize, DropCollection};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::crypto::kzg;
 use subspace_core_primitives::{PieceIndexHash, PieceOffset, Record, SectorIndex};
@@ -33,7 +34,6 @@ use tracing_futures::Instrument;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
 use crate::dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
-use crate::utils::{self, AsyncDropFutures, ByteSize, DropCollection};
 use crate::{Node, PosTable, PublicKey};
 
 /// Description of the cache
@@ -105,10 +105,10 @@ mod builder {
     use derivative::Derivative;
     use derive_builder::Builder;
     use derive_more::{Deref, DerefMut, Display, From};
+    use sdk_utils::ByteSize;
     use serde::{Deserialize, Serialize};
 
     use super::{BuildError, CacheDescription};
-    use crate::utils::ByteSize;
     use crate::{Farmer, Node, PlotDescription, PublicKey};
 
     #[derive(
@@ -178,15 +178,15 @@ mod builder {
     pub struct Config {
         /// Number of plots that can be plotted concurrently, impacts RAM usage.
         #[builder(default, setter(into))]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
         pub max_concurrent_plots: MaxConcurrentPlots,
         /// Number of plots that can be plotted concurrently, impacts RAM usage.
         #[builder(default, setter(into))]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
         pub piece_cache_size: PieceCacheSize,
         /// Number of plots that can be plotted concurrently, impacts RAM usage.
         #[builder(default, setter(into))]
-        #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+        #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
         pub provided_keys_limit: ProvidedKeysLimit,
     }
 
@@ -396,7 +396,7 @@ fn handler_on_sector_plotted(
         drop(plotting_permit);
     };
 
-    drop(utils::task_spawn(
+    drop(sdk_utils::task_spawn(
         format!("subspace-sdk-farmer-{node_name}-piece-publishing"),
         async move {
             use futures::future::{select, Either};
@@ -577,7 +577,7 @@ impl Config {
         let (drop_sender, drop_receiver) = oneshot::channel::<()>();
         let (result_sender, result_receiver) = oneshot::channel::<_>();
 
-        utils::task_spawn_blocking(format!("subspace-sdk-farmer-{node_name}-plots-driver"), {
+        sdk_utils::task_spawn_blocking(format!("subspace-sdk-farmer-{node_name}-plots-driver"), {
             let handle = tokio::runtime::Handle::current();
             let is_node_closed = {
                 let stop_sender = node.stop_sender.clone();

@@ -81,29 +81,29 @@ impl From<Header> for BlockHeader {
 pub struct Config {
     /// Id of the relayer
     #[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub relayer_id: Option<AccountId>,
     #[doc(hidden)]
     #[builder(
         setter(into, strip_option),
         field(type = "BaseBuilder", build = "self.base.build()")
     )]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub base: Base,
     /// The core payments domain config
     #[cfg(feature = "core-payments")]
     #[builder(setter(into, strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub core_payments: Option<core_payments::Config>,
     /// The eth relayer domain config
     #[cfg(feature = "eth-relayer")]
     #[builder(setter(into, strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub eth_relayer: Option<eth_relayer::Config>,
     /// The evm domain config
     #[cfg(feature = "core-evm")]
     #[builder(setter(into, strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub evm: Option<evm::Config>,
 }
 
@@ -134,7 +134,7 @@ pub struct SystemDomainNode {
     eth: Option<eth_relayer::EthDomainNode>,
     #[cfg(feature = "core-evm")]
     evm: Option<evm::EvmDomainNode>,
-    rpc_handlers: crate::utils::Rpc,
+    rpc_handlers: sdk_utils::Rpc,
 }
 
 static_assertions::assert_impl_all!(SystemDomainNode: Send, Sync);
@@ -301,7 +301,7 @@ impl SystemDomainNode {
             eth,
             #[cfg(feature = "core-evm")]
             evm,
-            rpc_handlers: crate::utils::Rpc::new(&rpc_handlers),
+            rpc_handlers: sdk_utils::Rpc::new(&rpc_handlers),
         })
     }
 

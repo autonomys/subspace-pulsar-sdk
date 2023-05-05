@@ -1,0 +1,41 @@
+[package]
+name = "sdk-utils"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+async-trait = "0.1"
+bytesize = "1"
+bytesize-serde = "0.2"
+derivative = "2.2.0"
+parity-scale-codec = "3"
+derive_more = "0.99"
+futures = "0.3"
+jsonrpsee-core = "0.16"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["rt", "tracing"] }
+libp2p-core = "0.39"
+
+frame-support = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "9cf78129a2638d3f370868863d16f4fe32b4ad30" }
+frame-system = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "9cf78129a2638d3f370868863d16f4fe32b4ad30" }
+sc-service = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "9cf78129a2638d3f370868863d16f4fe32b4ad30", default-features = false }
+sc-rpc = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "9cf78129a2638d3f370868863d16f4fe32b4ad30", default-features = false }
+sc-rpc-api = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "9cf78129a2638d3f370868863d16f4fe32b4ad30", default-features = false }
+sc-network = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "9cf78129a2638d3f370868863d16f4fe32b4ad30", default-features = false }
+sp-core = { version = "7.0.0", git = "https://github.com/subspace/substrate", rev = "9cf78129a2638d3f370868863d16f4fe32b4ad30" }
+sp-core-hashing = { version = "5.0.0", git = "https://github.com/subspace/substrate", rev = "9cf78129a2638d3f370868863d16f4fe32b4ad30" }
+sp-runtime = { version = "7.0.0", git = "https://github.com/subspace/substrate", rev = "9cf78129a2638d3f370868863d16f4fe32b4ad30" }
+sp-storage = { version = "7.0.0", git = "https://github.com/subspace/substrate", rev = "9cf78129a2638d3f370868863d16f4fe32b4ad30" }
+
+sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
+subspace-archiving = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
+subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
+subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
+
+# Unused for now. TODO: add `serde` feature to `subspace-core-primitives` in `subspace-archiver`
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }

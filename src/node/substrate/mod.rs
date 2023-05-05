@@ -10,14 +10,11 @@ use sc_service::config::{
     KeystoreConfig, NetworkConfiguration, NonDefaultSetConfig, TransportConfig,
 };
 use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
+use sdk_utils::{Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
-pub(crate) use storage::StorageKey;
 pub use subspace_runtime::RuntimeEvent as Event;
 pub use types::*;
 
-use crate::utils::{Multiaddr, MultiaddrWithPeerId};
-
-mod storage;
 mod types;
 
 #[doc(hidden)]
@@ -28,51 +25,51 @@ mod types;
 pub struct Base {
     /// Force block authoring
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub force_authoring: bool,
     /// Set node role
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub role: Role,
     /// Blocks pruning options
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub blocks_pruning: BlocksPruning,
     /// State pruning options
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub state_pruning: PruningMode,
     /// Set execution strategies
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub execution_strategy: ExecutionStrategy,
     /// Implementation name
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub impl_name: ImplName,
     /// Implementation version
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub impl_version: ImplVersion,
     /// Rpc settings
     #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub rpc: Rpc,
     /// Network settings
     #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub network: Network,
     /// Offchain worker settings
     #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub offchain_worker: OffchainWorker,
     /// Enable color for substrate informant
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub informant_enable_color: bool,
     /// Additional telemetry endpoints
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub telemetry: Vec<(Multiaddr, u8)>,
 }
 
@@ -124,7 +121,7 @@ macro_rules! derive_base {
                 /// Enable color for substrate informant
                 informant_enable_color: bool,
                 /// Additional telemetry endpoints
-                telemetry: Vec<($crate::utils::Multiaddr, u8)>,
+                telemetry: Vec<(sdk_utils::Multiaddr, u8)>,
             });
         }
     }
@@ -310,51 +307,51 @@ impl Base {
 pub struct Rpc {
     /// RPC over HTTP binding address. `None` if disabled.
     #[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub http: Option<SocketAddr>,
     /// RPC over Websockets binding address. `None` if disabled.
     #[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub ws: Option<SocketAddr>,
     /// RPC over IPC binding path. `None` if disabled.
     #[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub ipc: Option<String>,
     /// Maximum number of connections for WebSockets RPC server. `None` if
     /// default.
     #[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub ws_max_connections: Option<usize>,
     /// CORS settings for HTTP & WS servers. `None` if all origins are
     /// allowed.
     #[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub cors: Option<Vec<String>>,
     /// RPC methods to expose (by default only a safe subset or all of
     /// them).
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub methods: RpcMethods,
     /// Maximum payload of rpc request/responses.
     #[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub max_payload: Option<usize>,
     /// Maximum payload of a rpc request
     #[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub max_request_size: Option<usize>,
     /// Maximum payload of a rpc request
     #[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub max_response_size: Option<usize>,
     /// Maximum allowed subscriptions per rpc connection
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub max_subs_per_conn: Option<usize>,
     /// Maximum size of the output buffer capacity for websocket
     /// connections.
     #[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub ws_max_out_buffer_capacity: Option<usize>,
 }
 
@@ -400,19 +397,19 @@ impl RpcBuilder {
 pub struct Network {
     /// Listen on some address for other nodes
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub enable_mdns: bool,
     /// Listen on some address for other nodes
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub allow_private_ip: bool,
     /// Allow non globals in network DHT
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub allow_non_globals_in_dht: bool,
     /// Listen on some address for other nodes
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub listen_addresses: Vec<Multiaddr>,
     /// Boot nodes
     #[builder(default)]
@@ -420,15 +417,15 @@ pub struct Network {
     pub boot_nodes: Vec<MultiaddrWithPeerId>,
     /// Force node to think it is synced
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub force_synced: bool,
     /// Node name
     #[builder(setter(into, strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub name: Option<String>,
     /// Client id for telemetry (default is `{IMPL_NAME}/v{IMPL_VERSION}`)
     #[builder(setter(into, strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub client_id: Option<String>,
 }
 

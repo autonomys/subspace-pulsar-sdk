@@ -5,14 +5,13 @@ use sc_service::ChainType;
 use sc_subspace_chain_specs::ChainSpecExtensions;
 use sc_subspace_chain_specs::SerializableChainSpec;
 use sc_telemetry::TelemetryEndpoints;
+use sdk_utils::chain_spec as utils;
 use sp_core::crypto::{Ss58Codec, UncheckedFrom};
 use subspace_runtime::{
     AllowAuthoringBy, BalancesConfig, GenesisConfig, RuntimeConfigsConfig, SubspaceConfig,
     SudoConfig, SystemConfig, VestingConfig, MILLISECS_PER_BLOCK, WASM_BINARY,
 };
 use subspace_runtime_primitives::{AccountId, Balance, BlockNumber, SSC};
-
-use crate::utils::chain_spec as utils;
 
 const SUBSPACE_TELEMETRY_URL: &str = "wss://telemetry.subspace.network/submit/";
 const GEMINI_3D_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-gemini-3d.json");

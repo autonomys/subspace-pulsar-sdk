@@ -41,14 +41,14 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 pub struct Config {
     /// Id of the relayer
     #[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub relayer_id: Option<domain_runtime_primitives::AccountId>,
     #[doc(hidden)]
     #[builder(
         setter(into, strip_option),
         field(type = "BaseBuilder", build = "self.base.build()")
     )]
-    #[serde(flatten, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(flatten, skip_serializing_if = "sdk_utils::is_default")]
     pub base: Base,
 }
 

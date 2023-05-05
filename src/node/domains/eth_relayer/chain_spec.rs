@@ -23,8 +23,7 @@ use core_eth_relay_runtime::{
 use sc_service::ChainType;
 use sp_core::crypto::Ss58Codec;
 use subspace_runtime_primitives::SSC;
-
-use crate::utils::chain_spec::{chain_spec_properties, get_account_id_from_seed};
+use sdk_utils::chain_spec::{chain_spec_properties, get_account_id_from_seed};
 
 pub type ChainSpec = sc_subspace_chain_specs::ExecutionChainSpec<GenesisConfig>;
 

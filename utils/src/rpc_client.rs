@@ -1,6 +1,6 @@
 use std::pin::Pin;
 
-use futures::Stream;
+use futures::prelude::*;
 use sc_consensus_subspace_rpc::SubspaceRpcApiClient;
 use subspace_archiving::archiver::NewArchivedSegment;
 use subspace_core_primitives::{SegmentCommitment, SegmentHeader, SegmentIndex};
@@ -9,10 +9,8 @@ use subspace_rpc_primitives::{
     FarmerAppInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
 };
 
-use super::*;
-
 #[async_trait::async_trait]
-impl NodeClient for crate::utils::Rpc {
+impl NodeClient for crate::Rpc {
     async fn farmer_app_info(&self) -> Result<FarmerAppInfo, Error> {
         Ok(self.get_farmer_app_info().await?)
     }

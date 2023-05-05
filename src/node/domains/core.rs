@@ -47,7 +47,7 @@ pub(crate) type NewFull<RuntimeApi, ExecutorDispatch, AccountId, Provider> =
 pub struct CoreDomainNode<RuntimeApi, ExecutorDispatch: sc_executor::NativeExecutionDispatch> {
     #[derivative(Debug = "ignore")]
     client: Weak<FullClient<RuntimeApi, ExecutorDispatch>>,
-    rpc_handlers: crate::utils::Rpc,
+    rpc_handlers: sdk_utils::Rpc,
 }
 
 /// Internal config for core domains
@@ -219,7 +219,7 @@ where
 
         Ok(Self {
             client: Arc::downgrade(&client),
-            rpc_handlers: crate::utils::Rpc::new(&rpc_handlers),
+            rpc_handlers: sdk_utils::Rpc::new(&rpc_handlers),
         })
     }
 
@@ -227,7 +227,7 @@ where
         self.client.upgrade().ok_or_else(|| anyhow::anyhow!("The node was already closed"))
     }
 
-    pub(crate) fn rpc(&self) -> &crate::utils::Rpc {
+    pub(crate) fn rpc(&self) -> &sdk_utils::Rpc {
         &self.rpc_handlers
     }
 }

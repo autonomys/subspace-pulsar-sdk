@@ -13,7 +13,7 @@ use system_domain_runtime::{
     GenesisConfig, Hash, MessengerConfig, SudoConfig, SystemConfig, WASM_BINARY,
 };
 
-use crate::utils::chain_spec::{
+use sdk_utils::chain_spec::{
     chain_spec_properties, get_account_id_from_seed, get_public_key_from_seed,
 };
 

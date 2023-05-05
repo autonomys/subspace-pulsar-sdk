@@ -11,6 +11,7 @@ use sc_consensus_subspace_rpc::SegmentHeaderProvider;
 use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, SyncState};
 use sc_rpc_api::state::StateApiClient;
+use sdk_utils::{DropCollection, MultiaddrWithPeerId};
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
 use sp_runtime::DigestItem;
@@ -24,14 +25,12 @@ use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::SubspaceConfiguration;
 
 use crate::dsn::NodePieceCache;
-use crate::utils::{self, DropCollection, MultiaddrWithPeerId};
 use crate::PosTable;
 
 mod builder;
 pub mod chain_spec;
 #[cfg(feature = "executor")]
 pub mod domains;
-mod farmer_rpc_client;
 mod substrate;
 
 pub use builder::*;
@@ -210,11 +209,11 @@ impl Config {
             new_slot_notification_stream: _,
         } = full_client;
 
-        let rpc_handle = crate::utils::Rpc::new(&rpc_handlers);
+        let rpc_handle = sdk_utils::Rpc::new(&rpc_handlers);
         network_starter.start_network();
         let (stop_sender, mut stop_receiver) = mpsc::channel::<oneshot::Sender<()>>(1);
 
-        utils::task_spawn(format!("subspace-sdk-node-{name}-task-manager"), {
+        sdk_utils::task_spawn(format!("subspace-sdk-node-{name}-task-manager"), {
             let dsn_informer = subspace_networking::utils::online_status_informer(&dsn.node);
             async move {
                 let opt_stop_sender = async move {
@@ -322,7 +321,7 @@ pub struct Node {
     #[derivative(Debug = "ignore")]
     network_service: Arc<NetworkService<RuntimeBlock, Hash>>,
 
-    pub(crate) rpc_handle: crate::utils::Rpc,
+    pub(crate) rpc_handle: sdk_utils::Rpc,
     pub(crate) stop_sender: mpsc::Sender<oneshot::Sender<()>>,
     pub(crate) name: String,
     pub(crate) dsn: DsnShared<FullClient>,

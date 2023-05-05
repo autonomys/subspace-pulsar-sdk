@@ -8,16 +8,15 @@ pub(crate) mod dsn;
 pub mod farmer;
 /// Module related to the node
 pub mod node;
-pub(crate) mod utils;
 
 use derive_more::{Deref, DerefMut};
 pub use farmer::{Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotDescription};
 pub use node::{chain_spec, Builder as NodeBuilder, Info as FarmerInfo, Node};
 use parity_scale_codec::{Decode, Encode};
 pub use parse_ss58::Ss58ParsingError;
+pub use sdk_utils::{ByteSize, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::PUBLIC_KEY_LENGTH;
-pub use utils::{ByteSize, Multiaddr, MultiaddrWithPeerId};
 
 #[doc(hidden)]
 #[macro_export]

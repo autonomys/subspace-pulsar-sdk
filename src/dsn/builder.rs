@@ -8,6 +8,7 @@ use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
 use either::*;
 use futures::prelude::*;
+use sdk_utils::{self, DropCollection, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::piece_caching::PieceMemoryCache;
@@ -20,7 +21,6 @@ use subspace_service::segment_headers::SegmentHeaderCache;
 use super::provider_storage_utils::MaybeProviderStorage;
 use super::{FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage};
 use crate::node::PieceCacheSize;
-use crate::utils::{self, DropCollection, Multiaddr, MultiaddrWithPeerId};
 use crate::{farmer, node};
 
 /// Wrapper with default value for listen address
@@ -85,11 +85,11 @@ pub struct PendingOutConnections(#[derivative(Default(value = "100"))] pub(crate
 pub struct Dsn {
     /// Listen on some address for other nodes
     #[builder(default, setter(into, strip_option))]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub provider_storage_path: Option<std::path::PathBuf>,
     /// Listen on some address for other nodes
     #[builder(default, setter(into))]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub listen_addresses: ListenAddresses,
     /// Boot nodes
     #[builder(default)]
@@ -97,33 +97,33 @@ pub struct Dsn {
     pub boot_nodes: Vec<MultiaddrWithPeerId>,
     /// Reserved nodes
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub reserved_nodes: Vec<Multiaddr>,
     /// Determines whether we allow keeping non-global (private, shared,
     /// loopback..) addresses in Kademlia DHT.
     #[builder(default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub allow_non_global_addresses_in_dht: bool,
     /// Defines max established incoming swarm connection limit.
     #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub in_connections: InConnections,
     /// Defines max established outgoing swarm connection limit.
     #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub out_connections: OutConnections,
     /// Pending incoming swarm connection limit.
     #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub pending_in_connections: PendingInConnections,
     /// Pending outgoing swarm connection limit.
     #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub pending_out_connections: PendingOutConnections,
     /// Defines target total (in and out) connection number for DSN that
     /// should be maintained.
     #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "crate::utils::is_default")]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub target_connections: TargetConnections,
 }
 
@@ -225,7 +225,7 @@ impl Dsn {
 
         // Start before archiver, so we don't have potential race condition and
         // miss pieces
-        utils::task_spawn(format!("subspace-sdk-node-{node_name}-piece-caching"), {
+        sdk_utils::task_spawn(format!("subspace-sdk-node-{node_name}-piece-caching"), {
             let mut piece_cache = piece_cache.clone();
 
             async move {

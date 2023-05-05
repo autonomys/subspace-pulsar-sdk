@@ -16,8 +16,6 @@ use subspace_networking::utils::piece_provider::PieceValidator;
 use subspace_networking::{Node, ParityDbProviderStorage};
 use tracing::{warn, Instrument};
 
-use crate::utils;
-
 pub(crate) type FarmerPieceCache = subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
 pub(crate) type NodePieceCache<C> = subspace_service::piece_cache::PieceCache<C>;
 pub(crate) type PieceCache = FarmerPieceCache;
@@ -84,7 +82,7 @@ pub fn start_announcements_processor(
         MAX_CONCURRENT_RE_ANNOUNCEMENTS_PROCESSING,
     );
 
-    utils::task_spawn(
+    sdk_utils::task_spawn(
         format!("subspace-sdk-farmer-{node_name}-ann-processor"),
         async move {
             while let Some((provider_record, guard)) = provider_records_receiver.next().await {
