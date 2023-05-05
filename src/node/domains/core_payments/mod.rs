@@ -4,13 +4,13 @@ use std::path::Path;
 
 use anyhow::Context;
 use core_payments_domain_runtime::{Runtime, RuntimeApi};
+use cross_domain_message_gossip::GossipWorkerBuilder;
 use derivative::Derivative;
 use derive_builder::Builder;
 use domain_runtime_primitives::AccountId;
 use futures::prelude::*;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
-use cross_domain_message_gossip::GossipWorkerBuilder;
 
 use super::core::CoreDomainNode;
 use super::BlockHeader;

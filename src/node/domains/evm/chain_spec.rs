@@ -16,8 +16,8 @@
 
 //! Core EVM domain configurations.
 
-use crate::utils::chain_spec::chain_spec_properties;
-use super::AccountId32ToAccountId20Converter;
+use std::str::FromStr;
+
 use core_evm_runtime::{
     AccountId, BalancesConfig, EVMChainIdConfig, EVMConfig, GenesisConfig, MessengerConfig,
     Precompiles, SudoConfig, SystemConfig, WASM_BINARY,
@@ -27,8 +27,10 @@ use sc_service::ChainType;
 use sc_subspace_chain_specs::ExecutionChainSpec;
 use sp_core::{sr25519, Pair, Public};
 use sp_runtime::traits::Convert;
-use std::str::FromStr;
 use subspace_runtime_primitives::SSC;
+
+use super::AccountId32ToAccountId20Converter;
+use crate::utils::chain_spec::chain_spec_properties;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -200,27 +202,19 @@ fn testnet_genesis(
     chain_id: u64,
 ) -> GenesisConfig {
     // This is the simplest bytecode to revert without returning any data.
-    // We will pre-deploy it under all of our precompiles to ensure they can be called from
-    // within contracts.
+    // We will pre-deploy it under all of our precompiles to ensure they can be
+    // called from within contracts.
     // (PUSH1 0x00 PUSH1 0x00 REVERT)
     let revert_bytecode = vec![0x60, 0x00, 0x60, 0x00, 0xFD];
 
     GenesisConfig {
         system: SystemConfig {
-            code: WASM_BINARY
-                .expect("WASM binary was not build, please build it!")
-                .to_vec(),
+            code: WASM_BINARY.expect("WASM binary was not build, please build it!").to_vec(),
         },
-        sudo: SudoConfig {
-            key: maybe_sudo_account,
-        },
+        sudo: SudoConfig { key: maybe_sudo_account },
         transaction_payment: Default::default(),
         balances: BalancesConfig {
-            balances: endowed_accounts
-                .iter()
-                .cloned()
-                .map(|k| (k, 1_000_000 * SSC))
-                .collect(),
+            balances: endowed_accounts.iter().cloned().map(|k| (k, 1_000_000 * SSC)).collect(),
         },
         messenger: MessengerConfig { relayers },
         evm_chain_id: EVMChainIdConfig { chain_id },

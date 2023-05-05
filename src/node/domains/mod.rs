@@ -4,19 +4,19 @@ use std::path::Path;
 use std::sync::{Arc, Weak};
 
 use anyhow::Context;
+use cross_domain_message_gossip::GossipWorkerBuilder;
 use derivative::Derivative;
 use derive_builder::Builder;
+use domain_runtime_primitives::opaque::Block;
 use domain_runtime_primitives::AccountId;
 use domain_service::DomainConfiguration;
 use futures::prelude::*;
 use sc_client_api::BlockchainEvents;
 use sc_service::ChainSpecExtension;
-use cross_domain_message_gossip::GossipWorkerBuilder;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
 use system_domain_runtime::{Header, Runtime, RuntimeApi};
 use tracing_futures::Instrument;
-use domain_runtime_primitives::opaque::Block;
 
 use super::{BlockNumber, Hash};
 use crate::node::{Base, BaseBuilder};
@@ -109,11 +109,7 @@ pub struct Config {
 
 crate::derive_base!(crate::node::Base => ConfigBuilder);
 
-pub(crate) type FullClient = domain_service::FullClient<
-    Block,
-    RuntimeApi,
-    ExecutorDispatch,
->;
+pub(crate) type FullClient = domain_service::FullClient<Block, RuntimeApi, ExecutorDispatch>;
 pub(crate) type NewFull = domain_service::NewFullSystem<
     Arc<FullClient>,
     sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
@@ -282,7 +278,8 @@ impl SystemDomainNode {
             None
         };
 
-        xdm_gossip_worker_builder.push_domain_tx_pool_sink(DomainId::SYSTEM, system_domain_node.tx_pool_sink);
+        xdm_gossip_worker_builder
+            .push_domain_tx_pool_sink(DomainId::SYSTEM, system_domain_node.tx_pool_sink);
         primary_new_full.task_manager.add_child(system_domain_node.task_manager);
 
         let cross_domain_message_gossip_worker = xdm_gossip_worker_builder.build::<Block, _, _>(

@@ -3,16 +3,15 @@
 use std::path::Path;
 
 use anyhow::Context;
-use core_evm_runtime::{Runtime, RuntimeApi};
+use core_evm_runtime::{AccountId as AccountId20, Runtime, RuntimeApi};
+use cross_domain_message_gossip::GossipWorkerBuilder;
 use derivative::Derivative;
 use derive_builder::Builder;
 use futures::prelude::*;
 use serde::{Deserialize, Serialize};
-use sp_domains::DomainId;
-use cross_domain_message_gossip::GossipWorkerBuilder;
-use core_evm_runtime::AccountId as AccountId20;
 use sp_core::crypto::AccountId32;
 use sp_core::ByteArray;
+use sp_domains::DomainId;
 
 use super::core::CoreDomainNode;
 use crate::node::{Base, BaseBuilder, BlockHeader};
@@ -23,7 +22,8 @@ pub(crate) struct AccountId32ToAccountId20Converter;
 
 impl sp_runtime::traits::Convert<AccountId32, AccountId20> for AccountId32ToAccountId20Converter {
     fn convert(acc: AccountId32) -> AccountId20 {
-        // Using the full hex key, truncating to the first 20 bytes (the first 40 hex chars)
+        // Using the full hex key, truncating to the first 20 bytes (the first 40 hex
+        // chars)
         sp_core::H160::from_slice(&acc.as_slice()[0..20]).into()
     }
 }

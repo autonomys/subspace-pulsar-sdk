@@ -4,12 +4,12 @@ use std::path::Path;
 
 use anyhow::Context;
 use core_eth_relay_runtime::{Runtime, RuntimeApi};
+use cross_domain_message_gossip::GossipWorkerBuilder;
 use derivative::Derivative;
 use derive_builder::Builder;
 use futures::prelude::*;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
-use cross_domain_message_gossip::GossipWorkerBuilder;
 
 use super::core::CoreDomainNode;
 use crate::node::{Base, BaseBuilder, BlockHeader};
