@@ -101,7 +101,7 @@ pub struct Config {
     #[serde(default, skip_serializing_if = "crate::utils::is_default")]
     pub eth_relayer: Option<eth_relayer::Config>,
     /// The evm domain config
-    #[cfg(feature = "eth-relayer")]
+    #[cfg(feature = "core-evm")]
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "crate::utils::is_default")]
     pub evm: Option<evm::Config>,
