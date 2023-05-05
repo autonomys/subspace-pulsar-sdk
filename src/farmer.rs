@@ -10,6 +10,7 @@ pub use builder::{Builder, Config};
 use derivative::Derivative;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
+use sdk_dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
 use sdk_utils::{AsyncDropFutures, ByteSize, DropCollection, PublicKey};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::crypto::kzg;
@@ -33,7 +34,6 @@ use tokio::sync::{oneshot, watch, Mutex};
 use tracing_futures::Instrument;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
-use crate::dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
 use crate::{Node, PosTable};
 
 /// Description of the cache
@@ -603,7 +603,7 @@ impl Config {
         node.dsn.farmer_provider_storage.swap(Some(farmer_provider_storage));
 
         drop_at_exit.push(
-            crate::dsn::start_announcements_processor(
+            sdk_dsn::start_announcements_processor(
                 node.dsn.node.clone(),
                 Arc::clone(&piece_cache),
                 Arc::downgrade(&readers_and_pieces),

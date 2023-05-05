@@ -55,7 +55,7 @@ pub struct Config {
     pub base: Base,
 }
 
-crate::generate_builder!(Config);
+sdk_utils::generate_builder!(Config);
 crate::derive_base!(crate::node::Base => ConfigBuilder);
 
 /// Chain spec of the core domain

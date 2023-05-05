@@ -25,12 +25,12 @@ use core_evm_runtime::{
 use hex_literal::hex;
 use sc_service::ChainType;
 use sc_subspace_chain_specs::ExecutionChainSpec;
+use sdk_utils::chain_spec::chain_spec_properties;
 use sp_core::{sr25519, Pair, Public};
 use sp_runtime::traits::Convert;
 use subspace_runtime_primitives::SSC;
 
 use super::AccountId32ToAccountId20Converter;
-use sdk_utils::chain_spec::chain_spec_properties;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {

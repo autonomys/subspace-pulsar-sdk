@@ -456,4 +456,4 @@ impl NetworkBuilder {
     }
 }
 
-crate::generate_builder!(Base, Rpc, Network);
+sdk_utils::generate_builder!(Base, Rpc, Network);

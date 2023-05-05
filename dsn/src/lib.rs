@@ -1,5 +1,7 @@
-pub(crate) mod builder;
-pub(crate) mod provider_storage_utils;
+#![feature(concat_idents, const_option)]
+
+pub mod builder;
+pub mod provider_storage_utils;
 
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Weak};
@@ -16,20 +18,19 @@ use subspace_networking::utils::piece_provider::PieceValidator;
 use subspace_networking::{Node, ParityDbProviderStorage};
 use tracing::{warn, Instrument};
 
-pub(crate) type FarmerPieceCache = subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
-pub(crate) type NodePieceCache<C> = subspace_service::piece_cache::PieceCache<C>;
-pub(crate) type PieceCache = FarmerPieceCache;
-pub(crate) type FarmerProviderStorage =
+pub type FarmerPieceCache = subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
+pub type NodePieceCache<C> = subspace_service::piece_cache::PieceCache<C>;
+pub type PieceCache = FarmerPieceCache;
+pub type FarmerProviderStorage =
     subspace_farmer::utils::farmer_provider_storage::FarmerProviderStorage<
         ParityDbProviderStorage,
         PieceCache,
     >;
-pub(crate) type NodeProviderStorage<C> =
-    subspace_service::dsn::node_provider_storage::NodeProviderStorage<
-        NodePieceCache<C>,
-        Either<ParityDbProviderStorage, subspace_networking::MemoryProviderStorage>,
-    >;
-pub(crate) type ProviderStorage<C> = provider_storage_utils::AndProviderStorage<
+pub type NodeProviderStorage<C> = subspace_service::dsn::node_provider_storage::NodeProviderStorage<
+    NodePieceCache<C>,
+    Either<ParityDbProviderStorage, subspace_networking::MemoryProviderStorage>,
+>;
+pub type ProviderStorage<C> = provider_storage_utils::AndProviderStorage<
     provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage>,
     NodeProviderStorage<C>,
 >;
@@ -95,7 +96,7 @@ pub fn start_announcements_processor(
     Ok(handler_id)
 }
 
-pub(crate) struct NodePieceGetter<PV, C> {
+pub struct NodePieceGetter<PV, C> {
     piece_getter: subspace_farmer::utils::node_piece_getter::NodePieceGetter<PV>,
     node_cache: NodePieceCache<C>,
 }

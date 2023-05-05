@@ -234,7 +234,7 @@ impl From<OffchainWorker> for sc_service::config::OffchainWorkerConfig {
     }
 }
 
-crate::generate_builder!(OffchainWorker);
+sdk_utils::generate_builder!(OffchainWorker);
 
 /// Role of the local node.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]

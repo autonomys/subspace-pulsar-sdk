@@ -9224,6 +9224,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdk-dsn"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "derivative",
+ "derive_builder 0.12.0",
+ "derive_more",
+ "either",
+ "event-listener-primitives",
+ "futures",
+ "hex",
+ "ouroboros",
+ "parking_lot 0.12.1",
+ "sc-client-api",
+ "sc-consensus-subspace",
+ "sdk-utils",
+ "serde",
+ "sp-blockchain",
+ "sp-runtime",
+ "subspace-core-primitives",
+ "subspace-farmer",
+ "subspace-farmer-components",
+ "subspace-networking",
+ "subspace-service",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sdk-utils"
 version = "0.1.0"
 dependencies = [
@@ -10948,6 +10978,7 @@ dependencies = [
  "sc-subspace-chain-specs",
  "sc-telemetry",
  "sc-utils",
+ "sdk-dsn",
  "sdk-utils",
  "serde",
  "serde_json",

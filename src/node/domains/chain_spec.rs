@@ -3,6 +3,9 @@
 use frame_support::weights::Weight;
 use sc_service::ChainType;
 use sc_subspace_chain_specs::SerializableChainSpec;
+use sdk_utils::chain_spec::{
+    chain_spec_properties, get_account_id_from_seed, get_public_key_from_seed,
+};
 use sp_core::crypto::Ss58Codec;
 use sp_domains::ExecutorPublicKey;
 use sp_runtime::Percent;
@@ -11,10 +14,6 @@ use subspace_runtime_primitives::SSC;
 use system_domain_runtime::{
     AccountId, Balance, BalancesConfig, DomainRegistryConfig, ExecutorRegistryConfig,
     GenesisConfig, Hash, MessengerConfig, SudoConfig, SystemConfig, WASM_BINARY,
-};
-
-use sdk_utils::chain_spec::{
-    chain_spec_properties, get_account_id_from_seed, get_public_key_from_seed,
 };
 
 type DomainConfig = sp_domains::DomainConfig<Hash, Balance, Weight>;

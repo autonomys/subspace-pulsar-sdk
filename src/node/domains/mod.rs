@@ -107,7 +107,7 @@ pub struct Config {
     pub evm: Option<evm::Config>,
 }
 
-crate::generate_builder!(Config);
+sdk_utils::generate_builder!(Config);
 crate::derive_base!(crate::node::Base => ConfigBuilder);
 
 pub(crate) type FullClient = domain_service::FullClient<Block, RuntimeApi, ExecutorDispatch>;

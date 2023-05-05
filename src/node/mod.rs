@@ -11,6 +11,7 @@ use sc_consensus_subspace_rpc::SegmentHeaderProvider;
 use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, SyncState};
 use sc_rpc_api::state::StateApiClient;
+use sdk_dsn::NodePieceCache;
 use sdk_utils::{DropCollection, MultiaddrWithPeerId};
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
@@ -18,13 +19,14 @@ use sp_runtime::DigestItem;
 use subspace_core_primitives::{HistorySize, PieceIndexHash, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
 use subspace_farmer_components::FarmerProtocolInfo;
-use subspace_networking::{PieceByHashResponse, SegmentHeaderRequest, SegmentHeaderResponse};
+use subspace_networking::{
+    PieceByHashRequest, PieceByHashResponse, SegmentHeaderRequest, SegmentHeaderResponse,
+};
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::SubspaceConfiguration;
 
-use crate::dsn::NodePieceCache;
 use crate::PosTable;
 
 mod builder;
@@ -36,9 +38,8 @@ mod substrate;
 pub use builder::*;
 #[cfg(feature = "executor")]
 pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
+pub use sdk_dsn::builder::*;
 pub use substrate::*;
-
-pub use crate::dsn::builder::*;
 
 impl Config {
     /// Start a node with supplied parameters
@@ -104,9 +105,11 @@ impl Config {
                     .1
                     .archived_segment_notification_stream()
                     .subscribe(),
-                piece_cache_size,
+                piece_cache_size: *piece_cache_size,
                 keypair,
                 base_path: directory.as_ref().to_path_buf(),
+                get_piece_by_hash,
+                get_segment_header_by_segment_indexes,
             })?;
 
             tracing::debug!("Subspace networking initialized: Node ID is {}", dsn.node.id());
@@ -751,7 +754,39 @@ pub(crate) fn get_segment_header_by_segment_indexes(
     }
 }
 
-pub(crate) fn get_piece_by_hash(
+fn get_piece_by_hash(
+    &PieceByHashRequest { piece_index_hash }: &PieceByHashRequest,
+    weak_readers_and_pieces: std::sync::Weak<
+        parking_lot::Mutex<Option<subspace_farmer::utils::readers_and_pieces::ReadersAndPieces>>,
+    >,
+    farmer_piece_store: Arc<tokio::sync::Mutex<Option<sdk_dsn::builder::PieceStore>>>,
+    piece_cache: NodePieceCache<impl sc_client_api::AuxStore>,
+    piece_memory_cache: subspace_farmer_components::piece_caching::PieceMemoryCache,
+) -> impl std::future::Future<Output = Option<PieceByHashResponse>> {
+    let weak_readers_and_pieces = weak_readers_and_pieces.clone();
+    let farmer_piece_store = Arc::clone(&farmer_piece_store);
+    let piece_cache = piece_cache.clone();
+    let piece_memory_cache = piece_memory_cache.clone();
+    async move {
+        match node_get_piece_by_hash(piece_index_hash, &piece_cache) {
+            Some(PieceByHashResponse { piece: None }) | None => (),
+            result => return result,
+        }
+
+        if let Some(piece_store) = farmer_piece_store.lock().await.as_ref() {
+            crate::farmer::get_piece_by_hash(
+                piece_index_hash,
+                piece_store,
+                &weak_readers_and_pieces,
+                &piece_memory_cache,
+            )
+            .await
+        } else {
+            None
+        }
+    }
+}
+fn node_get_piece_by_hash(
     piece_index_hash: PieceIndexHash,
     piece_cache: &NodePieceCache<impl sc_client_api::AuxStore>,
 ) -> Option<PieceByHashResponse> {

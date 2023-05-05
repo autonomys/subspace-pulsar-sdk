@@ -1,6 +1,6 @@
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use anyhow::Context;
 use derivative::Derivative;
@@ -14,14 +14,12 @@ use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_networking::{
     PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
-    SegmentHeaderBySegmentIndexesRequestHandler,
+    SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
 };
 use subspace_service::segment_headers::SegmentHeaderCache;
 
 use super::provider_storage_utils::MaybeProviderStorage;
 use super::{FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage};
-use crate::node::PieceCacheSize;
-use crate::{farmer, node};
 
 /// Wrapper with default value for listen address
 #[derive(
@@ -34,7 +32,7 @@ pub struct ListenAddresses(
         // TODO: get rid of it, once it won't be required by monorepo
         value = "vec![\"/ip4/127.0.0.1/tcp/0\".parse().expect(\"Always valid\")]"
     ))]
-    pub(crate) Vec<Multiaddr>,
+    pub Vec<Multiaddr>,
 );
 
 /// Wrapper with default value for number of incoming connections
@@ -43,7 +41,7 @@ pub struct ListenAddresses(
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct InConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
+pub struct InConnections(#[derivative(Default(value = "100"))] pub u32);
 
 /// Wrapper with default value for number of outgoing connections
 #[derive(
@@ -51,7 +49,7 @@ pub struct InConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct OutConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
+pub struct OutConnections(#[derivative(Default(value = "100"))] pub u32);
 
 /// Wrapper with default value for number of target connections
 #[derive(
@@ -59,7 +57,7 @@ pub struct OutConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct TargetConnections(#[derivative(Default(value = "50"))] pub(crate) u32);
+pub struct TargetConnections(#[derivative(Default(value = "50"))] pub u32);
 
 /// Wrapper with default value for number of pending incoming connections
 #[derive(
@@ -67,7 +65,7 @@ pub struct TargetConnections(#[derivative(Default(value = "50"))] pub(crate) u32
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct PendingInConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
+pub struct PendingInConnections(#[derivative(Default(value = "100"))] pub u32);
 
 /// Wrapper with default value for number of pending outgoing connections
 #[derive(
@@ -75,7 +73,7 @@ pub struct PendingInConnections(#[derivative(Default(value = "100"))] pub(crate)
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct PendingOutConnections(#[derivative(Default(value = "100"))] pub(crate) u32);
+pub struct PendingOutConnections(#[derivative(Default(value = "100"))] pub u32);
 
 /// Node DSN builder
 #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
@@ -127,7 +125,7 @@ pub struct Dsn {
     pub target_connections: TargetConnections,
 }
 
-crate::generate_builder!(Dsn);
+sdk_utils::generate_builder!(Dsn);
 
 impl DsnBuilder {
     /// Dev chain configuration
@@ -154,51 +152,64 @@ impl DsnBuilder {
 
 const MAX_PROVIDER_RECORDS_LIMIT: NonZeroUsize = NonZeroUsize::new(100000).expect("100000 > 0"); // ~ 10 MB
 
-pub(crate) struct DsnOptions<C: sc_client_api::AuxStore, ASNS> {
-    pub(crate) client: Arc<C>,
-    pub(crate) node_name: String,
-    pub(crate) archived_segment_notification_stream: ASNS,
-    pub(crate) piece_cache_size: PieceCacheSize,
-    pub(crate) base_path: PathBuf,
-    pub(crate) keypair: subspace_networking::libp2p::identity::Keypair,
+pub struct DsnOptions<C, ASNS, PieceByHash, SegmentHeaderByIndexes> {
+    pub client: Arc<C>,
+    pub node_name: String,
+    pub archived_segment_notification_stream: ASNS,
+    pub piece_cache_size: sdk_utils::ByteSize,
+    pub base_path: PathBuf,
+    pub keypair: subspace_networking::libp2p::identity::Keypair,
+    pub get_piece_by_hash: PieceByHash,
+    pub get_segment_header_by_segment_indexes: SegmentHeaderByIndexes,
 }
+
+pub type PieceStore = subspace_farmer::utils::parity_db_store::ParityDbStore<
+    subspace_networking::libp2p::kad::record::Key,
+    subspace_core_primitives::Piece,
+>;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub(crate) struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
-    pub(crate) node: subspace_networking::Node,
-    pub(crate) farmer_readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
+pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
+    pub node: subspace_networking::Node,
+    pub farmer_readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
     #[derivative(Debug = "ignore")]
-    pub(crate) farmer_piece_store: Arc<
-        tokio::sync::Mutex<
-            Option<
-                subspace_farmer::utils::parity_db_store::ParityDbStore<
-                    subspace_networking::libp2p::kad::record::Key,
-                    subspace_core_primitives::Piece,
-                >,
-            >,
-        >,
-    >,
-    pub(crate) farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
+    pub farmer_piece_store: Arc<tokio::sync::Mutex<Option<PieceStore>>>,
+    pub farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
     #[derivative(Debug = "ignore")]
-    pub(crate) piece_cache: NodePieceCache<C>,
+    pub piece_cache: NodePieceCache<C>,
     #[derivative(Debug = "ignore")]
-    pub(crate) piece_memory_cache: PieceMemoryCache,
+    pub piece_memory_cache: PieceMemoryCache,
 
     _drop: DropCollection,
 }
 
 impl Dsn {
-    pub(crate) fn build_dsn<B, C, ASNS>(
+    pub fn build_dsn<B, C, ASNS, PieceByHash, F1, SegmentHeaderByIndexes>(
         self,
-        options: DsnOptions<C, ASNS>,
+        options: DsnOptions<C, ASNS, PieceByHash, SegmentHeaderByIndexes>,
     ) -> anyhow::Result<(DsnShared<C>, subspace_networking::NodeRunner<ProviderStorage<C>>)>
     where
-        B: sp_runtime::traits::Block<Hash = crate::node::Hash>,
+        B: sp_runtime::traits::Block,
         C: sc_client_api::AuxStore + sp_blockchain::HeaderBackend<B> + Send + Sync + 'static,
         ASNS: Stream<Item = sc_consensus_subspace::ArchivedSegmentNotification>
             + Unpin
             + Send
+            + 'static,
+        PieceByHash: Fn(
+                &PieceByHashRequest,
+                Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
+                Arc<tokio::sync::Mutex<Option<PieceStore>>>,
+                NodePieceCache<C>,
+                PieceMemoryCache,
+            ) -> F1
+            + Send
+            + Sync
+            + 'static,
+        F1: Future<Output = Option<PieceByHashResponse>> + Send + 'static,
+        SegmentHeaderByIndexes: Fn(&SegmentHeaderRequest, &SegmentHeaderCache<C>) -> Option<SegmentHeaderResponse>
+            + Send
+            + Sync
             + 'static,
     {
         let DsnOptions {
@@ -208,6 +219,8 @@ impl Dsn {
             base_path,
             keypair,
             piece_cache_size,
+            get_piece_by_hash,
+            get_segment_header_by_segment_indexes,
         } = options;
         let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
         let farmer_piece_store = Arc::new(tokio::sync::Mutex::new(None));
@@ -290,7 +303,6 @@ impl Dsn {
             ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
 
         let config = subspace_networking::Config {
-            keypair: keypair.clone(),
             listen_on,
             allow_non_global_addresses_in_dht,
             networking_parameters_registry,
@@ -300,39 +312,25 @@ impl Dsn {
                     let farmer_piece_store = Arc::clone(&farmer_piece_store);
                     let piece_cache = piece_cache.clone();
                     let piece_memory_cache = piece_memory_cache.clone();
-
-                    move |&PieceByHashRequest { piece_index_hash }| {
+                    move |req| {
                         let weak_readers_and_pieces = weak_readers_and_pieces.clone();
                         let farmer_piece_store = Arc::clone(&farmer_piece_store);
                         let piece_cache = piece_cache.clone();
-                        let node_piece_by_hash =
-                            node::get_piece_by_hash(piece_index_hash, &piece_cache);
                         let piece_memory_cache = piece_memory_cache.clone();
 
-                        async move {
-                            match node_piece_by_hash {
-                                Some(PieceByHashResponse { piece: None }) | None => (),
-                                result => return result,
-                            }
-
-                            if let Some(piece_store) = farmer_piece_store.lock().await.as_ref() {
-                                farmer::get_piece_by_hash(
-                                    piece_index_hash,
-                                    piece_store,
-                                    &weak_readers_and_pieces,
-                                    &piece_memory_cache,
-                                )
-                                .await
-                            } else {
-                                None
-                            }
-                        }
+                        get_piece_by_hash(
+                            req,
+                            weak_readers_and_pieces,
+                            farmer_piece_store,
+                            piece_cache,
+                            piece_memory_cache,
+                        )
                     }
                 }),
                 SegmentHeaderBySegmentIndexesRequestHandler::create({
                     let segment_header_cache = SegmentHeaderCache::new(client);
                     move |req| {
-                        futures::future::ready(node::get_segment_header_by_segment_indexes(
+                        futures::future::ready(get_segment_header_by_segment_indexes(
                             req,
                             &segment_header_cache,
                         ))

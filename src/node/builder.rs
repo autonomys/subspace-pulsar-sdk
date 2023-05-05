@@ -4,6 +4,7 @@ use std::path::Path;
 use derivative::Derivative;
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
+use sdk_dsn::builder::{Dsn, DsnBuilder};
 use sdk_utils::ByteSize;
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +13,6 @@ use super::substrate::{
     StorageMonitor,
 };
 use super::{ChainSpec, Node};
-use crate::dsn::builder::{Dsn, DsnBuilder};
 
 /// Wrapper with default value for piece cache size
 #[derive(

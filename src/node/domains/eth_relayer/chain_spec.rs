@@ -21,9 +21,9 @@ use core_eth_relay_runtime::{
     SudoConfig, SystemConfig, WASM_BINARY,
 };
 use sc_service::ChainType;
+use sdk_utils::chain_spec::{chain_spec_properties, get_account_id_from_seed};
 use sp_core::crypto::Ss58Codec;
 use subspace_runtime_primitives::SSC;
-use sdk_utils::chain_spec::{chain_spec_properties, get_account_id_from_seed};
 
 pub type ChainSpec = sc_subspace_chain_specs::ExecutionChainSpec<GenesisConfig>;
 

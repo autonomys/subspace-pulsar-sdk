@@ -11,12 +11,12 @@ use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::Error;
+use parity_scale_codec::{Decode, Encode};
+pub use parse_ss58::Ss58ParsingError;
 use sc_rpc_api::state::StateApiClient;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use parity_scale_codec::{Decode, Encode};
 use subspace_core_primitives::PUBLIC_KEY_LENGTH;
-pub use parse_ss58::Ss58ParsingError;
 
 mod rpc_client;
 
@@ -638,4 +638,31 @@ pub mod chain_spec {
     pub fn get_account_id_from_seed(seed: &'static str) -> AccountId32 {
         MultiSigner::from(get_public_key_from_seed::<sr25519::Public>(seed)).into_account()
     }
+}
+
+#[macro_export]
+macro_rules! generate_builder {
+    ( $name:ident ) => {
+        impl concat_idents!($name, Builder) {
+            /// Constructor
+            pub fn new() -> Self {
+                Self::default()
+            }
+
+            #[doc = concat!("Build ", stringify!($name))]
+            pub fn build(&self) -> $name {
+                self._build().expect("Infallible")
+            }
+        }
+
+        impl From<concat_idents!($name, Builder)> for $name {
+            fn from(value: concat_idents!($name, Builder)) -> Self {
+                value.build()
+            }
+        }
+    };
+    ( $name:ident, $($rest:ident),+ ) => {
+        $crate::generate_builder!($name);
+        $crate::generate_builder!($($rest),+);
+    };
 }
