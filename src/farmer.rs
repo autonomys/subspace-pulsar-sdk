@@ -10,7 +10,7 @@ pub use builder::{Builder, Config};
 use derivative::Derivative;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
-use sdk_utils::{AsyncDropFutures, ByteSize, DropCollection};
+use sdk_utils::{AsyncDropFutures, ByteSize, DropCollection, PublicKey};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::crypto::kzg;
 use subspace_core_primitives::{PieceIndexHash, PieceOffset, Record, SectorIndex};
@@ -34,7 +34,7 @@ use tracing_futures::Instrument;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
 use crate::dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
-use crate::{Node, PosTable, PublicKey};
+use crate::{Node, PosTable};
 
 /// Description of the cache
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -105,11 +105,11 @@ mod builder {
     use derivative::Derivative;
     use derive_builder::Builder;
     use derive_more::{Deref, DerefMut, Display, From};
-    use sdk_utils::ByteSize;
+    use sdk_utils::{ByteSize, PublicKey};
     use serde::{Deserialize, Serialize};
 
     use super::{BuildError, CacheDescription};
-    use crate::{Farmer, Node, PlotDescription, PublicKey};
+    use crate::{Farmer, Node, PlotDescription};
 
     #[derive(
         Debug,
@@ -719,7 +719,7 @@ impl From<SingleDiskPlotInfo> for PlotInfo {
         Self {
             id,
             genesis_hash,
-            public_key: super::PublicKey(public_key),
+            public_key: PublicKey(public_key),
             first_sector_index,
             allocated_space: ByteSize::b(allocated_space),
             pieces_in_sector,

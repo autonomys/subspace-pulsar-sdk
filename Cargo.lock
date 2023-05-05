@@ -9229,6 +9229,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base58",
+ "blake2",
  "bytesize",
  "bytesize-serde",
  "derivative",
@@ -9249,12 +9251,14 @@ dependencies = [
  "sp-core-hashing",
  "sp-runtime",
  "sp-storage",
+ "ss58-registry",
  "subspace-archiving",
  "subspace-core-primitives",
  "subspace-farmer",
  "subspace-rpc-primitives",
  "subspace-runtime",
  "subspace-runtime-primitives",
+ "thiserror",
  "tokio",
 ]
 
