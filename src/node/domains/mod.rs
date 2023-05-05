@@ -4,8 +4,10 @@ use std::path::Path;
 use std::sync::{Arc, Weak};
 
 use anyhow::Context;
+use cross_domain_message_gossip::GossipWorkerBuilder;
 use derivative::Derivative;
 use derive_builder::Builder;
+use domain_runtime_primitives::opaque::Block;
 use domain_runtime_primitives::AccountId;
 use domain_service::DomainConfiguration;
 use futures::prelude::*;
@@ -107,11 +109,7 @@ pub struct Config {
 
 crate::derive_base!(crate::node::Base => ConfigBuilder);
 
-pub(crate) type FullClient = domain_service::FullClient<
-    domain_runtime_primitives::opaque::Block,
-    RuntimeApi,
-    ExecutorDispatch,
->;
+pub(crate) type FullClient = domain_service::FullClient<Block, RuntimeApi, ExecutorDispatch>;
 pub(crate) type NewFull = domain_service::NewFullSystem<
     Arc<FullClient>,
     sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
@@ -183,8 +181,7 @@ impl SystemDomainNode {
                 )
             });
 
-        let (gossip_msg_sink, gossip_msg_stream) =
-            sc_utils::mpsc::tracing_unbounded("Cross domain gossip messages", 100);
+        let mut xdm_gossip_worker_builder = GossipWorkerBuilder::new();
 
         // TODO: proper value
         let block_import_throttling_buffer_size = 10;
@@ -205,11 +202,9 @@ impl SystemDomainNode {
             primary_new_full.sync_service.clone(),
             &primary_new_full.select_chain,
             executor_streams,
-            gossip_msg_sink.clone(),
+            xdm_gossip_worker_builder.gossip_msg_sink(),
         )
         .await?;
-
-        let mut domain_tx_pool_sinks = std::collections::BTreeMap::new();
 
         #[cfg(feature = "core-payments")]
         let core = if let Some(core_payments) = core_payments {
@@ -226,8 +221,7 @@ impl SystemDomainNode {
                     .ok_or_else(|| anyhow::anyhow!("Core domain is not supported"))?,
                 primary_new_full,
                 &system_domain_node,
-                gossip_msg_sink.clone(),
-                &mut domain_tx_pool_sinks,
+                &mut xdm_gossip_worker_builder,
             )
             .instrument(span)
             .await
@@ -251,8 +245,7 @@ impl SystemDomainNode {
                     .ok_or_else(|| anyhow::anyhow!("Eth domain is not supported"))?,
                 primary_new_full,
                 &system_domain_node,
-                gossip_msg_sink.clone(),
-                &mut domain_tx_pool_sinks,
+                &mut xdm_gossip_worker_builder,
             )
             .instrument(span)
             .await
@@ -276,8 +269,7 @@ impl SystemDomainNode {
                     .ok_or_else(|| anyhow::anyhow!("Evm domain is not supported"))?,
                 primary_new_full,
                 &system_domain_node,
-                gossip_msg_sink.clone(),
-                &mut domain_tx_pool_sinks,
+                &mut xdm_gossip_worker_builder,
             )
             .instrument(span)
             .await
@@ -286,23 +278,18 @@ impl SystemDomainNode {
             None
         };
 
-        domain_tx_pool_sinks.insert(DomainId::SYSTEM, system_domain_node.tx_pool_sink);
+        xdm_gossip_worker_builder
+            .push_domain_tx_pool_sink(DomainId::SYSTEM, system_domain_node.tx_pool_sink);
         primary_new_full.task_manager.add_child(system_domain_node.task_manager);
 
-        let cross_domain_message_gossip_worker =
-            cross_domain_message_gossip::GossipWorker::<subspace_runtime::Block>::new(
-                primary_new_full.network_service.clone(),
-                primary_new_full.sync_service.clone(),
-                domain_tx_pool_sinks,
-            );
+        let cross_domain_message_gossip_worker = xdm_gossip_worker_builder.build::<Block, _, _>(
+            primary_new_full.network_service.clone(),
+            primary_new_full.sync_service.clone(),
+        );
 
         let NewFull { client, network_starter, rpc_handlers, .. } = system_domain_node;
 
-        tokio::spawn(
-            cross_domain_message_gossip_worker
-                .run(gossip_msg_stream)
-                .instrument(tracing::Span::current()),
-        );
+        tokio::spawn(cross_domain_message_gossip_worker.run().in_current_span());
         network_starter.start_network();
 
         Ok(Self {

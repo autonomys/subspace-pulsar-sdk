@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 
+use cross_domain_message_gossip::GossipWorkerBuilder;
 use derivative::Derivative;
 use domain_runtime_primitives::opaque::{Block, Block as SBlock};
 use domain_service::DomainConfiguration;
@@ -50,16 +51,15 @@ pub struct CoreDomainNode<RuntimeApi, ExecutorDispatch: sc_executor::NativeExecu
 }
 
 /// Internal config for core domains
-pub(crate) struct Config<'a, AccountId, CS, DTXS, Provider> {
+pub(crate) struct Config<'a, AccountId, CS, Provider> {
     pub base: Base,
     pub relayer_id: Option<AccountId>,
     pub directory: PathBuf,
     pub chain_spec: CS,
     pub(crate) primary_chain_node: &'a mut crate::node::NewFull,
     pub(crate) system_domain_node: &'a super::NewFull,
-    pub gossip_message_sink: domain_client_message_relayer::GossipMessageSink,
+    pub gossip_worker_builder: &'a mut GossipWorkerBuilder,
     pub domain_id: DomainId,
-    pub domain_tx_pool_sinks: &'a mut DTXS,
     pub provider: Provider,
 }
 
@@ -88,8 +88,8 @@ where
         > + sp_messenger::MessengerApi<Block, NumberFor<Block>>
         + domain_runtime_primitives::InherentExtrinsicApi<Block>,
 {
-    pub(crate) async fn new<CS, DTXS, AccountId, Provider>(
-        cfg: Config<'_, AccountId, CS, DTXS, Provider>,
+    pub(crate) async fn new<CS, AccountId, Provider>(
+        cfg: Config<'_, AccountId, CS, Provider>,
     ) -> anyhow::Result<Self>
     where
         AccountId: serde::de::DeserializeOwned
@@ -107,7 +107,6 @@ where
             + serde::de::DeserializeOwned
             + sp_runtime::BuildStorage
             + 'static,
-        DTXS: Extend<(DomainId, cross_domain_message_gossip::DomainTxPoolSink)>,
         RuntimeApi::RuntimeApi: sp_messenger::RelayerApi<Block, AccountId, NumberFor<Block>>
             + frame_system_rpc_runtime_api::AccountNonceApi<
                 Block,
@@ -153,9 +152,8 @@ where
             chain_spec,
             primary_chain_node,
             system_domain_node,
-            gossip_message_sink,
+            gossip_worker_builder,
             domain_id,
-            domain_tx_pool_sinks,
             provider,
         } = cfg;
         let service_config = base.configuration(directory, chain_spec).await;
@@ -201,7 +199,7 @@ where
             primary_network_sync_oracle: primary_chain_node.sync_service.clone(),
             select_chain: primary_chain_node.select_chain.clone(),
             executor_streams,
-            gossip_message_sink,
+            gossip_message_sink: gossip_worker_builder.gossip_msg_sink(),
             provider,
         };
 
@@ -214,7 +212,7 @@ where
             ..
         } = domain_service::new_full_core(core_domain_params).await?;
 
-        domain_tx_pool_sinks.extend([(domain_id, tx_pool_sink)]);
+        gossip_worker_builder.push_domain_tx_pool_sink(domain_id, tx_pool_sink);
         primary_chain_node.task_manager.add_child(task_manager);
 
         network_starter.start_network();
