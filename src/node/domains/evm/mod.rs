@@ -9,6 +9,7 @@ use derive_builder::Builder;
 use futures::prelude::*;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
+use cross_domain_message_gossip::GossipWorkerBuilder;
 
 use super::core::CoreDomainNode;
 use crate::node::{Base, BaseBuilder, BlockHeader};
@@ -105,11 +106,7 @@ impl EvmDomainNode {
         chain_spec: ChainSpec,
         primary_chain_node: &mut crate::node::NewFull,
         system_domain_node: &super::NewFull,
-        gossip_message_sink: domain_client_message_relayer::GossipMessageSink,
-        domain_tx_pool_sinks: &mut impl Extend<(
-            DomainId,
-            cross_domain_message_gossip::DomainTxPoolSink,
-        )>,
+        gossip_worker_builder: &mut GossipWorkerBuilder,
     ) -> anyhow::Result<Self> {
         let Config {
             max_past_logs,
@@ -146,8 +143,7 @@ impl EvmDomainNode {
             directory: directory.as_ref().to_owned(),
             primary_chain_node,
             system_domain_node,
-            gossip_message_sink,
-            domain_tx_pool_sinks,
+            gossip_worker_builder,
             domain_id: DomainId::CORE_EVM,
             chain_spec,
             provider,
