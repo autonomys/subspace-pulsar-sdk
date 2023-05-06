@@ -12,6 +12,7 @@ use event_listener_primitives::HandlerId;
 use futures::StreamExt;
 use parking_lot::Mutex;
 use sc_client_api::AuxStore;
+pub use subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
 use subspace_farmer::utils::farmer_provider_record_processor::FarmerProviderRecordProcessor;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::plotting::{PieceGetter, PieceGetterRetryPolicy};
@@ -19,13 +20,11 @@ use subspace_networking::utils::piece_provider::PieceValidator;
 use subspace_networking::{Node, ParityDbProviderStorage};
 use tracing::{warn, Instrument};
 
-pub type FarmerPieceCache = subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
 pub type NodePieceCache<C> = subspace_service::piece_cache::PieceCache<C>;
-pub type PieceCache = FarmerPieceCache;
 pub type FarmerProviderStorage =
     subspace_farmer::utils::farmer_provider_storage::FarmerProviderStorage<
         ParityDbProviderStorage,
-        PieceCache,
+        FarmerPieceCache,
     >;
 pub type NodeProviderStorage<C> = subspace_service::dsn::node_provider_storage::NodeProviderStorage<
     NodePieceCache<C>,
@@ -75,7 +74,6 @@ pub fn start_announcements_processor(
         }
     }));
 
-    let span = tracing::Span::current();
     let mut provider_record_processor = FarmerProviderRecordProcessor::new(
         node,
         piece_cache,
@@ -91,7 +89,7 @@ pub fn start_announcements_processor(
                 provider_record_processor.process_provider_record(provider_record, guard).await;
             }
         }
-        .instrument(span),
+        .in_current_span(),
     );
 
     Ok(handler_id)

@@ -267,10 +267,8 @@ pub(crate) fn get_piece_by_hash(
     };
 
     match readers_and_pieces.read_piece(&piece_index_hash) {
-        Some(fut) => Either::Right(
-            fut.map(|piece| Some(PieceByHashResponse { piece }))
-                .instrument(tracing::Span::current()),
-        ),
+        Some(fut) =>
+            Either::Right(fut.map(|piece| Some(PieceByHashResponse { piece })).in_current_span()),
         None => Either::Left(ready(None)),
     }
 }
