@@ -36,7 +36,7 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 /// Node builder
 #[derive(Clone, Derivative, Builder, Deserialize, Serialize)]
 #[derivative(Debug, PartialEq)]
-#[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "ConfigBuilder")]
+#[builder(pattern = "owned", build_fn(private, name = "_build"), name = "ConfigBuilder")]
 #[non_exhaustive]
 pub struct Config {
     /// Id of the relayer
@@ -53,7 +53,7 @@ pub struct Config {
 }
 
 sdk_utils::generate_builder!(Config);
-sdk_substrate::derive_base!(crate::node::Base => ConfigBuilder);
+sdk_substrate::derive_base!(@ crate::node::Base => ConfigBuilder);
 
 /// Chain spec of the core domain
 pub type ChainSpec = chain_spec::ChainSpec;

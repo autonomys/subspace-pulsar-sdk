@@ -192,7 +192,7 @@ pub struct MaxSubsPerConn(#[derivative(Default(value = "1024"))] pub usize);
 /// Offchain worker config
 #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq, Eq)]
 #[derivative(Default)]
-#[builder(pattern = "immutable", build_fn(name = "_build"), name = "OffchainWorkerBuilder")]
+#[builder(pattern = "owned", build_fn(name = "_build"), name = "OffchainWorkerBuilder")]
 #[non_exhaustive]
 pub struct OffchainWorker {
     /// Is enabled

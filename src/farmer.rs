@@ -28,7 +28,7 @@ use subspace_farmer::utils::readers_and_pieces::{PieceDetails, ReadersAndPieces}
 use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_farmer_components::plotting::PlottedSector;
 use subspace_networking::utils::multihash::ToMultihash;
-use subspace_networking::{ParityDbProviderStorage, PieceByHashResponse};
+use subspace_networking::ParityDbProviderStorage;
 use subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
 use tokio::sync::{oneshot, watch, Mutex};
 use tracing_futures::Instrument;
@@ -200,7 +200,7 @@ mod builder {
         pub async fn build(
             self,
             reward_address: PublicKey,
-            node: &Node,
+            node: &Node<Farmer>,
             plots: &[PlotDescription],
             cache: CacheDescription,
         ) -> Result<Farmer, BuildError> {
@@ -226,50 +226,47 @@ pub enum BuildError {
     Other(#[from] anyhow::Error),
 }
 
-pub(crate) fn get_piece_by_hash(
-    piece_index_hash: PieceIndexHash,
-    piece_cache: &ParityDbStore<
-        subspace_networking::libp2p::kad::record::Key,
-        subspace_core_primitives::Piece,
-    >,
-    weak_readers_and_pieces: &std::sync::Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
-    piece_memory_cache: &PieceMemoryCache,
-) -> impl std::future::Future<Output = Option<PieceByHashResponse>> + Send + Sync + 'static {
-    use futures::future::{ready, Either};
-    use tracing::debug;
+#[async_trait::async_trait]
+impl crate::node::Farmer for Farmer {
+    async fn get_piece_by_hash(
+        piece_index_hash: PieceIndexHash,
+        piece_store: &sdk_dsn::builder::PieceStore,
+        weak_readers_and_pieces: &std::sync::Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
+        piece_memory_cache: &PieceMemoryCache,
+    ) -> Option<subspace_core_primitives::Piece> {
+        use tracing::debug;
 
-    if let Some(piece) = piece_memory_cache.get_piece(&piece_index_hash) {
-        return Either::Left(ready(Some(PieceByHashResponse { piece: Some(piece) })));
-    }
-
-    if let Some(piece) = piece_cache.get(&piece_index_hash.to_multihash().into()) {
-        return Either::Left(ready(Some(PieceByHashResponse { piece: Some(piece) })));
-    }
-
-    let weak_readers_and_pieces = weak_readers_and_pieces.clone();
-
-    debug!(?piece_index_hash, "No piece in the cache. Trying archival storage...");
-
-    let readers_and_pieces = match weak_readers_and_pieces.upgrade() {
-        Some(readers_and_pieces) => readers_and_pieces,
-        None => {
-            debug!("A readers and pieces are already dropped");
-            return Either::Left(ready(None));
+        if let Some(piece) = piece_memory_cache.get_piece(&piece_index_hash) {
+            return Some(piece);
         }
-    };
-    let readers_and_pieces = readers_and_pieces.lock();
-    let readers_and_pieces = match readers_and_pieces.as_ref() {
-        Some(readers_and_pieces) => readers_and_pieces,
-        None => {
-            debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
-            return Either::Left(ready(None));
-        }
-    };
 
-    match readers_and_pieces.read_piece(&piece_index_hash) {
-        Some(fut) =>
-            Either::Right(fut.map(|piece| Some(PieceByHashResponse { piece })).in_current_span()),
-        None => Either::Left(ready(None)),
+        if let Some(piece) = piece_store.get(&piece_index_hash.to_multihash().into()) {
+            return Some(piece);
+        }
+
+        let weak_readers_and_pieces = weak_readers_and_pieces.clone();
+
+        debug!(?piece_index_hash, "No piece in the cache. Trying archival storage...");
+
+        let readers_and_pieces = match weak_readers_and_pieces.upgrade() {
+            Some(readers_and_pieces) => readers_and_pieces,
+            None => {
+                debug!("A readers and pieces are already dropped");
+                return None;
+            }
+        };
+        let read_piece = match readers_and_pieces.lock().as_ref() {
+            Some(readers_and_pieces) => readers_and_pieces.read_piece(&piece_index_hash),
+            None => {
+                debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
+                return None;
+            }
+        };
+
+        match read_piece {
+            Some(fut) => fut.in_current_span().await,
+            None => None,
+        }
     }
 }
 
@@ -412,7 +409,7 @@ impl Config {
     pub async fn build(
         self,
         reward_address: PublicKey,
-        node: &Node,
+        node: &Node<Farmer>,
         plots: &[PlotDescription],
         cache: CacheDescription,
     ) -> Result<Farmer, BuildError> {
@@ -824,7 +821,7 @@ impl Stream for InitialPlottingProgressStream {
 struct PlotOptions<'a, PG> {
     pub disk_farm_idx: usize,
     pub reward_address: PublicKey,
-    pub node: &'a Node,
+    pub node: &'a Node<Farmer>,
     pub piece_getter: PG,
     pub concurrent_plotting_semaphore: Arc<tokio::sync::Semaphore>,
     pub description: &'a PlotDescription,

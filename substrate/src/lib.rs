@@ -22,7 +22,7 @@ mod types;
 #[doc(hidden)]
 #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
 #[derivative(Default)]
-#[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "BaseBuilder")]
+#[builder(pattern = "owned", build_fn(private, name = "_build"), name = "BaseBuilder")]
 #[non_exhaustive]
 pub struct Base {
     /// Force block authoring
@@ -79,7 +79,7 @@ pub struct Base {
 #[macro_export]
 macro_rules! derive_base {
     (
-        $base:ty => $builder:ident {
+        $(< $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),+ >)? @ $base:ty => $builder:ident {
             $(
                 #[doc = $doc:literal]
                 $field:ident : $field_ty:ty
@@ -87,19 +87,20 @@ macro_rules! derive_base {
             $(,)?
         }
     ) => {
-        impl $builder {
+        impl $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)? $builder $(< $($lt),+ >)?  {
             $(
             #[doc = $doc]
-            pub fn $field(&self, $field: impl Into<$field_ty>) -> Self {
-                let mut me = self.clone();
-                me.base = me.base.$field($field.into());
-                me
+            pub fn $field(mut self, $field: impl Into<$field_ty>) -> Self {
+                self.base = self.base.$field($field.into());
+                self
             }
             )*
         }
     };
-    ( $base:ty => $builder:ident ) => {
-        $crate::derive_base!($base => $builder {
+
+    ( $(< $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),+ >)? @ $base:ty => $builder:ident ) => {
+        $crate::derive_base!(
+            $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)? @ $base => $builder {
             /// Force block authoring
             force_authoring: bool,
             /// Set node role
@@ -304,7 +305,7 @@ impl Base {
 /// Node RPC builder
 #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq, Eq)]
 #[derivative(Default)]
-#[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "RpcBuilder")]
+#[builder(pattern = "owned", build_fn(private, name = "_build"), name = "RpcBuilder")]
 #[non_exhaustive]
 pub struct Rpc {
     /// RPC over HTTP binding address. `None` if disabled.
@@ -394,7 +395,7 @@ impl RpcBuilder {
 
 /// Node network builder
 #[derive(Debug, Default, Clone, Builder, Deserialize, Serialize, PartialEq)]
-#[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "NetworkBuilder")]
+#[builder(pattern = "owned", build_fn(private, name = "_build"), name = "NetworkBuilder")]
 #[non_exhaustive]
 pub struct Network {
     /// Listen on some address for other nodes

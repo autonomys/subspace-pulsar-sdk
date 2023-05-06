@@ -12,7 +12,7 @@ use sdk_substrate::{
 use sdk_utils::ByteSize;
 use serde::{Deserialize, Serialize};
 
-use super::{ChainSpec, Node};
+use super::{ChainSpec, Node, Farmer};
 
 /// Wrapper with default value for piece cache size
 #[derive(
@@ -35,10 +35,10 @@ pub struct SegmentPublishConcurrency(
 
 /// Node builder
 #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
-#[derivative(Default)]
-#[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "Builder")]
+#[derivative(Default(bound = ""))]
+#[builder(pattern = "owned", build_fn(private, name = "_build"), name = "Builder")]
 #[non_exhaustive]
-pub struct Config {
+pub struct Config<F: Farmer> {
     /// Set piece cache size
     #[builder(setter(into), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
@@ -72,26 +72,29 @@ pub struct Config {
     #[builder(setter(into), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub storage_monitor: Option<StorageMonitor>,
+
+    #[builder(setter(skip), default)]
+    _farmer: std::marker::PhantomData<F>,
 }
 
-impl Config {
+impl<F: Farmer + 'static> Config<F> {
     /// Dev configuraiton
-    pub fn dev() -> Builder {
+    pub fn dev() -> Builder<F> {
         Builder::dev()
     }
 
     /// Gemini 3d configuraiton
-    pub fn gemini_3d() -> Builder {
+    pub fn gemini_3d() -> Builder<F> {
         Builder::gemini_3d()
     }
 
     /// Devnet configuraiton
-    pub fn devnet() -> Builder {
+    pub fn devnet() -> Builder<F> {
         Builder::devnet()
     }
 }
 
-impl Builder {
+impl<F: Farmer + 'static> Builder<F> {
     /// Dev chain configuration
     pub fn dev() -> Self {
         Self::new()
@@ -123,7 +126,7 @@ impl Builder {
     }
 
     /// Get configuration for saving on disk
-    pub fn configuration(&self) -> Config {
+    pub fn configuration(self) -> Config<F> {
         self._build().expect("Build is infallible")
     }
 
@@ -137,9 +140,9 @@ impl Builder {
         self,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,
-    ) -> anyhow::Result<Node> {
+    ) -> anyhow::Result<Node<F>> {
         self.configuration().build(directory, chain_spec).await
     }
 }
 
-sdk_substrate::derive_base!(Base => Builder);
+sdk_substrate::derive_base!(<F: Farmer + 'static> @ Base => Builder);

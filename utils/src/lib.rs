@@ -652,7 +652,7 @@ macro_rules! generate_builder {
             }
 
             #[doc = concat!("Build ", stringify!($name))]
-            pub fn build(&self) -> $name {
+            pub fn build(self) -> $name {
                 self._build().expect("Infallible")
             }
         }

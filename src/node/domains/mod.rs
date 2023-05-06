@@ -82,7 +82,7 @@ impl From<Header> for BlockHeader {
 /// Node builder
 #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
 #[derivative(Default)]
-#[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "ConfigBuilder")]
+#[builder(pattern = "owned", build_fn(private, name = "_build"), name = "ConfigBuilder")]
 #[non_exhaustive]
 pub struct Config {
     /// Id of the relayer
@@ -114,7 +114,7 @@ pub struct Config {
 }
 
 sdk_utils::generate_builder!(Config);
-sdk_substrate::derive_base!(crate::node::Base => ConfigBuilder);
+sdk_substrate::derive_base!(@ crate::node::Base => ConfigBuilder);
 
 pub(crate) type FullClient = domain_service::FullClient<Block, RuntimeApi, ExecutorDispatch>;
 pub(crate) type NewFull = domain_service::NewFullSystem<

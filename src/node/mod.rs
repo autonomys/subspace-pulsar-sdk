@@ -40,13 +40,29 @@ pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
 pub use sdk_dsn::builder::*;
 pub use sdk_substrate::*;
 
-impl Config {
+/// Trait which abstracts farmer for node
+#[async_trait::async_trait]
+pub trait Farmer {
+    /// Fetch piece by its hash
+    async fn get_piece_by_hash(
+        piece_index_hash: subspace_core_primitives::PieceIndexHash,
+        piece_store: &sdk_dsn::builder::PieceStore,
+        weak_readers_and_pieces: &std::sync::Weak<
+            parking_lot::Mutex<
+                Option<subspace_farmer::utils::readers_and_pieces::ReadersAndPieces>,
+            >,
+        >,
+        piece_memory_cache: &subspace_farmer_components::piece_caching::PieceMemoryCache,
+    ) -> Option<subspace_core_primitives::Piece>;
+}
+
+impl<F: Farmer + 'static> Config<F> {
     /// Start a node with supplied parameters
     pub async fn build(
         self,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,
-    ) -> anyhow::Result<Node> {
+    ) -> anyhow::Result<Node<F>> {
         let Self {
             base,
             piece_cache_size,
@@ -56,6 +72,7 @@ impl Config {
             segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
             sync_from_dsn,
             storage_monitor,
+            ..
         } = self;
         let base = base.configuration(directory.as_ref(), chain_spec.clone()).await;
         let name = base.network.node_name.clone();
@@ -107,7 +124,7 @@ impl Config {
                 piece_cache_size: *piece_cache_size,
                 keypair,
                 base_path: directory.as_ref().to_path_buf(),
-                get_piece_by_hash,
+                get_piece_by_hash: get_piece_by_hash::<F>,
                 get_segment_header_by_segment_indexes,
             })?;
 
@@ -268,6 +285,7 @@ impl Config {
             dsn,
             stop_sender,
             _drop_at_exit: drop_collection,
+            _farmer: Default::default(),
         })
     }
 }
@@ -313,7 +331,7 @@ pub(crate) type NewFull = subspace_service::NewFull<
 #[derive(Derivative)]
 #[derivative(Debug)]
 #[must_use = "Node should be closed"]
-pub struct Node {
+pub struct Node<F: Farmer> {
     #[cfg(feature = "executor")]
     system_domain: Option<SystemDomainNode>,
     #[derivative(Debug = "ignore")]
@@ -329,9 +347,11 @@ pub struct Node {
     pub(crate) dsn: DsnShared<FullClient>,
     #[derivative(Debug = "ignore")]
     _drop_at_exit: DropCollection,
+    #[derivative(Debug = "ignore")]
+    _farmer: std::marker::PhantomData<F>,
 }
 
-static_assertions::assert_impl_all!(Node: Send, Sync);
+static_assertions::assert_impl_all!(Node<crate::farmer::Farmer>: Send, Sync);
 
 /// Hash type
 pub type Hash = <subspace_runtime::Runtime as frame_system::Config>::Hash;
@@ -451,24 +471,24 @@ impl<E, S: Stream<Item = Result<SyncingProgress, E>>> Stream for SyncingProgress
     }
 }
 
-impl Node {
+impl<F: Farmer + 'static> Node<F> {
     /// New node builder
-    pub fn builder() -> Builder {
+    pub fn builder() -> Builder<F> {
         Builder::new()
     }
 
     /// Development configuration
-    pub fn dev() -> Builder {
+    pub fn dev() -> Builder<F> {
         Builder::dev()
     }
 
     /// Gemini 3d configuration
-    pub fn gemini_3d() -> Builder {
+    pub fn gemini_3d() -> Builder<F> {
         Builder::gemini_3d()
     }
 
     /// Devnet configuration
-    pub fn devnet() -> Builder {
+    pub fn devnet() -> Builder<F> {
         Builder::devnet()
     }
 
@@ -753,7 +773,7 @@ pub(crate) fn get_segment_header_by_segment_indexes(
     }
 }
 
-fn get_piece_by_hash(
+fn get_piece_by_hash<F: Farmer>(
     &PieceByHashRequest { piece_index_hash }: &PieceByHashRequest,
     weak_readers_and_pieces: std::sync::Weak<
         parking_lot::Mutex<Option<subspace_farmer::utils::readers_and_pieces::ReadersAndPieces>>,
@@ -762,10 +782,6 @@ fn get_piece_by_hash(
     piece_cache: NodePieceCache<impl sc_client_api::AuxStore>,
     piece_memory_cache: subspace_farmer_components::piece_caching::PieceMemoryCache,
 ) -> impl std::future::Future<Output = Option<PieceByHashResponse>> {
-    let weak_readers_and_pieces = weak_readers_and_pieces.clone();
-    let farmer_piece_store = Arc::clone(&farmer_piece_store);
-    let piece_cache = piece_cache.clone();
-    let piece_memory_cache = piece_memory_cache.clone();
     async move {
         match node_get_piece_by_hash(piece_index_hash, &piece_cache) {
             Some(PieceByHashResponse { piece: None }) | None => (),
@@ -773,18 +789,20 @@ fn get_piece_by_hash(
         }
 
         if let Some(piece_store) = farmer_piece_store.lock().await.as_ref() {
-            crate::farmer::get_piece_by_hash(
+            let piece = F::get_piece_by_hash(
                 piece_index_hash,
                 piece_store,
                 &weak_readers_and_pieces,
                 &piece_memory_cache,
             )
-            .await
+            .await;
+            Some(PieceByHashResponse { piece })
         } else {
             None
         }
     }
 }
+
 fn node_get_piece_by_hash(
     piece_index_hash: PieceIndexHash,
     piece_cache: &NodePieceCache<impl sc_client_api::AuxStore>,
