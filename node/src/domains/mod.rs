@@ -17,9 +17,9 @@ use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
 use system_domain_runtime::{Header, Runtime, RuntimeApi};
 use tracing_futures::Instrument;
+use sdk_substrate::{Base, BaseBuilder};
 
 use super::{BlockNumber, Hash};
-use crate::node::{Base, BaseBuilder};
 
 pub(crate) mod core;
 
@@ -32,7 +32,7 @@ pub mod eth_relayer;
 pub mod evm;
 
 /// System domain executor instance.
-pub(crate) struct ExecutorDispatch;
+pub struct ExecutorDispatch;
 
 impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     // #[cfg(feature = "runtime-benchmarks")]
@@ -114,14 +114,14 @@ pub struct Config {
 }
 
 sdk_utils::generate_builder!(Config);
-sdk_substrate::derive_base!(@ crate::node::Base => ConfigBuilder);
+sdk_substrate::derive_base!(@ sdk_substrate::Base => ConfigBuilder);
 
 pub(crate) type FullClient = domain_service::FullClient<Block, RuntimeApi, ExecutorDispatch>;
 pub(crate) type NewFull = domain_service::NewFullSystem<
     Arc<FullClient>,
     sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
     subspace_runtime_primitives::opaque::Block,
-    crate::node::FullClient,
+    crate::FullClient,
     RuntimeApi,
     ExecutorDispatch,
 >;
@@ -150,7 +150,7 @@ impl SystemDomainNode {
         cfg: Config,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,
-        primary_new_full: &mut crate::node::NewFull,
+        primary_new_full: &mut crate::NewFull,
     ) -> anyhow::Result<Self> {
         let Config {
             base,

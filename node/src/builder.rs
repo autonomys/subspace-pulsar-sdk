@@ -22,7 +22,7 @@ use super::{ChainSpec, Node, Farmer};
 #[serde(transparent)]
 pub struct PieceCacheSize(#[derivative(Default(value = "ByteSize::gib(1)"))] pub(crate) ByteSize);
 
-/// Wrapper with default value for segment publish concurent jobs
+/// Wrapper with default value for segment publish concurrent jobs
 #[derive(
     Debug, Clone, Derivative, Deserialize, Serialize, PartialEq, Eq, From, Deref, DerefMut, Display,
 )]
@@ -63,7 +63,7 @@ pub struct Config<F: Farmer> {
     #[cfg(feature = "executor")]
     #[builder(setter(into, strip_option), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub system_domain: Option<crate::node::domains::Config>,
+    pub system_domain: Option<super::domains::Config>,
     /// DSN settings
     #[builder(setter(into), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
@@ -136,7 +136,7 @@ impl<F: Farmer + 'static> Builder<F> {
     }
 
     /// Start a node with supplied parameters
-    pub async fn build(
+    pub async fn build<T: subspace_proof_of_space::Table>(
         self,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,

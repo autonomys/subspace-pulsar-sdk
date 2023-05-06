@@ -13,9 +13,10 @@ use sc_client_api::BlockchainEvents;
 use sp_api::NumberFor;
 use sp_domains::DomainId;
 use subspace_runtime_primitives::opaque::Block as PBlock;
+use sdk_substrate::Base;
 
 use super::FullClient as SClient;
-use crate::node::{Base, FullClient as PClient};
+use crate::FullClient as PClient;
 
 type BlockImportOf<Provider, RuntimeApi, ExecutorDispatch> =
     <Provider as domain_service::providers::BlockImportProvider<
@@ -23,10 +24,10 @@ type BlockImportOf<Provider, RuntimeApi, ExecutorDispatch> =
         FullClient<RuntimeApi, ExecutorDispatch>,
     >>::BI;
 
-pub(crate) type FullClient<RuntimeApi, ExecutorDispatch> =
+pub type FullClient<RuntimeApi, ExecutorDispatch> =
     domain_service::FullClient<Block, RuntimeApi, ExecutorDispatch>;
 
-pub(crate) type NewFull<RuntimeApi, ExecutorDispatch, AccountId, Provider> =
+pub type NewFull<RuntimeApi, ExecutorDispatch, AccountId, Provider> =
     domain_service::NewFullCore<
         Arc<FullClient<RuntimeApi, ExecutorDispatch>>,
         sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
@@ -51,13 +52,13 @@ pub struct CoreDomainNode<RuntimeApi, ExecutorDispatch: sc_executor::NativeExecu
 }
 
 /// Internal config for core domains
-pub(crate) struct Config<'a, AccountId, CS, Provider> {
+pub struct Config<'a, AccountId, CS, Provider> {
     pub base: Base,
     pub relayer_id: Option<AccountId>,
     pub directory: PathBuf,
     pub chain_spec: CS,
-    pub(crate) primary_chain_node: &'a mut crate::node::NewFull,
-    pub(crate) system_domain_node: &'a super::NewFull,
+    pub primary_chain_node: &'a mut crate::NewFull,
+    pub system_domain_node: &'a super::NewFull,
     pub gossip_worker_builder: &'a mut GossipWorkerBuilder,
     pub domain_id: DomainId,
     pub provider: Provider,

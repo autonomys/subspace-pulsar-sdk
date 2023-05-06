@@ -32,9 +32,9 @@ use subspace_networking::ParityDbProviderStorage;
 use subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
 use tokio::sync::{oneshot, watch, Mutex};
 use tracing_futures::Instrument;
+use sdk_node::Node;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
-use crate::Node;
 
 /// Description of the cache
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -227,7 +227,7 @@ pub enum BuildError {
 }
 
 #[async_trait::async_trait]
-impl<T: subspace_proof_of_space::Table> crate::node::Farmer for Farmer<T> {
+impl<T: subspace_proof_of_space::Table> sdk_node::Farmer for Farmer<T> {
     type Table = T;
 
     async fn get_piece_by_hash(

@@ -14,8 +14,8 @@ use subspace_runtime::{
 use subspace_runtime_primitives::{AccountId, Balance, BlockNumber, SSC};
 
 const SUBSPACE_TELEMETRY_URL: &str = "wss://telemetry.subspace.network/submit/";
-const GEMINI_3D_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-gemini-3d.json");
-const DEVNET_CHAIN_SPEC: &[u8] = include_bytes!("../../res/chain-spec-raw-devnet.json");
+const GEMINI_3D_CHAIN_SPEC: &[u8] = include_bytes!("../res/chain-spec-raw-gemini-3d.json");
+const DEVNET_CHAIN_SPEC: &[u8] = include_bytes!("../res/chain-spec-raw-devnet.json");
 
 /// List of accounts which should receive token grants, amounts are specified in
 /// SSC.

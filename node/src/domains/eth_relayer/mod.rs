@@ -1,24 +1,22 @@
-//! Core payments domain module
+//! Core ethereum relay domain module
 
 use std::path::Path;
 
 use anyhow::Context;
-use core_payments_domain_runtime::{Runtime, RuntimeApi};
+use core_eth_relay_runtime::{Runtime, RuntimeApi};
 use cross_domain_message_gossip::GossipWorkerBuilder;
 use derivative::Derivative;
 use derive_builder::Builder;
-use domain_runtime_primitives::AccountId;
 use futures::prelude::*;
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
+use sdk_substrate::{Base, BaseBuilder};
 
 use super::core::CoreDomainNode;
 use super::BlockHeader;
-use crate::node::{Base, BaseBuilder};
 
 pub(crate) mod chain_spec;
 
-/// Core payments domain instance.
 pub(crate) struct ExecutorDispatch;
 
 impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
@@ -28,11 +26,11 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     type ExtendHostFunctions = ();
 
     fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-        core_payments_domain_runtime::api::dispatch(method, data)
+        core_eth_relay_runtime::api::dispatch(method, data)
     }
 
     fn native_version() -> sc_executor::NativeVersion {
-        core_payments_domain_runtime::native_version()
+        core_eth_relay_runtime::native_version()
     }
 }
 
@@ -45,7 +43,7 @@ pub struct Config {
     /// Id of the relayer
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub relayer_id: Option<AccountId>,
+    pub relayer_id: Option<domain_runtime_primitives::AccountId>,
     #[doc(hidden)]
     #[builder(
         setter(into, strip_option),
@@ -64,16 +62,16 @@ pub type ChainSpec = chain_spec::ChainSpec;
 /// Core domain node
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
-pub struct CorePaymentsDomainNode {
+pub struct EthDomainNode {
     core: CoreDomainNode<RuntimeApi, ExecutorDispatch>,
 }
 
-impl CorePaymentsDomainNode {
+impl EthDomainNode {
     pub(crate) async fn new(
         cfg: Config,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,
-        primary_chain_node: &mut crate::node::NewFull,
+        primary_chain_node: &mut crate::NewFull,
         system_domain_node: &super::NewFull,
         gossip_worker_builder: &mut GossipWorkerBuilder,
     ) -> anyhow::Result<Self> {
@@ -85,7 +83,7 @@ impl CorePaymentsDomainNode {
             primary_chain_node,
             system_domain_node,
             gossip_worker_builder,
-            domain_id: DomainId::CORE_PAYMENTS,
+            domain_id: DomainId::CORE_ETH_RELAY,
             chain_spec,
             provider: domain_service::providers::DefaultProvider,
         };

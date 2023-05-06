@@ -1,3 +1,12 @@
+#![warn(
+    clippy::dbg_macro,
+    clippy::unwrap_used,
+    clippy::disallowed_types,
+    unused_crate_dependencies,
+    unused_features
+)]
+#![feature(type_changing_struct_update, concat_idents, const_option)]
+
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
@@ -12,7 +21,7 @@ use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, SyncState};
 use sc_rpc_api::state::StateApiClient;
 use sdk_dsn::NodePieceCache;
-use sdk_utils::{DropCollection, MultiaddrWithPeerId};
+use sdk_utils::{DropCollection, MultiaddrWithPeerId, PublicKey};
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
 use sp_runtime::DigestItem;
@@ -292,7 +301,7 @@ impl<F: Farmer + 'static> Config<F> {
 }
 
 /// Executor dispatch for subspace runtime
-pub(crate) struct ExecutorDispatch;
+pub struct ExecutorDispatch;
 
 impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     // /// Only enable the benchmarking host functions when we actually want to
@@ -316,9 +325,9 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 
 /// Chain spec for subspace node
 pub type ChainSpec = chain_spec::ChainSpec;
-pub(crate) type FullClient =
+pub type FullClient =
     subspace_service::FullClient<subspace_runtime::RuntimeApi, ExecutorDispatch>;
-pub(crate) type NewFull = subspace_service::NewFull<
+pub type NewFull = subspace_service::NewFull<
     FullClient,
     subspace_service::tx_pre_validator::PrimaryChainTxPreValidator<
         RuntimeBlock,
@@ -342,10 +351,10 @@ pub struct Node<F: Farmer> {
     #[derivative(Debug = "ignore")]
     network_service: Arc<NetworkService<RuntimeBlock, Hash>>,
 
-    pub(crate) rpc_handle: sdk_utils::Rpc,
-    pub(crate) stop_sender: mpsc::Sender<oneshot::Sender<()>>,
-    pub(crate) name: String,
-    pub(crate) dsn: DsnShared<FullClient>,
+    pub rpc_handle: sdk_utils::Rpc,
+    pub stop_sender: mpsc::Sender<oneshot::Sender<()>>,
+    pub name: String,
+    pub dsn: DsnShared<FullClient>,
     #[derivative(Debug = "ignore")]
     _drop_at_exit: DropCollection,
     #[derivative(Debug = "ignore")]
@@ -404,7 +413,7 @@ pub struct BlockHeader {
     /// Extrinsics root
     pub extrinsics_root: Hash,
     /// Block pre digest
-    pub pre_digest: Option<PreDigest<crate::PublicKey, crate::PublicKey>>,
+    pub pre_digest: Option<PreDigest<PublicKey, PublicKey>>,
 }
 
 impl From<Header> for BlockHeader {
@@ -732,7 +741,7 @@ impl<F: Farmer + 'static> Node<F> {
 
 const ROOT_BLOCK_NUMBER_LIMIT: u64 = 100;
 
-pub(crate) fn get_segment_header_by_segment_indexes(
+fn get_segment_header_by_segment_indexes(
     req: &SegmentHeaderRequest,
     segment_header_cache: &SegmentHeaderCache<impl sc_client_api::AuxStore>,
 ) -> Option<SegmentHeaderResponse> {

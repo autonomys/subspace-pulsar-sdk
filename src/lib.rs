@@ -12,11 +12,9 @@
 
 /// Module related to the farmer
 pub mod farmer;
-/// Module related to the node
-pub mod node;
 
 pub use farmer::{Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotDescription};
-pub use node::{chain_spec, Builder as NodeBuilder, Info as FarmerInfo, Node};
+pub use sdk_node::{chain_spec, Builder as NodeBuilder, Info as FarmerInfo, Node};
 pub use sdk_utils::{ByteSize, Multiaddr, MultiaddrWithPeerId, PublicKey, Ss58ParsingError};
 
 use subspace_proof_of_space::chia::ChiaTable as PosTable;
