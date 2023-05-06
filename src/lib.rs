@@ -19,4 +19,8 @@ pub use farmer::{Builder as FarmerBuilder, Farmer, Info as NodeInfo, Plot, PlotD
 pub use node::{chain_spec, Builder as NodeBuilder, Info as FarmerInfo, Node};
 pub use sdk_utils::{ByteSize, Multiaddr, MultiaddrWithPeerId, PublicKey, Ss58ParsingError};
 
-type PosTable = subspace_proof_of_space::chia::ChiaTable;
+use subspace_proof_of_space::chia::ChiaTable as PosTable;
+
+static_assertions::assert_impl_all!(Node<Farmer<PosTable>>: Send, Sync);
+static_assertions::assert_impl_all!(Farmer<PosTable>: Send, Sync);
+static_assertions::assert_impl_all!(farmer::Plot<PosTable>: Send, Sync);

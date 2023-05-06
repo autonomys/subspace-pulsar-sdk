@@ -34,7 +34,7 @@ use tokio::sync::{oneshot, watch, Mutex};
 use tracing_futures::Instrument;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
-use crate::{Node, PosTable};
+use crate::Node;
 
 /// Description of the cache
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -197,13 +197,13 @@ mod builder {
         }
 
         /// Open and start farmer
-        pub async fn build(
+        pub async fn build<T: subspace_proof_of_space::Table>(
             self,
             reward_address: PublicKey,
-            node: &Node<Farmer>,
+            node: &Node<Farmer<T>>,
             plots: &[PlotDescription],
             cache: CacheDescription,
-        ) -> Result<Farmer, BuildError> {
+        ) -> Result<Farmer<T>, BuildError> {
             self.configuration().build(reward_address, node, plots, cache).await
         }
     }
@@ -227,7 +227,9 @@ pub enum BuildError {
 }
 
 #[async_trait::async_trait]
-impl crate::node::Farmer for Farmer {
+impl<T: subspace_proof_of_space::Table> crate::node::Farmer for Farmer<T> {
+    type Table = T;
+
     async fn get_piece_by_hash(
         piece_index_hash: PieceIndexHash,
         piece_store: &sdk_dsn::builder::PieceStore,
@@ -406,13 +408,13 @@ fn handler_on_sector_plotted(
 
 impl Config {
     /// Open and start farmer
-    pub async fn build(
+    pub async fn build<T: subspace_proof_of_space::Table>(
         self,
         reward_address: PublicKey,
-        node: &Node<Farmer>,
+        node: &Node<Farmer<T>>,
         plots: &[PlotDescription],
         cache: CacheDescription,
-    ) -> Result<Farmer, BuildError> {
+    ) -> Result<Farmer<T>, BuildError> {
         if plots.is_empty() {
             return Err(BuildError::NoPlotsSupplied);
         }
@@ -663,9 +665,9 @@ impl Config {
 #[derive(Derivative)]
 #[derivative(Debug)]
 #[must_use = "Farmer should be closed"]
-pub struct Farmer {
+pub struct Farmer<T: subspace_proof_of_space::Table> {
     reward_address: PublicKey,
-    plot_info: HashMap<PathBuf, Plot>,
+    plot_info: HashMap<PathBuf, Plot<T>>,
     result_receiver: Option<oneshot::Receiver<anyhow::Result<()>>>,
     base_path: PathBuf,
     node_name: String,
@@ -673,9 +675,6 @@ pub struct Farmer {
     _drop_at_exit: DropCollection,
     _async_drop: Option<AsyncDropFutures>,
 }
-
-static_assertions::assert_impl_all!(Farmer: Send, Sync);
-static_assertions::assert_impl_all!(Plot: Send, Sync);
 
 /// Info about some plot
 #[derive(Debug)]
@@ -751,7 +750,7 @@ pub struct InitialPlottingProgress {
 
 /// Plot structure
 #[derive(Debug)]
-pub struct Plot {
+pub struct Plot<T: subspace_proof_of_space::Table> {
     directory: PathBuf,
     progress:
         watch::Receiver<Option<(usize, PlottedSector, Arc<tokio::sync::OwnedSemaphorePermit>)>>,
@@ -759,6 +758,7 @@ pub struct Plot {
     initial_plotting_progress: Arc<Mutex<InitialPlottingProgress>>,
     allocated_space: u64,
     _drop_at_exit: DropCollection,
+    _table: std::marker::PhantomData<T>,
 }
 
 #[pin_project::pin_project]
@@ -818,10 +818,10 @@ impl Stream for InitialPlottingProgressStream {
     }
 }
 
-struct PlotOptions<'a, PG> {
+struct PlotOptions<'a, PG, T: subspace_proof_of_space::Table> {
     pub disk_farm_idx: usize,
     pub reward_address: PublicKey,
-    pub node: &'a Node<Farmer>,
+    pub node: &'a Node<Farmer<T>>,
     pub piece_getter: PG,
     pub concurrent_plotting_semaphore: Arc<tokio::sync::Semaphore>,
     pub description: &'a PlotDescription,
@@ -829,7 +829,7 @@ struct PlotOptions<'a, PG> {
     pub erasure_coding: ErasureCoding,
 }
 
-impl Plot {
+impl<T: subspace_proof_of_space::Table> Plot<T> {
     async fn new(
         PlotOptions {
             disk_farm_idx,
@@ -843,6 +843,7 @@ impl Plot {
         }: PlotOptions<
             '_,
             impl subspace_farmer_components::plotting::PieceGetter + Send + 'static,
+            T,
         >,
     ) -> Result<(Self, SingleDiskPlot), BuildError> {
         let directory = description.directory.clone();
@@ -865,7 +866,7 @@ impl Plot {
             piece_memory_cache: node.dsn.piece_memory_cache.clone(),
         };
         let single_disk_plot =
-            SingleDiskPlot::new::<_, _, PosTable>(description, disk_farm_idx).await?;
+            SingleDiskPlot::new::<_, _, T>(description, disk_farm_idx).await?;
         let mut drop_at_exit = DropCollection::new();
 
         let progress = {
@@ -899,6 +900,7 @@ impl Plot {
                             as u64,
                 })),
                 _drop_at_exit: drop_at_exit,
+                _table: Default::default(),
             },
             single_disk_plot,
         ))
@@ -959,7 +961,7 @@ impl Plot {
     }
 }
 
-impl Farmer {
+impl<T: subspace_proof_of_space::Table> Farmer<T> {
     /// Farmer builder
     pub fn builder() -> Builder {
         Builder::default()
@@ -993,7 +995,7 @@ impl Farmer {
     }
 
     /// Iterate over plots
-    pub async fn iter_plots(&'_ self) -> impl Iterator<Item = &'_ Plot> + '_ {
+    pub async fn iter_plots(&'_ self) -> impl Iterator<Item = &'_ Plot<T>> + '_ {
         self.plot_info.values()
     }
 

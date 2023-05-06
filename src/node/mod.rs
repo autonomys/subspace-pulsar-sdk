@@ -27,8 +27,6 @@ use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::SubspaceConfiguration;
 
-use crate::PosTable;
-
 mod builder;
 pub mod chain_spec;
 #[cfg(feature = "executor")]
@@ -43,6 +41,9 @@ pub use sdk_substrate::*;
 /// Trait which abstracts farmer for node
 #[async_trait::async_trait]
 pub trait Farmer {
+    /// Proof of space table
+    type Table: subspace_proof_of_space::Table;
+
     /// Fetch piece by its hash
     async fn get_piece_by_hash(
         piece_index_hash: subspace_core_primitives::PieceIndexHash,
@@ -79,7 +80,7 @@ impl<F: Farmer + 'static> Config<F> {
         let database_source = base.database.clone();
 
         let partial_components =
-            subspace_service::new_partial::<PosTable, RuntimeApi, ExecutorDispatch>(&base)
+            subspace_service::new_partial::<F::Table, RuntimeApi, ExecutorDispatch>(&base)
                 .context("Failed to build a partial subspace node")?;
 
         let (subspace_networking, dsn, mut runner) = {
@@ -161,7 +162,7 @@ impl<F: Farmer + 'static> Config<F> {
         .context("Failed to run node runner future")?;
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(3f32 / 4f32);
-        let full_client = subspace_service::new_full::<PosTable, _, _, _>(
+        let full_client = subspace_service::new_full::<F::Table, _, _, _>(
             configuration,
             partial_components,
             true,
@@ -350,8 +351,6 @@ pub struct Node<F: Farmer> {
     #[derivative(Debug = "ignore")]
     _farmer: std::marker::PhantomData<F>,
 }
-
-static_assertions::assert_impl_all!(Node<crate::farmer::Farmer>: Send, Sync);
 
 /// Hash type
 pub type Hash = <subspace_runtime::Runtime as frame_system::Config>::Hash;
