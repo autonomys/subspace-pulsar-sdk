@@ -1,3 +1,5 @@
+#![warn(unused_crate_dependencies)]
+
 use std::pin::Pin;
 use std::sync::Arc;
 

@@ -1,6 +1,6 @@
 //! Subspace SDK for easy running of both Subspace node and farmer
 
-#![warn(missing_docs, clippy::dbg_macro, clippy::unwrap_used, clippy::disallowed_types)]
+#![warn(missing_docs, clippy::dbg_macro, clippy::unwrap_used, clippy::disallowed_types, unused_crate_dependencies)]
 #![feature(type_changing_struct_update, concat_idents, const_option)]
 
 /// Module related to the farmer
