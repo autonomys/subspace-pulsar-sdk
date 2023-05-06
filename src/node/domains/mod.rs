@@ -49,6 +49,12 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     }
 }
 
+/// Events from subspace pallet
+pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
+
+/// Events from subspace pallet
+pub type RewardsEvent = pallet_rewards::Event<subspace_runtime::Runtime>;
+
 /// New block notification
 #[derive(Debug, Clone)]
 #[non_exhaustive]
@@ -108,7 +114,7 @@ pub struct Config {
 }
 
 sdk_utils::generate_builder!(Config);
-crate::derive_base!(crate::node::Base => ConfigBuilder);
+sdk_substrate::derive_base!(crate::node::Base => ConfigBuilder);
 
 pub(crate) type FullClient = domain_service::FullClient<Block, RuntimeApi, ExecutorDispatch>;
 pub(crate) type NewFull = domain_service::NewFullSystem<

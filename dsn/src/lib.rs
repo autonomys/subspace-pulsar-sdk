@@ -1,5 +1,5 @@
 #![feature(concat_idents, const_option)]
-#![warn(unused_crate_dependencies)]
+#![warn(unused_crate_dependencies, unused_features)]
 
 pub mod builder;
 pub mod provider_storage_utils;

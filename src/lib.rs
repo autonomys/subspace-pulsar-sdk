@@ -5,7 +5,8 @@
     clippy::dbg_macro,
     clippy::unwrap_used,
     clippy::disallowed_types,
-    unused_crate_dependencies
+    unused_crate_dependencies,
+    unused_features
 )]
 #![feature(type_changing_struct_update, concat_idents, const_option)]
 

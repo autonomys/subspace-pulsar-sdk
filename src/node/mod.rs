@@ -22,7 +22,7 @@ use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{
     PieceByHashRequest, PieceByHashResponse, SegmentHeaderRequest, SegmentHeaderResponse,
 };
-use subspace_runtime::RuntimeApi;
+use subspace_runtime::{RuntimeApi, RuntimeEvent as Event};
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::SubspaceConfiguration;
@@ -33,13 +33,12 @@ mod builder;
 pub mod chain_spec;
 #[cfg(feature = "executor")]
 pub mod domains;
-mod substrate;
 
 pub use builder::*;
 #[cfg(feature = "executor")]
 pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
 pub use sdk_dsn::builder::*;
-pub use substrate::*;
+pub use sdk_substrate::*;
 
 impl Config {
     /// Start a node with supplied parameters

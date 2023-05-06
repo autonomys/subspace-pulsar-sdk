@@ -1,3 +1,6 @@
+#![warn(unused_crate_dependencies, unused_features)]
+#![feature(concat_idents)]
+
 use std::net::SocketAddr;
 use std::path::Path;
 
@@ -12,7 +15,6 @@ use sc_service::config::{
 use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use sdk_utils::{Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
-pub use subspace_runtime::RuntimeEvent as Event;
 pub use types::*;
 
 mod types;
@@ -76,60 +78,60 @@ pub struct Base {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! derive_base {
-        (
-            $base:ty => $builder:ident {
-                $(
-                    #[doc = $doc:literal]
-                    $field:ident : $field_ty:ty
-                ),+
-                $(,)?
-            }
-        ) => {
-            impl $builder {
-                $(
-                #[doc = $doc]
-                pub fn $field(&self, $field: impl Into<$field_ty>) -> Self {
-                    let mut me = self.clone();
-                    me.base = me.base.$field($field.into());
-                    me
-                }
-                )*
-            }
-        };
-        ( $base:ty => $builder:ident ) => {
-            $crate::derive_base!($base => $builder {
-                /// Force block authoring
-                force_authoring: bool,
-                /// Set node role
-                role: $crate::node::Role,
-                /// Blocks pruning options
-                blocks_pruning: $crate::node::BlocksPruning,
-                /// State pruning options
-                state_pruning: $crate::node::PruningMode,
-                /// Set execution strategies
-                execution_strategy: $crate::node::ExecutionStrategy,
-                /// Implementation name
-                impl_name: $crate::node::ImplName,
-                /// Implementation version
-                impl_version: $crate::node::ImplVersion,
-                /// Rpc settings
-                rpc: $crate::node::Rpc,
-                /// Network settings
-                network: $crate::node::Network,
-                /// Offchain worker settings
-                offchain_worker: $crate::node::OffchainWorker,
-                /// Enable color for substrate informant
-                informant_enable_color: bool,
-                /// Additional telemetry endpoints
-                telemetry: Vec<(sdk_utils::Multiaddr, u8)>,
-            });
+    (
+        $base:ty => $builder:ident {
+            $(
+                #[doc = $doc:literal]
+                $field:ident : $field_ty:ty
+            ),+
+            $(,)?
         }
+    ) => {
+        impl $builder {
+            $(
+            #[doc = $doc]
+            pub fn $field(&self, $field: impl Into<$field_ty>) -> Self {
+                let mut me = self.clone();
+                me.base = me.base.$field($field.into());
+                me
+            }
+            )*
+        }
+    };
+    ( $base:ty => $builder:ident ) => {
+        $crate::derive_base!($base => $builder {
+            /// Force block authoring
+            force_authoring: bool,
+            /// Set node role
+            role: $crate::Role,
+            /// Blocks pruning options
+            blocks_pruning: $crate::BlocksPruning,
+            /// State pruning options
+            state_pruning: $crate::PruningMode,
+            /// Set execution strategies
+            execution_strategy: $crate::ExecutionStrategy,
+            /// Implementation name
+            impl_name: $crate::ImplName,
+            /// Implementation version
+            impl_version: $crate::ImplVersion,
+            /// Rpc settings
+            rpc: $crate::Rpc,
+            /// Network settings
+            network: $crate::Network,
+            /// Offchain worker settings
+            offchain_worker: $crate::OffchainWorker,
+            /// Enable color for substrate informant
+            informant_enable_color: bool,
+            /// Additional telemetry endpoints
+            telemetry: Vec<(sdk_utils::Multiaddr, u8)>,
+        });
     }
+}
 
 impl Base {
     const NODE_NAME_MAX_LENGTH: usize = 64;
 
-    pub(crate) async fn configuration<CS>(
+    pub async fn configuration<CS>(
         self,
         directory: impl AsRef<Path>,
         chain_spec: CS,

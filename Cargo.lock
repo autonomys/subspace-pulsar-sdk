@@ -9254,6 +9254,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdk-substrate"
+version = "0.1.0"
+dependencies = [
+ "bytesize",
+ "derivative",
+ "derive_builder 0.12.0",
+ "derive_more",
+ "names 0.14.0",
+ "sc-chain-spec",
+ "sc-executor",
+ "sc-informant",
+ "sc-network",
+ "sc-service",
+ "sc-state-db",
+ "sc-storage-monitor",
+ "sdk-utils",
+ "serde",
+ "serde_json",
+ "sp-runtime",
+ "tokio",
+]
+
+[[package]]
 name = "sdk-utils"
 version = "0.1.0"
 dependencies = [
@@ -10916,7 +10939,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "backoff",
- "bytesize",
  "clap",
  "console-subscriber",
  "core-eth-relay-runtime",
@@ -10939,7 +10961,6 @@ dependencies = [
  "hex-literal",
  "jemallocator",
  "lru 0.10.0",
- "names 0.14.0",
  "pallet-rewards",
  "pallet-subspace",
  "pallet-transaction-payment-rpc-runtime-api",
@@ -10952,16 +10973,15 @@ dependencies = [
  "sc-consensus-slots",
  "sc-consensus-subspace-rpc",
  "sc-executor",
- "sc-informant",
  "sc-network",
  "sc-network-sync",
  "sc-rpc-api",
  "sc-service",
- "sc-state-db",
  "sc-storage-monitor",
  "sc-subspace-chain-specs",
  "sc-telemetry",
  "sdk-dsn",
+ "sdk-substrate",
  "sdk-utils",
  "serde",
  "serde_json",

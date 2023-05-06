@@ -88,7 +88,7 @@ pub struct Config {
 }
 
 sdk_utils::generate_builder!(Config);
-crate::derive_base!(crate::node::Base => ConfigBuilder);
+sdk_substrate::derive_base!(crate::node::Base => ConfigBuilder);
 
 /// Chain spec of the core domain
 pub type ChainSpec = chain_spec::ChainSpec;

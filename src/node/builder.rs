@@ -5,13 +5,13 @@ use derivative::Derivative;
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
 use sdk_dsn::builder::{Dsn, DsnBuilder};
-use sdk_utils::ByteSize;
-use serde::{Deserialize, Serialize};
-
-use super::substrate::{
+use sdk_substrate::{
     Base, BaseBuilder, ExecutionStrategy, NetworkBuilder, OffchainWorkerBuilder, RpcBuilder,
     StorageMonitor,
 };
+use sdk_utils::ByteSize;
+use serde::{Deserialize, Serialize};
+
 use super::{ChainSpec, Node};
 
 /// Wrapper with default value for piece cache size
@@ -142,4 +142,4 @@ impl Builder {
     }
 }
 
-crate::derive_base!(Base => Builder);
+sdk_substrate::derive_base!(Base => Builder);

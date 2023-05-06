@@ -4,12 +4,6 @@ use derive_more::{Deref, DerefMut, Display, From};
 use sdk_utils::ByteSize;
 use serde::{Deserialize, Serialize};
 
-/// Events from subspace pallet
-pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
-
-/// Events from subspace pallet
-pub type RewardsEvent = pallet_rewards::Event<subspace_runtime::Runtime>;
-
 /// Block pruning settings.
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, Eq, PartialOrd, Ord)]
 pub enum BlocksPruning {
@@ -153,7 +147,7 @@ impl From<ExecutionStrategy> for sc_service::config::ExecutionStrategies {
 #[derivative(Default)]
 #[serde(transparent)]
 pub struct ImplName(
-    #[derivative(Default(value = "env!(\"CARGO_PKG_NAME\").to_owned()"))] pub(crate) String,
+    #[derivative(Default(value = "env!(\"CARGO_PKG_NAME\").to_owned()"))] pub String,
 );
 
 /// Type wrapper with default value for implementation version
@@ -166,7 +160,7 @@ pub struct ImplVersion(
     #[derivative(Default(
         value = "format!(\"{}-{}\", env!(\"CARGO_PKG_VERSION\"), env!(\"GIT_HASH\"))"
     ))]
-    pub(crate) String,
+    pub String,
 );
 
 /// Storage monitor
@@ -193,7 +187,7 @@ impl From<StorageMonitor> for sc_storage_monitor::StorageMonitorParams {
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct MaxSubsPerConn(#[derivative(Default(value = "1024"))] pub(crate) usize);
+pub struct MaxSubsPerConn(#[derivative(Default(value = "1024"))] pub usize);
 
 /// Offchain worker config
 #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq, Eq)]
