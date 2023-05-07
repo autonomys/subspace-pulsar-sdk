@@ -1,4 +1,13 @@
-#![warn(unused_crate_dependencies, unused_features)]
+//! Utilities crate shared across all SDK crates
+
+#![warn(
+    missing_docs,
+    clippy::dbg_macro,
+    clippy::unwrap_used,
+    clippy::disallowed_types,
+    unused_features
+)]
+#![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
 use std::pin::Pin;
 use std::sync::Arc;
@@ -22,17 +31,20 @@ use subspace_core_primitives::PUBLIC_KEY_LENGTH;
 
 mod rpc_client;
 
+/// Rpc implementation over jsonrpsee_core debug rpc module
 #[derive(Clone, Debug)]
 pub struct Rpc {
     inner: Arc<RpcModule<()>>,
 }
 
 impl Rpc {
+    /// Constructor for our rpc from substrate rpc handlers
     pub fn new(handlers: &sc_service::RpcHandlers) -> Self {
         let inner = handlers.handle();
         Self { inner }
     }
 
+    /// Subscribe to new block headers
     pub async fn subscribe_new_heads<'a, 'b, T>(
         &'a self,
     ) -> Result<impl Stream<Item = T::Header> + Send + Sync + Unpin + 'static, Error>
@@ -54,6 +66,7 @@ impl Rpc {
         Ok(stream)
     }
 
+    /// Subscribe to new finalized block headers
     pub async fn subscribe_finalized_heads<'a, 'b, T>(
         &'a self,
     ) -> Result<impl Stream<Item = T::Header> + Send + Sync + Unpin + 'static, Error>
@@ -75,6 +88,7 @@ impl Rpc {
         Ok(stream)
     }
 
+    /// Get substrate events for some block
     pub async fn get_events<T>(
         &self,
         block: Option<T::Hash>,
@@ -164,6 +178,7 @@ impl SubscriptionClientT for Rpc {
     }
 }
 
+/// Useful predicate for serde, which allows to skip type during serialization
 pub fn is_default<T: Default + PartialEq>(t: &T) -> bool {
     t == &T::default()
 }
@@ -182,6 +197,7 @@ impl<F: FnOnce()> Drop for Defer<F> {
     }
 }
 
+/// Useful type which will ensure that things will be dropped
 #[derive(Default, derivative::Derivative)]
 #[derivative(Debug)]
 pub struct DropCollection {
@@ -190,14 +206,17 @@ pub struct DropCollection {
 }
 
 impl DropCollection {
+    /// Constructor
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Run closure during drop
     pub fn defer<F: FnOnce() + Sync + Send + 'static>(&mut self, f: F) {
         self.push(Defer::new(f))
     }
 
+    /// Add something to drop collection
     pub fn push<T: Send + Sync + 'static>(&mut self, t: T) {
         self.vec.push(Box::new(t))
     }
@@ -221,6 +240,7 @@ impl<T: Send + Sync + 'static> Extend<T> for DropCollection {
     }
 }
 
+/// Type for dropping things asynchronously
 #[derive(Default, derivative::Derivative)]
 #[derivative(Debug)]
 pub struct AsyncDropFutures {
@@ -229,14 +249,17 @@ pub struct AsyncDropFutures {
 }
 
 impl AsyncDropFutures {
+    /// Constructor
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Push some future
     pub fn push<F: Future<Output = ()> + Send + Sync + 'static>(&mut self, fut: F) {
         self.vec.push(Box::pin(fut))
     }
 
+    /// Drop and wait on every future
     pub async fn async_drop(self) {
         for f in self.vec {
             f.await;
@@ -368,6 +391,7 @@ impl From<MultiaddrWithPeerId> for Multiaddr {
     }
 }
 
+/// Spawn task with provided name (if possible)
 #[cfg(not(tokio_unstable))]
 pub fn task_spawn<F>(name: impl AsRef<str>, future: F) -> tokio::task::JoinHandle<F::Output>
 where
@@ -378,6 +402,7 @@ where
     tokio::task::spawn(future)
 }
 
+/// Spawn task with provided name (if possible)
 #[cfg(tokio_unstable)]
 pub fn task_spawn<F>(name: impl AsRef<str>, future: F) -> tokio::task::JoinHandle<F::Output>
 where
@@ -390,6 +415,7 @@ where
         .expect("Spawning task never fails")
 }
 
+/// Spawn task with provided name (if possible)
 #[cfg(not(tokio_unstable))]
 pub fn task_spawn_blocking<F, R>(name: impl AsRef<str>, f: F) -> tokio::task::JoinHandle<R>
 where
@@ -400,6 +426,7 @@ where
     tokio::task::spawn_blocking(f)
 }
 
+/// Spawn task with provided name (if possible)
 #[cfg(tokio_unstable)]
 pub fn task_spawn_blocking<F, R>(name: impl AsRef<str>, f: F) -> tokio::task::JoinHandle<R>
 where
@@ -412,9 +439,11 @@ where
         .expect("Spawning task never fails")
 }
 
+/// Substrate storage key abstraction
 pub struct StorageKey(pub Vec<u8>);
 
 impl StorageKey {
+    /// Constructor which accepts storage keys
     pub fn new<IT, K>(keys: IT) -> Self
     where
         IT: IntoIterator<Item = K>,
@@ -423,6 +452,7 @@ impl StorageKey {
         Self(keys.into_iter().flat_map(|key| sp_core_hashing::twox_128(key.as_ref())).collect())
     }
 
+    /// Storage key for events
     pub fn events() -> Self {
         Self::new(["System", "Events"])
     }
@@ -607,6 +637,8 @@ mod parse_ss58 {
 }
 
 pub mod chain_spec {
+    //! Subspace chain spec related utilities
+
     use frame_support::traits::Get;
     use sc_service::Properties;
     use sp_core::crypto::AccountId32;
@@ -642,6 +674,8 @@ pub mod chain_spec {
     }
 }
 
+/// Useful macro to generate some common methods and trait implementations for
+/// builders
 #[macro_export]
 macro_rules! generate_builder {
     ( $name:ident ) => {

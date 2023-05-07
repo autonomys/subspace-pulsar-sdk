@@ -69,7 +69,7 @@ pub struct CorePaymentsDomainNode {
 }
 
 impl CorePaymentsDomainNode {
-    pub async fn new(
+    pub(crate) async fn new(
         cfg: Config,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,

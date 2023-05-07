@@ -8,7 +8,6 @@
     unused_features
 )]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
-#![feature(type_changing_struct_update, concat_idents, const_option)]
 
 /// Module related to the farmer
 pub use sdk_farmer::{Builder as FarmerBuilder, Info as FarmerInfo, PlotDescription};
@@ -36,7 +35,7 @@ pub mod farmer {
 
 /// Node related things located here
 pub mod node {
-    pub use sdk_dsn::builder::*;
+    pub use sdk_dsn::*;
     pub use sdk_node::chain_spec::ChainSpec;
     pub use sdk_node::{chain_spec, domains, Event, RewardsEvent, SubspaceEvent};
     pub use sdk_substrate::*;

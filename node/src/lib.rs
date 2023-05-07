@@ -1,11 +1,14 @@
+//! Crate with subspace node
+
 #![warn(
+    missing_docs,
     clippy::dbg_macro,
     clippy::unwrap_used,
     clippy::disallowed_types,
-    unused_crate_dependencies,
     unused_features
 )]
-#![feature(type_changing_struct_update, concat_idents, const_option)]
+#![cfg_attr(not(test), warn(unused_crate_dependencies))]
+#![feature(concat_idents)]
 
 use std::io;
 use std::path::Path;
@@ -20,8 +23,7 @@ use sc_consensus_subspace_rpc::SegmentHeaderProvider;
 use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, SyncState};
 use sc_rpc_api::state::StateApiClient;
-use sdk_dsn::builder::{DsnOptions, DsnShared};
-use sdk_dsn::NodePieceCache;
+use sdk_dsn::{DsnOptions, DsnShared, NodePieceCache};
 use sdk_traits::Farmer;
 use sdk_utils::{DropCollection, MultiaddrWithPeerId, PublicKey};
 use sp_consensus::SyncOracle;
@@ -313,8 +315,9 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 
 /// Chain spec for subspace node
 pub type ChainSpec = chain_spec::ChainSpec;
-pub type FullClient = subspace_service::FullClient<subspace_runtime::RuntimeApi, ExecutorDispatch>;
-pub type NewFull = subspace_service::NewFull<
+pub(crate) type FullClient =
+    subspace_service::FullClient<subspace_runtime::RuntimeApi, ExecutorDispatch>;
+pub(crate) type NewFull = subspace_service::NewFull<
     FullClient,
     subspace_service::tx_pre_validator::PrimaryChainTxPreValidator<
         RuntimeBlock,
@@ -337,11 +340,10 @@ pub struct Node<F: Farmer> {
     sync_service: Arc<sc_network_sync::service::chain_sync::SyncingService<RuntimeBlock>>,
     #[derivative(Debug = "ignore")]
     network_service: Arc<NetworkService<RuntimeBlock, Hash>>,
-
-    pub rpc_handle: sdk_utils::Rpc,
-    pub stop_sender: mpsc::Sender<oneshot::Sender<()>>,
-    pub name: String,
-    pub dsn: DsnShared<FullClient>,
+    rpc_handle: sdk_utils::Rpc,
+    stop_sender: mpsc::Sender<oneshot::Sender<()>>,
+    name: String,
+    dsn: DsnShared<FullClient>,
     #[derivative(Debug = "ignore")]
     _drop_at_exit: DropCollection,
     #[derivative(Debug = "ignore")]
@@ -791,7 +793,7 @@ fn get_piece_by_hash<F: Farmer>(
     weak_readers_and_pieces: std::sync::Weak<
         parking_lot::Mutex<Option<subspace_farmer::utils::readers_and_pieces::ReadersAndPieces>>,
     >,
-    farmer_piece_store: Arc<tokio::sync::Mutex<Option<sdk_dsn::builder::PieceStore>>>,
+    farmer_piece_store: Arc<tokio::sync::Mutex<Option<sdk_dsn::PieceStore>>>,
     piece_cache: NodePieceCache<impl sc_client_api::AuxStore>,
     piece_memory_cache: subspace_farmer_components::piece_caching::PieceMemoryCache,
 ) -> impl std::future::Future<Output = Option<PieceByHashResponse>> {

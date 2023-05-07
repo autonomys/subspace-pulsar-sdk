@@ -1,4 +1,13 @@
-#![warn(unused_crate_dependencies, unused_features)]
+//! Crate with abstraction over substrate logic
+
+#![warn(
+    missing_docs,
+    clippy::dbg_macro,
+    clippy::unwrap_used,
+    clippy::disallowed_types,
+    unused_features
+)]
+#![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![feature(concat_idents)]
 
 use std::net::SocketAddr;

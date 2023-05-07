@@ -4,7 +4,7 @@ use std::path::Path;
 use derivative::Derivative;
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
-use sdk_dsn::builder::{Dsn, DsnBuilder};
+use sdk_dsn::{Dsn, DsnBuilder};
 use sdk_substrate::{
     Base, BaseBuilder, ExecutionStrategy, NetworkBuilder, OffchainWorkerBuilder, RpcBuilder,
     StorageMonitor,

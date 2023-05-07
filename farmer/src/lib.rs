@@ -5,9 +5,9 @@
     clippy::dbg_macro,
     clippy::unwrap_used,
     clippy::disallowed_types,
-    unused_crate_dependencies,
     unused_features
 )]
+#![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![feature(const_option)]
 
 use std::collections::HashMap;
@@ -245,7 +245,7 @@ impl<T: subspace_proof_of_space::Table> sdk_traits::Farmer for Farmer<T> {
 
     async fn get_piece_by_hash(
         piece_index_hash: PieceIndexHash,
-        piece_store: &sdk_dsn::builder::PieceStore,
+        piece_store: &sdk_dsn::PieceStore,
         weak_readers_and_pieces: &std::sync::Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
         piece_memory_cache: &PieceMemoryCache,
     ) -> Option<subspace_core_primitives::Piece> {

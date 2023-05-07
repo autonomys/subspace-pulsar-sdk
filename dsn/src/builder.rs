@@ -152,32 +152,49 @@ impl DsnBuilder {
 
 const MAX_PROVIDER_RECORDS_LIMIT: NonZeroUsize = NonZeroUsize::new(100000).expect("100000 > 0"); // ~ 10 MB
 
+/// Options for DSN
 pub struct DsnOptions<C, ASNS, PieceByHash, SegmentHeaderByIndexes> {
+    /// Client to aux storage for node piece cache
     pub client: Arc<C>,
+    /// Node telemetry name
     pub node_name: String,
+    /// Archived segment notification stream
     pub archived_segment_notification_stream: ASNS,
+    /// Node piece cache size
     pub piece_cache_size: sdk_utils::ByteSize,
+    /// Path for dsn
     pub base_path: PathBuf,
+    /// Keypair for networking
     pub keypair: subspace_networking::libp2p::identity::Keypair,
+    /// Get piece by hash handler
     pub get_piece_by_hash: PieceByHash,
+    /// Get segment header by segment indexes handler
     pub get_segment_header_by_segment_indexes: SegmentHeaderByIndexes,
 }
 
+/// Farmer piece store
 pub type PieceStore = subspace_farmer::utils::parity_db_store::ParityDbStore<
     subspace_networking::libp2p::kad::record::Key,
     subspace_core_primitives::Piece,
 >;
 
+/// Shared Dsn structure between node and farmer
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
+    /// Dsn node
     pub node: subspace_networking::Node,
+    /// Farmer readers and pieces
     pub farmer_readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
+    /// Farmer piece store
     #[derivative(Debug = "ignore")]
     pub farmer_piece_store: Arc<tokio::sync::Mutex<Option<PieceStore>>>,
+    /// Farmer provider storage
     pub farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
+    /// Farmer piece cache
     #[derivative(Debug = "ignore")]
     pub piece_cache: NodePieceCache<C>,
+    /// Farmer memory cache
     #[derivative(Debug = "ignore")]
     pub piece_memory_cache: PieceMemoryCache,
 
@@ -185,6 +202,7 @@ pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
 }
 
 impl Dsn {
+    /// Build dsn
     pub fn build_dsn<B, C, ASNS, PieceByHash, F1, SegmentHeaderByIndexes>(
         self,
         options: DsnOptions<C, ASNS, PieceByHash, SegmentHeaderByIndexes>,
