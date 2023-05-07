@@ -16,3 +16,12 @@ pub trait Farmer {
         piece_memory_cache: &subspace_farmer_components::piece_caching::PieceMemoryCache,
     ) -> Option<subspace_core_primitives::Piece>;
 }
+
+pub trait Node {
+    type Client: sc_client_api::AuxStore + Send + Sync + 'static;
+    type Rpc: subspace_farmer::node_client::NodeClient + Clone;
+
+    fn name(&self) -> &str;
+    fn dsn(&self) -> &sdk_dsn::builder::DsnShared<Self::Client>;
+    fn rpc(&self) -> &Self::Rpc;
+}

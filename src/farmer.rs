@@ -32,7 +32,7 @@ use subspace_networking::ParityDbProviderStorage;
 use subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
 use tokio::sync::{oneshot, watch, Mutex};
 use tracing_futures::Instrument;
-use sdk_node::Node;
+use sdk_traits::Node;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
 
@@ -106,10 +106,11 @@ mod builder {
     use derive_builder::Builder;
     use derive_more::{Deref, DerefMut, Display, From};
     use sdk_utils::{ByteSize, PublicKey};
+    use sdk_traits::Node;
     use serde::{Deserialize, Serialize};
 
     use super::{BuildError, CacheDescription};
-    use crate::{Farmer, Node, PlotDescription};
+    use crate::{Farmer, PlotDescription};
 
     #[derive(
         Debug,
@@ -197,10 +198,10 @@ mod builder {
         }
 
         /// Open and start farmer
-        pub async fn build<T: subspace_proof_of_space::Table>(
+        pub async fn build<N: Node, T: subspace_proof_of_space::Table>(
             self,
             reward_address: PublicKey,
-            node: &Node<Farmer<T>>,
+            node: &N,
             plots: &[PlotDescription],
             cache: CacheDescription,
         ) -> Result<Farmer<T>, BuildError> {
@@ -408,10 +409,10 @@ fn handler_on_sector_plotted(
 
 impl Config {
     /// Open and start farmer
-    pub async fn build<T: subspace_proof_of_space::Table>(
+    pub async fn build<N: Node, T: subspace_proof_of_space::Table>(
         self,
         reward_address: PublicKey,
-        node: &Node<Farmer<T>>,
+        node: &N,
         plots: &[PlotDescription],
         cache: CacheDescription,
     ) -> Result<Farmer<T>, BuildError> {
@@ -437,9 +438,9 @@ impl Config {
             Arc::new(tokio::sync::Semaphore::new(max_concurrent_plots.get()));
 
         let base_path = cache.directory;
-        let readers_and_pieces = Arc::clone(&node.dsn.farmer_readers_and_pieces);
+        let readers_and_pieces = Arc::clone(&node.dsn().farmer_readers_and_pieces);
 
-        let node_name = node.name.clone();
+        let node_name = node.name().to_owned();
 
         let piece_cache_db_path = base_path.join("piece_cache_db");
 
@@ -461,7 +462,7 @@ impl Config {
                 "Initializing provider storage..."
             );
 
-            let peer_id = node.dsn.node.id();
+            let peer_id = node.dsn().node.id();
 
             let db_provider_storage =
                 ParityDbProviderStorage::new(&provider_db_path, provided_keys_limit, peer_id)
@@ -502,19 +503,19 @@ impl Config {
         .map_err(|error| anyhow::anyhow!("Failed to create erasure coding for plot: {error}"))?;
 
         let piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
-            node.dsn.node.clone(),
+            node.dsn().node.clone(),
             Some(SegmentCommitmentPieceValidator::new(
-                node.dsn.node.clone(),
-                node.rpc_handle.clone(),
+                node.dsn().node.clone(),
+                node.rpc().clone(),
                 kzg.clone(),
                 // TODO: Consider introducing and using global in-memory segment commitments cache
                 parking_lot::Mutex::new(lru::LruCache::new(SEGMENT_COMMITMENTS_CACHE_SIZE)),
             )),
         );
         let piece_getter = Arc::new(FarmerPieceGetter::new(
-            NodePieceGetter::new(DsnPieceGetter::new(piece_provider), node.dsn.piece_cache.clone()),
+            NodePieceGetter::new(DsnPieceGetter::new(piece_provider), node.dsn().piece_cache.clone()),
             Arc::clone(&piece_cache),
-            node.dsn.node.clone(),
+            node.dsn().node.clone(),
         ));
 
         for (disk_farm_idx, description) in plots.iter().enumerate() {
@@ -546,7 +547,7 @@ impl Config {
                 move || drop(dropped_sender.send(()))
             });
 
-            let node = node.dsn.node.clone();
+            let node = node.dsn().node.clone();
             let node_name = node_name.clone();
             // Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
@@ -576,10 +577,6 @@ impl Config {
 
         sdk_utils::task_spawn_blocking(format!("subspace-sdk-farmer-{node_name}-plots-driver"), {
             let handle = tokio::runtime::Handle::current();
-            let is_node_closed = {
-                let stop_sender = node.stop_sender.clone();
-                move || stop_sender.is_closed()
-            };
 
             move || {
                 use future::Either::*;
@@ -587,30 +584,28 @@ impl Config {
                 let result = match handle
                     .block_on(future::select(single_disk_plots_stream.next(), drop_receiver))
                 {
-                    Left((_, _)) if is_node_closed() => Ok(()),
-                    Left((maybe_result, _)) =>
-                        maybe_result.expect("there is always at least one plot"),
+                    Left((maybe_result, _)) => maybe_result.expect("We have at least one plot").context("Farmer exited with error"),
                     Right((_, _)) => Ok(()),
                 };
                 let _ = result_sender.send(result);
             }
         });
 
-        node.dsn.farmer_piece_store.lock().await.replace(piece_store);
-        node.dsn.farmer_provider_storage.swap(Some(farmer_provider_storage));
+        node.dsn().farmer_piece_store.lock().await.replace(piece_store);
+        node.dsn().farmer_provider_storage.swap(Some(farmer_provider_storage));
 
         drop_at_exit.push(
             sdk_dsn::start_announcements_processor(
-                node.dsn.node.clone(),
+                node.dsn().node.clone(),
                 Arc::clone(&piece_cache),
                 Arc::downgrade(&readers_and_pieces),
-                &node.name,
+                &node.name(),
             )
             .context("Failed to start announcement processor")?,
         );
 
         drop_at_exit.defer({
-            let provider_storage = node.dsn.farmer_provider_storage.clone();
+            let provider_storage = node.dsn().farmer_provider_storage.clone();
             move || {
                 let _ = drop_sender.send(());
                 provider_storage.swap(None);
@@ -620,7 +615,7 @@ impl Config {
         let mut async_drop = AsyncDropFutures::new();
 
         async_drop.push({
-            let piece_store = Arc::clone(&node.dsn.farmer_piece_store);
+            let piece_store = Arc::clone(&node.dsn().farmer_piece_store);
             async move {
                 piece_store.lock().await.take();
             }
@@ -652,7 +647,7 @@ impl Config {
             result_receiver: Some(result_receiver),
             node_name,
             base_path,
-            app_info: subspace_farmer::NodeClient::farmer_app_info(&node.rpc_handle)
+            app_info: subspace_farmer::NodeClient::farmer_app_info(node.rpc())
                 .await
                 .expect("Node is always reachable"),
             _drop_at_exit: drop_at_exit,
@@ -818,10 +813,10 @@ impl Stream for InitialPlottingProgressStream {
     }
 }
 
-struct PlotOptions<'a, PG, T: subspace_proof_of_space::Table> {
+struct PlotOptions<'a, PG, N: sdk_traits::Node> {
     pub disk_farm_idx: usize,
     pub reward_address: PublicKey,
-    pub node: &'a Node<Farmer<T>>,
+    pub node: &'a N,
     pub piece_getter: PG,
     pub concurrent_plotting_semaphore: Arc<tokio::sync::Semaphore>,
     pub description: &'a PlotDescription,
@@ -843,12 +838,12 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
         }: PlotOptions<
             '_,
             impl subspace_farmer_components::plotting::PieceGetter + Send + 'static,
-            T,
+            impl sdk_traits::Node,
         >,
     ) -> Result<(Self, SingleDiskPlot), BuildError> {
         let directory = description.directory.clone();
         let allocated_space = description.space_pledged.as_u64();
-        let farmer_app_info = subspace_farmer::NodeClient::farmer_app_info(&node.rpc_handle)
+        let farmer_app_info = subspace_farmer::NodeClient::farmer_app_info(node.rpc())
             .await
             .expect("Node is always reachable");
         let max_pieces_in_sector = farmer_app_info.protocol_info.max_pieces_in_sector;
@@ -858,12 +853,12 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
             farmer_app_info,
             max_pieces_in_sector,
             reward_address: *reward_address,
-            node_client: node.rpc_handle.clone(),
+            node_client: node.rpc().clone(),
             kzg,
             erasure_coding,
             piece_getter,
             concurrent_plotting_semaphore,
-            piece_memory_cache: node.dsn.piece_memory_cache.clone(),
+            piece_memory_cache: node.dsn().piece_memory_cache.clone(),
         };
         let single_disk_plot =
             SingleDiskPlot::new::<_, _, T>(description, disk_farm_idx).await?;

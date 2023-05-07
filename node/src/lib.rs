@@ -343,6 +343,21 @@ pub struct Node<F: Farmer> {
     _farmer: std::marker::PhantomData<F>,
 }
 
+impl<F: Farmer> sdk_traits::Node for Node<F> {
+    type Client = FullClient;
+    type Rpc = sdk_utils::Rpc;
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn dsn(&self) -> &DsnShared<Self::Client> {
+        &self.dsn
+    }
+    fn rpc(&self) -> &Self::Rpc {
+        &self.rpc_handle
+    }
+}
+
 /// Hash type
 pub type Hash = <subspace_runtime::Runtime as frame_system::Config>::Hash;
 /// Block number
