@@ -35,6 +35,7 @@ use subspace_runtime::{RuntimeApi, RuntimeEvent as Event};
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::SubspaceConfiguration;
+use sdk_traits::Farmer;
 
 mod builder;
 pub mod chain_spec;
@@ -46,25 +47,6 @@ pub use builder::*;
 pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
 pub use sdk_dsn::builder::*;
 pub use sdk_substrate::*;
-
-/// Trait which abstracts farmer for node
-#[async_trait::async_trait]
-pub trait Farmer {
-    /// Proof of space table
-    type Table: subspace_proof_of_space::Table;
-
-    /// Fetch piece by its hash
-    async fn get_piece_by_hash(
-        piece_index_hash: subspace_core_primitives::PieceIndexHash,
-        piece_store: &sdk_dsn::builder::PieceStore,
-        weak_readers_and_pieces: &std::sync::Weak<
-            parking_lot::Mutex<
-                Option<subspace_farmer::utils::readers_and_pieces::ReadersAndPieces>,
-            >,
-        >,
-        piece_memory_cache: &subspace_farmer_components::piece_caching::PieceMemoryCache,
-    ) -> Option<subspace_core_primitives::Piece>;
-}
 
 impl<F: Farmer + 'static> Config<F> {
     /// Start a node with supplied parameters

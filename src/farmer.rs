@@ -227,7 +227,7 @@ pub enum BuildError {
 }
 
 #[async_trait::async_trait]
-impl<T: subspace_proof_of_space::Table> sdk_node::Farmer for Farmer<T> {
+impl<T: subspace_proof_of_space::Table> sdk_traits::Farmer for Farmer<T> {
     type Table = T;
 
     async fn get_piece_by_hash(

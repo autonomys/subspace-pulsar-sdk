@@ -9258,7 +9258,6 @@ name = "sdk-node"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "backoff",
  "core-eth-relay-runtime",
  "core-evm-runtime",
@@ -9297,6 +9296,7 @@ dependencies = [
  "sc-telemetry",
  "sdk-dsn",
  "sdk-substrate",
+ "sdk-traits",
  "sdk-utils",
  "serde",
  "serde_json",
@@ -9351,6 +9351,19 @@ dependencies = [
  "serde_json",
  "sp-runtime",
  "tokio",
+]
+
+[[package]]
+name = "sdk-traits"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "parking_lot 0.12.1",
+ "sdk-dsn",
+ "subspace-core-primitives",
+ "subspace-farmer",
+ "subspace-farmer-components",
+ "subspace-proof-of-space",
 ]
 
 [[package]]
@@ -11030,6 +11043,7 @@ dependencies = [
  "pin-project",
  "sdk-dsn",
  "sdk-node",
+ "sdk-traits",
  "sdk-utils",
  "serde",
  "static_assertions",
