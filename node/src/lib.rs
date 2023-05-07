@@ -20,6 +20,7 @@ use sc_consensus_subspace_rpc::SegmentHeaderProvider;
 use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, SyncState};
 use sc_rpc_api::state::StateApiClient;
+use sdk_dsn::builder::{DsnOptions, DsnShared};
 use sdk_dsn::NodePieceCache;
 use sdk_traits::Farmer;
 use sdk_utils::{DropCollection, MultiaddrWithPeerId, PublicKey};
@@ -32,11 +33,10 @@ use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{
     PieceByHashRequest, PieceByHashResponse, SegmentHeaderRequest, SegmentHeaderResponse,
 };
-use subspace_runtime::{RuntimeApi};
+use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::SubspaceConfiguration;
-use sdk_dsn::builder::{DsnShared, DsnOptions};
 
 mod builder;
 pub mod chain_spec;
@@ -53,7 +53,6 @@ pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
 
 /// Events from subspace pallet
 pub type RewardsEvent = pallet_rewards::Event<subspace_runtime::Runtime>;
-
 
 impl<F: Farmer + 'static> Config<F> {
     /// Start a node with supplied parameters

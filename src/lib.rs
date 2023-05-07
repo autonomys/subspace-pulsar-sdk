@@ -29,16 +29,16 @@ pub type Node = sdk_node::Node<Farmer>;
 
 /// Farmer related things located here
 pub mod farmer {
-    pub use sdk_farmer::{PlotDescription, CacheDescription};
+    pub use sdk_farmer::{CacheDescription, PlotDescription};
 
     pub use super::{Farmer, Plot};
 }
 
 /// Node related things located here
 pub mod node {
-    pub use sdk_node::{chain_spec, domains, Event, RewardsEvent, SubspaceEvent};
-    pub use sdk_node::chain_spec::ChainSpec;
     pub use sdk_dsn::builder::*;
+    pub use sdk_node::chain_spec::ChainSpec;
+    pub use sdk_node::{chain_spec, domains, Event, RewardsEvent, SubspaceEvent};
     pub use sdk_substrate::*;
 
     pub use super::Node;

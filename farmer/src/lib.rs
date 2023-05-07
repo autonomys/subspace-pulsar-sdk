@@ -616,7 +616,7 @@ impl Config {
                 node.dsn().node.clone(),
                 Arc::clone(&piece_cache),
                 Arc::downgrade(&readers_and_pieces),
-                &node.name(),
+                node.name(),
             )
             .context("Failed to start announcement processor")?,
         );
