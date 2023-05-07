@@ -21,6 +21,7 @@ use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, SyncState};
 use sc_rpc_api::state::StateApiClient;
 use sdk_dsn::NodePieceCache;
+use sdk_traits::Farmer;
 use sdk_utils::{DropCollection, MultiaddrWithPeerId, PublicKey};
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
@@ -35,7 +36,6 @@ use subspace_runtime::{RuntimeApi, RuntimeEvent as Event};
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::SubspaceConfiguration;
-use sdk_traits::Farmer;
 
 mod builder;
 pub mod chain_spec;
@@ -307,8 +307,7 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 
 /// Chain spec for subspace node
 pub type ChainSpec = chain_spec::ChainSpec;
-pub type FullClient =
-    subspace_service::FullClient<subspace_runtime::RuntimeApi, ExecutorDispatch>;
+pub type FullClient = subspace_service::FullClient<subspace_runtime::RuntimeApi, ExecutorDispatch>;
 pub type NewFull = subspace_service::NewFull<
     FullClient,
     subspace_service::tx_pre_validator::PrimaryChainTxPreValidator<
@@ -350,9 +349,11 @@ impl<F: Farmer> sdk_traits::Node for Node<F> {
     fn name(&self) -> &str {
         &self.name
     }
+
     fn dsn(&self) -> &DsnShared<Self::Client> {
         &self.dsn
     }
+
     fn rpc(&self) -> &Self::Rpc {
         &self.rpc_handle
     }

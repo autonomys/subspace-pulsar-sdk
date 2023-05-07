@@ -12,7 +12,7 @@ use sdk_substrate::{
 use sdk_utils::ByteSize;
 use serde::{Deserialize, Serialize};
 
-use super::{ChainSpec, Node, Farmer};
+use super::{ChainSpec, Farmer, Node};
 
 /// Wrapper with default value for piece cache size
 #[derive(

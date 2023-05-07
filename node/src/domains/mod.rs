@@ -13,11 +13,11 @@ use domain_service::DomainConfiguration;
 use futures::prelude::*;
 use sc_client_api::BlockchainEvents;
 use sc_service::ChainSpecExtension;
+use sdk_substrate::{Base, BaseBuilder};
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
 use system_domain_runtime::{Header, Runtime, RuntimeApi};
 use tracing_futures::Instrument;
-use sdk_substrate::{Base, BaseBuilder};
 
 use super::{BlockNumber, Hash};
 

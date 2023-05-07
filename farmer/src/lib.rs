@@ -23,6 +23,7 @@ use derivative::Derivative;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
 use sdk_dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
+use sdk_traits::Node;
 use sdk_utils::{AsyncDropFutures, ByteSize, DropCollection, PublicKey};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::crypto::kzg;
@@ -44,7 +45,6 @@ use subspace_networking::ParityDbProviderStorage;
 use subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
 use tokio::sync::{oneshot, watch, Mutex};
 use tracing_futures::Instrument;
-use sdk_traits::Node;
 
 use self::builder::{PieceCacheSize, ProvidedKeysLimit};
 
@@ -117,8 +117,8 @@ mod builder {
     use derivative::Derivative;
     use derive_builder::Builder;
     use derive_more::{Deref, DerefMut, Display, From};
-    use sdk_utils::{ByteSize, PublicKey};
     use sdk_traits::Node;
+    use sdk_utils::{ByteSize, PublicKey};
     use serde::{Deserialize, Serialize};
 
     use super::{BuildError, CacheDescription};
@@ -525,7 +525,10 @@ impl Config {
             )),
         );
         let piece_getter = Arc::new(FarmerPieceGetter::new(
-            NodePieceGetter::new(DsnPieceGetter::new(piece_provider), node.dsn().piece_cache.clone()),
+            NodePieceGetter::new(
+                DsnPieceGetter::new(piece_provider),
+                node.dsn().piece_cache.clone(),
+            ),
             Arc::clone(&piece_cache),
             node.dsn().node.clone(),
         ));
@@ -596,7 +599,9 @@ impl Config {
                 let result = match handle
                     .block_on(future::select(single_disk_plots_stream.next(), drop_receiver))
                 {
-                    Left((maybe_result, _)) => maybe_result.expect("We have at least one plot").context("Farmer exited with error"),
+                    Left((maybe_result, _)) => maybe_result
+                        .expect("We have at least one plot")
+                        .context("Farmer exited with error"),
                     Right((_, _)) => Ok(()),
                 };
                 let _ = result_sender.send(result);
@@ -872,8 +877,7 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
             concurrent_plotting_semaphore,
             piece_memory_cache: node.dsn().piece_memory_cache.clone(),
         };
-        let single_disk_plot =
-            SingleDiskPlot::new::<_, _, T>(description, disk_farm_idx).await?;
+        let single_disk_plot = SingleDiskPlot::new::<_, _, T>(description, disk_farm_idx).await?;
         let mut drop_at_exit = DropCollection::new();
 
         let progress = {

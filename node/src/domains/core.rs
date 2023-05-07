@@ -10,10 +10,10 @@ use domain_service::DomainConfiguration;
 use futures::prelude::*;
 use parity_scale_codec::{Decode, Encode};
 use sc_client_api::BlockchainEvents;
+use sdk_substrate::Base;
 use sp_api::NumberFor;
 use sp_domains::DomainId;
 use subspace_runtime_primitives::opaque::Block as PBlock;
-use sdk_substrate::Base;
 
 use super::FullClient as SClient;
 use crate::FullClient as PClient;
@@ -27,20 +27,19 @@ type BlockImportOf<Provider, RuntimeApi, ExecutorDispatch> =
 pub type FullClient<RuntimeApi, ExecutorDispatch> =
     domain_service::FullClient<Block, RuntimeApi, ExecutorDispatch>;
 
-pub type NewFull<RuntimeApi, ExecutorDispatch, AccountId, Provider> =
-    domain_service::NewFullCore<
-        Arc<FullClient<RuntimeApi, ExecutorDispatch>>,
-        sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
-        Block,
-        SBlock,
-        PBlock,
-        SClient,
-        PClient,
-        RuntimeApi,
-        ExecutorDispatch,
-        AccountId,
-        BlockImportOf<Provider, RuntimeApi, ExecutorDispatch>,
-    >;
+pub type NewFull<RuntimeApi, ExecutorDispatch, AccountId, Provider> = domain_service::NewFullCore<
+    Arc<FullClient<RuntimeApi, ExecutorDispatch>>,
+    sc_executor::NativeElseWasmExecutor<ExecutorDispatch>,
+    Block,
+    SBlock,
+    PBlock,
+    SClient,
+    PClient,
+    RuntimeApi,
+    ExecutorDispatch,
+    AccountId,
+    BlockImportOf<Provider, RuntimeApi, ExecutorDispatch>,
+>;
 
 /// Core domain node
 #[derive(Derivative)]

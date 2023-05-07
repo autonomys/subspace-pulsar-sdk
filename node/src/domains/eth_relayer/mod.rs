@@ -8,9 +8,9 @@ use cross_domain_message_gossip::GossipWorkerBuilder;
 use derivative::Derivative;
 use derive_builder::Builder;
 use futures::prelude::*;
+use sdk_substrate::{Base, BaseBuilder};
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
-use sdk_substrate::{Base, BaseBuilder};
 
 use super::core::CoreDomainNode;
 use super::BlockHeader;

@@ -9,9 +9,9 @@ use derivative::Derivative;
 use derive_builder::Builder;
 use domain_runtime_primitives::AccountId;
 use futures::prelude::*;
+use sdk_substrate::{Base, BaseBuilder};
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
-use sdk_substrate::{Base, BaseBuilder};
 
 use super::core::CoreDomainNode;
 use super::BlockHeader;
