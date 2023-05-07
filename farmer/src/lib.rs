@@ -1,3 +1,15 @@
+//! This crate is related to abstract farmer implementation
+
+#![warn(
+    missing_docs,
+    clippy::dbg_macro,
+    clippy::unwrap_used,
+    clippy::disallowed_types,
+    unused_crate_dependencies,
+    unused_features
+)]
+#![feature(const_option)]
+
 use std::collections::HashMap;
 use std::io;
 use std::num::NonZeroUsize;

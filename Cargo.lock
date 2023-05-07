@@ -9254,6 +9254,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdk-farmer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "derivative",
+ "derive_builder 0.12.0",
+ "derive_more",
+ "futures",
+ "lru 0.10.0",
+ "parity-db",
+ "parking_lot 0.12.1",
+ "pin-project",
+ "sdk-dsn",
+ "sdk-traits",
+ "sdk-utils",
+ "serde",
+ "subspace-core-primitives",
+ "subspace-erasure-coding",
+ "subspace-farmer",
+ "subspace-farmer-components",
+ "subspace-networking",
+ "subspace-proof-of-space",
+ "subspace-rpc-primitives",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "tracing-futures",
+]
+
+[[package]]
 name = "sdk-node"
 version = "0.1.0"
 dependencies = [
@@ -11028,39 +11060,17 @@ dependencies = [
 name = "subspace-sdk"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "async-trait",
  "clap",
  "console-subscriber",
- "derivative",
- "derive_builder 0.12.0",
- "derive_more",
  "fdlimit",
- "futures",
  "jemallocator",
- "lru 0.10.0",
- "parity-db",
- "parking_lot 0.12.1",
- "pin-project",
- "sdk-dsn",
+ "sdk-farmer",
  "sdk-node",
- "sdk-traits",
  "sdk-utils",
- "serde",
  "static_assertions",
- "subspace-core-primitives",
- "subspace-erasure-coding",
- "subspace-farmer",
- "subspace-farmer-components",
- "subspace-networking",
  "subspace-proof-of-space",
- "subspace-rpc-primitives",
  "tempfile",
- "thiserror",
  "tokio",
- "tokio-stream",
- "tracing",
- "tracing-futures",
  "tracing-subscriber 0.3.16",
 ]
 
