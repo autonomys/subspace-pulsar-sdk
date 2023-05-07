@@ -19,6 +19,7 @@ pub trait Farmer {
 
 pub trait Node {
     type Client: sc_client_api::AuxStore + Send + Sync + 'static;
+    type Table: subspace_proof_of_space::Table;
     type Rpc: subspace_farmer::node_client::NodeClient + Clone;
 
     fn name(&self) -> &str;

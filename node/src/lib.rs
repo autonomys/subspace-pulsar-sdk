@@ -32,10 +32,11 @@ use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{
     PieceByHashRequest, PieceByHashResponse, SegmentHeaderRequest, SegmentHeaderResponse,
 };
-use subspace_runtime::{RuntimeApi, RuntimeEvent as Event};
+use subspace_runtime::{RuntimeApi};
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::SubspaceConfiguration;
+use sdk_dsn::builder::{DsnShared, DsnOptions};
 
 mod builder;
 pub mod chain_spec;
@@ -45,8 +46,14 @@ pub mod domains;
 pub use builder::*;
 #[cfg(feature = "executor")]
 pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
-pub use sdk_dsn::builder::*;
-pub use sdk_substrate::*;
+pub use subspace_runtime::RuntimeEvent as Event;
+
+/// Events from subspace pallet
+pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
+
+/// Events from subspace pallet
+pub type RewardsEvent = pallet_rewards::Event<subspace_runtime::Runtime>;
+
 
 impl<F: Farmer + 'static> Config<F> {
     /// Start a node with supplied parameters
@@ -345,6 +352,7 @@ pub struct Node<F: Farmer> {
 impl<F: Farmer> sdk_traits::Node for Node<F> {
     type Client = FullClient;
     type Rpc = sdk_utils::Rpc;
+    type Table = F::Table;
 
     fn name(&self) -> &str {
         &self.name

@@ -8,6 +8,8 @@ static_assertions = "1.1.0"
 
 sdk-utils = { path = "utils" }
 sdk-node = { path = "node" }
+sdk-dsn = { path = "dsn" }
+sdk-substrate = { path = "substrate" }
 sdk-farmer = { path = "farmer" }
 
 subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
@@ -28,11 +30,20 @@ core-payments = ["sdk-node/core-payments"]
 core-evm = ["sdk-node/core-evm"]
 
 [dev-dependencies]
+anyhow = "1"
 clap = { version = "4", features = ["derive"] }
+derive_builder = "0.12"
+derive_more = "0.99"
+fdlimit = "0.2"
+futures = "0.3"
+serde_json = "1"
 tempfile = "3"
 tokio = { version = "1.26", features = ["rt-multi-thread", "macros"] }
+tracing = "0.1"
+tracing-futures = "0.2"
 tracing-subscriber = "0.3"
-fdlimit = "0.2"
+
+subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
 # that are suspected to be CPU-intensive, and that are unlikely to require debugging (as some of

@@ -144,7 +144,7 @@ impl FarmerBuilder {
         let farmer = subspace_sdk::Farmer::builder()
             .build(
                 reward_address,
-                node,
+                &**node,
                 &[PlotDescription::new(
                     node.path().path().join("plot"),
                     // TODO: account for overhead here

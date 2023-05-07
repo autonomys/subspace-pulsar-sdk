@@ -136,7 +136,7 @@ impl<F: Farmer + 'static> Builder<F> {
     }
 
     /// Start a node with supplied parameters
-    pub async fn build<T: subspace_proof_of_space::Table>(
+    pub async fn build(
         self,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,

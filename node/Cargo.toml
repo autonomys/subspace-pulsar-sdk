@@ -72,7 +72,6 @@ subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev =
 subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
 subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
 subspace-networking = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
-subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
 subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
 subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
 subspace-service = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }

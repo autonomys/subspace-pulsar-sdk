@@ -210,13 +210,13 @@ mod builder {
         }
 
         /// Open and start farmer
-        pub async fn build<N: Node, T: subspace_proof_of_space::Table>(
+        pub async fn build<N: Node>(
             self,
             reward_address: PublicKey,
             node: &N,
             plots: &[PlotDescription],
             cache: CacheDescription,
-        ) -> Result<Farmer<T>, BuildError> {
+        ) -> Result<Farmer<N::Table>, BuildError> {
             self.configuration().build(reward_address, node, plots, cache).await
         }
     }

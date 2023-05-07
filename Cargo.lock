@@ -9350,7 +9350,6 @@ dependencies = [
  "subspace-farmer",
  "subspace-farmer-components",
  "subspace-networking",
- "subspace-proof-of-space",
  "subspace-runtime",
  "subspace-runtime-primitives",
  "subspace-service",
@@ -11060,17 +11059,27 @@ dependencies = [
 name = "subspace-sdk"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap",
  "console-subscriber",
+ "derive_builder 0.12.0",
+ "derive_more",
  "fdlimit",
+ "futures",
  "jemallocator",
+ "sdk-dsn",
  "sdk-farmer",
  "sdk-node",
+ "sdk-substrate",
  "sdk-utils",
+ "serde_json",
  "static_assertions",
+ "subspace-farmer-components",
  "subspace-proof-of-space",
  "tempfile",
  "tokio",
+ "tracing",
+ "tracing-futures",
  "tracing-subscriber 0.3.16",
 ]
 

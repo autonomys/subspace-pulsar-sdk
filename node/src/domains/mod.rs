@@ -49,12 +49,6 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     }
 }
 
-/// Events from subspace pallet
-pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
-
-/// Events from subspace pallet
-pub type RewardsEvent = pallet_rewards::Event<subspace_runtime::Runtime>;
-
 /// New block notification
 #[derive(Debug, Clone)]
 #[non_exhaustive]
