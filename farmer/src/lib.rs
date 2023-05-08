@@ -320,7 +320,7 @@ fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAnd
                     (PieceOffset::ZERO..).zip(plotted_sector.piece_indexes).map(
                         move |(piece_offset, piece_index)| {
                             (
-                                PieceIndexHash::from_index(piece_index),
+                                piece_index.hash(),
                                 PieceDetails {
                                     plot_offset,
                                     sector_index: plotted_sector.sector_index,
@@ -390,7 +390,7 @@ fn handler_on_sector_plotted(
         new_pieces
             .into_iter()
             .map(|piece_index| {
-                subspace_networking::utils::pieces::announce_single_piece_index_with_backoff(
+                subspace_networking::utils::piece_announcement::announce_single_piece_index_with_backoff(
                     piece_index,
                     &node,
                 )
