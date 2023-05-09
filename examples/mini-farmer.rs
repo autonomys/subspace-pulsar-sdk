@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Context;
-use clap::{Parser, Subcommand};
+use clap::{Parser, ValueEnum};
 use futures::prelude::*;
 use subspace_sdk::farmer::CacheDescription;
 use subspace_sdk::node::{self, Event, Node, RewardsEvent, SubspaceEvent};
@@ -17,10 +17,22 @@ use tracing_subscriber::prelude::*;
 #[global_allocator]
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
-#[derive(Subcommand, Debug)]
+#[derive(ValueEnum, Debug, Clone)]
 enum Chain {
-    Gemini3D,
+    Gemini3d,
     Devnet,
+    Dev,
+}
+
+#[cfg(feature = "executor")]
+#[derive(ValueEnum, Debug, Clone)]
+enum Domain {
+    #[cfg(feature = "core-payments")]
+    Payments,
+    #[cfg(feature = "eth-relayer")]
+    EthRelayer,
+    #[cfg(feature = "core-evm")]
+    Evm,
 }
 
 /// Mini farmer
@@ -28,12 +40,12 @@ enum Chain {
 #[command(author, version, about)]
 pub struct Args {
     /// Set the chain
-    #[command(subcommand)]
+    #[arg(value_enum)]
     chain: Chain,
     #[cfg(feature = "executor")]
-    /// Should we run the executor?
+    /// Run executor with specified domain
     #[arg(short, long)]
-    executor: bool,
+    domain: Option<Domain>,
     /// Address for farming rewards
     #[arg(short, long)]
     reward_address: PublicKey,
@@ -68,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
     let Args {
         chain,
         #[cfg(feature = "executor")]
-        executor,
+        domain,
         reward_address,
         base_path,
         plot_size,
@@ -81,7 +93,7 @@ async fn main() -> anyhow::Result<()> {
 
     let node_dir = base_path.join("node");
     let node = match chain {
-        Chain::Gemini3D => Node::gemini_3d().dsn(
+        Chain::Gemini3d => Node::gemini_3d().dsn(
             subspace_sdk::node::DsnBuilder::gemini_3d()
                 .provider_storage_path(node_dir.join("provider_storage")),
         ),
@@ -89,28 +101,67 @@ async fn main() -> anyhow::Result<()> {
             subspace_sdk::node::DsnBuilder::devnet()
                 .provider_storage_path(node_dir.join("provider_storage")),
         ),
+        Chain::Dev => Node::dev().dsn(
+            subspace_sdk::node::DsnBuilder::dev()
+                .provider_storage_path(node_dir.join("provider_storage")),
+        ),
     }
     .role(node::Role::Authority);
 
     #[cfg(feature = "executor")]
-    let node = if executor {
-        node.system_domain(subspace_sdk::node::domains::ConfigBuilder::new())
-    } else {
-        node
+    let node = match domain {
+        Some(domain) => node.system_domain({
+            use subspace_sdk::node::domains;
+
+            let system_domain = domains::ConfigBuilder::new()
+                .rpc(
+                    subspace_sdk::node::RpcBuilder::new()
+                        .http("127.0.0.1:9990".parse().unwrap())
+                        .ws("127.0.0.1:9991".parse().unwrap()),
+                )
+                .role(node::Role::Authority);
+            let rpc = subspace_sdk::node::RpcBuilder::new()
+                .http("127.0.0.1:9992".parse().unwrap())
+                .ws("127.0.0.1:9993".parse().unwrap());
+
+            match domain {
+                #[cfg(feature = "core-payments")]
+                Domain::Payments => system_domain.core_payments(
+                    domains::core_payments::ConfigBuilder::new()
+                        .rpc(rpc)
+                        .role(node::Role::Authority),
+                ),
+                #[cfg(feature = "eth-relayer")]
+                Domain::EthRelayer => system_domain.eth_relayer(
+                    domains::eth_relayer::ConfigBuilder::new().rpc(rpc).role(node::Role::Authority),
+                ),
+                #[cfg(feature = "core-evm")]
+                Domain::Evm => system_domain
+                    .evm(domains::evm::ConfigBuilder::new().rpc(rpc).role(node::Role::Authority)),
+            }
+        }),
+        None => node,
     };
 
     let node = node
         .build(
             &node_dir,
             match chain {
-                Chain::Gemini3D => node::chain_spec::gemini_3d(),
+                Chain::Gemini3d => node::chain_spec::gemini_3d(),
                 Chain::Devnet => node::chain_spec::devnet_config(),
+                Chain::Dev => node::chain_spec::dev_config(),
             },
         )
         .await?;
 
+    let sync = if !matches!(chain, Chain::Dev) {
+        futures::future::Either::Left(node.sync())
+    } else {
+        futures::future::Either::Right(futures::future::ok(()))
+    };
+
     tokio::select! {
-        result = node.sync() => result?,
+        result = sync => result?,
         _ = tokio::signal::ctrl_c() => {
             tracing::error!("Exitting...");
             return node.close().await.context("Failed to close node")

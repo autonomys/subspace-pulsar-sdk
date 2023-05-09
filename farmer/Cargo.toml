@@ -1,0 +1,35 @@
+[package]
+name = "sdk-farmer"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1"
+anyhow = "1"
+derivative = "2.2.0"
+derive_builder = "0.12"
+derive_more = "0.99"
+futures = "0.3"
+lru = "0.10"
+parity-db = "0.4"
+parking_lot = "0.12"
+pin-project = "1"
+serde = { version = "1", features = ["derive"] }
+thiserror = "1"
+tokio = { version = "1.26", features = ["fs", "rt", "tracing"] }
+tokio-stream = { version = "0.1", features = ["sync", "time"] }
+tracing = "0.1"
+tracing-futures = "0.2"
+sdk-utils = { path = "../utils" }
+sdk-dsn = { path = "../dsn" }
+sdk-traits = { path = "../traits" }
+
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
+subspace-erasure-coding = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
+subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
+subspace-networking = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
+subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "629db2fd80120f9947916e7606d064f0f1ff23cc" }
