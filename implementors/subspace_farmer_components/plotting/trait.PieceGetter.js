@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"sdk_dsn":[["impl&lt;PV: PieceValidator, C: AuxStore + <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/marker/trait.Send.html\" title=\"trait core::marker::Send\">Send</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/marker/trait.Sync.html\" title=\"trait core::marker::Sync\">Sync</a>&gt; PieceGetter for <a class=\"struct\" href=\"sdk_dsn/struct.NodePieceGetter.html\" title=\"struct sdk_dsn::NodePieceGetter\">NodePieceGetter</a>&lt;PV, C&gt;"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

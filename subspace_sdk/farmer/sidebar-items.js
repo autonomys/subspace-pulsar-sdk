@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["BuildError"],"struct":["Builder","CacheDescription","CacheTooSmall","Config","Farmer","Info","InitialPlottingProgress","InitialPlottingProgressStream","Plot","PlotDescription","PlotInfo"]};
+window.SIDEBAR_ITEMS = {"struct":["CacheDescription","PlotDescription"]};

@@ -1,3 +1,3 @@
 (function() {var implementors = {
-"subspace_sdk":[["impl Encode for <a class=\"struct\" href=\"subspace_sdk/struct.PublicKey.html\" title=\"struct subspace_sdk::PublicKey\">PublicKey</a>"]]
+"sdk_utils":[["impl Encode for <a class=\"struct\" href=\"sdk_utils/struct.PublicKey.html\" title=\"struct sdk_utils::PublicKey\">PublicKey</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

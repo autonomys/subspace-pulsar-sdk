@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Ss58ParsingError"],"fn":["is_default","task_spawn","task_spawn_blocking"],"macro":["generate_builder"],"mod":["chain_spec"],"struct":["AsyncDropFutures","ByteSize","DropCollection","Multiaddr","MultiaddrWithPeerId","PublicKey","Rpc","StorageKey"]};
