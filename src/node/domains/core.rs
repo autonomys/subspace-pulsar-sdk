@@ -85,7 +85,8 @@ where
         + pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi<
             Block,
             domain_runtime_primitives::Balance,
-        > + sp_messenger::MessengerApi<Block, NumberFor<Block>>,
+        > + sp_messenger::MessengerApi<Block, NumberFor<Block>>
+        + domain_runtime_primitives::InherentExtrinsicApi<Block>,
 {
     pub(crate) async fn new<CS, DTXS, AccountId, Provider>(
         cfg: Config<'_, AccountId, CS, DTXS, Provider>,
