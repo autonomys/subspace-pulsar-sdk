@@ -235,7 +235,6 @@ impl<F: Farmer + 'static> Config<F> {
         let (stop_sender, mut stop_receiver) = mpsc::channel::<oneshot::Sender<()>>(1);
 
         sdk_utils::task_spawn(format!("subspace-sdk-node-{name}-task-manager"), {
-            let dsn_informer = subspace_networking::utils::online_status_informer(&dsn.node);
             async move {
                 let opt_stop_sender = async move {
                     futures::select! {
@@ -246,10 +245,6 @@ impl<F: Farmer + 'static> Config<F> {
                         }
                         _ = node_runner_future.fuse() => {
                             tracing::info!("Node runner exited");
-                            None
-                        }
-                        _ = dsn_informer.fuse() => {
-                            tracing::info!("DSN online status observer exited");
                             None
                         }
                     }
