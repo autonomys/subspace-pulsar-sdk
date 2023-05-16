@@ -72,6 +72,7 @@ impl<F: Farmer + 'static> Config<F> {
             segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
             sync_from_dsn,
             storage_monitor,
+            enable_subspace_block_relay,
             ..
         } = self;
         let base = base.configuration(directory.as_ref(), chain_spec.clone()).await;
@@ -147,6 +148,7 @@ impl<F: Farmer + 'static> Config<F> {
             segment_publish_concurrency,
             subspace_networking,
             sync_from_dsn,
+            enable_subspace_block_relay,
         };
 
         let node_runner_future = subspace_farmer::utils::run_future_in_dedicated_thread(
