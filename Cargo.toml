@@ -12,7 +12,7 @@ sdk-dsn = { path = "dsn" }
 sdk-substrate = { path = "substrate" }
 sdk-farmer = { path = "farmer" }
 
-subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "40570762c7f9fac3600599a52273ca7327699c12" }
+subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "e2acdebb0b2798943ab0871e4bbd2ec51f677f10" }
 
 # The only triple tested and confirmed as working in `jemallocator` crate is `x86_64-unknown-linux-gnu`
 [target.'cfg(all(target_arch = "x86_64", target_vendor = "unknown", target_os = "linux", target_env = "gnu"))'.dev-dependencies]
@@ -43,7 +43,7 @@ tracing = "0.1"
 tracing-futures = "0.2"
 tracing-subscriber = "0.3"
 
-subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "40570762c7f9fac3600599a52273ca7327699c12" }
+subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "e2acdebb0b2798943ab0871e4bbd2ec51f677f10" }
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
 # that are suspected to be CPU-intensive, and that are unlikely to require debugging (as some of
@@ -53,10 +53,13 @@ subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev
 #
 # This list is ordered alphabetically.
 [profile.dev.package]
+bitvec = { opt-level = 3 }
 blake2 = { opt-level = 3 }
+blake3 = { opt-level = 3 }
 blake2b_simd = { opt-level = 3 }
 blst = { opt-level = 3 }
-blst_from_scratch = { opt-level = 3 }
+blst_rust = { opt-level = 3 }
+chacha20 = { opt-level = 3 }
 chacha20poly1305 = { opt-level = 3 }
 cranelift-codegen = { opt-level = 3 }
 cranelift-wasm = { opt-level = 3 }
@@ -93,7 +96,6 @@ sha3 = { opt-level = 3 }
 smallvec = { opt-level = 3 }
 snow = { opt-level = 3 }
 subspace-archiving = { opt-level = 3 }
-subspace-chiapos = { opt-level = 3 }
 subspace-core-primitives = { opt-level = 3 }
 subspace-erasure-coding = { opt-level = 3 }
 subspace-farmer-components = { opt-level = 3 }
