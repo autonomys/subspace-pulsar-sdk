@@ -219,7 +219,7 @@ impl Dsn {
 
         let piece_cache = NodePieceCache::new(
             client.clone(),
-            piece_cache_size.as_u64() / subspace_core_primitives::Piece::SIZE as u64,
+            piece_cache_size.as_u64(),
             subspace_networking::peer_id(&keypair),
         );
 
