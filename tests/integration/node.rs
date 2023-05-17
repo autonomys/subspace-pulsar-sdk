@@ -40,9 +40,7 @@ async fn sync_block_inner() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-// #[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on
-// linux")]
-#[ignore = "Test is too slow for now for CI"]
+#[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
 async fn sync_block() {
     tokio::time::timeout(std::time::Duration::from_secs(60 * 60), sync_block_inner()).await.unwrap()
 }
@@ -95,9 +93,7 @@ async fn sync_plot_inner() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-// #[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on
-// linux")]
-#[ignore = "Test is too slow for now for CI"]
+#[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
 async fn sync_plot() {
     tokio::time::timeout(std::time::Duration::from_secs(60 * 60), sync_plot_inner()).await.unwrap()
 }
@@ -115,9 +111,7 @@ async fn node_restart() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-// #[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on
-// linux")]
-#[ignore = "Test is too slow for now for CI"]
+#[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
 async fn node_events() {
     crate::common::setup();
 
@@ -148,9 +142,7 @@ async fn node_events() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-// #[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on
-// linux")]
-#[ignore = "Test is too slow for now for CI"]
+#[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
 async fn fetch_block_author() {
     crate::common::setup();
 

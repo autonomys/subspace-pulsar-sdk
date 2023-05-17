@@ -72,6 +72,10 @@ pub struct Config<F: Farmer> {
     #[builder(setter(into), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub storage_monitor: Option<StorageMonitor>,
+    /// Enables subspace block relayer
+    #[builder(default)]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
+    pub enable_subspace_block_relay: bool,
 
     #[builder(setter(skip), default)]
     _farmer: std::marker::PhantomData<F>,
