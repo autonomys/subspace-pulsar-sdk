@@ -146,6 +146,10 @@
 <a href="#146" id="146">146</a>
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::path::Path;
 
@@ -220,6 +224,10 @@
     </span><span class="attr">#[builder(setter(into), default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
     </span><span class="kw">pub </span>storage_monitor: <span class="prelude-ty">Option</span>&lt;StorageMonitor&gt;,
+    <span class="doccomment">/// Enables subspace block relayer
+    </span><span class="attr">#[builder(default)]
+    #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
+    </span><span class="kw">pub </span>enable_subspace_block_relay: bool,
 
     <span class="attr">#[builder(setter(skip), default)]
     </span>_farmer: std::marker::PhantomData&lt;F&gt;,

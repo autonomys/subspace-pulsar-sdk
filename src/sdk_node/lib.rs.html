@@ -829,9 +829,6 @@
 <a href="#829" id="829">829</a>
 <a href="#830" id="830">830</a>
 <a href="#831" id="831">831</a>
-<a href="#832" id="832">832</a>
-<a href="#833" id="833">833</a>
-<a href="#834" id="834">834</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Crate with subspace node
 
 </span><span class="attr">#![warn(
@@ -906,6 +903,7 @@
             segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
             sync_from_dsn,
             storage_monitor,
+            enable_subspace_block_relay,
             ..
         } = <span class="self">self</span>;
         <span class="kw">let </span>base = base.configuration(directory.as_ref(), chain_spec.clone()).<span class="kw">await</span>;
@@ -981,6 +979,7 @@
             segment_publish_concurrency,
             subspace_networking,
             sync_from_dsn,
+            enable_subspace_block_relay,
         };
 
         <span class="kw">let </span>node_runner_future = subspace_farmer::utils::run_future_in_dedicated_thread(
@@ -1067,7 +1066,6 @@
         <span class="kw">let </span>(stop_sender, <span class="kw-2">mut </span>stop_receiver) = mpsc::channel::&lt;oneshot::Sender&lt;()&gt;&gt;(<span class="number">1</span>);
 
         sdk_utils::task_spawn(<span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-node-{name}-task-manager&quot;</span>), {
-            <span class="kw">let </span>dsn_informer = subspace_networking::utils::online_status_informer(<span class="kw-2">&amp;</span>dsn.node);
             <span class="kw">async move </span>{
                 <span class="kw">let </span>opt_stop_sender = <span class="kw">async move </span>{
                     <span class="macro">futures::select! </span>{
@@ -1078,10 +1076,6 @@
                         </span>}
                         <span class="kw">_ </span>= node_runner_future.fuse() =&gt; {
                             <span class="macro">tracing::info!</span>(<span class="string">&quot;Node runner exited&quot;</span>);
-                            <span class="prelude-val">None
-                        </span>}
-                        <span class="kw">_ </span>= dsn_informer.fuse() =&gt; {
-                            <span class="macro">tracing::info!</span>(<span class="string">&quot;DSN online status observer exited&quot;</span>);
                             <span class="prelude-val">None
                         </span>}
                     }
