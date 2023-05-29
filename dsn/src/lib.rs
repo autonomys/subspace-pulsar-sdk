@@ -18,7 +18,6 @@ use std::sync::{Arc, Weak};
 
 pub use builder::*;
 use either::*;
-use event_listener_primitives::HandlerId;
 use futures::StreamExt;
 use parking_lot::Mutex;
 use sc_client_api::AuxStore;
@@ -50,8 +49,6 @@ pub type ProviderStorage<C> = provider_storage_utils::AndProviderStorage<
     NodeProviderStorage<C>,
 >;
 
-const MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE: NonZeroUsize =
-    NonZeroUsize::new(2000).expect("Not zero; qed");
 const MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
     NonZeroUsize::new(20).expect("Not zero; qed");
 const MAX_CONCURRENT_RE_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
@@ -64,35 +61,14 @@ pub fn start_announcements_processor(
     piece_cache: Arc<tokio::sync::Mutex<FarmerPieceCache>>,
     weak_readers_and_pieces: Weak<Mutex<Option<ReadersAndPieces>>>,
     node_name: &str,
-) -> std::io::Result<HandlerId> {
-    let (provider_records_sender, mut provider_records_receiver) =
-        futures::channel::mpsc::channel(MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE.get());
-
-    let handler_id = node.on_announcement(Arc::new({
-        let provider_records_sender = Mutex::new(provider_records_sender);
-
-        move |record, guard| {
-            if let Err(error) =
-                provider_records_sender.lock().try_send((record.clone(), Arc::clone(guard)))
-            {
-                if error.is_disconnected() {
-                    // Receiver exited, nothing left to be done
-                    return;
-                }
-                let (record, _guard) = error.into_inner();
-                warn!(
-                    ?record.key,
-                    ?record.provider,
-                    "Failed to add provider record to the channel."
-                );
-            };
-        }
-    }));
-
+    mut provider_records_receiver: futures::channel::mpsc::Receiver<
+        subspace_networking::libp2p::kad::ProviderRecord,
+    >,
+) -> std::io::Result<()> {
     let mut provider_record_processor = FarmerProviderRecordProcessor::new(
         node,
         piece_cache,
-        weak_readers_and_pieces,
+        weak_readers_and_pieces.clone(),
         MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING,
         MAX_CONCURRENT_RE_ANNOUNCEMENTS_PROCESSING,
     );
@@ -100,14 +76,18 @@ pub fn start_announcements_processor(
     sdk_utils::task_spawn(
         format!("subspace-sdk-farmer-{node_name}-ann-processor"),
         async move {
-            while let Some((provider_record, guard)) = provider_records_receiver.next().await {
-                provider_record_processor.process_provider_record(provider_record, guard).await;
+            while let Some(provider_record) = provider_records_receiver.next().await {
+                if weak_readers_and_pieces.upgrade().is_none() {
+                    // `ReadersAndPieces` was dropped, nothing left to be done
+                    return;
+                }
+                provider_record_processor.process_provider_record(provider_record).await;
             }
         }
         .in_current_span(),
     );
 
-    Ok(handler_id)
+    Ok(())
 }
 
 /// Node piece getter (combines DSN and Farmer getters)

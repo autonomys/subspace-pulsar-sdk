@@ -396,8 +396,8 @@ fn handler_on_sector_plotted(
         new_pieces
             .into_iter()
             .map(|piece_index| {
-                subspace_networking::utils::piece_announcement::announce_single_piece_index_with_backoff(
-                    piece_index,
+                subspace_networking::utils::piece_announcement::announce_single_piece_index_hash_with_backoff(
+                    piece_index.hash(),
                     &node,
                 )
             })
@@ -632,15 +632,18 @@ impl Config {
         node.dsn().farmer_piece_store.lock().await.replace(piece_store);
         node.dsn().farmer_provider_storage.swap(Some(farmer_provider_storage));
 
-        drop_at_exit.push(
-            sdk_dsn::start_announcements_processor(
-                node.dsn().node.clone(),
-                Arc::clone(&piece_cache),
-                Arc::downgrade(&readers_and_pieces),
-                node.name(),
-            )
-            .context("Failed to start announcement processor")?,
-        );
+        sdk_dsn::start_announcements_processor(
+            node.dsn().node.clone(),
+            Arc::clone(&piece_cache),
+            Arc::downgrade(&readers_and_pieces),
+            node.name(),
+            node.dsn()
+                .provider_records_receiver
+                .lock()
+                .take()
+                .context("Node already has farmer")?,
+        )
+        .context("Failed to start announcement processor")?;
 
         drop_at_exit.defer({
             let provider_storage = node.dsn().farmer_provider_storage.clone();
@@ -659,23 +662,24 @@ impl Config {
             }
         });
 
-        async_drop.push(async move {
-            const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
+        // TODO: check for piece cache to exit
+        // async_drop.push(async move {
+        //     const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
 
-            // HACK: Poll on piece store creation just to be sure
-            loop {
-                let result = ParityDbStore::<
-                    subspace_networking::libp2p::kad::record::Key,
-                    subspace_core_primitives::Piece,
-                >::new(&piece_cache_db_path);
+        //     // HACK: Poll on piece store creation just to be sure
+        //     loop {
+        //         let result = ParityDbStore::<
+        //             subspace_networking::libp2p::kad::record::Key,
+        //             subspace_core_primitives::Piece,
+        //         >::new(&piece_cache_db_path);
 
-                match result.map(drop) {
-                    // If parity db is still locked wait on it
-                    Err(parity_db::Error::Locked(_)) => tokio::time::sleep(PIECE_STORE_POLL).await,
-                    _ => break,
-                }
-            }
-        });
+        //         match result.map(drop) {
+        //             // If parity db is still locked wait on it
+        //             Err(parity_db::Error::Locked(_)) => tokio::time::sleep(PIECE_STORE_POLL).await,
+        //             _ => break,
+        //         }
+        //     }
+        // });
 
         tracing::debug!("Started farmer");
 

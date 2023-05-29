@@ -12,9 +12,12 @@ use sdk_utils::{self, DropCollection, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::piece_caching::PieceMemoryCache;
+use subspace_networking::libp2p::kad::ProviderRecord;
 use subspace_networking::{
-    PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
+    PieceAnnouncementRequestHandler, PieceAnnouncementResponse, PieceByHashRequest,
+    PieceByHashRequestHandler, PieceByHashResponse, ProviderStorage as _,
     SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
+    KADEMLIA_PROVIDER_TTL_IN_SECS,
 };
 use subspace_service::segment_headers::SegmentHeaderCache;
 
@@ -151,6 +154,8 @@ impl DsnBuilder {
 }
 
 const MAX_PROVIDER_RECORDS_LIMIT: NonZeroUsize = NonZeroUsize::new(100000).expect("100000 > 0"); // ~ 10 MB
+const MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE: NonZeroUsize =
+    NonZeroUsize::new(2000).expect("Not zero; qed");
 
 /// Options for DSN
 pub struct DsnOptions<C, ASNS, PieceByHash, SegmentHeaderByIndexes> {
@@ -189,6 +194,9 @@ pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
     /// Farmer piece store
     #[derivative(Debug = "ignore")]
     pub farmer_piece_store: Arc<tokio::sync::Mutex<Option<PieceStore>>>,
+    /// Provider records receiver
+    pub provider_records_receiver:
+        parking_lot::Mutex<Option<futures::channel::mpsc::Receiver<ProviderRecord>>>,
     /// Farmer provider storage
     pub farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
     /// Farmer piece cache
@@ -320,17 +328,69 @@ impl Dsn {
         let provider_storage =
             ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
 
+        let (provider_records_sender, provider_records_receiver) =
+            futures::channel::mpsc::channel(MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE.get());
+
         let config = subspace_networking::Config {
             listen_on,
             allow_non_global_addresses_in_dht,
             networking_parameters_registry,
             request_response_protocols: vec![
+                PieceAnnouncementRequestHandler::create({
+                    let provider_storage = provider_storage.clone();
+                    move |peer_id, req| {
+                        tracing::trace!(?req, %peer_id, "Piece announcement request received.");
+
+                        let mut provider_records_sender = provider_records_sender.clone();
+                        let provider_record = ProviderRecord {
+                            provider: peer_id,
+                            key: req.piece_index_hash.into(),
+                            addresses: req.addresses.clone(),
+                            expires: KADEMLIA_PROVIDER_TTL_IN_SECS
+                                .map(|ttl| std::time::Instant::now() + ttl),
+                        };
+
+                        let result = match provider_storage.add_provider(provider_record.clone()) {
+                            Ok(()) => {
+                                if let Err(error) =
+                                    provider_records_sender.try_send(provider_record)
+                                {
+                                    if !error.is_disconnected() {
+                                        let record = error.into_inner();
+                                        // TODO: This should be made a warning, but due to
+                                        //  https://github.com/libp2p/rust-libp2p/discussions/3411 it'll
+                                        //  take us some time to resolve
+                                        tracing::debug!(
+                                            ?record.key,
+                                            ?record.provider,
+                                            "Failed to add provider record to the channel."
+                                        );
+                                    }
+                                };
+
+                                Some(PieceAnnouncementResponse::Success)
+                            }
+                            Err(error) => {
+                                tracing::error!(
+                                    %error,
+                                    %peer_id,
+                                    ?req,
+                                    "Failed to add provider for received key."
+                                );
+
+                                None
+                            }
+                        };
+
+                        futures::future::ready(result)
+                    }
+                }),
                 PieceByHashRequestHandler::create({
                     let weak_readers_and_pieces = Arc::downgrade(&farmer_readers_and_pieces);
                     let farmer_piece_store = Arc::clone(&farmer_piece_store);
                     let piece_cache = piece_cache.clone();
                     let piece_memory_cache = piece_memory_cache.clone();
-                    move |req| {
+                    move |_, req| {
                         let weak_readers_and_pieces = weak_readers_and_pieces.clone();
                         let farmer_piece_store = Arc::clone(&farmer_piece_store);
                         let piece_cache = piece_cache.clone();
@@ -347,7 +407,7 @@ impl Dsn {
                 }),
                 SegmentHeaderBySegmentIndexesRequestHandler::create({
                     let segment_header_cache = SegmentHeaderCache::new(client);
-                    move |req| {
+                    move |_, req| {
                         futures::future::ready(get_segment_header_by_segment_indexes(
                             req,
                             &segment_header_cache,
@@ -385,6 +445,7 @@ impl Dsn {
             DsnShared {
                 node,
                 farmer_piece_store,
+                provider_records_receiver: parking_lot::Mutex::new(Some(provider_records_receiver)),
                 farmer_provider_storage,
                 farmer_readers_and_pieces,
                 piece_cache,
