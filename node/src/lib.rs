@@ -49,6 +49,7 @@ pub use builder::*;
 #[cfg(feature = "executor")]
 pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
 pub use subspace_runtime::RuntimeEvent as Event;
+use tracing::Instrument;
 
 /// Events from subspace pallet
 pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
@@ -184,7 +185,6 @@ impl<F: Farmer + 'static> Config<F> {
         #[cfg(feature = "executor")]
         let (system_domain, full_client) = if let Some(config) = system_domain {
             use sc_service::ChainSpecExtension;
-            use tracing_futures::Instrument;
 
             let span = tracing::info_span!("SystemDomain");
             let mut full_client = full_client;
@@ -813,6 +813,7 @@ fn get_piece_by_hash<F: Farmer>(
             None
         }
     }
+    .in_current_span()
 }
 
 fn node_get_piece_by_hash(

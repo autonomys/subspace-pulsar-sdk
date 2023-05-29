@@ -298,7 +298,7 @@ fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAnd
     let plotted_pieces: HashMap<PieceIndexHash, PieceDetails> = single_disk_plots
         .iter()
         .enumerate()
-        .flat_map(|(plot_offset, single_disk_plot)| {
+        .flat_map(|(disk_farm_index, single_disk_plot)| {
             single_disk_plot
                 .plotted_sectors()
                 .enumerate()
@@ -308,7 +308,7 @@ fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAnd
                         Err(error) => {
                             tracing::error!(
                                 %error,
-                                %plot_offset,
+                                %disk_farm_index,
                                 %sector_offset,
                                 "Failed reading plotted sector on startup, skipping"
                             );
@@ -322,7 +322,7 @@ fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAnd
                             (
                                 piece_index.hash(),
                                 PieceDetails {
-                                    plot_offset,
+                                    disk_farm_index,
                                     sector_index: plotted_sector.sector_index,
                                     piece_offset,
                                 },
@@ -343,7 +343,7 @@ fn handler_on_sector_plotted(
     sector_offset: usize,
     plotted_sector: &subspace_farmer_components::plotting::PlottedSector,
     plotting_permit: Arc<impl Send + Sync + 'static>,
-    plot_offset: usize,
+    disk_farm_index: usize,
     node: &subspace_networking::Node,
     readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
     mut dropped_receiver: tokio::sync::broadcast::Receiver<()>,
@@ -370,7 +370,10 @@ fn handler_on_sector_plotted(
         readers_and_pieces.add_pieces(
             (PieceOffset::ZERO..).zip(plotted_sector.piece_indexes.iter().copied()).map(
                 |(piece_offset, piece_index)| {
-                    (piece_index.hash(), PieceDetails { plot_offset, sector_index, piece_offset })
+                    (
+                        piece_index.hash(),
+                        PieceDetails { disk_farm_index, sector_index, piece_offset },
+                    )
                 },
             ),
         );
@@ -404,7 +407,8 @@ fn handler_on_sector_plotted(
 
         // Release only after publishing is finished
         drop(plotting_permit);
-    };
+    }
+    .in_current_span();
 
     drop(sdk_utils::task_spawn(
         format!("subspace-sdk-farmer-{node_name}-piece-publishing"),
@@ -551,8 +555,9 @@ impl Config {
 
         readers_and_pieces.lock().replace(create_readers_and_pieces(&single_disk_plots));
 
-        for (plot_offset, single_disk_plot) in single_disk_plots.iter().enumerate() {
+        for (disk_farm_index, single_disk_plot) in single_disk_plots.iter().enumerate() {
             let readers_and_pieces = Arc::clone(&readers_and_pieces);
+            let span = tracing::info_span!("farm", %disk_farm_index);
 
             // We are not going to send anything here, but dropping of sender on dropping of
             // corresponding `SingleDiskPlot` will allow us to stop background tasks.
@@ -568,11 +573,12 @@ impl Config {
             // TODO: Once we have replotting, this will have to be updated
             let handler_id = single_disk_plot.on_sector_plotted(Arc::new(
                 move |(sector_offset, plotted_sector, plotting_permit)| {
+                    let _span_guard = span.enter();
                     handler_on_sector_plotted(
                         *sector_offset,
                         plotted_sector,
                         Arc::clone(plotting_permit),
-                        plot_offset,
+                        disk_farm_index,
                         &node,
                         readers_and_pieces.clone(),
                         dropped_sender.subscribe(),
