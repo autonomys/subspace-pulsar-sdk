@@ -13,7 +13,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::Context;
-use derive_more::{Deref, DerefMut, Display, From, FromStr, Into};
+use derive_more::{Add, Deref, DerefMut, Display, From, FromStr, Into};
 use futures::prelude::*;
 use jsonrpsee_core::client::{
     BatchResponse, ClientT, Subscription, SubscriptionClientT, SubscriptionKind,
@@ -269,6 +269,7 @@ impl AsyncDropFutures {
 
 /// Container for number of bytes.
 #[derive(
+    Add,
     Clone,
     Copy,
     Debug,
