@@ -24,12 +24,12 @@ pub fn setup() {
                  subspace_sdk=trace,subspace_farmer=trace,subspace_service=trace,\
                  subspace_farmer::utils::parity_db_store=debug,trie-cache=info,\
                  wasm_overrides=info,jsonrpsee_core=info,libp2p_gossipsub::behaviour=info,\
-                 libp2p_core=info,libp2p_tcp=info,multistream_select=info,yamux=info,libp2p_swarm=info,\
-                 libp2p_ping=info,subspace_networking::node_runner=info,\
+                 libp2p_core=info,libp2p_tcp=info,multistream_select=info,yamux=info,\
+                 libp2p_swarm=info,libp2p_ping=info,subspace_networking::node_runner=info,\
                  subspace_networking::utils::piece_announcement=info,\
                  subspace_farmer::utils::farmer_provider_record_processor=debug,\
-                 subspace_farmer::utils::farmer_piece_cache=debug,\
-                 wasmtime_jit=info,wasm-runtime=info"
+                 subspace_farmer::utils::farmer_piece_cache=debug,wasmtime_jit=info,\
+                 wasm-runtime=info"
                     .parse::<tracing_subscriber::EnvFilter>()
                     .expect("Env filter directives are correct"),
             ),

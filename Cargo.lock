@@ -9321,7 +9321,6 @@ dependencies = [
  "derive_more",
  "futures",
  "lru 0.10.0",
- "parity-db",
  "parking_lot 0.12.1",
  "pin-project",
  "sdk-dsn",
