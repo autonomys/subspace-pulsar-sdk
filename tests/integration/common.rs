@@ -136,19 +136,18 @@ pub struct Farmer {
 impl FarmerBuilder {
     pub async fn build(self, node: &Node) -> Farmer {
         let InnerFarmer { reward_address, n_sectors } = self._build().expect("Infallible");
-        let sector_size = subspace_farmer_components::sector::sector_size(
-            // TODO: query node for this value
-            1000,
-        ) as u64;
+        let pieces_in_sector = 50u16;
+        let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
 
         let farmer = subspace_sdk::Farmer::builder()
+            .max_pieces_in_sector(Some(pieces_in_sector))
             .build(
                 reward_address,
                 &**node,
                 &[PlotDescription::new(
                     node.path().path().join("plot"),
                     // TODO: account for overhead here
-                    subspace_sdk::ByteSize::b(sector_size * n_sectors),
+                    subspace_sdk::ByteSize::b(sector_size as u64 * n_sectors),
                 )],
                 CacheDescription::minimal(node.path().path().join("cache")),
             )

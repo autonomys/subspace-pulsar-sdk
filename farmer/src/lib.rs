@@ -201,6 +201,9 @@ mod builder {
         #[builder(default, setter(into))]
         #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
         pub provided_keys_limit: ProvidedKeysLimit,
+        /// Maximum number of pieces in single sector
+        #[builder(default)]
+        pub max_pieces_in_sector: Option<u16>,
     }
 
     impl Builder {
@@ -440,6 +443,7 @@ impl Config {
             max_concurrent_plots,
             piece_cache_size: PieceCacheSize(piece_cache_size),
             provided_keys_limit: ProvidedKeysLimit(provided_keys_limit),
+            max_pieces_in_sector,
         } = self;
 
         let piece_cache_size = NonZeroUsize::new(
@@ -537,11 +541,22 @@ impl Config {
             node.dsn().node.clone(),
         ));
 
+        let max_pieces_in_sector = match max_pieces_in_sector {
+            Some(m) => m,
+            None =>
+                subspace_farmer::NodeClient::farmer_app_info(node.rpc())
+                    .await
+                    .expect("Node is always reachable")
+                    .protocol_info
+                    .max_pieces_in_sector,
+        };
+
         for (disk_farm_idx, description) in plots.iter().enumerate() {
             let (plot, single_disk_plot) = Plot::new(PlotOptions {
                 disk_farm_idx,
                 reward_address,
                 node,
+                max_pieces_in_sector,
                 piece_getter: Arc::clone(&piece_getter),
                 concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
                 description,
@@ -845,6 +860,7 @@ struct PlotOptions<'a, PG, N: sdk_traits::Node> {
     pub description: &'a PlotDescription,
     pub kzg: kzg::Kzg,
     pub erasure_coding: ErasureCoding,
+    pub max_pieces_in_sector: u16,
 }
 
 impl<T: subspace_proof_of_space::Table> Plot<T> {
@@ -858,6 +874,7 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
             description,
             kzg,
             erasure_coding,
+            max_pieces_in_sector,
         }: PlotOptions<
             '_,
             impl subspace_farmer_components::plotting::PieceGetter + Send + 'static,
@@ -869,7 +886,6 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
         let farmer_app_info = subspace_farmer::NodeClient::farmer_app_info(node.rpc())
             .await
             .expect("Node is always reachable");
-        let max_pieces_in_sector = farmer_app_info.protocol_info.max_pieces_in_sector;
         let description = SingleDiskPlotOptions {
             allocated_space,
             directory: directory.clone(),
