@@ -13,7 +13,6 @@ derive_builder = "0.12"
 derive_more = "0.99"
 futures = "0.3"
 lru = "0.10"
-parity-db = "0.4"
 parking_lot = "0.12"
 pin-project = "1"
 serde = { version = "1", features = ["derive"] }
