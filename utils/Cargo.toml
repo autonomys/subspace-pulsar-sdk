@@ -34,12 +34,12 @@ sp-core-hashing = { version = "5.0.0", git = "https://github.com/subspace/substr
 sp-runtime = { version = "7.0.0", git = "https://github.com/subspace/substrate", rev = "88bb945975301f9b29bad96dc4590c33f1029eae" }
 sp-storage = { version = "7.0.0", git = "https://github.com/subspace/substrate", rev = "88bb945975301f9b29bad96dc4590c33f1029eae" }
 
-sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "62602ac631189346b02a47398b77f0f5cceb287e" }
-subspace-archiving = { git = "https://github.com/subspace/subspace", rev = "62602ac631189346b02a47398b77f0f5cceb287e" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "62602ac631189346b02a47398b77f0f5cceb287e" }
-subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "62602ac631189346b02a47398b77f0f5cceb287e" }
-subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "62602ac631189346b02a47398b77f0f5cceb287e" }
-subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "62602ac631189346b02a47398b77f0f5cceb287e" }
+sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "56a84505ad02a5cc5c3458b7b9322cf1fcf6a10f" }
+subspace-archiving = { git = "https://github.com/subspace/subspace", rev = "56a84505ad02a5cc5c3458b7b9322cf1fcf6a10f" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "56a84505ad02a5cc5c3458b7b9322cf1fcf6a10f" }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "56a84505ad02a5cc5c3458b7b9322cf1fcf6a10f" }
+subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "56a84505ad02a5cc5c3458b7b9322cf1fcf6a10f" }
+subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "56a84505ad02a5cc5c3458b7b9322cf1fcf6a10f" }
 
 # Unused for now. TODO: add `serde` feature to `subspace-core-primitives` in `subspace-archiver`
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "62602ac631189346b02a47398b77f0f5cceb287e" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "56a84505ad02a5cc5c3458b7b9322cf1fcf6a10f" }
