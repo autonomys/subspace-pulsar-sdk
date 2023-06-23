@@ -17,10 +17,7 @@ use derivative::Derivative;
 use derive_builder::Builder;
 use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sc_network::config::{NodeKeyConfig, Secret};
-use sc_network::ProtocolName;
-use sc_service::config::{
-    KeystoreConfig, NetworkConfiguration, NonDefaultSetConfig, TransportConfig,
-};
+use sc_service::config::{KeystoreConfig, NetworkConfiguration, TransportConfig};
 use sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 use sdk_utils::{Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
@@ -166,17 +163,14 @@ impl Base {
             impl_version: ImplVersion(impl_version),
             rpc:
                 Rpc {
-                    http: rpc_http,
-                    ws: rpc_ws,
-                    ws_max_connections: rpc_ws_max_connections,
-                    ipc: rpc_ipc,
+                    addr: rpc_addr,
+                    port: rpc_port,
+                    max_connections: rpc_max_connections,
                     cors: rpc_cors,
                     methods: rpc_methods,
-                    max_payload: rpc_max_payload,
                     max_request_size: rpc_max_request_size,
                     max_response_size: rpc_max_response_size,
                     max_subs_per_conn: rpc_max_subs_per_conn,
-                    ws_max_out_buffer_capacity,
                 },
             network,
             offchain_worker,
@@ -219,10 +213,6 @@ impl Base {
                     .collect(),
                 force_synced,
                 transport: TransportConfig::Normal { enable_mdns, allow_private_ip },
-                extra_sets: vec![NonDefaultSetConfig::new(
-                    ProtocolName::Static("/subspace/cross-domain-messages"),
-                    40,
-                )],
                 allow_non_globals_in_dht,
                 ..NetworkConfiguration::new(
                     name,
@@ -277,18 +267,15 @@ impl Base {
             },
             wasm_runtime_overrides: None,
             execution_strategies: execution_strategy.into(),
-            rpc_http,
-            rpc_ws,
-            rpc_ipc,
+            rpc_addr,
+            rpc_port: rpc_port.unwrap_or_default(),
             rpc_methods: rpc_methods.into(),
-            rpc_ws_max_connections,
+            rpc_max_connections: rpc_max_connections.unwrap_or_default() as u32,
             rpc_cors,
-            rpc_max_payload,
-            rpc_max_request_size,
-            rpc_max_response_size,
+            rpc_max_request_size: rpc_max_request_size.unwrap_or_default() as u32,
+            rpc_max_response_size: rpc_max_response_size.unwrap_or_default() as u32,
             rpc_id_provider: None,
-            rpc_max_subs_per_conn,
-            ws_max_out_buffer_capacity,
+            rpc_max_subs_per_conn: rpc_max_subs_per_conn.unwrap_or_default() as u32,
             prometheus_config: None,
             telemetry_endpoints: Some(telemetry_endpoints),
             default_heap_pages: None,
@@ -302,7 +289,8 @@ impl Base {
             max_runtime_instances: 8,
             announce_block: true,
             role: role.into(),
-            base_path: Some(base_path),
+            base_path,
+            data_path: config_dir,
             informant_output_format: sc_informant::OutputFormat {
                 enable_color: informant_enable_color,
             },
@@ -317,23 +305,18 @@ impl Base {
 #[builder(pattern = "owned", build_fn(private, name = "_build"), name = "RpcBuilder")]
 #[non_exhaustive]
 pub struct Rpc {
-    /// RPC over HTTP binding address. `None` if disabled.
+    /// Rpc address
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub http: Option<SocketAddr>,
-    /// RPC over Websockets binding address. `None` if disabled.
+    pub addr: Option<SocketAddr>,
+    /// RPC port
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub ws: Option<SocketAddr>,
-    /// RPC over IPC binding path. `None` if disabled.
+    pub port: Option<u16>,
+    /// Maximum number of connections for RPC server. `None` if default.
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub ipc: Option<String>,
-    /// Maximum number of connections for WebSockets RPC server. `None` if
-    /// default.
-    #[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub ws_max_connections: Option<usize>,
+    pub max_connections: Option<usize>,
     /// CORS settings for HTTP & WS servers. `None` if all origins are
     /// allowed.
     #[builder(setter(strip_option), default)]
@@ -344,10 +327,6 @@ pub struct Rpc {
     #[builder(default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub methods: RpcMethods,
-    /// Maximum payload of rpc request/responses.
-    #[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub max_payload: Option<usize>,
     /// Maximum payload of a rpc request
     #[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
@@ -360,11 +339,6 @@ pub struct Rpc {
     #[builder(default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub max_subs_per_conn: Option<usize>,
-    /// Maximum size of the output buffer capacity for websocket
-    /// connections.
-    #[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub ws_max_out_buffer_capacity: Option<usize>,
 }
 
 impl RpcBuilder {
@@ -375,30 +349,24 @@ impl RpcBuilder {
 
     /// Gemini 3d configuration
     pub fn gemini_3d() -> Self {
-        Self::new()
-            .http("127.0.0.1:9933".parse().expect("hardcoded value is true"))
-            .ws("127.0.0.1:9944".parse().expect("hardcoded value is true"))
-            .cors(vec![
-                "http://localhost:*".to_owned(),
-                "http://127.0.0.1:*".to_owned(),
-                "https://localhost:*".to_owned(),
-                "https://127.0.0.1:*".to_owned(),
-                "https://polkadot.js.org".to_owned(),
-            ])
+        Self::new().addr("127.0.0.1:9944".parse().expect("hardcoded value is true")).cors(vec![
+            "http://localhost:*".to_owned(),
+            "http://127.0.0.1:*".to_owned(),
+            "https://localhost:*".to_owned(),
+            "https://127.0.0.1:*".to_owned(),
+            "https://polkadot.js.org".to_owned(),
+        ])
     }
 
     /// Devnet configuration
     pub fn devnet() -> Self {
-        Self::new()
-            .http("127.0.0.1:9933".parse().expect("hardcoded value is true"))
-            .ws("127.0.0.1:9944".parse().expect("hardcoded value is true"))
-            .cors(vec![
-                "http://localhost:*".to_owned(),
-                "http://127.0.0.1:*".to_owned(),
-                "https://localhost:*".to_owned(),
-                "https://127.0.0.1:*".to_owned(),
-                "https://polkadot.js.org".to_owned(),
-            ])
+        Self::new().addr("127.0.0.1:9944".parse().expect("hardcoded value is true")).cors(vec![
+            "http://localhost:*".to_owned(),
+            "http://127.0.0.1:*".to_owned(),
+            "https://localhost:*".to_owned(),
+            "https://127.0.0.1:*".to_owned(),
+            "https://polkadot.js.org".to_owned(),
+        ])
     }
 }
 
