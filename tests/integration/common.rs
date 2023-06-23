@@ -24,7 +24,12 @@ pub fn setup() {
                  subspace_sdk=trace,subspace_farmer=trace,subspace_service=trace,\
                  subspace_farmer::utils::parity_db_store=debug,trie-cache=info,\
                  wasm_overrides=info,jsonrpsee_core=info,libp2p_gossipsub::behaviour=info,\
-                 wasmtime_jit=info,wasm-runtime=info"
+                 libp2p_core=info,libp2p_tcp=info,multistream_select=info,yamux=info,\
+                 libp2p_swarm=info,libp2p_ping=info,subspace_networking::node_runner=info,\
+                 subspace_networking::utils::piece_announcement=info,\
+                 subspace_farmer::utils::farmer_provider_record_processor=debug,\
+                 subspace_farmer::utils::farmer_piece_cache=debug,wasmtime_jit=info,\
+                 wasm-runtime=info"
                     .parse::<tracing_subscriber::EnvFilter>()
                     .expect("Env filter directives are correct"),
             ),
@@ -57,6 +62,7 @@ pub struct Node {
     #[deref]
     #[deref_mut]
     node: subspace_sdk::Node,
+    _node: subspace_sdk::Node,
     pub path: Arc<TempDir>,
     pub chain: ChainSpec,
 }
@@ -98,7 +104,32 @@ impl NodeBuilder {
 
         let node = node.build(path.path().join("node"), chain.clone()).await.unwrap();
 
-        Node { node, path, chain }
+        // TODO: remove me once bug with infinite announcements while offline gets fixed
+        let _node = {
+            let node = subspace_sdk::Node::dev()
+                .dsn(
+                    DsnBuilder::dev()
+                        .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
+                        .boot_nodes(node.dsn_listen_addresses().await.unwrap()),
+                )
+                .network(
+                    NetworkBuilder::dev()
+                        .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
+                        .boot_nodes(node.listen_addresses().await.unwrap()),
+                );
+            #[cfg(all(feature = "core-payments", feature = "executor"))]
+            let node = if enable_core {
+                node.system_domain(subspace_sdk::node::domains::ConfigBuilder::new().core_payments(
+                    subspace_sdk::node::domains::core_payments::ConfigBuilder::new().build(),
+                ))
+            } else {
+                node
+            };
+
+            node.build(path.path().join(".sync-node"), chain.clone()).await.unwrap()
+        };
+
+        Node { node, path, chain, _node }
     }
 }
 
@@ -112,7 +143,8 @@ impl Node {
     }
 
     pub async fn close(self) {
-        self.node.close().await.unwrap()
+        self.node.close().await.unwrap();
+        self._node.close().await.unwrap();
     }
 }
 
@@ -136,19 +168,18 @@ pub struct Farmer {
 impl FarmerBuilder {
     pub async fn build(self, node: &Node) -> Farmer {
         let InnerFarmer { reward_address, n_sectors } = self._build().expect("Infallible");
-        let sector_size = subspace_farmer_components::sector::sector_size(
-            // TODO: query node for this value
-            35,
-        ) as u64;
+        let pieces_in_sector = 50u16;
+        let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
 
         let farmer = subspace_sdk::Farmer::builder()
+            .max_pieces_in_sector(Some(pieces_in_sector))
             .build(
                 reward_address,
                 &**node,
                 &[PlotDescription::new(
                     node.path().path().join("plot"),
                     // TODO: account for overhead here
-                    subspace_sdk::ByteSize::b(sector_size * n_sectors),
+                    subspace_sdk::ByteSize::b(sector_size as u64 * n_sectors),
                 )],
                 CacheDescription::minimal(node.path().path().join("cache")),
             )

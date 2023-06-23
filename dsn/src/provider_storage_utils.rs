@@ -73,7 +73,7 @@ impl<S: subspace_networking::ProviderStorage + 'static> subspace_networking::Pro
     }
 
     fn remove_provider(
-        &mut self,
+        &self,
         k: &subspace_networking::libp2p::kad::record::Key,
         p: &subspace_networking::libp2p::PeerId,
     ) {
@@ -90,13 +90,14 @@ impl<S: subspace_networking::ProviderStorage + 'static> subspace_networking::Pro
     }
 
     fn add_provider(
-        &mut self,
+        &self,
         record: ProviderRecord,
     ) -> subspace_networking::libp2p::kad::store::Result<()> {
         self.inner.write().as_mut().map(|x| x.add_provider(record)).unwrap_or(Ok(()))
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct AndProviderStorage<A, B> {
     a: A,
     b: B,
@@ -115,7 +116,7 @@ impl<A: subspace_networking::ProviderStorage, B: subspace_networking::ProviderSt
     where A: 'a, B: 'a;
 
     fn add_provider(
-        &mut self,
+        &self,
         record: ProviderRecord,
     ) -> subspace_networking::libp2p::kad::store::Result<()> {
         self.a.add_provider(record.clone())?;
@@ -141,7 +142,7 @@ impl<A: subspace_networking::ProviderStorage, B: subspace_networking::ProviderSt
     }
 
     fn remove_provider(
-        &mut self,
+        &self,
         k: &subspace_networking::libp2p::kad::record::Key,
         p: &subspace_networking::libp2p::PeerId,
     ) {

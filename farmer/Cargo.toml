@@ -13,7 +13,6 @@ derive_builder = "0.12"
 derive_more = "0.99"
 futures = "0.3"
 lru = "0.10"
-parity-db = "0.4"
 parking_lot = "0.12"
 pin-project = "1"
 serde = { version = "1", features = ["derive"] }
@@ -26,10 +25,10 @@ sdk-utils = { path = "../utils" }
 sdk-dsn = { path = "../dsn" }
 sdk-traits = { path = "../traits" }
 
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "da96b4843e33a570f9a98c7eb2411fa91be56170" }
-subspace-erasure-coding = { git = "https://github.com/subspace/subspace", rev = "da96b4843e33a570f9a98c7eb2411fa91be56170" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "da96b4843e33a570f9a98c7eb2411fa91be56170" }
-subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "da96b4843e33a570f9a98c7eb2411fa91be56170" }
-subspace-networking = { git = "https://github.com/subspace/subspace", rev = "da96b4843e33a570f9a98c7eb2411fa91be56170" }
-subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "da96b4843e33a570f9a98c7eb2411fa91be56170", features = ["parallel", "chia"] }
-subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "da96b4843e33a570f9a98c7eb2411fa91be56170" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "5fdbf23630fd41017dd062046fbf91821375c910" }
+subspace-erasure-coding = { git = "https://github.com/subspace/subspace", rev = "5fdbf23630fd41017dd062046fbf91821375c910" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "5fdbf23630fd41017dd062046fbf91821375c910" }
+subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "5fdbf23630fd41017dd062046fbf91821375c910" }
+subspace-networking = { git = "https://github.com/subspace/subspace", rev = "5fdbf23630fd41017dd062046fbf91821375c910" }
+subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "5fdbf23630fd41017dd062046fbf91821375c910", features = ["parallel", "chia"] }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "5fdbf23630fd41017dd062046fbf91821375c910" }

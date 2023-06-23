@@ -15,7 +15,6 @@ use std::io;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::Context;
 pub use builder::{Builder, Config};
@@ -201,6 +200,9 @@ mod builder {
         #[builder(default, setter(into))]
         #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
         pub provided_keys_limit: ProvidedKeysLimit,
+        /// Maximum number of pieces in single sector
+        #[builder(default)]
+        pub max_pieces_in_sector: Option<u16>,
     }
 
     impl Builder {
@@ -298,7 +300,7 @@ fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAnd
     let plotted_pieces: HashMap<PieceIndexHash, PieceDetails> = single_disk_plots
         .iter()
         .enumerate()
-        .flat_map(|(plot_offset, single_disk_plot)| {
+        .flat_map(|(disk_farm_index, single_disk_plot)| {
             single_disk_plot
                 .plotted_sectors()
                 .enumerate()
@@ -308,7 +310,7 @@ fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAnd
                         Err(error) => {
                             tracing::error!(
                                 %error,
-                                %plot_offset,
+                                %disk_farm_index,
                                 %sector_offset,
                                 "Failed reading plotted sector on startup, skipping"
                             );
@@ -322,7 +324,7 @@ fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAnd
                             (
                                 piece_index.hash(),
                                 PieceDetails {
-                                    plot_offset,
+                                    disk_farm_index,
                                     sector_index: plotted_sector.sector_index,
                                     piece_offset,
                                 },
@@ -343,7 +345,7 @@ fn handler_on_sector_plotted(
     sector_offset: usize,
     plotted_sector: &subspace_farmer_components::plotting::PlottedSector,
     plotting_permit: Arc<impl Send + Sync + 'static>,
-    plot_offset: usize,
+    disk_farm_index: usize,
     node: &subspace_networking::Node,
     readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
     mut dropped_receiver: tokio::sync::broadcast::Receiver<()>,
@@ -370,7 +372,10 @@ fn handler_on_sector_plotted(
         readers_and_pieces.add_pieces(
             (PieceOffset::ZERO..).zip(plotted_sector.piece_indexes.iter().copied()).map(
                 |(piece_offset, piece_index)| {
-                    (piece_index.hash(), PieceDetails { plot_offset, sector_index, piece_offset })
+                    (
+                        piece_index.hash(),
+                        PieceDetails { disk_farm_index, sector_index, piece_offset },
+                    )
                 },
             ),
         );
@@ -390,8 +395,8 @@ fn handler_on_sector_plotted(
         new_pieces
             .into_iter()
             .map(|piece_index| {
-                subspace_networking::utils::piece_announcement::announce_single_piece_index_with_backoff(
-                    piece_index,
+                subspace_networking::utils::piece_announcement::announce_single_piece_index_hash_with_backoff(
+                    piece_index.hash(),
                     &node,
                 )
             })
@@ -404,7 +409,8 @@ fn handler_on_sector_plotted(
 
         // Release only after publishing is finished
         drop(plotting_permit);
-    };
+    }
+    .in_current_span();
 
     drop(sdk_utils::task_spawn(
         format!("subspace-sdk-farmer-{node_name}-piece-publishing"),
@@ -436,6 +442,7 @@ impl Config {
             max_concurrent_plots,
             piece_cache_size: PieceCacheSize(piece_cache_size),
             provided_keys_limit: ProvidedKeysLimit(provided_keys_limit),
+            max_pieces_in_sector,
         } = self;
 
         let piece_cache_size = NonZeroUsize::new(
@@ -533,11 +540,22 @@ impl Config {
             node.dsn().node.clone(),
         ));
 
+        let max_pieces_in_sector = match max_pieces_in_sector {
+            Some(m) => m,
+            None =>
+                subspace_farmer::NodeClient::farmer_app_info(node.rpc())
+                    .await
+                    .expect("Node is always reachable")
+                    .protocol_info
+                    .max_pieces_in_sector,
+        };
+
         for (disk_farm_idx, description) in plots.iter().enumerate() {
             let (plot, single_disk_plot) = Plot::new(PlotOptions {
                 disk_farm_idx,
                 reward_address,
                 node,
+                max_pieces_in_sector,
                 piece_getter: Arc::clone(&piece_getter),
                 concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
                 description,
@@ -551,8 +569,9 @@ impl Config {
 
         readers_and_pieces.lock().replace(create_readers_and_pieces(&single_disk_plots));
 
-        for (plot_offset, single_disk_plot) in single_disk_plots.iter().enumerate() {
+        for (disk_farm_index, single_disk_plot) in single_disk_plots.iter().enumerate() {
             let readers_and_pieces = Arc::clone(&readers_and_pieces);
+            let span = tracing::info_span!("farm", %disk_farm_index);
 
             // We are not going to send anything here, but dropping of sender on dropping of
             // corresponding `SingleDiskPlot` will allow us to stop background tasks.
@@ -568,11 +587,12 @@ impl Config {
             // TODO: Once we have replotting, this will have to be updated
             let handler_id = single_disk_plot.on_sector_plotted(Arc::new(
                 move |(sector_offset, plotted_sector, plotting_permit)| {
+                    let _span_guard = span.enter();
                     handler_on_sector_plotted(
                         *sector_offset,
                         plotted_sector,
                         Arc::clone(plotting_permit),
-                        plot_offset,
+                        disk_farm_index,
                         &node,
                         readers_and_pieces.clone(),
                         dropped_sender.subscribe(),
@@ -611,15 +631,18 @@ impl Config {
         node.dsn().farmer_piece_store.lock().await.replace(piece_store);
         node.dsn().farmer_provider_storage.swap(Some(farmer_provider_storage));
 
-        drop_at_exit.push(
-            sdk_dsn::start_announcements_processor(
-                node.dsn().node.clone(),
-                Arc::clone(&piece_cache),
-                Arc::downgrade(&readers_and_pieces),
-                node.name(),
-            )
-            .context("Failed to start announcement processor")?,
-        );
+        sdk_dsn::start_announcements_processor(
+            node.dsn().node.clone(),
+            Arc::clone(&piece_cache),
+            Arc::downgrade(&readers_and_pieces),
+            node.name(),
+            node.dsn()
+                .provider_records_receiver
+                .lock()
+                .take()
+                .context("Node already has farmer")?,
+        )
+        .context("Failed to start announcement processor")?;
 
         drop_at_exit.defer({
             let provider_storage = node.dsn().farmer_provider_storage.clone();
@@ -638,23 +661,24 @@ impl Config {
             }
         });
 
-        async_drop.push(async move {
-            const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
+        // TODO: check for piece cache to exit
+        // async_drop.push(async move {
+        //     const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
 
-            // HACK: Poll on piece store creation just to be sure
-            loop {
-                let result = ParityDbStore::<
-                    subspace_networking::libp2p::kad::record::Key,
-                    subspace_core_primitives::Piece,
-                >::new(&piece_cache_db_path);
+        //     // HACK: Poll on piece store creation just to be sure
+        //     loop {
+        //         let result = ParityDbStore::<
+        //             subspace_networking::libp2p::kad::record::Key,
+        //             subspace_core_primitives::Piece,
+        //         >::new(&piece_cache_db_path);
 
-                match result.map(drop) {
-                    // If parity db is still locked wait on it
-                    Err(parity_db::Error::Locked(_)) => tokio::time::sleep(PIECE_STORE_POLL).await,
-                    _ => break,
-                }
-            }
-        });
+        //         match result.map(drop) {
+        //             // If parity db is still locked wait on it
+        //             Err(parity_db::Error::Locked(_)) =>
+        // tokio::time::sleep(PIECE_STORE_POLL).await,             _ => break,
+        //         }
+        //     }
+        // });
 
         tracing::debug!("Started farmer");
 
@@ -839,6 +863,7 @@ struct PlotOptions<'a, PG, N: sdk_traits::Node> {
     pub description: &'a PlotDescription,
     pub kzg: kzg::Kzg,
     pub erasure_coding: ErasureCoding,
+    pub max_pieces_in_sector: u16,
 }
 
 impl<T: subspace_proof_of_space::Table> Plot<T> {
@@ -852,6 +877,7 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
             description,
             kzg,
             erasure_coding,
+            max_pieces_in_sector,
         }: PlotOptions<
             '_,
             impl subspace_farmer_components::plotting::PieceGetter + Send + 'static,
@@ -863,7 +889,6 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
         let farmer_app_info = subspace_farmer::NodeClient::farmer_app_info(node.rpc())
             .await
             .expect("Node is always reachable");
-        let max_pieces_in_sector = farmer_app_info.protocol_info.max_pieces_in_sector;
         let description = SingleDiskPlotOptions {
             allocated_space,
             directory: directory.clone(),
