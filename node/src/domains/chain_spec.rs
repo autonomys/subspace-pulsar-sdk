@@ -1,6 +1,5 @@
 //! System domain chain specs
 
-use frame_support::weights::Weight;
 use sc_service::ChainType;
 use sc_subspace_chain_specs::SerializableChainSpec;
 use sdk_utils::chain_spec::{
@@ -8,32 +7,14 @@ use sdk_utils::chain_spec::{
 };
 use sp_core::crypto::Ss58Codec;
 use sp_domains::ExecutorPublicKey;
-use sp_runtime::Percent;
-use subspace_core_primitives::crypto::blake2b_256_hash;
 use subspace_runtime_primitives::SSC;
 use system_domain_runtime::{
     AccountId, Balance, BalancesConfig, DomainRegistryConfig, ExecutorRegistryConfig,
-    GenesisConfig, Hash, MessengerConfig, SudoConfig, SystemConfig, WASM_BINARY,
+    GenesisConfig, MessengerConfig, SudoConfig, SystemConfig, WASM_BINARY,
 };
 
-type DomainConfig = sp_domains::DomainConfig<Hash, Balance, Weight>;
-
-/// The extensions for the [`ConsensusChainSpec`].
-#[derive(Clone, serde::Serialize, serde::Deserialize, sc_chain_spec::ChainSpecExtension)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct ChainSpecExtensions {
-    #[cfg(feature = "core-payments")]
-    pub core: Option<SerializableChainSpec<core_payments_domain_runtime::GenesisConfig>>,
-    #[cfg(feature = "eth-relayer")]
-    pub eth: Option<SerializableChainSpec<core_eth_relay_runtime::GenesisConfig>>,
-    #[cfg(feature = "core-evm")]
-    pub evm: Option<SerializableChainSpec<core_evm_runtime::GenesisConfig>>,
-    #[serde(skip)]
-    pub _if_no_fields_in_extension_macro_panics: (),
-}
-
 /// Chain spec type for the system domain
-pub type ChainSpec = SerializableChainSpec<GenesisConfig, ChainSpecExtensions>;
+pub type ChainSpec = SerializableChainSpec<GenesisConfig>;
 
 /// Development config
 pub fn development_config() -> ChainSpec {
@@ -57,23 +38,6 @@ pub fn development_config() -> ChainSpec {
                     get_account_id_from_seed("Alice"),
                     get_public_key_from_seed::<ExecutorPublicKey>("Alice"),
                 )],
-                vec![(
-                    get_account_id_from_seed("Alice"),
-                    1_000 * SSC,
-                    // TODO: proper genesis domain config
-                    DomainConfig {
-                        wasm_runtime_hash: blake2b_256_hash(
-                            system_domain_runtime::CORE_PAYMENTS_WASM_BUNDLE,
-                        )
-                        .into(),
-                        max_bundle_size: 1024 * 1024,
-                        bundle_slot_probability: (1, 1),
-                        max_bundle_weight: Weight::MAX,
-                        min_operator_stake: 100 * SSC,
-                    },
-                    get_account_id_from_seed("Alice"),
-                    Percent::from_percent(10),
-                )],
                 Some(get_account_id_from_seed("Alice")),
                 vec![(get_account_id_from_seed("Alice"), get_account_id_from_seed("Alice"))],
             )
@@ -83,15 +47,7 @@ pub fn development_config() -> ChainSpec {
         None,
         None,
         Some(chain_spec_properties()),
-        ChainSpecExtensions {
-            #[cfg(feature = "core-payments")]
-            core: Some(super::core_payments::chain_spec::development_config()),
-            #[cfg(feature = "eth-relayer")]
-            eth: Some(super::eth_relayer::chain_spec::development_config()),
-            #[cfg(feature = "core-evm")]
-            evm: Some(super::evm::chain_spec::development_config()),
-            _if_no_fields_in_extension_macro_panics: (),
-        },
+        None,
     )
 }
 
@@ -125,23 +81,6 @@ pub fn local_testnet_config() -> ChainSpec {
                     get_account_id_from_seed("Alice"),
                     get_public_key_from_seed::<ExecutorPublicKey>("Alice"),
                 )],
-                vec![(
-                    get_account_id_from_seed("Alice"),
-                    1_000 * SSC,
-                    // TODO: proper genesis domain config
-                    DomainConfig {
-                        wasm_runtime_hash: blake2b_256_hash(
-                            system_domain_runtime::CORE_PAYMENTS_WASM_BUNDLE,
-                        )
-                        .into(),
-                        max_bundle_size: 1024 * 1024,
-                        bundle_slot_probability: (1, 1),
-                        max_bundle_weight: Weight::MAX,
-                        min_operator_stake: 100 * SSC,
-                    },
-                    get_account_id_from_seed("Alice"),
-                    Percent::from_percent(10),
-                )],
                 Some(get_account_id_from_seed("Alice")),
                 vec![
                     (get_account_id_from_seed("Alice"), get_account_id_from_seed("Alice")),
@@ -159,15 +98,7 @@ pub fn local_testnet_config() -> ChainSpec {
         // Properties
         Some(chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions {
-            #[cfg(feature = "core-payments")]
-            core: Some(super::core_payments::chain_spec::local_testnet_config()),
-            #[cfg(feature = "eth-relayer")]
-            eth: Some(super::eth_relayer::chain_spec::local_testnet_config()),
-            #[cfg(feature = "core-evm")]
-            evm: Some(super::evm::chain_spec::local_testnet_config()),
-            _if_no_fields_in_extension_macro_panics: (),
-        },
+        None,
     )
 }
 
@@ -202,24 +133,6 @@ pub fn gemini_3d_config() -> ChainSpec {
                     )
                     .expect("Wrong executor public key"),
                 )],
-                vec![(
-                    AccountId::from_ss58check("5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ")
-                        .expect("Wrong executor account address"),
-                    1_000 * SSC,
-                    DomainConfig {
-                        wasm_runtime_hash: blake2b_256_hash(
-                            system_domain_runtime::CORE_PAYMENTS_WASM_BUNDLE,
-                        )
-                        .into(),
-                        max_bundle_size: 4 * 1024 * 1024,
-                        bundle_slot_probability: (1, 1),
-                        max_bundle_weight: Weight::MAX,
-                        min_operator_stake: 100 * SSC,
-                    },
-                    AccountId::from_ss58check("5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ")
-                        .expect("Wrong executor account address"),
-                    Percent::from_percent(10),
-                )],
                 Some(sudo_account),
                 Default::default(),
             )
@@ -234,15 +147,7 @@ pub fn gemini_3d_config() -> ChainSpec {
         // Properties
         Some(chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions {
-            #[cfg(feature = "core-payments")]
-            core: Some(super::core_payments::chain_spec::gemini_3d_config()),
-            #[cfg(feature = "eth-relayer")]
-            eth: Some(super::eth_relayer::chain_spec::gemini_3d_config()),
-            #[cfg(feature = "core-evm")]
-            evm: Some(super::evm::chain_spec::gemini_3d_config()),
-            _if_no_fields_in_extension_macro_panics: (),
-        },
+        None,
     )
 }
 
@@ -276,24 +181,6 @@ pub fn devnet_config() -> ChainSpec {
                     )
                     .expect("Wrong executor public key"),
                 )],
-                vec![(
-                    AccountId::from_ss58check("5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ")
-                        .expect("Wrong executor account address"),
-                    1_000 * SSC,
-                    DomainConfig {
-                        wasm_runtime_hash: blake2b_256_hash(
-                            system_domain_runtime::CORE_PAYMENTS_WASM_BUNDLE,
-                        )
-                        .into(),
-                        max_bundle_size: 4 * 1024 * 1024,
-                        bundle_slot_probability: (1, 1),
-                        max_bundle_weight: Weight::MAX,
-                        min_operator_stake: 100 * SSC,
-                    },
-                    AccountId::from_ss58check("5Df6w8CgYY8kTRwCu8bjBsFu46fy4nFa61xk6dUbL6G4fFjQ")
-                        .expect("Wrong executor account address"),
-                    Percent::from_percent(10),
-                )],
                 Some(sudo_account.clone()),
                 vec![(
                     sudo_account,
@@ -312,22 +199,13 @@ pub fn devnet_config() -> ChainSpec {
         // Properties
         Some(chain_spec_properties()),
         // Extensions
-        ChainSpecExtensions {
-            #[cfg(feature = "core-payments")]
-            core: Some(super::core_payments::chain_spec::devnet_config()),
-            #[cfg(feature = "eth-relayer")]
-            eth: Some(super::eth_relayer::chain_spec::devnet_config()),
-            #[cfg(feature = "core-evm")]
-            evm: Some(super::evm::chain_spec::devnet_config()),
-            _if_no_fields_in_extension_macro_panics: (),
-        },
+        None,
     )
 }
 
 fn testnet_genesis(
     endowed_accounts: Vec<AccountId>,
     executors: Vec<(AccountId, Balance, AccountId, ExecutorPublicKey)>,
-    domains: Vec<(AccountId, Balance, DomainConfig, AccountId, Percent)>,
     maybe_sudo_account: Option<AccountId>,
     relayers: Vec<(AccountId, AccountId)>,
 ) -> GenesisConfig {
@@ -344,7 +222,7 @@ fn testnet_genesis(
             balances: endowed_accounts.iter().cloned().map(|k| (k, 1_000_000 * SSC)).collect(),
         },
         executor_registry: ExecutorRegistryConfig { executors, slot_probability: (1, 1) },
-        domain_registry: DomainRegistryConfig { domains },
+        domain_registry: DomainRegistryConfig::default(),
         messenger: MessengerConfig { relayers },
     }
 }
