@@ -24,17 +24,6 @@ enum Chain {
     Dev,
 }
 
-#[cfg(feature = "executor")]
-#[derive(ValueEnum, Debug, Clone)]
-enum Domain {
-    #[cfg(feature = "core-payments")]
-    Payments,
-    #[cfg(feature = "eth-relayer")]
-    EthRelayer,
-    #[cfg(feature = "core-evm")]
-    Evm,
-}
-
 /// Mini farmer
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
@@ -45,7 +34,7 @@ pub struct Args {
     #[cfg(feature = "executor")]
     /// Run executor with specified domain
     #[arg(short, long)]
-    domain: Option<Domain>,
+    executor: bool,
     /// Address for farming rewards
     #[arg(short, long)]
     reward_address: PublicKey,
@@ -80,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
     let Args {
         chain,
         #[cfg(feature = "executor")]
-        domain,
+        executor,
         reward_address,
         base_path,
         plot_size,
@@ -109,38 +98,14 @@ async fn main() -> anyhow::Result<()> {
     .role(node::Role::Authority);
 
     #[cfg(feature = "executor")]
-    let node = match domain {
-        Some(domain) => node.system_domain({
-            use subspace_sdk::node::domains;
-
-            let system_domain = domains::ConfigBuilder::new()
-                .rpc(
-                    subspace_sdk::node::RpcBuilder::new()
-                        .http("127.0.0.1:9990".parse().unwrap())
-                        .ws("127.0.0.1:9991".parse().unwrap()),
-                )
-                .role(node::Role::Authority);
-            let rpc = subspace_sdk::node::RpcBuilder::new()
-                .http("127.0.0.1:9992".parse().unwrap())
-                .ws("127.0.0.1:9993".parse().unwrap());
-
-            match domain {
-                #[cfg(feature = "core-payments")]
-                Domain::Payments => system_domain.core_payments(
-                    domains::core_payments::ConfigBuilder::new()
-                        .rpc(rpc)
-                        .role(node::Role::Authority),
-                ),
-                #[cfg(feature = "eth-relayer")]
-                Domain::EthRelayer => system_domain.eth_relayer(
-                    domains::eth_relayer::ConfigBuilder::new().rpc(rpc).role(node::Role::Authority),
-                ),
-                #[cfg(feature = "core-evm")]
-                Domain::Evm => system_domain
-                    .evm(domains::evm::ConfigBuilder::new().rpc(rpc).role(node::Role::Authority)),
-            }
-        }),
-        None => node,
+    let node = if executor {
+        node.system_domain(
+            node::domains::ConfigBuilder::new()
+                .rpc(subspace_sdk::node::RpcBuilder::new().addr("127.0.0.1:9990".parse().unwrap()))
+                .role(node::Role::Authority),
+        )
+    } else {
+        node
     };
 
     let node = node
