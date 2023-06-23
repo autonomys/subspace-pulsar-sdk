@@ -674,8 +674,8 @@ impl Config {
 
         //         match result.map(drop) {
         //             // If parity db is still locked wait on it
-        //             Err(parity_db::Error::Locked(_)) =>
-        // tokio::time::sleep(PIECE_STORE_POLL).await,             _ => break,
+        //             Err(parity_db::Error::Locked(_)) => tokio::time::sleep(PIECE_STORE_POLL).await,
+        //             _ => break,
         //         }
         //     }
         // });
