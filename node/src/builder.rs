@@ -78,6 +78,7 @@ pub struct Config<F: Farmer> {
     pub enable_subspace_block_relay: bool,
 
     #[builder(setter(skip), default)]
+    #[serde(skip, default)]
     _farmer: std::marker::PhantomData<F>,
 }
 
