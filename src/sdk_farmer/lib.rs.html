@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `farmer/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-fbd14db5c88ed452.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sdk_farmer" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (0599b6b93 2023-04-01)" data-search-js="search-bc5a112813b5d712.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" data-theme-light-css="light-db279b6232be9c13.css" data-theme-dark-css="dark-cf923f49f397b216.css" data-theme-ayu-css="ayu-be46fdc453a55015.css" ></div><script src="../../static.files/storage-d4a1a279bad1a0c0.js"></script><script defer src="../../static.files/source-script-1b95b7cca98b26e5.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-8e6affb8c73a5ff1.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-db279b6232be9c13.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-cf923f49f397b216.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../sdk_farmer/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `farmer/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-f3501f0f5ae15dfb.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sdk_farmer" data-themes="" data-resource-suffix="" data-rustdoc-version="1.71.0-nightly (ce5919fce 2023-05-15)" data-search-js="search-4926e5fc22a5646a.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-6f6ffb5395b17c6e.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../../static.files/source-script-11255107d0a65077.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-f0540c1d82cde29b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../sdk_farmer/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1021,7 +1021,32 @@
 <a href="#1021" id="1021">1021</a>
 <a href="#1022" id="1022">1022</a>
 <a href="#1023" id="1023">1023</a>
-</pre><pre class="rust"><code><span class="doccomment">//! This crate is related to abstract farmer implementation
+<a href="#1024" id="1024">1024</a>
+<a href="#1025" id="1025">1025</a>
+<a href="#1026" id="1026">1026</a>
+<a href="#1027" id="1027">1027</a>
+<a href="#1028" id="1028">1028</a>
+<a href="#1029" id="1029">1029</a>
+<a href="#1030" id="1030">1030</a>
+<a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
+<a href="#1039" id="1039">1039</a>
+<a href="#1040" id="1040">1040</a>
+<a href="#1041" id="1041">1041</a>
+<a href="#1042" id="1042">1042</a>
+<a href="#1043" id="1043">1043</a>
+<a href="#1044" id="1044">1044</a>
+<a href="#1045" id="1045">1045</a>
+<a href="#1046" id="1046">1046</a>
+<a href="#1047" id="1047">1047</a>
+<a href="#1048" id="1048">1048</a>
+</pre></div><pre class="rust"><code><span class="doccomment">//! This crate is related to abstract farmer implementation
 
 </span><span class="attr">#![warn(
     missing_docs,
@@ -1038,7 +1063,6 @@
 <span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">pub use </span>builder::{Builder, Config};
@@ -1224,6 +1248,9 @@
         </span><span class="attr">#[builder(default, setter(into))]
         #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
         </span><span class="kw">pub </span>provided_keys_limit: ProvidedKeysLimit,
+        <span class="doccomment">/// Maximum number of pieces in single sector
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>max_pieces_in_sector: <span class="prelude-ty">Option</span>&lt;u16&gt;,
     }
 
     <span class="kw">impl </span>Builder {
@@ -1321,7 +1348,7 @@
     </span><span class="kw">let </span>plotted_pieces: HashMap&lt;PieceIndexHash, PieceDetails&gt; = single_disk_plots
         .iter()
         .enumerate()
-        .flat_map(|(plot_offset, single_disk_plot)| {
+        .flat_map(|(disk_farm_index, single_disk_plot)| {
             single_disk_plot
                 .plotted_sectors()
                 .enumerate()
@@ -1331,7 +1358,7 @@
                         <span class="prelude-val">Err</span>(error) =&gt; {
                             <span class="macro">tracing::error!</span>(
                                 %error,
-                                %plot_offset,
+                                %disk_farm_index,
                                 %sector_offset,
                                 <span class="string">&quot;Failed reading plotted sector on startup, skipping&quot;
                             </span>);
@@ -1345,7 +1372,7 @@
                             (
                                 piece_index.hash(),
                                 PieceDetails {
-                                    plot_offset,
+                                    disk_farm_index,
                                     sector_index: plotted_sector.sector_index,
                                     piece_offset,
                                 },
@@ -1366,7 +1393,7 @@
     sector_offset: usize,
     plotted_sector: <span class="kw-2">&amp;</span>subspace_farmer_components::plotting::PlottedSector,
     plotting_permit: Arc&lt;<span class="kw">impl </span>Send + Sync + <span class="lifetime">&#39;static</span>&gt;,
-    plot_offset: usize,
+    disk_farm_index: usize,
     node: <span class="kw-2">&amp;</span>subspace_networking::Node,
     readers_and_pieces: Arc&lt;parking_lot::Mutex&lt;<span class="prelude-ty">Option</span>&lt;ReadersAndPieces&gt;&gt;&gt;,
     <span class="kw-2">mut </span>dropped_receiver: tokio::sync::broadcast::Receiver&lt;()&gt;,
@@ -1393,7 +1420,10 @@
         readers_and_pieces.add_pieces(
             (PieceOffset::ZERO..).zip(plotted_sector.piece_indexes.iter().copied()).map(
                 |(piece_offset, piece_index)| {
-                    (piece_index.hash(), PieceDetails { plot_offset, sector_index, piece_offset })
+                    (
+                        piece_index.hash(),
+                        PieceDetails { disk_farm_index, sector_index, piece_offset },
+                    )
                 },
             ),
         );
@@ -1413,8 +1443,8 @@
         new_pieces
             .into_iter()
             .map(|piece_index| {
-                subspace_networking::utils::piece_announcement::announce_single_piece_index_with_backoff(
-                    piece_index,
+                subspace_networking::utils::piece_announcement::announce_single_piece_index_hash_with_backoff(
+                    piece_index.hash(),
                     <span class="kw-2">&amp;</span>node,
                 )
             })
@@ -1427,7 +1457,8 @@
 
         <span class="comment">// Release only after publishing is finished
         </span>drop(plotting_permit);
-    };
+    }
+    .in_current_span();
 
     drop(sdk_utils::task_spawn(
         <span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-farmer-{node_name}-piece-publishing&quot;</span>),
@@ -1459,6 +1490,7 @@
             max_concurrent_plots,
             piece_cache_size: PieceCacheSize(piece_cache_size),
             provided_keys_limit: ProvidedKeysLimit(provided_keys_limit),
+            max_pieces_in_sector,
         } = <span class="self">self</span>;
 
         <span class="kw">let </span>piece_cache_size = NonZeroUsize::new(
@@ -1556,11 +1588,22 @@
             node.dsn().node.clone(),
         ));
 
+        <span class="kw">let </span>max_pieces_in_sector = <span class="kw">match </span>max_pieces_in_sector {
+            <span class="prelude-val">Some</span>(m) =&gt; m,
+            <span class="prelude-val">None </span>=&gt;
+                subspace_farmer::NodeClient::farmer_app_info(node.rpc())
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">&quot;Node is always reachable&quot;</span>)
+                    .protocol_info
+                    .max_pieces_in_sector,
+        };
+
         <span class="kw">for </span>(disk_farm_idx, description) <span class="kw">in </span>plots.iter().enumerate() {
             <span class="kw">let </span>(plot, single_disk_plot) = Plot::new(PlotOptions {
                 disk_farm_idx,
                 reward_address,
                 node,
+                max_pieces_in_sector,
                 piece_getter: Arc::clone(<span class="kw-2">&amp;</span>piece_getter),
                 concurrent_plotting_semaphore: Arc::clone(<span class="kw-2">&amp;</span>concurrent_plotting_semaphore),
                 description,
@@ -1574,8 +1617,9 @@
 
         readers_and_pieces.lock().replace(create_readers_and_pieces(<span class="kw-2">&amp;</span>single_disk_plots));
 
-        <span class="kw">for </span>(plot_offset, single_disk_plot) <span class="kw">in </span>single_disk_plots.iter().enumerate() {
+        <span class="kw">for </span>(disk_farm_index, single_disk_plot) <span class="kw">in </span>single_disk_plots.iter().enumerate() {
             <span class="kw">let </span>readers_and_pieces = Arc::clone(<span class="kw-2">&amp;</span>readers_and_pieces);
+            <span class="kw">let </span>span = <span class="macro">tracing::info_span!</span>(<span class="string">&quot;farm&quot;</span>, %disk_farm_index);
 
             <span class="comment">// We are not going to send anything here, but dropping of sender on dropping of
             // corresponding `SingleDiskPlot` will allow us to stop background tasks.
@@ -1591,11 +1635,12 @@
             // TODO: Once we have replotting, this will have to be updated
             </span><span class="kw">let </span>handler_id = single_disk_plot.on_sector_plotted(Arc::new(
                 <span class="kw">move </span>|(sector_offset, plotted_sector, plotting_permit)| {
+                    <span class="kw">let </span>_span_guard = span.enter();
                     handler_on_sector_plotted(
                         <span class="kw-2">*</span>sector_offset,
                         plotted_sector,
                         Arc::clone(plotting_permit),
-                        plot_offset,
+                        disk_farm_index,
                         <span class="kw-2">&amp;</span>node,
                         readers_and_pieces.clone(),
                         dropped_sender.subscribe(),
@@ -1634,15 +1679,18 @@
         node.dsn().farmer_piece_store.lock().<span class="kw">await</span>.replace(piece_store);
         node.dsn().farmer_provider_storage.swap(<span class="prelude-val">Some</span>(farmer_provider_storage));
 
-        drop_at_exit.push(
-            sdk_dsn::start_announcements_processor(
-                node.dsn().node.clone(),
-                Arc::clone(<span class="kw-2">&amp;</span>piece_cache),
-                Arc::downgrade(<span class="kw-2">&amp;</span>readers_and_pieces),
-                node.name(),
-            )
-            .context(<span class="string">&quot;Failed to start announcement processor&quot;</span>)<span class="question-mark">?</span>,
-        );
+        sdk_dsn::start_announcements_processor(
+            node.dsn().node.clone(),
+            Arc::clone(<span class="kw-2">&amp;</span>piece_cache),
+            Arc::downgrade(<span class="kw-2">&amp;</span>readers_and_pieces),
+            node.name(),
+            node.dsn()
+                .provider_records_receiver
+                .lock()
+                .take()
+                .context(<span class="string">&quot;Node already has farmer&quot;</span>)<span class="question-mark">?</span>,
+        )
+        .context(<span class="string">&quot;Failed to start announcement processor&quot;</span>)<span class="question-mark">?</span>;
 
         drop_at_exit.defer({
             <span class="kw">let </span>provider_storage = node.dsn().farmer_provider_storage.clone();
@@ -1661,25 +1709,26 @@
             }
         });
 
-        async_drop.push(<span class="kw">async move </span>{
-            <span class="kw">const </span>PIECE_STORE_POLL: Duration = Duration::from_millis(<span class="number">100</span>);
+        <span class="comment">// TODO: check for piece cache to exit
+        // async_drop.push(async move {
+        //     const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
 
-            <span class="comment">// HACK: Poll on piece store creation just to be sure
-            </span><span class="kw">loop </span>{
-                <span class="kw">let </span>result = ParityDbStore::&lt;
-                    subspace_networking::libp2p::kad::record::Key,
-                    subspace_core_primitives::Piece,
-                &gt;::new(<span class="kw-2">&amp;</span>piece_cache_db_path);
+        //     // HACK: Poll on piece store creation just to be sure
+        //     loop {
+        //         let result = ParityDbStore::&lt;
+        //             subspace_networking::libp2p::kad::record::Key,
+        //             subspace_core_primitives::Piece,
+        //         &gt;::new(&amp;piece_cache_db_path);
 
-                <span class="kw">match </span>result.map(drop) {
-                    <span class="comment">// If parity db is still locked wait on it
-                    </span><span class="prelude-val">Err</span>(parity_db::Error::Locked(<span class="kw">_</span>)) =&gt; tokio::time::sleep(PIECE_STORE_POLL).<span class="kw">await</span>,
-                    <span class="kw">_ </span>=&gt; <span class="kw">break</span>,
-                }
-            }
-        });
+        //         match result.map(drop) {
+        //             // If parity db is still locked wait on it
+        //             Err(parity_db::Error::Locked(_)) =&gt;
+        // tokio::time::sleep(PIECE_STORE_POLL).await,             _ =&gt; break,
+        //         }
+        //     }
+        // });
 
-        <span class="macro">tracing::debug!</span>(<span class="string">&quot;Started farmer&quot;</span>);
+        </span><span class="macro">tracing::debug!</span>(<span class="string">&quot;Started farmer&quot;</span>);
 
         <span class="prelude-val">Ok</span>(Farmer {
             reward_address,
@@ -1862,6 +1911,7 @@
     <span class="kw">pub </span>description: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>PlotDescription,
     <span class="kw">pub </span>kzg: kzg::Kzg,
     <span class="kw">pub </span>erasure_coding: ErasureCoding,
+    <span class="kw">pub </span>max_pieces_in_sector: u16,
 }
 
 <span class="kw">impl</span>&lt;T: subspace_proof_of_space::Table&gt; Plot&lt;T&gt; {
@@ -1875,6 +1925,7 @@
             description,
             kzg,
             erasure_coding,
+            max_pieces_in_sector,
         }: PlotOptions&lt;
             <span class="lifetime">&#39;_</span>,
             <span class="kw">impl </span>subspace_farmer_components::plotting::PieceGetter + Send + <span class="lifetime">&#39;static</span>,
@@ -1886,7 +1937,6 @@
         <span class="kw">let </span>farmer_app_info = subspace_farmer::NodeClient::farmer_app_info(node.rpc())
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Node is always reachable&quot;</span>);
-        <span class="kw">let </span>max_pieces_in_sector = farmer_app_info.protocol_info.max_pieces_in_sector;
         <span class="kw">let </span>description = SingleDiskPlotOptions {
             allocated_space,
             directory: directory.clone(),

@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `dsn/src/builder.rs`."><title>builder.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-fbd14db5c88ed452.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sdk_dsn" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (0599b6b93 2023-04-01)" data-search-js="search-bc5a112813b5d712.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" data-theme-light-css="light-db279b6232be9c13.css" data-theme-dark-css="dark-cf923f49f397b216.css" data-theme-ayu-css="ayu-be46fdc453a55015.css" ></div><script src="../../static.files/storage-d4a1a279bad1a0c0.js"></script><script defer src="../../static.files/source-script-1b95b7cca98b26e5.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-8e6affb8c73a5ff1.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-db279b6232be9c13.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-cf923f49f397b216.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../sdk_dsn/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `dsn/src/builder.rs`."><title>builder.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-f3501f0f5ae15dfb.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sdk_dsn" data-themes="" data-resource-suffix="" data-rustdoc-version="1.71.0-nightly (ce5919fce 2023-05-15)" data-search-js="search-4926e5fc22a5646a.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-6f6ffb5395b17c6e.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../../static.files/source-script-11255107d0a65077.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-f0540c1d82cde29b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../sdk_dsn/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -395,7 +395,68 @@
 <a href="#395" id="395">395</a>
 <a href="#396" id="396">396</a>
 <a href="#397" id="397">397</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::num::NonZeroUsize;
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::{Arc, Weak};
 
@@ -409,9 +470,12 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 <span class="kw">use </span>subspace_farmer_components::piece_caching::PieceMemoryCache;
+<span class="kw">use </span>subspace_networking::libp2p::kad::ProviderRecord;
 <span class="kw">use </span>subspace_networking::{
-    PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
+    PieceAnnouncementRequestHandler, PieceAnnouncementResponse, PieceByHashRequest,
+    PieceByHashRequestHandler, PieceByHashResponse, ProviderStorage <span class="kw">as _</span>,
     SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
+    KADEMLIA_PROVIDER_TTL_IN_SECS,
 };
 <span class="kw">use </span>subspace_service::segment_headers::SegmentHeaderCache;
 
@@ -548,8 +612,10 @@
 }
 
 <span class="kw">const </span>MAX_PROVIDER_RECORDS_LIMIT: NonZeroUsize = NonZeroUsize::new(<span class="number">100000</span>).expect(<span class="string">&quot;100000 &gt; 0&quot;</span>); <span class="comment">// ~ 10 MB
+</span><span class="kw">const </span>MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE: NonZeroUsize =
+    NonZeroUsize::new(<span class="number">2000</span>).expect(<span class="string">&quot;Not zero; qed&quot;</span>);
 
-</span><span class="doccomment">/// Options for DSN
+<span class="doccomment">/// Options for DSN
 </span><span class="kw">pub struct </span>DsnOptions&lt;C, ASNS, PieceByHash, SegmentHeaderByIndexes&gt; {
     <span class="doccomment">/// Client to aux storage for node piece cache
     </span><span class="kw">pub </span>client: Arc&lt;C&gt;,
@@ -586,6 +652,9 @@
     <span class="doccomment">/// Farmer piece store
     </span><span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
     </span><span class="kw">pub </span>farmer_piece_store: Arc&lt;tokio::sync::Mutex&lt;<span class="prelude-ty">Option</span>&lt;PieceStore&gt;&gt;&gt;,
+    <span class="doccomment">/// Provider records receiver
+    </span><span class="kw">pub </span>provider_records_receiver:
+        parking_lot::Mutex&lt;<span class="prelude-ty">Option</span>&lt;futures::channel::mpsc::Receiver&lt;ProviderRecord&gt;&gt;&gt;,
     <span class="doccomment">/// Farmer provider storage
     </span><span class="kw">pub </span>farmer_provider_storage: MaybeProviderStorage&lt;FarmerProviderStorage&gt;,
     <span class="doccomment">/// Farmer piece cache
@@ -717,17 +786,69 @@
         <span class="kw">let </span>provider_storage =
             ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
 
+        <span class="kw">let </span>(provider_records_sender, provider_records_receiver) =
+            futures::channel::mpsc::channel(MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE.get());
+
         <span class="kw">let </span>config = subspace_networking::Config {
             listen_on,
             allow_non_global_addresses_in_dht,
             networking_parameters_registry,
             request_response_protocols: <span class="macro">vec!</span>[
+                PieceAnnouncementRequestHandler::create({
+                    <span class="kw">let </span>provider_storage = provider_storage.clone();
+                    <span class="kw">move </span>|peer_id, req| {
+                        <span class="macro">tracing::trace!</span>(<span class="question-mark">?</span>req, %peer_id, <span class="string">&quot;Piece announcement request received.&quot;</span>);
+
+                        <span class="kw">let </span><span class="kw-2">mut </span>provider_records_sender = provider_records_sender.clone();
+                        <span class="kw">let </span>provider_record = ProviderRecord {
+                            provider: peer_id,
+                            key: req.piece_index_hash.into(),
+                            addresses: req.addresses.clone(),
+                            expires: KADEMLIA_PROVIDER_TTL_IN_SECS
+                                .map(|ttl| std::time::Instant::now() + ttl),
+                        };
+
+                        <span class="kw">let </span>result = <span class="kw">match </span>provider_storage.add_provider(provider_record.clone()) {
+                            <span class="prelude-val">Ok</span>(()) =&gt; {
+                                <span class="kw">if let </span><span class="prelude-val">Err</span>(error) =
+                                    provider_records_sender.try_send(provider_record)
+                                {
+                                    <span class="kw">if </span>!error.is_disconnected() {
+                                        <span class="kw">let </span>record = error.into_inner();
+                                        <span class="comment">// TODO: This should be made a warning, but due to
+                                        //  https://github.com/libp2p/rust-libp2p/discussions/3411 it&#39;ll
+                                        //  take us some time to resolve
+                                        </span><span class="macro">tracing::debug!</span>(
+                                            <span class="question-mark">?</span>record.key,
+                                            <span class="question-mark">?</span>record.provider,
+                                            <span class="string">&quot;Failed to add provider record to the channel.&quot;
+                                        </span>);
+                                    }
+                                };
+
+                                <span class="prelude-val">Some</span>(PieceAnnouncementResponse::Success)
+                            }
+                            <span class="prelude-val">Err</span>(error) =&gt; {
+                                <span class="macro">tracing::error!</span>(
+                                    %error,
+                                    %peer_id,
+                                    <span class="question-mark">?</span>req,
+                                    <span class="string">&quot;Failed to add provider for received key.&quot;
+                                </span>);
+
+                                <span class="prelude-val">None
+                            </span>}
+                        };
+
+                        futures::future::ready(result)
+                    }
+                }),
                 PieceByHashRequestHandler::create({
                     <span class="kw">let </span>weak_readers_and_pieces = Arc::downgrade(<span class="kw-2">&amp;</span>farmer_readers_and_pieces);
                     <span class="kw">let </span>farmer_piece_store = Arc::clone(<span class="kw-2">&amp;</span>farmer_piece_store);
                     <span class="kw">let </span>piece_cache = piece_cache.clone();
                     <span class="kw">let </span>piece_memory_cache = piece_memory_cache.clone();
-                    <span class="kw">move </span>|req| {
+                    <span class="kw">move </span>|<span class="kw">_</span>, req| {
                         <span class="kw">let </span>weak_readers_and_pieces = weak_readers_and_pieces.clone();
                         <span class="kw">let </span>farmer_piece_store = Arc::clone(<span class="kw-2">&amp;</span>farmer_piece_store);
                         <span class="kw">let </span>piece_cache = piece_cache.clone();
@@ -744,7 +865,7 @@
                 }),
                 SegmentHeaderBySegmentIndexesRequestHandler::create({
                     <span class="kw">let </span>segment_header_cache = SegmentHeaderCache::new(client);
-                    <span class="kw">move </span>|req| {
+                    <span class="kw">move </span>|<span class="kw">_</span>, req| {
                         futures::future::ready(get_segment_header_by_segment_indexes(
                             req,
                             <span class="kw-2">&amp;</span>segment_header_cache,
@@ -782,6 +903,7 @@
             DsnShared {
                 node,
                 farmer_piece_store,
+                provider_records_receiver: parking_lot::Mutex::new(<span class="prelude-val">Some</span>(provider_records_receiver)),
                 farmer_provider_storage,
                 farmer_readers_and_pieces,
                 piece_cache,
