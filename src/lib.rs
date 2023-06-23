@@ -37,7 +37,9 @@ pub mod farmer {
 pub mod node {
     pub use sdk_dsn::*;
     pub use sdk_node::chain_spec::ChainSpec;
-    pub use sdk_node::{chain_spec, domains, Event, RewardsEvent, SubspaceEvent};
+    pub use sdk_node::{
+        chain_spec, domains, BlockNumber, Event, Hash, RewardsEvent, SubspaceEvent, SyncingProgress,
+    };
     pub use sdk_substrate::*;
 
     pub use super::Node;
