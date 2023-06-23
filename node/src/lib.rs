@@ -70,7 +70,6 @@ impl<F: Farmer + 'static> Config<F> {
             mut dsn,
             #[cfg(feature = "executor")]
             system_domain,
-            segment_publish_concurrency: SegmentPublishConcurrency(segment_publish_concurrency),
             sync_from_dsn,
             storage_monitor,
             enable_subspace_block_relay,
@@ -146,7 +145,6 @@ impl<F: Farmer + 'static> Config<F> {
         let configuration = SubspaceConfiguration {
             base,
             force_new_slot_notifications: false,
-            segment_publish_concurrency,
             subspace_networking,
             sync_from_dsn,
             enable_subspace_block_relay,

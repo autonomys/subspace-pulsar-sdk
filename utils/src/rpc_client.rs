@@ -2,8 +2,7 @@ use std::pin::Pin;
 
 use futures::prelude::*;
 use sc_consensus_subspace_rpc::SubspaceRpcApiClient;
-use subspace_archiving::archiver::NewArchivedSegment;
-use subspace_core_primitives::{SegmentCommitment, SegmentHeader, SegmentIndex};
+use subspace_core_primitives::{Piece, PieceIndex, SegmentCommitment, SegmentHeader, SegmentIndex};
 use subspace_farmer::node_client::{Error, NodeClient};
 use subspace_rpc_primitives::{
     FarmerAppInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
@@ -49,11 +48,11 @@ impl NodeClient for crate::Rpc {
         Ok(SubspaceRpcApiClient::submit_reward_signature(self, reward_signature).await?)
     }
 
-    async fn subscribe_archived_segments(
+    async fn subscribe_archived_segment_headers(
         &self,
-    ) -> Result<Pin<Box<dyn Stream<Item = NewArchivedSegment> + Send + 'static>>, Error> {
+    ) -> Result<Pin<Box<dyn Stream<Item = SegmentHeader> + Send + 'static>>, Error> {
         Ok(Box::pin(
-            SubspaceRpcApiClient::subscribe_archived_segment(self)
+            SubspaceRpcApiClient::subscribe_archived_segment_header(self)
                 .await?
                 .filter_map(|result| futures::future::ready(result.ok())),
         ))
@@ -71,5 +70,25 @@ impl NodeClient for crate::Rpc {
         segment_indexes: Vec<SegmentIndex>,
     ) -> Result<Vec<Option<SegmentHeader>>, Error> {
         Ok(SubspaceRpcApiClient::segment_headers(self, segment_indexes).await?)
+    }
+
+    async fn piece(&self, piece_index: PieceIndex) -> Result<Option<Piece>, Error> {
+        let result = SubspaceRpcApiClient::piece(self, piece_index).await?;
+
+        if let Some(bytes) = result {
+            let piece = Piece::try_from(bytes.as_slice())
+                .map_err(|_| format!("Cannot convert piece. PieceIndex={}", piece_index))?;
+
+            return Ok(Some(piece));
+        }
+
+        Ok(None)
+    }
+
+    async fn acknowledge_archived_segment_header(
+        &self,
+        segment_index: SegmentIndex,
+    ) -> Result<(), Error> {
+        Ok(SubspaceRpcApiClient::acknowledge_archived_segment_header(self, segment_index).await?)
     }
 }
