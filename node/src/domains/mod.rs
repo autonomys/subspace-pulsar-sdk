@@ -12,7 +12,6 @@ use domain_runtime_primitives::AccountId;
 use domain_service::DomainConfiguration;
 use futures::prelude::*;
 use sc_client_api::BlockchainEvents;
-use sc_service::ChainSpecExtension;
 use sdk_substrate::{Base, BaseBuilder};
 use serde::{Deserialize, Serialize};
 use sp_domains::DomainId;
@@ -21,13 +20,7 @@ use tracing_futures::Instrument;
 
 use super::{BlockNumber, Hash};
 
-pub(crate) mod core;
-
 pub(crate) mod chain_spec;
-#[cfg(feature = "core-payments")]
-pub mod core_payments;
-#[cfg(feature = "core-evm")]
-pub mod evm;
 
 /// System domain executor instance.
 pub struct ExecutorDispatch;
@@ -88,16 +81,6 @@ pub struct Config {
     )]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub base: Base,
-    /// The core payments domain config
-    #[cfg(feature = "core-payments")]
-    #[builder(setter(into, strip_option), default)]
-    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub core_payments: Option<core_payments::Config>,
-    /// The evm domain config
-    #[cfg(feature = "core-evm")]
-    #[builder(setter(into, strip_option), default)]
-    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub evm: Option<evm::Config>,
 }
 
 sdk_utils::generate_builder!(Config);
@@ -121,10 +104,6 @@ pub type ChainSpec = chain_spec::ChainSpec;
 pub struct SystemDomainNode {
     #[derivative(Debug = "ignore")]
     _client: Weak<FullClient>,
-    #[cfg(feature = "core-payments")]
-    core: Option<core_payments::CorePaymentsDomainNode>,
-    #[cfg(feature = "core-evm")]
-    evm: Option<evm::EvmDomainNode>,
     rpc_handlers: sdk_utils::Rpc,
 }
 
@@ -137,15 +116,7 @@ impl SystemDomainNode {
         chain_spec: ChainSpec,
         primary_new_full: &mut crate::NewFull,
     ) -> anyhow::Result<Self> {
-        let Config {
-            base,
-            relayer_id: maybe_relayer_id,
-            #[cfg(feature = "core-payments")]
-            core_payments,
-            #[cfg(feature = "core-evm")]
-            evm,
-        } = cfg;
-        let extensions = chain_spec.extensions().clone();
+        let Config { base, relayer_id: maybe_relayer_id } = cfg;
         let service_config =
             base.configuration(directory.as_ref().join("system"), chain_spec).await;
 
@@ -196,54 +167,6 @@ impl SystemDomainNode {
         )
         .await?;
 
-        #[cfg(feature = "core-payments")]
-        let core = if let Some(core_payments) = core_payments {
-            let span = tracing::info_span!("CoreDomain");
-            let core_payments_domain_id = u32::from(DomainId::CORE_PAYMENTS);
-            core_payments::CorePaymentsDomainNode::new(
-                core_payments,
-                directory.as_ref().join(format!("core-{core_payments_domain_id}")),
-                extensions
-                    .get_any(std::any::TypeId::of::<Option<core_payments::ChainSpec>>())
-                    .downcast_ref()
-                    .cloned()
-                    .flatten()
-                    .ok_or_else(|| anyhow::anyhow!("Core domain is not supported"))?,
-                primary_new_full,
-                &system_domain_node,
-                &mut xdm_gossip_worker_builder,
-            )
-            .instrument(span)
-            .await
-            .map(Some)?
-        } else {
-            None
-        };
-
-        #[cfg(feature = "core-evm")]
-        let evm = if let Some(evm) = evm {
-            let span = tracing::info_span!("EvmDomain");
-            let domain_id = u32::from(DomainId::CORE_EVM);
-            evm::EvmDomainNode::new(
-                evm,
-                directory.as_ref().join(format!("evm-{domain_id}")),
-                extensions
-                    .get_any(std::any::TypeId::of::<Option<evm::ChainSpec>>())
-                    .downcast_ref()
-                    .cloned()
-                    .flatten()
-                    .ok_or_else(|| anyhow::anyhow!("Evm domain is not supported"))?,
-                primary_new_full,
-                &system_domain_node,
-                &mut xdm_gossip_worker_builder,
-            )
-            .instrument(span)
-            .await
-            .map(Some)?
-        } else {
-            None
-        };
-
         xdm_gossip_worker_builder
             .push_domain_tx_pool_sink(DomainId::SYSTEM, system_domain_node.tx_pool_sink);
         primary_new_full.task_manager.add_child(system_domain_node.task_manager);
@@ -260,24 +183,12 @@ impl SystemDomainNode {
 
         Ok(Self {
             _client: Arc::downgrade(&client),
-            #[cfg(feature = "core-payments")]
-            core,
-            #[cfg(feature = "eth-relayer")]
-            eth,
-            #[cfg(feature = "core-evm")]
-            evm,
             rpc_handlers: sdk_utils::Rpc::new(&rpc_handlers),
         })
     }
 
     pub(crate) fn _client(&self) -> anyhow::Result<Arc<FullClient>> {
         self._client.upgrade().ok_or_else(|| anyhow::anyhow!("The node was already closed"))
-    }
-
-    /// Get the core node handler
-    #[cfg(feature = "core-payments")]
-    pub fn payments(&self) -> Option<core_payments::CorePaymentsDomainNode> {
-        self.core.clone()
     }
 
     /// Subscribe to new blocks imported

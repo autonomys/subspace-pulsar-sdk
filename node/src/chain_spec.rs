@@ -51,13 +51,8 @@ pub struct GenesisParams {
 
 /// Chain spec type for the subspace
 #[cfg(feature = "executor")]
-pub type ChainSpec = SerializableChainSpec<
-    GenesisConfig,
-    ChainSpecExtensions<
-        system_domain_runtime::GenesisConfig,
-        super::domains::chain_spec::ChainSpecExtensions,
-    >,
->;
+pub type ChainSpec =
+    SerializableChainSpec<GenesisConfig, ChainSpecExtensions<system_domain_runtime::GenesisConfig>>;
 
 /// Chain spec type for the subspace
 #[cfg(not(feature = "executor"))]
