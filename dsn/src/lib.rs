@@ -13,22 +13,15 @@
 mod builder;
 mod provider_storage_utils;
 
-use std::num::NonZeroUsize;
-use std::sync::{Arc, Weak};
-
 pub use builder::*;
 use either::*;
-use futures::StreamExt;
-use parking_lot::Mutex;
 use sc_client_api::AuxStore;
 /// Farmer piece cache
 pub use subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
-use subspace_farmer::utils::farmer_provider_record_processor::FarmerProviderRecordProcessor;
-use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::plotting::{PieceGetter, PieceGetterRetryPolicy};
 use subspace_networking::utils::piece_provider::PieceValidator;
-use subspace_networking::{Node, ParityDbProviderStorage};
-use tracing::{warn, Instrument};
+use subspace_networking::ParityDbProviderStorage;
+use tracing::warn;
 
 /// Node piece cache
 pub type NodePieceCache<C> = subspace_service::piece_cache::PieceCache<C>;
@@ -48,47 +41,6 @@ pub type ProviderStorage<C> = provider_storage_utils::AndProviderStorage<
     provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage>,
     NodeProviderStorage<C>,
 >;
-
-const MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
-    NonZeroUsize::new(20).expect("Not zero; qed");
-const MAX_CONCURRENT_RE_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
-    NonZeroUsize::new(100).expect("Not zero; qed");
-
-/// Start processing announcements received by the network node, returns handle
-/// that will stop processing on drop.
-pub fn start_announcements_processor(
-    node: Node,
-    piece_cache: Arc<tokio::sync::Mutex<FarmerPieceCache>>,
-    weak_readers_and_pieces: Weak<Mutex<Option<ReadersAndPieces>>>,
-    node_name: &str,
-    mut provider_records_receiver: futures::channel::mpsc::Receiver<
-        subspace_networking::libp2p::kad::ProviderRecord,
-    >,
-) -> std::io::Result<()> {
-    let mut provider_record_processor = FarmerProviderRecordProcessor::new(
-        node,
-        piece_cache,
-        weak_readers_and_pieces.clone(),
-        MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING,
-        MAX_CONCURRENT_RE_ANNOUNCEMENTS_PROCESSING,
-    );
-
-    sdk_utils::task_spawn(
-        format!("subspace-sdk-farmer-{node_name}-ann-processor"),
-        async move {
-            while let Some(provider_record) = provider_records_receiver.next().await {
-                if weak_readers_and_pieces.upgrade().is_none() {
-                    // `ReadersAndPieces` was dropped, nothing left to be done
-                    return;
-                }
-                provider_record_processor.process_provider_record(provider_record).await;
-            }
-        }
-        .in_current_span(),
-    );
-
-    Ok(())
-}
 
 /// Node piece getter (combines DSN and Farmer getters)
 pub struct NodePieceGetter<PV, C> {
