@@ -42,12 +42,8 @@ use subspace_service::SubspaceConfiguration;
 
 mod builder;
 pub mod chain_spec;
-#[cfg(feature = "executor")]
-pub mod domains;
 
 pub use builder::*;
-#[cfg(feature = "executor")]
-pub use domains::{ConfigBuilder as SystemDomainBuilder, SystemDomainNode};
 pub use subspace_runtime::RuntimeEvent as Event;
 use tracing::Instrument;
 
@@ -68,8 +64,6 @@ impl<F: Farmer + 'static> Config<F> {
             base,
             piece_cache_size,
             mut dsn,
-            #[cfg(feature = "executor")]
-            system_domain,
             sync_from_dsn,
             storage_monitor,
             enable_subspace_block_relay,
@@ -180,37 +174,6 @@ impl<F: Farmer + 'static> Config<F> {
             .context("Failed to start storage monitor")?;
         }
 
-        #[cfg(feature = "executor")]
-        let (system_domain, full_client) = if let Some(config) = system_domain {
-            use sc_service::ChainSpecExtension;
-
-            let span = tracing::info_span!("SystemDomain");
-            let mut full_client = full_client;
-
-            let system_domain_spec = chain_spec
-                .extensions()
-                .get_any(std::any::TypeId::of::<domains::ChainSpec>())
-                .downcast_ref()
-                .cloned()
-                .ok_or_else(|| {
-                    anyhow::anyhow!("Primary chain spec must contain system domain chain spec")
-                })?;
-
-            let node = SystemDomainNode::new(
-                config,
-                directory.as_ref().join("domains"),
-                system_domain_spec,
-                &mut full_client,
-            )
-            .instrument(span)
-            .await
-            .map(Some)?;
-
-            (node, full_client)
-        } else {
-            (None, full_client)
-        };
-
         let NewFull {
             mut task_manager,
             client,
@@ -271,8 +234,6 @@ impl<F: Farmer + 'static> Config<F> {
 
         Ok(Node {
             client,
-            #[cfg(feature = "executor")]
-            system_domain,
             network_service,
             sync_service,
             name,
@@ -327,8 +288,6 @@ pub(crate) type NewFull = subspace_service::NewFull<
 #[derivative(Debug)]
 #[must_use = "Node should be closed"]
 pub struct Node<F: Farmer> {
-    #[cfg(feature = "executor")]
-    system_domain: Option<SystemDomainNode>,
     #[derivative(Debug = "ignore")]
     client: Arc<FullClient>,
     #[derivative(Debug = "ignore")]
@@ -650,12 +609,6 @@ impl<F: Farmer + 'static> Node<F> {
     /// Runs `.close()` and also wipes node's state
     pub async fn wipe(path: impl AsRef<Path>) -> io::Result<()> {
         tokio::fs::remove_dir_all(path).await
-    }
-
-    /// Returns system domain node if one was setted up
-    #[cfg(feature = "executor")]
-    pub fn system_domain(&self) -> Option<SystemDomainNode> {
-        self.system_domain.as_ref().cloned()
     }
 
     /// Get node info

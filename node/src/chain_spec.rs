@@ -1,8 +1,6 @@
 //! Subspace chain configurations.
 
 use sc_service::ChainType;
-#[cfg(feature = "executor")]
-use sc_subspace_chain_specs::ChainSpecExtensions;
 use sc_subspace_chain_specs::SerializableChainSpec;
 use sc_telemetry::TelemetryEndpoints;
 use sdk_utils::chain_spec as utils;
@@ -50,12 +48,6 @@ pub struct GenesisParams {
 }
 
 /// Chain spec type for the subspace
-#[cfg(feature = "executor")]
-pub type ChainSpec =
-    SerializableChainSpec<GenesisConfig, ChainSpecExtensions<system_domain_runtime::GenesisConfig>>;
-
-/// Chain spec type for the subspace
-#[cfg(not(feature = "executor"))]
 pub type ChainSpec = SerializableChainSpec<GenesisConfig>;
 
 /// Gemini 3d chain spec
@@ -136,11 +128,6 @@ pub fn gemini_3d_compiled() -> ChainSpec {
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        #[cfg(feature = "executor")]
-        ChainSpecExtensions {
-            execution_chain_spec: super::domains::chain_spec::gemini_3d_config(),
-        },
-        #[cfg(not(feature = "executor"))]
         None,
     )
 }
@@ -222,9 +209,6 @@ pub fn devnet_config_compiled() -> ChainSpec {
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        #[cfg(feature = "executor")]
-        ChainSpecExtensions { execution_chain_spec: super::domains::chain_spec::devnet_config() },
-        #[cfg(not(feature = "executor"))]
         None,
     )
 }
@@ -272,11 +256,6 @@ pub fn dev_config() -> ChainSpec {
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        #[cfg(feature = "executor")]
-        ChainSpecExtensions {
-            execution_chain_spec: super::domains::chain_spec::development_config(),
-        },
-        #[cfg(not(feature = "executor"))]
         None,
     )
 }
@@ -332,11 +311,6 @@ pub fn local_config() -> ChainSpec {
         // Properties
         Some(utils::chain_spec_properties()),
         // Extensions
-        #[cfg(feature = "executor")]
-        ChainSpecExtensions {
-            execution_chain_spec: super::domains::chain_spec::local_testnet_config(),
-        },
-        #[cfg(not(feature = "executor"))]
         None,
     )
 }
@@ -360,6 +334,7 @@ fn subspace_genesis_config(
     } = genesis_params;
 
     GenesisConfig {
+        domains: Default::default(),
         system: SystemConfig {
             // Add Wasm runtime to storage.
             code: wasm_binary.to_vec(),
@@ -376,7 +351,7 @@ fn subspace_genesis_config(
             enable_executor,
             enable_transfer,
             confirmation_depth_k,
-        },
+        }
     }
 }
 
