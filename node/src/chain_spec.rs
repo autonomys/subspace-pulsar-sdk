@@ -351,7 +351,7 @@ fn subspace_genesis_config(
             enable_executor,
             enable_transfer,
             confirmation_depth_k,
-        }
+        },
     }
 }
 
