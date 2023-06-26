@@ -20,6 +20,7 @@ use subspace_networking::{
     KADEMLIA_PROVIDER_TTL_IN_SECS,
 };
 use subspace_service::segment_headers::SegmentHeaderCache;
+use subspace_service::Error;
 
 use super::provider_storage_utils::MaybeProviderStorage;
 use super::{FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage};
@@ -406,7 +407,13 @@ impl Dsn {
                     }
                 }),
                 SegmentHeaderBySegmentIndexesRequestHandler::create({
-                    let segment_header_cache = SegmentHeaderCache::new(client);
+                    let segment_header_cache =
+                        SegmentHeaderCache::new(client).map_err(|error| {
+                            Error::Other(
+                                format!("Failed to instantiate segment header cache: {error}")
+                                    .into(),
+                            )
+                        })?;
                     move |_, req| {
                         futures::future::ready(get_segment_header_by_segment_indexes(
                             req,

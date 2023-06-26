@@ -44,21 +44,21 @@ sp-core = { version = "21.0.0", git = "https://github.com/subspace/substrate", r
 sp-runtime = { version = "24.0.0", git = "https://github.com/subspace/substrate", rev = "28e33f78a3aa8ac4c6753108bc0471273ff6bf6f" }
 sp-version = { version = "22.0.0", git = "https://github.com/subspace/substrate", rev = "28e33f78a3aa8ac4c6753108bc0471273ff6bf6f" }
 
-cross-domain-message-gossip = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-domain-client-executor = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-domain-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-domain-service = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-pallet-rewards = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-pallet-subspace = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-sc-subspace-chain-specs = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-sp-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-sp-domains = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-subspace-networking = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-subspace-service = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
-subspace-transaction-pool = { git = "https://github.com/subspace/subspace", rev = "5fceffacf81cabc834bd3b55656981cca9e7e852" }
+cross-domain-message-gossip = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+domain-client-executor = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+domain-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+domain-service = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+pallet-rewards = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+pallet-subspace = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+sc-subspace-chain-specs = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+sp-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+sp-domains = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+subspace-networking = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+subspace-service = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
+subspace-transaction-pool = { git = "https://github.com/subspace/subspace", rev = "50ea8949067cf665d1cc0295e0a9e9aa76fc7b93" }
