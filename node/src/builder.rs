@@ -59,11 +59,6 @@ pub struct Config<F: Farmer> {
     )]
     #[serde(flatten, skip_serializing_if = "sdk_utils::is_default")]
     pub base: Base,
-    /// System domain settings
-    #[cfg(feature = "executor")]
-    #[builder(setter(into, strip_option), default)]
-    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub system_domain: Option<super::domains::Config>,
     /// DSN settings
     #[builder(setter(into), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
