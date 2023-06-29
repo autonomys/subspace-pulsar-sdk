@@ -83,9 +83,9 @@ impl<F: Farmer + 'static> Config<F> {
         Builder::dev()
     }
 
-    /// Gemini 3d configuraiton
-    pub fn gemini_3d() -> Builder<F> {
-        Builder::gemini_3d()
+    /// Gemini 3e configuraiton
+    pub fn gemini_3e() -> Builder<F> {
+        Builder::gemini_3e()
     }
 
     /// Devnet configuraiton
@@ -105,14 +105,14 @@ impl<F: Farmer + 'static> Builder<F> {
             .offchain_worker(OffchainWorkerBuilder::dev())
     }
 
-    /// Gemini 3d configuration
-    pub fn gemini_3d() -> Self {
+    /// Gemini 3e configuration
+    pub fn gemini_3e() -> Self {
         Self::new()
             .execution_strategy(ExecutionStrategy::AlwaysWasm)
-            .network(NetworkBuilder::gemini_3d())
-            .dsn(DsnBuilder::gemini_3d())
-            .rpc(RpcBuilder::gemini_3d())
-            .offchain_worker(OffchainWorkerBuilder::gemini_3d())
+            .network(NetworkBuilder::gemini_3e())
+            .dsn(DsnBuilder::gemini_3e())
+            .rpc(RpcBuilder::gemini_3e())
+            .offchain_worker(OffchainWorkerBuilder::gemini_3e())
     }
 
     /// Devnet chain configuration

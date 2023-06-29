@@ -102,13 +102,13 @@ pub fn local_testnet_config() -> ChainSpec {
     )
 }
 
-/// Gemini 3d config
-pub fn gemini_3d_config() -> ChainSpec {
+/// Gemini 3e config
+pub fn gemini_3e_config() -> ChainSpec {
     ChainSpec::from_genesis(
         // Name
-        "Subspace Gemini 3d System Domain",
+        "Subspace Gemini 3e System Domain",
         // ID
-        "subspace_gemini_3d_system_domain",
+        "subspace_gemini_3e_system_domain",
         ChainType::Live,
         move || {
             let sudo_account =
@@ -142,7 +142,7 @@ pub fn gemini_3d_config() -> ChainSpec {
         // Telemetry
         None,
         // Protocol ID
-        Some("subspace-gemini-3d-system-domain"),
+        Some("subspace-gemini-3e-system-domain"),
         None,
         // Properties
         Some(chain_spec_properties()),
