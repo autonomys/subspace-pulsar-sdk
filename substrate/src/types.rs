@@ -211,8 +211,8 @@ impl OffchainWorkerBuilder {
         Self::default()
     }
 
-    /// Gemini 3d configuration
-    pub fn gemini_3d() -> Self {
+    /// Gemini 3e configuration
+    pub fn gemini_3e() -> Self {
         Self::default().enabled(true)
     }
 
