@@ -12,7 +12,7 @@ sdk-dsn = { path = "dsn" }
 sdk-substrate = { path = "substrate" }
 sdk-farmer = { path = "farmer" }
 
-subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "0cdf99e29809828eece73ffcad0ba5347123f6c7" }
+subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "c0ca66ca828ccb64af29ddd105a6258628632380" }
 
 # The only triple tested and confirmed as working in `jemallocator` crate is `x86_64-unknown-linux-gnu`
 [target.'cfg(all(target_arch = "x86_64", target_vendor = "unknown", target_os = "linux", target_env = "gnu"))'.dev-dependencies]
@@ -35,7 +35,7 @@ tracing = "0.1"
 tracing-futures = "0.2"
 tracing-subscriber = "0.3"
 
-subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "0cdf99e29809828eece73ffcad0ba5347123f6c7" }
+subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "c0ca66ca828ccb64af29ddd105a6258628632380" }
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
 # that are suspected to be CPU-intensive, and that are unlikely to require debugging (as some of
