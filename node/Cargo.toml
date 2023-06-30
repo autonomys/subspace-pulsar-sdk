@@ -18,11 +18,9 @@ parking_lot = "0.12"
 pin-project = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-static_assertions = "1.1.0"
 tokio = { version = "1.26", features = ["fs", "rt", "tracing"] }
 tokio-stream = { version = "0.1", features = ["sync", "time"] }
 tracing = "0.1"
-tracing-futures = "0.2"
 sdk-utils = { path = "../utils" }
 sdk-dsn = { path = "../dsn" }
 sdk-substrate = { path = "../substrate" }
@@ -44,16 +42,11 @@ sp-core = { version = "21.0.0", git = "https://github.com/subspace/substrate", r
 sp-runtime = { version = "24.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 sp-version = { version = "22.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 
-cross-domain-message-gossip = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
-domain-client-executor = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
-domain-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
-domain-service = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
 pallet-rewards = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
 pallet-subspace = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
 sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
 sc-subspace-chain-specs = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
 sp-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
-sp-domains = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
 subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
 subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
 subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
