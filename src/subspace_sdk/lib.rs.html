@@ -42,6 +42,8 @@
 <a href="#42" id="42">42</a>
 <a href="#43" id="43">43</a>
 <a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Subspace SDK for easy running of both Subspace node and farmer
 
 </span><span class="attr">#![warn(
@@ -81,7 +83,9 @@
 </span><span class="kw">pub mod </span>node {
     <span class="kw">pub use </span>sdk_dsn::<span class="kw-2">*</span>;
     <span class="kw">pub use </span>sdk_node::chain_spec::ChainSpec;
-    <span class="kw">pub use </span>sdk_node::{chain_spec, domains, Event, RewardsEvent, SubspaceEvent};
+    <span class="kw">pub use </span>sdk_node::{
+        chain_spec, BlockNumber, Event, Hash, RewardsEvent, SubspaceEvent, SyncingProgress,
+    };
     <span class="kw">pub use </span>sdk_substrate::<span class="kw-2">*</span>;
 
     <span class="kw">pub use </span><span class="kw">super</span>::Node;

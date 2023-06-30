@@ -437,38 +437,6 @@
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a>
-<a href="#443" id="443">443</a>
-<a href="#444" id="444">444</a>
-<a href="#445" id="445">445</a>
-<a href="#446" id="446">446</a>
-<a href="#447" id="447">447</a>
-<a href="#448" id="448">448</a>
-<a href="#449" id="449">449</a>
-<a href="#450" id="450">450</a>
-<a href="#451" id="451">451</a>
-<a href="#452" id="452">452</a>
-<a href="#453" id="453">453</a>
-<a href="#454" id="454">454</a>
-<a href="#455" id="455">455</a>
-<a href="#456" id="456">456</a>
-<a href="#457" id="457">457</a>
-<a href="#458" id="458">458</a>
-<a href="#459" id="459">459</a>
-<a href="#460" id="460">460</a>
-<a href="#461" id="461">461</a>
-<a href="#462" id="462">462</a>
-<a href="#463" id="463">463</a>
-<a href="#464" id="464">464</a>
-<a href="#465" id="465">465</a>
-<a href="#466" id="466">466</a>
-<a href="#467" id="467">467</a>
-<a href="#468" id="468">468</a>
-<a href="#469" id="469">469</a>
-<a href="#470" id="470">470</a>
-<a href="#471" id="471">471</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Crate with abstraction over substrate logic
 
 </span><span class="attr">#![warn(
@@ -488,10 +456,7 @@
 <span class="kw">use </span>derive_builder::Builder;
 <span class="kw">use </span>sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 <span class="kw">use </span>sc_network::config::{NodeKeyConfig, Secret};
-<span class="kw">use </span>sc_network::ProtocolName;
-<span class="kw">use </span>sc_service::config::{
-    KeystoreConfig, NetworkConfiguration, NonDefaultSetConfig, TransportConfig,
-};
+<span class="kw">use </span>sc_service::config::{KeystoreConfig, NetworkConfiguration, TransportConfig};
 <span class="kw">use </span>sc_service::{BasePath, Configuration, DatabaseSource, TracingReceiver};
 <span class="kw">use </span>sdk_utils::{Multiaddr, MultiaddrWithPeerId};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -637,17 +602,14 @@
             impl_version: ImplVersion(impl_version),
             rpc:
                 Rpc {
-                    http: rpc_http,
-                    ws: rpc_ws,
-                    ws_max_connections: rpc_ws_max_connections,
-                    ipc: rpc_ipc,
+                    addr: rpc_addr,
+                    port: rpc_port,
+                    max_connections: rpc_max_connections,
                     cors: rpc_cors,
                     methods: rpc_methods,
-                    max_payload: rpc_max_payload,
                     max_request_size: rpc_max_request_size,
                     max_response_size: rpc_max_response_size,
                     max_subs_per_conn: rpc_max_subs_per_conn,
-                    ws_max_out_buffer_capacity,
                 },
             network,
             offchain_worker,
@@ -690,10 +652,6 @@
                     .collect(),
                 force_synced,
                 transport: TransportConfig::Normal { enable_mdns, allow_private_ip },
-                extra_sets: <span class="macro">vec!</span>[NonDefaultSetConfig::new(
-                    ProtocolName::Static(<span class="string">&quot;/subspace/cross-domain-messages&quot;</span>),
-                    <span class="number">40</span>,
-                )],
                 allow_non_globals_in_dht,
                 ..NetworkConfiguration::new(
                     name,
@@ -748,18 +706,15 @@
             },
             wasm_runtime_overrides: <span class="prelude-val">None</span>,
             execution_strategies: execution_strategy.into(),
-            rpc_http,
-            rpc_ws,
-            rpc_ipc,
+            rpc_addr,
+            rpc_port: rpc_port.unwrap_or_default(),
             rpc_methods: rpc_methods.into(),
-            rpc_ws_max_connections,
+            rpc_max_connections: rpc_max_connections.unwrap_or_default() <span class="kw">as </span>u32,
             rpc_cors,
-            rpc_max_payload,
-            rpc_max_request_size,
-            rpc_max_response_size,
+            rpc_max_request_size: rpc_max_request_size.unwrap_or_default() <span class="kw">as </span>u32,
+            rpc_max_response_size: rpc_max_response_size.unwrap_or_default() <span class="kw">as </span>u32,
             rpc_id_provider: <span class="prelude-val">None</span>,
-            rpc_max_subs_per_conn,
-            ws_max_out_buffer_capacity,
+            rpc_max_subs_per_conn: rpc_max_subs_per_conn.unwrap_or_default() <span class="kw">as </span>u32,
             prometheus_config: <span class="prelude-val">None</span>,
             telemetry_endpoints: <span class="prelude-val">Some</span>(telemetry_endpoints),
             default_heap_pages: <span class="prelude-val">None</span>,
@@ -773,7 +728,8 @@
             max_runtime_instances: <span class="number">8</span>,
             announce_block: <span class="bool-val">true</span>,
             role: role.into(),
-            base_path: <span class="prelude-val">Some</span>(base_path),
+            base_path,
+            data_path: config_dir,
             informant_output_format: sc_informant::OutputFormat {
                 enable_color: informant_enable_color,
             },
@@ -788,23 +744,18 @@
 #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(private, name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;RpcBuilder&quot;</span>)]
 #[non_exhaustive]
 </span><span class="kw">pub struct </span>Rpc {
-    <span class="doccomment">/// RPC over HTTP binding address. `None` if disabled.
+    <span class="doccomment">/// Rpc address
     </span><span class="attr">#[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
-    </span><span class="kw">pub </span>http: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
-    <span class="doccomment">/// RPC over Websockets binding address. `None` if disabled.
+    </span><span class="kw">pub </span>addr: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
+    <span class="doccomment">/// RPC port
     </span><span class="attr">#[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
-    </span><span class="kw">pub </span>ws: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
-    <span class="doccomment">/// RPC over IPC binding path. `None` if disabled.
+    </span><span class="kw">pub </span>port: <span class="prelude-ty">Option</span>&lt;u16&gt;,
+    <span class="doccomment">/// Maximum number of connections for RPC server. `None` if default.
     </span><span class="attr">#[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
-    </span><span class="kw">pub </span>ipc: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    <span class="doccomment">/// Maximum number of connections for WebSockets RPC server. `None` if
-    /// default.
-    </span><span class="attr">#[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
-    </span><span class="kw">pub </span>ws_max_connections: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+    </span><span class="kw">pub </span>max_connections: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     <span class="doccomment">/// CORS settings for HTTP &amp; WS servers. `None` if all origins are
     /// allowed.
     </span><span class="attr">#[builder(setter(strip_option), default)]
@@ -815,10 +766,6 @@
     </span><span class="attr">#[builder(default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
     </span><span class="kw">pub </span>methods: RpcMethods,
-    <span class="doccomment">/// Maximum payload of rpc request/responses.
-    </span><span class="attr">#[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
-    </span><span class="kw">pub </span>max_payload: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     <span class="doccomment">/// Maximum payload of a rpc request
     </span><span class="attr">#[builder(setter(strip_option), default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
@@ -831,11 +778,6 @@
     </span><span class="attr">#[builder(default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
     </span><span class="kw">pub </span>max_subs_per_conn: <span class="prelude-ty">Option</span>&lt;usize&gt;,
-    <span class="doccomment">/// Maximum size of the output buffer capacity for websocket
-    /// connections.
-    </span><span class="attr">#[builder(setter(strip_option), default)]
-    #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
-    </span><span class="kw">pub </span>ws_max_out_buffer_capacity: <span class="prelude-ty">Option</span>&lt;usize&gt;,
 }
 
 <span class="kw">impl </span>RpcBuilder {
@@ -844,32 +786,26 @@
         <span class="self">Self</span>::default()
     }
 
-    <span class="doccomment">/// Gemini 3d configuration
-    </span><span class="kw">pub fn </span>gemini_3d() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new()
-            .http(<span class="string">&quot;127.0.0.1:9933&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>))
-            .ws(<span class="string">&quot;127.0.0.1:9944&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>))
-            .cors(<span class="macro">vec!</span>[
-                <span class="string">&quot;http://localhost:*&quot;</span>.to_owned(),
-                <span class="string">&quot;http://127.0.0.1:*&quot;</span>.to_owned(),
-                <span class="string">&quot;https://localhost:*&quot;</span>.to_owned(),
-                <span class="string">&quot;https://127.0.0.1:*&quot;</span>.to_owned(),
-                <span class="string">&quot;https://polkadot.js.org&quot;</span>.to_owned(),
-            ])
+    <span class="doccomment">/// Gemini 3e configuration
+    </span><span class="kw">pub fn </span>gemini_3e() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new().addr(<span class="string">&quot;127.0.0.1:9944&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>)).cors(<span class="macro">vec!</span>[
+            <span class="string">&quot;http://localhost:*&quot;</span>.to_owned(),
+            <span class="string">&quot;http://127.0.0.1:*&quot;</span>.to_owned(),
+            <span class="string">&quot;https://localhost:*&quot;</span>.to_owned(),
+            <span class="string">&quot;https://127.0.0.1:*&quot;</span>.to_owned(),
+            <span class="string">&quot;https://polkadot.js.org&quot;</span>.to_owned(),
+        ])
     }
 
     <span class="doccomment">/// Devnet configuration
     </span><span class="kw">pub fn </span>devnet() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new()
-            .http(<span class="string">&quot;127.0.0.1:9933&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>))
-            .ws(<span class="string">&quot;127.0.0.1:9944&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>))
-            .cors(<span class="macro">vec!</span>[
-                <span class="string">&quot;http://localhost:*&quot;</span>.to_owned(),
-                <span class="string">&quot;http://127.0.0.1:*&quot;</span>.to_owned(),
-                <span class="string">&quot;https://localhost:*&quot;</span>.to_owned(),
-                <span class="string">&quot;https://127.0.0.1:*&quot;</span>.to_owned(),
-                <span class="string">&quot;https://polkadot.js.org&quot;</span>.to_owned(),
-            ])
+        <span class="self">Self</span>::new().addr(<span class="string">&quot;127.0.0.1:9944&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>)).cors(<span class="macro">vec!</span>[
+            <span class="string">&quot;http://localhost:*&quot;</span>.to_owned(),
+            <span class="string">&quot;http://127.0.0.1:*&quot;</span>.to_owned(),
+            <span class="string">&quot;https://localhost:*&quot;</span>.to_owned(),
+            <span class="string">&quot;https://127.0.0.1:*&quot;</span>.to_owned(),
+            <span class="string">&quot;https://polkadot.js.org&quot;</span>.to_owned(),
+        ])
     }
 }
 
@@ -918,8 +854,8 @@
         <span class="self">Self</span>::default().force_synced(<span class="bool-val">true</span>).allow_private_ip(<span class="bool-val">true</span>)
     }
 
-    <span class="doccomment">/// Gemini 3d configuration
-    </span><span class="kw">pub fn </span>gemini_3d() -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Gemini 3e configuration
+    </span><span class="kw">pub fn </span>gemini_3e() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::default()
             .listen_addresses(<span class="macro">vec!</span>[
                 <span class="string">&quot;/ip6/::/tcp/30333&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>),
@@ -928,7 +864,7 @@
             .enable_mdns(<span class="bool-val">true</span>)
     }
 
-    <span class="doccomment">/// Gemini 3d configuration
+    <span class="doccomment">/// Gemini 3e configuration
     </span><span class="kw">pub fn </span>devnet() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::default()
             .listen_addresses(<span class="macro">vec!</span>[

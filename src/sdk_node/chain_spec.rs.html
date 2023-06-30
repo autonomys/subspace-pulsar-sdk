@@ -371,41 +371,9 @@
 <a href="#371" id="371">371</a>
 <a href="#372" id="372">372</a>
 <a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
-<a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Subspace chain configurations.
 
 </span><span class="kw">use </span>sc_service::ChainType;
-<span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
-</span><span class="kw">use </span>sc_subspace_chain_specs::ChainSpecExtensions;
 <span class="kw">use </span>sc_subspace_chain_specs::SerializableChainSpec;
 <span class="kw">use </span>sc_telemetry::TelemetryEndpoints;
 <span class="kw">use </span>sdk_utils::chain_spec <span class="kw">as </span>utils;
@@ -417,7 +385,7 @@
 <span class="kw">use </span>subspace_runtime_primitives::{AccountId, Balance, BlockNumber, SSC};
 
 <span class="kw">const </span>SUBSPACE_TELEMETRY_URL: <span class="kw-2">&amp;</span>str = <span class="string">&quot;wss://telemetry.subspace.network/submit/&quot;</span>;
-<span class="kw">const </span>GEMINI_3D_CHAIN_SPEC: <span class="kw-2">&amp;</span>[u8] = <span class="macro">include_bytes!</span>(<span class="string">&quot;../res/chain-spec-raw-gemini-3d.json&quot;</span>);
+<span class="kw">const </span>GEMINI_3D_CHAIN_SPEC: <span class="kw-2">&amp;</span>[u8] = <span class="macro">include_bytes!</span>(<span class="string">&quot;../res/chain-spec-raw-gemini-3e.json&quot;</span>);
 <span class="kw">const </span>DEVNET_CHAIN_SPEC: <span class="kw-2">&amp;</span>[u8] = <span class="macro">include_bytes!</span>(<span class="string">&quot;../res/chain-spec-raw-devnet.json&quot;</span>);
 
 <span class="doccomment">/// List of accounts which should receive token grants, amounts are specified in
@@ -453,32 +421,21 @@
 }
 
 <span class="doccomment">/// Chain spec type for the subspace
-</span><span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
-</span><span class="kw">pub type </span>ChainSpec = SerializableChainSpec&lt;
-    GenesisConfig,
-    ChainSpecExtensions&lt;
-        system_domain_runtime::GenesisConfig,
-        <span class="kw">super</span>::domains::chain_spec::ChainSpecExtensions,
-    &gt;,
-&gt;;
-
-<span class="doccomment">/// Chain spec type for the subspace
-</span><span class="attr">#[cfg(not(feature = <span class="string">&quot;executor&quot;</span>))]
 </span><span class="kw">pub type </span>ChainSpec = SerializableChainSpec&lt;GenesisConfig&gt;;
 
-<span class="doccomment">/// Gemini 3d chain spec
-</span><span class="kw">pub fn </span>gemini_3d() -&gt; ChainSpec {
+<span class="doccomment">/// Gemini 3e chain spec
+</span><span class="kw">pub fn </span>gemini_3e() -&gt; ChainSpec {
     ChainSpec::from_json_bytes(GEMINI_3D_CHAIN_SPEC).expect(<span class="string">&quot;Always valid&quot;</span>)
 }
 
-<span class="doccomment">/// Gemini 3d compiled chain spec
-</span><span class="kw">pub fn </span>gemini_3d_compiled() -&gt; ChainSpec {
+<span class="doccomment">/// Gemini 3e compiled chain spec
+</span><span class="kw">pub fn </span>gemini_3e_compiled() -&gt; ChainSpec {
     ChainSpec::from_genesis(
         <span class="comment">// Name
-        </span><span class="string">&quot;Subspace Gemini 3d&quot;</span>,
+        </span><span class="string">&quot;Subspace Gemini 3e&quot;</span>,
         <span class="comment">// ID
-        </span><span class="string">&quot;subspace_gemini_3d&quot;</span>,
-        ChainType::Custom(<span class="string">&quot;Subspace Gemini 3d&quot;</span>.to_string()),
+        </span><span class="string">&quot;subspace_gemini_3e&quot;</span>,
+        ChainType::Custom(<span class="string">&quot;Subspace Gemini 3e&quot;</span>.to_string()),
         || {
             <span class="kw">let </span>sudo_account =
                 AccountId::from_ss58check(<span class="string">&quot;5CZy4hcmaVZUMZLfB41v1eAKvtZ8W7axeWuDvwjhjPwfhAqt&quot;</span>)
@@ -539,16 +496,11 @@
                 .expect(<span class="string">&quot;Telemetry value is valid&quot;</span>),
         ),
         <span class="comment">// Protocol ID
-        </span><span class="prelude-val">Some</span>(<span class="string">&quot;subspace-gemini-3d&quot;</span>),
+        </span><span class="prelude-val">Some</span>(<span class="string">&quot;subspace-gemini-3e&quot;</span>),
         <span class="prelude-val">None</span>,
         <span class="comment">// Properties
         </span><span class="prelude-val">Some</span>(utils::chain_spec_properties()),
         <span class="comment">// Extensions
-        </span><span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
-        </span>ChainSpecExtensions {
-            execution_chain_spec: <span class="kw">super</span>::domains::chain_spec::gemini_3d_config(),
-        },
-        <span class="attr">#[cfg(not(feature = <span class="string">&quot;executor&quot;</span>))]
         </span><span class="prelude-val">None</span>,
     )
 }
@@ -630,9 +582,6 @@
         <span class="comment">// Properties
         </span><span class="prelude-val">Some</span>(utils::chain_spec_properties()),
         <span class="comment">// Extensions
-        </span><span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
-        </span>ChainSpecExtensions { execution_chain_spec: <span class="kw">super</span>::domains::chain_spec::devnet_config() },
-        <span class="attr">#[cfg(not(feature = <span class="string">&quot;executor&quot;</span>))]
         </span><span class="prelude-val">None</span>,
     )
 }
@@ -680,11 +629,6 @@
         <span class="comment">// Properties
         </span><span class="prelude-val">Some</span>(utils::chain_spec_properties()),
         <span class="comment">// Extensions
-        </span><span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
-        </span>ChainSpecExtensions {
-            execution_chain_spec: <span class="kw">super</span>::domains::chain_spec::development_config(),
-        },
-        <span class="attr">#[cfg(not(feature = <span class="string">&quot;executor&quot;</span>))]
         </span><span class="prelude-val">None</span>,
     )
 }
@@ -740,11 +684,6 @@
         <span class="comment">// Properties
         </span><span class="prelude-val">Some</span>(utils::chain_spec_properties()),
         <span class="comment">// Extensions
-        </span><span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
-        </span>ChainSpecExtensions {
-            execution_chain_spec: <span class="kw">super</span>::domains::chain_spec::local_testnet_config(),
-        },
-        <span class="attr">#[cfg(not(feature = <span class="string">&quot;executor&quot;</span>))]
         </span><span class="prelude-val">None</span>,
     )
 }
@@ -768,6 +707,7 @@
     } = genesis_params;
 
     GenesisConfig {
+        domains: Default::default(),
         system: SystemConfig {
             <span class="comment">// Add Wasm runtime to storage.
             </span>code: wasm_binary.to_vec(),
@@ -796,8 +736,8 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_chain_specs() {
-        gemini_3d_compiled();
-        gemini_3d();
+        gemini_3e_compiled();
+        gemini_3e();
         devnet_config_compiled();
         devnet_config();
         dev_config();

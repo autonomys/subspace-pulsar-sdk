@@ -73,12 +73,30 @@
 <a href="#73" id="73">73</a>
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
 
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>sc_consensus_subspace_rpc::SubspaceRpcApiClient;
-<span class="kw">use </span>subspace_archiving::archiver::NewArchivedSegment;
-<span class="kw">use </span>subspace_core_primitives::{SegmentCommitment, SegmentHeader, SegmentIndex};
+<span class="kw">use </span>subspace_core_primitives::{Piece, PieceIndex, SegmentCommitment, SegmentHeader, SegmentIndex};
 <span class="kw">use </span>subspace_farmer::node_client::{Error, NodeClient};
 <span class="kw">use </span>subspace_rpc_primitives::{
     FarmerAppInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
@@ -124,11 +142,11 @@
         <span class="prelude-val">Ok</span>(SubspaceRpcApiClient::submit_reward_signature(<span class="self">self</span>, reward_signature).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
-    <span class="kw">async fn </span>subscribe_archived_segments(
+    <span class="kw">async fn </span>subscribe_archived_segment_headers(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = NewArchivedSegment&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;, Error&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = SegmentHeader&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;, Error&gt; {
         <span class="prelude-val">Ok</span>(Box::pin(
-            SubspaceRpcApiClient::subscribe_archived_segment(<span class="self">self</span>)
+            SubspaceRpcApiClient::subscribe_archived_segment_header(<span class="self">self</span>)
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.filter_map(|result| futures::future::ready(result.ok())),
         ))
@@ -146,6 +164,26 @@
         segment_indexes: Vec&lt;SegmentIndex&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="prelude-ty">Option</span>&lt;SegmentHeader&gt;&gt;, Error&gt; {
         <span class="prelude-val">Ok</span>(SubspaceRpcApiClient::segment_headers(<span class="self">self</span>, segment_indexes).<span class="kw">await</span><span class="question-mark">?</span>)
+    }
+
+    <span class="kw">async fn </span>piece(<span class="kw-2">&amp;</span><span class="self">self</span>, piece_index: PieceIndex) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Piece&gt;, Error&gt; {
+        <span class="kw">let </span>result = SubspaceRpcApiClient::piece(<span class="self">self</span>, piece_index).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(bytes) = result {
+            <span class="kw">let </span>piece = Piece::try_from(bytes.as_slice())
+                .map_err(|<span class="kw">_</span>| <span class="macro">format!</span>(<span class="string">&quot;Cannot convert piece. PieceIndex={}&quot;</span>, piece_index))<span class="question-mark">?</span>;
+
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(piece));
+        }
+
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+    }
+
+    <span class="kw">async fn </span>acknowledge_archived_segment_header(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        segment_index: SegmentIndex,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+        <span class="prelude-val">Ok</span>(SubspaceRpcApiClient::acknowledge_archived_segment_header(<span class="self">self</span>, segment_index).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 }
 </code></pre></div></section></main></body></html>

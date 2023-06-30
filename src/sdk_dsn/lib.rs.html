@@ -76,54 +76,6 @@
 <a href="#76" id="76">76</a>
 <a href="#77" id="77">77</a>
 <a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
-<a href="#88" id="88">88</a>
-<a href="#89" id="89">89</a>
-<a href="#90" id="90">90</a>
-<a href="#91" id="91">91</a>
-<a href="#92" id="92">92</a>
-<a href="#93" id="93">93</a>
-<a href="#94" id="94">94</a>
-<a href="#95" id="95">95</a>
-<a href="#96" id="96">96</a>
-<a href="#97" id="97">97</a>
-<a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a>
-<a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a>
-<a href="#104" id="104">104</a>
-<a href="#105" id="105">105</a>
-<a href="#106" id="106">106</a>
-<a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a>
-<a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a>
-<a href="#114" id="114">114</a>
-<a href="#115" id="115">115</a>
-<a href="#116" id="116">116</a>
-<a href="#117" id="117">117</a>
-<a href="#118" id="118">118</a>
-<a href="#119" id="119">119</a>
-<a href="#120" id="120">120</a>
-<a href="#121" id="121">121</a>
-<a href="#122" id="122">122</a>
-<a href="#123" id="123">123</a>
-<a href="#124" id="124">124</a>
-<a href="#125" id="125">125</a>
-<a href="#126" id="126">126</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Crate with DSN shared between sdk farmer and sdk node
 
 </span><span class="attr">#![warn(
@@ -139,22 +91,15 @@
 </span><span class="kw">mod </span>builder;
 <span class="kw">mod </span>provider_storage_utils;
 
-<span class="kw">use </span>std::num::NonZeroUsize;
-<span class="kw">use </span>std::sync::{Arc, Weak};
-
 <span class="kw">pub use </span>builder::<span class="kw-2">*</span>;
 <span class="kw">use </span>either::<span class="kw-2">*</span>;
-<span class="kw">use </span>futures::StreamExt;
-<span class="kw">use </span>parking_lot::Mutex;
 <span class="kw">use </span>sc_client_api::AuxStore;
 <span class="doccomment">/// Farmer piece cache
 </span><span class="kw">pub use </span>subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
-<span class="kw">use </span>subspace_farmer::utils::farmer_provider_record_processor::FarmerProviderRecordProcessor;
-<span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 <span class="kw">use </span>subspace_farmer_components::plotting::{PieceGetter, PieceGetterRetryPolicy};
 <span class="kw">use </span>subspace_networking::utils::piece_provider::PieceValidator;
-<span class="kw">use </span>subspace_networking::{Node, ParityDbProviderStorage};
-<span class="kw">use </span>tracing::{warn, Instrument};
+<span class="kw">use </span>subspace_networking::ParityDbProviderStorage;
+<span class="kw">use </span>tracing::warn;
 
 <span class="doccomment">/// Node piece cache
 </span><span class="kw">pub type </span>NodePieceCache&lt;C&gt; = subspace_service::piece_cache::PieceCache&lt;C&gt;;
@@ -174,47 +119,6 @@
     provider_storage_utils::MaybeProviderStorage&lt;FarmerProviderStorage&gt;,
     NodeProviderStorage&lt;C&gt;,
 &gt;;
-
-<span class="kw">const </span>MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
-    NonZeroUsize::new(<span class="number">20</span>).expect(<span class="string">&quot;Not zero; qed&quot;</span>);
-<span class="kw">const </span>MAX_CONCURRENT_RE_ANNOUNCEMENTS_PROCESSING: NonZeroUsize =
-    NonZeroUsize::new(<span class="number">100</span>).expect(<span class="string">&quot;Not zero; qed&quot;</span>);
-
-<span class="doccomment">/// Start processing announcements received by the network node, returns handle
-/// that will stop processing on drop.
-</span><span class="kw">pub fn </span>start_announcements_processor(
-    node: Node,
-    piece_cache: Arc&lt;tokio::sync::Mutex&lt;FarmerPieceCache&gt;&gt;,
-    weak_readers_and_pieces: Weak&lt;Mutex&lt;<span class="prelude-ty">Option</span>&lt;ReadersAndPieces&gt;&gt;&gt;,
-    node_name: <span class="kw-2">&amp;</span>str,
-    <span class="kw-2">mut </span>provider_records_receiver: futures::channel::mpsc::Receiver&lt;
-        subspace_networking::libp2p::kad::ProviderRecord,
-    &gt;,
-) -&gt; std::io::Result&lt;()&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>provider_record_processor = FarmerProviderRecordProcessor::new(
-        node,
-        piece_cache,
-        weak_readers_and_pieces.clone(),
-        MAX_CONCURRENT_ANNOUNCEMENTS_PROCESSING,
-        MAX_CONCURRENT_RE_ANNOUNCEMENTS_PROCESSING,
-    );
-
-    sdk_utils::task_spawn(
-        <span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-farmer-{node_name}-ann-processor&quot;</span>),
-        <span class="kw">async move </span>{
-            <span class="kw">while let </span><span class="prelude-val">Some</span>(provider_record) = provider_records_receiver.next().<span class="kw">await </span>{
-                <span class="kw">if </span>weak_readers_and_pieces.upgrade().is_none() {
-                    <span class="comment">// `ReadersAndPieces` was dropped, nothing left to be done
-                    </span><span class="kw">return</span>;
-                }
-                provider_record_processor.process_provider_record(provider_record).<span class="kw">await</span>;
-            }
-        }
-        .in_current_span(),
-    );
-
-    <span class="prelude-val">Ok</span>(())
-}
 
 <span class="doccomment">/// Node piece getter (combines DSN and Farmer getters)
 </span><span class="kw">pub struct </span>NodePieceGetter&lt;PV, C&gt; {

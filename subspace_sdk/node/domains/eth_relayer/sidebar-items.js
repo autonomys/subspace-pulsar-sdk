@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["ConfigBuilderError"],"struct":["Config","ConfigBuilder","EthDomainNode"],"type":["ChainSpec"]};

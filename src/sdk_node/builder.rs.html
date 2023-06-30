@@ -146,10 +146,6 @@
 <a href="#146" id="146">146</a>
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::path::Path;
 
@@ -211,11 +207,6 @@
     )]
     #[serde(flatten, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
     </span><span class="kw">pub </span>base: Base,
-    <span class="doccomment">/// System domain settings
-    </span><span class="attr">#[cfg(feature = <span class="string">&quot;executor&quot;</span>)]
-    #[builder(setter(into, strip_option), default)]
-    #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
-    </span><span class="kw">pub </span>system_domain: <span class="prelude-ty">Option</span>&lt;<span class="kw">super</span>::domains::Config&gt;,
     <span class="doccomment">/// DSN settings
     </span><span class="attr">#[builder(setter(into), default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
@@ -230,6 +221,7 @@
     </span><span class="kw">pub </span>enable_subspace_block_relay: bool,
 
     <span class="attr">#[builder(setter(skip), default)]
+    #[serde(skip, default)]
     </span>_farmer: std::marker::PhantomData&lt;F&gt;,
 }
 
@@ -239,9 +231,9 @@
         Builder::dev()
     }
 
-    <span class="doccomment">/// Gemini 3d configuraiton
-    </span><span class="kw">pub fn </span>gemini_3d() -&gt; Builder&lt;F&gt; {
-        Builder::gemini_3d()
+    <span class="doccomment">/// Gemini 3e configuraiton
+    </span><span class="kw">pub fn </span>gemini_3e() -&gt; Builder&lt;F&gt; {
+        Builder::gemini_3e()
     }
 
     <span class="doccomment">/// Devnet configuraiton
@@ -261,14 +253,14 @@
             .offchain_worker(OffchainWorkerBuilder::dev())
     }
 
-    <span class="doccomment">/// Gemini 3d configuration
-    </span><span class="kw">pub fn </span>gemini_3d() -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Gemini 3e configuration
+    </span><span class="kw">pub fn </span>gemini_3e() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new()
             .execution_strategy(ExecutionStrategy::AlwaysWasm)
-            .network(NetworkBuilder::gemini_3d())
-            .dsn(DsnBuilder::gemini_3d())
-            .rpc(RpcBuilder::gemini_3d())
-            .offchain_worker(OffchainWorkerBuilder::gemini_3d())
+            .network(NetworkBuilder::gemini_3e())
+            .dsn(DsnBuilder::gemini_3e())
+            .rpc(RpcBuilder::gemini_3e())
+            .offchain_worker(OffchainWorkerBuilder::gemini_3e())
     }
 
     <span class="doccomment">/// Devnet chain configuration
