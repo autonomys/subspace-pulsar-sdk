@@ -23,22 +23,22 @@ ss58-registry = "1.33"
 thiserror = "1"
 tokio = { version = "1", features = ["rt", "tracing"] }
 
-frame-support = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "28e33f78a3aa8ac4c6753108bc0471273ff6bf6f" }
-frame-system = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "28e33f78a3aa8ac4c6753108bc0471273ff6bf6f" }
-sc-service = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "28e33f78a3aa8ac4c6753108bc0471273ff6bf6f", default-features = false }
-sc-rpc = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "28e33f78a3aa8ac4c6753108bc0471273ff6bf6f", default-features = false }
-sc-rpc-api = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "28e33f78a3aa8ac4c6753108bc0471273ff6bf6f", default-features = false }
-sc-network = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "28e33f78a3aa8ac4c6753108bc0471273ff6bf6f", default-features = false }
-sp-core = { version = "21.0.0", git = "https://github.com/subspace/substrate", rev = "28e33f78a3aa8ac4c6753108bc0471273ff6bf6f" }
-sp-core-hashing = { version = "9.0.0", git = "https://github.com/subspace/substrate", rev = "28e33f78a3aa8ac4c6753108bc0471273ff6bf6f" }
-sp-runtime = { version = "24.0.0", git = "https://github.com/subspace/substrate", rev = "28e33f78a3aa8ac4c6753108bc0471273ff6bf6f" }
-sp-storage = { version = "13.0.0", git = "https://github.com/subspace/substrate", rev = "28e33f78a3aa8ac4c6753108bc0471273ff6bf6f" }
+frame-support = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
+frame-system = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
+sc-service = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71", default-features = false }
+sc-rpc = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71", default-features = false }
+sc-rpc-api = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71", default-features = false }
+sc-network = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71", default-features = false }
+sp-core = { version = "21.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
+sp-core-hashing = { version = "9.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
+sp-runtime = { version = "24.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
+sp-storage = { version = "13.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 
-sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "a3d021b5347b3a985130ec4c01e97d7a0ec3c404" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "a3d021b5347b3a985130ec4c01e97d7a0ec3c404" }
-subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "a3d021b5347b3a985130ec4c01e97d7a0ec3c404" }
-subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "a3d021b5347b3a985130ec4c01e97d7a0ec3c404" }
-subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "a3d021b5347b3a985130ec4c01e97d7a0ec3c404" }
+sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
+subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
+subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
 
 # Unused for now. TODO: add `serde` feature to `subspace-core-primitives` in `subspace-archiver`
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "a3d021b5347b3a985130ec4c01e97d7a0ec3c404" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
