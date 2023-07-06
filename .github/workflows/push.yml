@@ -27,6 +27,7 @@ env:
   CARGO_TERM_COLOR: always
   MAX_TARGET_SIZE: 1024 # MB
   RUSTFLAGS: -C debuginfo=0
+  RUST_BACKTRACE: 1
 
 jobs:
   fmt:
