@@ -15,19 +15,34 @@ env:
 
 jobs:
   code-coverage:
-    runs-on: ubuntu-latest
+    runs-on: ["self-hosted", "ubuntu-22.04-x86-64", "Linux"]
     steps:
       - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@64c0c85d18e984422218383b81c52f8b077404d3 # v1.1.2
+        uses: arduino/setup-protoc@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+        if: runner.os == 'Linux'
+
+      - name: Install Protoc Windows
+        run: |
+          Invoke-WebRequest -Uri https://github.com/protocolbuffers/protobuf/releases/download/v23.3/protoc-23.3-win64.zip -Outfile protoc-23.3-win64.zip
+          Expand-Archive .\protoc-23.3-win64.zip -DestinationPath .\protoc
+          echo ".\protoc\bin" >> $GITHUB_PATH
+        if: runner.os == 'Windows'
 
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@8852e4d5c58653ed05135c0a5d949d9c2febcb00 # v1.6.1
         with:
           version: "15.0"
+
+      - name: Install nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+            toolchain: nightly-2023-05-16
+            components: rustfmt, clippy, rust-src
+        if: runner.os == 'Linux'
 
       - name: Add cache
         uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6

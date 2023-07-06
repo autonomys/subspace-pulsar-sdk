@@ -30,20 +30,49 @@ env:
 
 jobs:
   fmt:
-    runs-on: ubuntu-latest
+    runs-on: ["self-hosted", "ubuntu-22.04-x86-64", "Linux"]
     steps:
-      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
-      - run: cargo fmt -- --check
+      - name: git checkout
+        uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+
+      - name: Install nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+            toolchain: nightly-2023-05-16
+            components: rustfmt, clippy, rust-src
+        if: runner.os == 'Linux'
+
+      - name: cargo fmt
+        uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b # @v1.0.1
+        with:
+          command: fmt
+          args: --all -- --check
 
   clippy:
-    runs-on: ubuntu-latest
+    runs-on: ["self-hosted", "ubuntu-22.04-x86-64", "Linux"]
     steps:
-      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+      - name: git checkout
+        uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+
+      - name: Install nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+            toolchain: nightly-2023-05-16
+            components: rustfmt, clippy, rust-src
+        if: runner.os == 'Linux'
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@64c0c85d18e984422218383b81c52f8b077404d3 # v1.1.2
+        uses: arduino/setup-protoc@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+        if: runner.os == 'Linux'
+
+      - name: Install Protoc Windows
+        run: |
+          Invoke-WebRequest -Uri https://github.com/protocolbuffers/protobuf/releases/download/v23.3/protoc-23.3-win64.zip -Outfile protoc-23.3-win64.zip
+          Expand-Archive .\protoc-23.3-win64.zip -DestinationPath .\protoc
+          echo ".\protoc\bin" >> $GITHUB_PATH
+        if: runner.os == 'Windows'
 
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@8852e4d5c58653ed05135c0a5d949d9c2febcb00 # v1.6.1
@@ -51,9 +80,9 @@ jobs:
           version: "15.0"
 
       # Workaround to resolve link error with C:\msys64\mingw64\bin\libclang.dll
-      - name: Remove msys64
-        run: Remove-Item -LiteralPath "C:\msys64\" -Force -Recurse
-        if: runner.os == 'Windows'
+      # - name: Remove msys64
+      #   run: Remove-Item -LiteralPath "C:\msys64\" -Force -Recurse
+      #   if: runner.os == 'Windows'
 
       - name: Add cache
         uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
@@ -86,25 +115,38 @@ jobs:
   test:
     strategy:
       matrix:
-        os:
-          - ubuntu-22.04
-          - macos-12
-          - windows-2022
+        os: ${{ fromJson(github.repository_owner == 'subspace' && github.repository == 'subspace/subspace-sdk' && '[["self-hosted", "ubuntu-22.04-x86-64", "Linux"], ["self-hosted", "macos-12-arm64", "macOS"], ["self-hosted", "windows-server-2022-x86-64", "Windows"]]' || '["ubuntu-22.04", "macos-12", "windows-2022"]') }}
         run-all:
           - ${{ inputs.test-macos || github.ref == 'refs/heads/master' }}
         exclude:  # exclude macos-12 when the condition is false
           - run-all: false
-            os: macos-12
+            os: ${{ fromJson(github.repository_owner == 'subspace' && github.repository == 'subspace/subspace-sdk' && '["self-hosted", "macos-12-arm64", "macOS"]' || '["macos-12"]') }}
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+      - name: git checkout
+        uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+
+      - name: Install nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+            toolchain: nightly-2023-05-16
+            components: rustfmt, clippy, rust-src
+        if: runner.os == 'Linux'
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@64c0c85d18e984422218383b81c52f8b077404d3 # v1.1.2
+        uses: arduino/setup-protoc@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+        if: runner.os == 'Linux'
+
+      - name: Install Protoc Windows
+        run: |
+          Invoke-WebRequest -Uri https://github.com/protocolbuffers/protobuf/releases/download/v23.3/protoc-23.3-win64.zip -Outfile protoc-23.3-win64.zip
+          Expand-Archive .\protoc-23.3-win64.zip -DestinationPath .\protoc
+          echo ".\protoc\bin" >> $GITHUB_PATH
+        if: runner.os == 'Windows'
 
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@8852e4d5c58653ed05135c0a5d949d9c2febcb00 # v1.6.1
@@ -112,9 +154,9 @@ jobs:
           version: "15.0"
 
       # Workaround to resolve link error with C:\msys64\mingw64\bin\libclang.dll
-      - name: Remove msys64
-        run: Remove-Item -LiteralPath "C:\msys64\" -Force -Recurse
-        if: runner.os == 'Windows'
+      # - name: Remove msys64
+      #   run: Remove-Item -LiteralPath "C:\msys64\" -Force -Recurse
+      #   if: runner.os == 'Windows'
 
       - name: Add cache
         uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
@@ -146,14 +188,29 @@ jobs:
         run: cargo sweep --maxsize ${{ env.MAX_TARGET_SIZE }}
 
   docs:
-    runs-on: ubuntu-22.04
+    runs-on: ["self-hosted", "ubuntu-22.04-x86-64", "Linux"]
     steps:
-      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+      - name: git checkout
+        uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+
+      - name: Install nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+            toolchain: nightly-2023-05-16
+            components: rustfmt, clippy, rust-src
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@64c0c85d18e984422218383b81c52f8b077404d3 # v1.1.2
+        uses: arduino/setup-protoc@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+        if: runner.os == 'Linux'
+
+      - name: Install Protoc Windows
+        run: |
+          Invoke-WebRequest -Uri https://github.com/protocolbuffers/protobuf/releases/download/v23.3/protoc-23.3-win64.zip -Outfile protoc-23.3-win64.zip
+          Expand-Archive .\protoc-23.3-win64.zip -DestinationPath .\protoc
+          echo ".\protoc\bin" >> $GITHUB_PATH
+        if: runner.os == 'Windows'
 
       - name: Configure cache
         uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
