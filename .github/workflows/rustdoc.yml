@@ -42,10 +42,10 @@ jobs:
       # This is needed in order to generate a landing page `index.html` for workspaces
 
       - name: Install nightly
-        uses: dtolnay/rust-toolchain@nightly
+        uses: actions-rs/toolchain@v1
         with:
             toolchain: nightly-2023-05-16
-            components: rustfmt, clippy, rust-src
+            components: rustfmt, clippy, rust-src, rust-std
 
       - name: Build Documentation
         run: cargo doc --all --no-deps --lib

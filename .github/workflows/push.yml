@@ -37,11 +37,10 @@ jobs:
         uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
 
       - name: Install nightly
-        uses: dtolnay/rust-toolchain@nightly
+        uses: actions-rs/toolchain@v1
         with:
             toolchain: nightly-2023-05-16
-            components: rustfmt, clippy, rust-src
-        if: runner.os == 'Linux'
+            components: rustfmt, clippy, rust-src, rust-std
 
       - name: cargo fmt
         uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b # @v1.0.1
@@ -56,10 +55,10 @@ jobs:
         uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
 
       - name: Install nightly
-        uses: dtolnay/rust-toolchain@nightly
+        uses: actions-rs/toolchain@v1
         with:
             toolchain: nightly-2023-05-16
-            components: rustfmt, clippy, rust-src
+            components: rustfmt, clippy, rust-src, rust-std
         if: runner.os == 'Linux'
 
       - name: Install Protoc
