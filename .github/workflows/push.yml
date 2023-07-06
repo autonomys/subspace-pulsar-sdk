@@ -70,8 +70,7 @@ jobs:
       - name: Install Protoc Windows
         run: |
           Invoke-WebRequest -Uri https://github.com/protocolbuffers/protobuf/releases/download/v23.3/protoc-23.3-win64.zip -Outfile protoc-23.3-win64.zip
-          Expand-Archive .\protoc-23.3-win64.zip -DestinationPath .\protoc
-          echo ".\protoc\bin" >> $GITHUB_PATH
+          Expand-Archive .\protoc-23.3-win64.zip -DestinationPath C:\protoc-23.3
         if: runner.os == 'Windows'
 
       - name: Install LLVM and Clang
@@ -144,8 +143,7 @@ jobs:
       - name: Install Protoc Windows
         run: |
           Invoke-WebRequest -Uri https://github.com/protocolbuffers/protobuf/releases/download/v23.3/protoc-23.3-win64.zip -Outfile protoc-23.3-win64.zip
-          Expand-Archive .\protoc-23.3-win64.zip -DestinationPath .\protoc
-          echo ".\protoc\bin" >> $GITHUB_PATH
+          Expand-Archive -Force .\protoc-23.3-win64.zip -DestinationPath C:\protoc-23.3
         if: runner.os == 'Windows'
 
       - name: Install LLVM and Clang
@@ -203,14 +201,6 @@ jobs:
         uses: arduino/setup-protoc@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-        if: runner.os == 'Linux'
-
-      - name: Install Protoc Windows
-        run: |
-          Invoke-WebRequest -Uri https://github.com/protocolbuffers/protobuf/releases/download/v23.3/protoc-23.3-win64.zip -Outfile protoc-23.3-win64.zip
-          Expand-Archive .\protoc-23.3-win64.zip -DestinationPath .\protoc
-          echo ".\protoc\bin" >> $GITHUB_PATH
-        if: runner.os == 'Windows'
 
       - name: Configure cache
         uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
