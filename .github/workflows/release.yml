@@ -10,6 +10,7 @@ on:
 
 jobs:
   create-release:
+    if: github.repository == 'subspace/subspace-sdk' && (github.repository_owner == 'subspace' || contains(github.event.repository.collaborators, github.actor))
     runs-on: ["self-hosted", "ubuntu-22.04-x86-64", "Linux"]
     steps:
       - name: git checkout

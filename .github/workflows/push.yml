@@ -31,6 +31,7 @@ env:
 
 jobs:
   fmt:
+    if: github.repository == 'subspace/subspace-sdk' && (github.repository_owner == 'subspace' || contains(github.event.repository.collaborators, github.actor))
     runs-on: ["self-hosted", "ubuntu-22.04-x86-64", "Linux"]
     steps:
       - name: git checkout
@@ -49,6 +50,7 @@ jobs:
           args: --all -- --check
 
   clippy:
+    if: github.repository == 'subspace/subspace-sdk' && (github.repository_owner == 'subspace' || contains(github.event.repository.collaborators, github.actor))
     runs-on: ["self-hosted", "ubuntu-22.04-x86-64", "Linux"]
     steps:
       - name: git checkout
@@ -66,12 +68,6 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
         if: runner.os == 'Linux'
-
-      - name: Install Protoc Windows
-        run: |
-          Invoke-WebRequest -Uri https://github.com/protocolbuffers/protobuf/releases/download/v23.3/protoc-23.3-win64.zip -Outfile protoc-23.3-win64.zip
-          Expand-Archive .\protoc-23.3-win64.zip -DestinationPath C:\protoc-23.3
-        if: runner.os == 'Windows'
 
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@8852e4d5c58653ed05135c0a5d949d9c2febcb00 # v1.6.1
@@ -146,10 +142,12 @@ jobs:
           Expand-Archive -Force .\protoc-23.3-win64.zip -DestinationPath C:\protoc-23.3
         if: runner.os == 'Windows'
 
+      # On macOS, we need a proper Clang version, not Apple's custom version without wasm32 support, we also install clang on Windows
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@8852e4d5c58653ed05135c0a5d949d9c2febcb00 # v1.6.1
         with:
           version: "15.0"
+        if: runner.os == 'macOS' || runner.os == 'Windows'
 
       # Workaround to resolve link error with C:\msys64\mingw64\bin\libclang.dll
       # - name: Remove msys64
@@ -186,6 +184,7 @@ jobs:
         run: cargo sweep --maxsize ${{ env.MAX_TARGET_SIZE }}
 
   docs:
+    if: github.repository == 'subspace/subspace-sdk' && (github.repository_owner == 'subspace' || contains(github.event.repository.collaborators, github.actor))
     runs-on: ["self-hosted", "ubuntu-22.04-x86-64", "Linux"]
     steps:
       - name: git checkout
