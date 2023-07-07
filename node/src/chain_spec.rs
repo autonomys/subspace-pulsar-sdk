@@ -42,7 +42,7 @@ pub struct GenesisParams {
     enable_rewards: bool,
     enable_storage_access: bool,
     allow_authoring_by: AllowAuthoringBy,
-    enable_executor: bool,
+    enable_domains: bool,
     enable_transfer: bool,
     confirmation_depth_k: u32,
 }
@@ -109,7 +109,7 @@ pub fn gemini_3e_compiled() -> ChainSpec {
                             "8aecbcf0b404590ddddc01ebacb205a562d12fdb5c2aa6a4035c1a20f23c9515"
                         )),
                     ),
-                    enable_executor: true,
+                    enable_domains: true,
                     enable_transfer: false,
                     confirmation_depth_k: 100, // TODO: Proper value here
                 },
@@ -190,7 +190,7 @@ pub fn devnet_config_compiled() -> ChainSpec {
                     enable_rewards: false,
                     enable_storage_access: false,
                     allow_authoring_by: AllowAuthoringBy::FirstFarmer,
-                    enable_executor: true,
+                    enable_domains: true,
                     enable_transfer: true,
                     confirmation_depth_k: 100, // TODO: Proper value here
                 },
@@ -241,7 +241,7 @@ pub fn dev_config() -> ChainSpec {
                     enable_transfer: true,
                     enable_storage_access: false,
                     allow_authoring_by: AllowAuthoringBy::Anyone,
-                    enable_executor: true,
+                    enable_domains: true,
                     confirmation_depth_k: 100,
                 },
             )
@@ -296,7 +296,7 @@ pub fn local_config() -> ChainSpec {
                     enable_transfer: true,
                     enable_storage_access: false,
                     allow_authoring_by: AllowAuthoringBy::Anyone,
-                    enable_executor: true,
+                    enable_domains: true,
                     confirmation_depth_k: 1,
                 },
             )
@@ -328,7 +328,7 @@ fn subspace_genesis_config(
         enable_rewards,
         enable_storage_access,
         allow_authoring_by,
-        enable_executor,
+        enable_domains,
         enable_transfer,
         confirmation_depth_k,
     } = genesis_params;
@@ -348,7 +348,7 @@ fn subspace_genesis_config(
         subspace: SubspaceConfig { enable_rewards, enable_storage_access, allow_authoring_by },
         vesting: VestingConfig { vesting },
         runtime_configs: RuntimeConfigsConfig {
-            enable_executor,
+            enable_domains,
             enable_transfer,
             confirmation_depth_k,
         },
