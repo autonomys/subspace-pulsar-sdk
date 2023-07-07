@@ -74,7 +74,7 @@ impl<F: Farmer + 'static> Config<F> {
         let database_source = base.database.clone();
 
         let partial_components =
-            subspace_service::new_partial::<F::Table, RuntimeApi, ExecutorDispatch>(&base)
+            subspace_service::new_partial::<F::Table, RuntimeApi, ExecutorDispatch>(&base, None)
                 .context("Failed to build a partial subspace node")?;
 
         let (subspace_networking, dsn, mut runner) = {
