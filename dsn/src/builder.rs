@@ -14,8 +14,8 @@ use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_networking::libp2p::kad::ProviderRecord;
 use subspace_networking::{
-    PieceAnnouncementRequestHandler, PieceAnnouncementResponse, PieceByHashRequest,
-    PieceByHashRequestHandler, PieceByHashResponse, ProviderStorage as _,
+    PeerInfoProvider, PieceAnnouncementRequestHandler, PieceAnnouncementResponse,
+    PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse, ProviderStorage as _,
     SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
     KADEMLIA_PROVIDER_TTL_IN_SECS,
 };
@@ -332,13 +332,20 @@ impl Dsn {
         let (provider_records_sender, provider_records_receiver) =
             futures::channel::mpsc::channel(MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE.get());
 
+        let mut default_networking_config = subspace_networking::Config::new(
+            protocol_version,
+            keypair,
+            provider_storage.clone(),
+            PeerInfoProvider::new_node(),
+        );
+        default_networking_config.kademlia.set_provider_record_ttl(KADEMLIA_PROVIDER_TTL_IN_SECS);
+
         let config = subspace_networking::Config {
             listen_on,
             allow_non_global_addresses_in_dht,
             networking_parameters_registry,
             request_response_protocols: vec![
                 PieceAnnouncementRequestHandler::create({
-                    let provider_storage = provider_storage.clone();
                     move |peer_id, req| {
                         tracing::trace!(?req, %peer_id, "Piece announcement request received.");
 
@@ -428,7 +435,7 @@ impl Dsn {
             target_connections,
             max_pending_incoming_connections,
             max_pending_outgoing_connections,
-            ..subspace_networking::Config::new(protocol_version, keypair, provider_storage)
+            ..default_networking_config
         };
 
         let (node, runner) = subspace_networking::create(config)?;

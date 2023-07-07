@@ -10,9 +10,9 @@ async-trait = "0.1"
 parking_lot = "0.12"
 sdk-dsn = { path = "../dsn" }
 
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "f1cc49378f735978501220da9d78af536cb40b9c" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "f1cc49378f735978501220da9d78af536cb40b9c" }
-subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "f1cc49378f735978501220da9d78af536cb40b9c" }
-subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "f1cc49378f735978501220da9d78af536cb40b9c" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "dc67d7d1529258675cc3b9c9c64ce0c05f51d75f" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "dc67d7d1529258675cc3b9c9c64ce0c05f51d75f" }
+subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "dc67d7d1529258675cc3b9c9c64ce0c05f51d75f" }
+subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "dc67d7d1529258675cc3b9c9c64ce0c05f51d75f" }
 
 sc-client-api = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
