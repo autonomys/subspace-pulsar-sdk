@@ -275,7 +275,7 @@ pub(crate) type FullClient =
     subspace_service::FullClient<subspace_runtime::RuntimeApi, ExecutorDispatch>;
 pub(crate) type NewFull = subspace_service::NewFull<
     FullClient,
-    subspace_service::tx_pre_validator::PrimaryChainTxPreValidator<
+    subspace_service::tx_pre_validator::ConsensusChainTxPreValidator<
         RuntimeBlock,
         FullClient,
         subspace_service::FraudProofVerifier<RuntimeApi, ExecutorDispatch>,
