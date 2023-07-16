@@ -31,8 +31,7 @@ env:
 
 jobs:
   fmt:
-    if: github.repository == 'subspace/subspace-sdk'
-    runs-on: ["self-hosted", "ubuntu-20.04-x86-64", "Linux"]
+    runs-on: ${{ fromJson(github.repository_owner == 'subspace' && '["self-hosted", "ubuntu-20.04-x86-64", "Linux"]' || '["ubuntu-20.04"]') }}
     steps:
       - name: git checkout
         uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
@@ -44,8 +43,7 @@ jobs:
           args: --all -- --check
 
   clippy:
-    if: github.repository == 'subspace/subspace-sdk'
-    runs-on: ["self-hosted", "ubuntu-20.04-x86-64", "Linux"]
+    runs-on: ${{ fromJson(github.repository_owner == 'subspace' && '["self-hosted", "ubuntu-20.04-x86-64", "Linux"]' || '["ubuntu-20.04"]') }}
     steps:
       - name: git checkout
         uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
@@ -97,12 +95,12 @@ jobs:
   test:
     strategy:
       matrix:
-        os: ${{ fromJson(github.repository_owner == 'subspace' && github.repository == 'subspace/subspace-sdk' && '[["self-hosted", "ubuntu-20.04-x86-64", "Linux"], ["self-hosted", "macos-12-arm64", "macOS"], ["self-hosted", "windows-server-2022-x86-64", "Windows"]]' || '["ubuntu-20.04", "macos-12", "windows-2022"]') }}
+        os: ${{ fromJson(github.repository_owner == 'subspace' && '[["self-hosted", "ubuntu-20.04-x86-64", "Linux"], ["self-hosted", "macos-12-arm64", "macOS"], ["self-hosted", "windows-server-2022-x86-64", "Windows"]]' || '["ubuntu-20.04", "macos-12", "windows-2022"]') }}
         run-all:
           - ${{ inputs.test-macos || github.ref == 'refs/heads/master' }}
         exclude:  # exclude macos-12 when the condition is false
           - run-all: false
-            os: ${{ fromJson(github.repository_owner == 'subspace' && github.repository == 'subspace/subspace-sdk' && '["self-hosted", "macos-12-arm64", "macOS"]' || '["macos-12"]') }}
+            os: ${{ fromJson(github.repository_owner == 'subspace' && '["self-hosted", "macos-12-arm64", "macOS"]' || '["macos-12"]') }}
 
     runs-on: ${{ matrix.os }}
 
@@ -158,8 +156,7 @@ jobs:
         run: cargo sweep --maxsize ${{ env.MAX_TARGET_SIZE }}
 
   docs:
-    if: github.repository == 'subspace/subspace-sdk'
-    runs-on: ["self-hosted", "ubuntu-20.04-x86-64", "Linux"]
+    runs-on: ${{ fromJson(github.repository_owner == 'subspace' && '["self-hosted", "ubuntu-20.04-x86-64", "Linux"]' || '["ubuntu-20.04"]') }}
     steps:
       - name: git checkout
         uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
