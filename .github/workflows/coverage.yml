@@ -15,27 +15,24 @@ env:
 
 jobs:
   code-coverage:
-    if: github.repository == 'subspace/subspace-sdk' && (github.repository_owner == 'subspace' || contains(github.event.repository.collaborators, github.actor))
-    runs-on: ["self-hosted", "ubuntu-22.04-x86-64", "Linux"]
+    strategy:
+      matrix:
+        os: ${{ fromJson(github.repository_owner == 'subspace' && '[["self-hosted", "ubuntu-20.04-x86-64", "Linux"]' || '["ubuntu-20.04"]') }}
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+
+      # On macOS, we need a proper Clang version, not Apple's custom version without wasm32 support
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@8852e4d5c58653ed05135c0a5d949d9c2febcb00 # v1.6.1
+        with:
+          version: "15.0"
+        if: contains(fromJSON('["Linux", "ubuntu-20.04"]'), runner.os)
 
       - name: Install Protoc
         uses: arduino/setup-protoc@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-        if: runner.os == 'Linux'
-
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@8852e4d5c58653ed05135c0a5d949d9c2febcb00 # v1.6.1
-        with:
-          version: "15.0"
-
-      - name: Install nightly
-        uses: actions-rs/toolchain@v1
-        with:
-            toolchain: nightly-2023-05-16
-            components: rustfmt, clippy, rust-src, rust-std
 
       - name: Add cache
         uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
