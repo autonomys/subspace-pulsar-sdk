@@ -46,6 +46,7 @@ jobs:
           restore-keys: coverage-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
 
       - name: Install utils for caching
+        shell: bash
         run: |
           test -x ~/.cargo/bin/cargo-sweep || cargo install cargo-sweep
           test -x ~/.cargo/bin/cargo-cache || cargo install cargo-cache --no-default-features --features ci-autoclean cargo-cache
@@ -54,9 +55,11 @@ jobs:
         run: cargo cache
 
       - name: cargo install cargo-tarpaulin
+        shell: bash
         run: test -x ~/.cargo/bin/cargo-tarpaulin || cargo install cargo-tarpaulin
 
       - name: Generate code coverage
+        shell: bash
         run: cargo tarpaulin --verbose --timeout $((2 * 60 * 60)) --out Xml --release --locked
 
       - name: Upload to codecov.io
