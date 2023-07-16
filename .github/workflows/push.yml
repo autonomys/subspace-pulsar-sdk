@@ -31,7 +31,7 @@ env:
 
 jobs:
   fmt:
-    if: github.repository == 'subspace/subspace-sdk' && (github.repository_owner == 'subspace' || contains(github.event.repository.collaborators, github.actor))
+    if: github.repository == 'subspace/subspace-sdk'
     runs-on: ["self-hosted", "ubuntu-20.04-x86-64", "Linux"]
     steps:
       - name: git checkout
@@ -44,7 +44,7 @@ jobs:
           args: --all -- --check
 
   clippy:
-    if: github.repository == 'subspace/subspace-sdk' && (github.repository_owner == 'subspace' || contains(github.event.repository.collaborators, github.actor))
+    if: github.repository == 'subspace/subspace-sdk'
     runs-on: ["self-hosted", "ubuntu-20.04-x86-64", "Linux"]
     steps:
       - name: git checkout
@@ -158,7 +158,7 @@ jobs:
         run: cargo sweep --maxsize ${{ env.MAX_TARGET_SIZE }}
 
   docs:
-    if: github.repository == 'subspace/subspace-sdk' && (github.repository_owner == 'subspace' || contains(github.event.repository.collaborators, github.actor))
+    if: github.repository == 'subspace/subspace-sdk'
     runs-on: ["self-hosted", "ubuntu-20.04-x86-64", "Linux"]
     steps:
       - name: git checkout

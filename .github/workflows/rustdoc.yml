@@ -15,7 +15,7 @@ env:
 
 jobs:
   rustdoc:
-    if: github.repository == 'subspace/subspace-sdk' && (github.repository_owner == 'subspace' || contains(github.event.repository.collaborators, github.actor))
+    if: github.repository == 'subspace/subspace-sdk'
     runs-on: ["self-hosted", "ubuntu-20.04-x86-64", "Linux"]
 
     steps:
