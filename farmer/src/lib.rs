@@ -452,7 +452,7 @@ impl Config {
         } = self;
 
         let piece_cache_size = NonZeroUsize::new(
-            piece_cache_size.as_u64() as usize / subspace_core_primitives::Piece::SIZE,
+            cache.space_dedicated.as_u64() as usize / subspace_core_primitives::Piece::SIZE,
         )
         .ok_or_else(|| anyhow::anyhow!("Piece cache size shouldn't be zero"))?;
 
