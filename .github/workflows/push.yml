@@ -1,6 +1,8 @@
 name: Rust checks and tests
 on:
   push:
+    branches:
+      - ci-self-hosted-sdk
     paths-ignore:
       - '**.md'
       - '.gitignore'
