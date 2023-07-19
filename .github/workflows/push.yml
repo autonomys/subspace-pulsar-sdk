@@ -31,7 +31,7 @@ env:
 
 jobs:
   fmt:
-    runs-on: ${{ fromJson(github.repository_owner == 'subspace' && '["self-hosted", "ubuntu-20.04-x86-64", "Linux"]' || '["ubuntu-20.04"]') }}
+    runs-on: ${{ fromJson(github.repository_owner == 'subspace' && '["self-hosted", "ubuntu-20.04-x86-64"]' || '["ubuntu-20.04"]') }}
     steps:
       - name: git checkout
         uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
@@ -43,7 +43,7 @@ jobs:
           args: --all -- --check
 
   clippy:
-    runs-on: ${{ fromJson(github.repository_owner == 'subspace' && '["self-hosted", "ubuntu-20.04-x86-64", "Linux"]' || '["ubuntu-20.04"]') }}
+    runs-on: ${{ fromJson(github.repository_owner == 'subspace' && '["self-hosted", "ubuntu-20.04-x86-64"]' || '["ubuntu-20.04"]') }}
     steps:
       - name: git checkout
         uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
@@ -62,7 +62,8 @@ jobs:
       # Workaround to resolve link error with C:\msys64\mingw64\bin\libclang.dll
       - name: Remove msys64
         run: Remove-Item -LiteralPath "C:\msys64\" -Force -Recurse
-        if: contains(fromJSON('["windows-latest", "windows-2022"]'), runner.os)
+        if: runner.os == 'Windows'
+        continue-on-error: true
 
       - name: Add cache
         uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
@@ -95,12 +96,12 @@ jobs:
   test:
     strategy:
       matrix:
-        os: ${{ fromJson(github.repository_owner == 'subspace' && '[["self-hosted", "ubuntu-20.04-x86-64", "Linux"], ["self-hosted", "macos-12-arm64", "macOS"], ["self-hosted", "windows-server-2022-x86-64", "Windows"]]' || '["ubuntu-20.04", "macos-12", "windows-2022"]') }}
+        os: ${{ fromJson(github.repository_owner == 'subspace' && '[["self-hosted", "ubuntu-20.04-x86-64"], ["self-hosted", "macos-12-arm64"], ["self-hosted", "windows-server-2022-x86-64"]]' || '["ubuntu-20.04", "macos-12", "windows-2022"]') }}
         run-all:
           - ${{ inputs.test-macos || github.ref == 'refs/heads/master' }}
         exclude:  # exclude macos-12 when the condition is false
           - run-all: false
-            os: ${{ fromJson(github.repository_owner == 'subspace' && '["self-hosted", "macos-12-arm64", "macOS"]' || '["macos-12"]') }}
+            os: "macos-12"
 
     runs-on: ${{ matrix.os }}
 
@@ -113,22 +114,24 @@ jobs:
         uses: KyleMayes/install-llvm-action@8852e4d5c58653ed05135c0a5d949d9c2febcb00 # v1.6.1
         with:
           version: "15.0"
-        if: contains(fromJSON('["Linux", "ubuntu-20.04", "macOS", "macos-12", "Windows", "windows-latest", "windows-2022"]'), runner.os)
+        if: contains(fromJSON('["macOS", "Windows"]'), runner.os)
 
       - name: Install Protoc
         uses: arduino/setup-protoc@9b1ee5b22b0a3f1feb8c2ff99b32c89b3c3191e9 # v2.0.0
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-        if: contains(fromJSON('["Linux", "ubuntu-20.04", "macOS", "macos-12", "windows-latest", "windows-2022"]'), runner.os)
+        if: contains(fromJSON('["Linux", "macOS", "Windows"]'), runner.os)
+        continue-on-error: true
 
       # Workaround to resolve link error with C:\msys64\mingw64\bin\libclang.dll
       - name: Remove msys64
         run: Remove-Item -LiteralPath "C:\msys64\" -Force -Recurse
-        if: contains(fromJSON('["windows-latest", "windows-2022"]'), runner.os)
+        if: runner.os == 'Windows'
+        continue-on-error: true
 
       - name: Add cache
         uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
-        if: ${{ !contains(fromJSON('["Windows", "windows-2022"]'), runner.os) }}
+        if: runner.os != 'Windows'
         with:
           path: |
             ~/.cargo/registry
@@ -139,24 +142,24 @@ jobs:
           restore-keys: test-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
 
       - name: Install utils for caching
-        if: ${{ !contains(fromJSON('["Windows", "windows-2022"]'), runner.os) }}
+        if: runner.os != 'Windows'
         run: |
           test -x ~/.cargo/bin/cargo-sweep || cargo install cargo-sweep
           test -x ~/.cargo/bin/cargo-cache || cargo install cargo-cache --no-default-features --features ci-autoclean cargo-cache
 
       - name: Clean unused crate source checkouts and git repo checkouts
-        if: ${{ !contains(fromJSON('["Windows", "windows-2022"]'), runner.os) }}
+        if: runner.os != 'Windows'
         run: cargo cache
 
       - name: Build and run tests
         run: cargo test --locked --test integration --release -- --test-threads=1 --nocapture
 
       - name: Clean unused artifacts
-        if: ${{ !contains(fromJSON('["Windows", "windows-2022"]'), runner.os) }}
+        if: runner.os != 'Windows'
         run: cargo sweep --maxsize ${{ env.MAX_TARGET_SIZE }}
 
   docs:
-    runs-on: ${{ fromJson(github.repository_owner == 'subspace' && '["self-hosted", "ubuntu-20.04-x86-64", "Linux"]' || '["ubuntu-20.04"]') }}
+    runs-on: ${{ fromJson(github.repository_owner == 'subspace' && '["self-hosted", "ubuntu-20.04-x86-64"]' || '["ubuntu-20.04"]') }}
     steps:
       - name: git checkout
         uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
