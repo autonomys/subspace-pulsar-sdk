@@ -3,7 +3,7 @@ name: rustdoc
 on:
   push:
     branches:
-      - ci-self-hosted-sdk
+      - main
     paths-ignore:
       - '**.md'
       - '.gitignore'

@@ -2,7 +2,7 @@ name: Code coverage
 on:
   push:
     branches:
-      - ci-self-hosted-sdk
+      - main
     paths-ignore:
       - '**.md'
       - '.gitignore'
