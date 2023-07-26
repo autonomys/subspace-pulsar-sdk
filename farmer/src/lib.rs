@@ -42,7 +42,6 @@ use subspace_farmer::utils::parity_db_store::ParityDbStore;
 use subspace_farmer::utils::piece_cache::PieceCache;
 use subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 use subspace_farmer::utils::readers_and_pieces::{PieceDetails, ReadersAndPieces};
-use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_farmer_components::plotting::{PieceGetter, PieceGetterRetryPolicy, PlottedSector};
 use subspace_networking::utils::multihash::ToMultihash;
 use subspace_networking::ParityDbProviderStorage;
@@ -255,13 +254,8 @@ impl<T: subspace_proof_of_space::Table> sdk_traits::Farmer for Farmer<T> {
         piece_index_hash: PieceIndexHash,
         piece_store: &sdk_dsn::PieceStore,
         weak_readers_and_pieces: &std::sync::Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
-        piece_memory_cache: &PieceMemoryCache,
     ) -> Option<subspace_core_primitives::Piece> {
         use tracing::debug;
-
-        if let Some(piece) = piece_memory_cache.get_piece(&piece_index_hash) {
-            return Some(piece);
-        }
 
         if let Some(piece) = piece_store.get(&piece_index_hash.to_multihash().into()) {
             return Some(piece);
@@ -307,23 +301,22 @@ fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAnd
         .iter()
         .enumerate()
         .flat_map(|(disk_farm_index, single_disk_plot)| {
-            single_disk_plot
-                .plotted_sectors()
-                .enumerate()
-                .filter_map(move |(sector_offset, plotted_sector_result)| {
-                    match plotted_sector_result {
+            (0 as SectorIndex..)
+                .zip(single_disk_plot.plotted_sectors())
+                .filter_map(
+                    move |(sector_index, plotted_sector_result)| match plotted_sector_result {
                         Ok(plotted_sector) => Some(plotted_sector),
                         Err(error) => {
                             tracing::error!(
                                 %error,
                                 %disk_farm_index,
-                                %sector_offset,
+                                %sector_index,
                                 "Failed reading plotted sector on startup, skipping"
                             );
                             None
                         }
-                    }
-                })
+                    },
+                )
                 .flat_map(move |plotted_sector| {
                     (PieceOffset::ZERO..).zip(plotted_sector.piece_indexes).map(
                         move |(piece_offset, piece_index)| {
@@ -348,7 +341,6 @@ fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAnd
 
 #[allow(clippy::too_many_arguments)]
 fn handler_on_sector_plotted(
-    sector_offset: usize,
     plotted_sector: &subspace_farmer_components::plotting::PlottedSector,
     plotting_permit: Arc<impl Send + Sync + 'static>,
     disk_farm_index: usize,
@@ -411,7 +403,7 @@ fn handler_on_sector_plotted(
             .collect::<Vec<()>>()
             .await;
 
-        tracing::info!(sector_offset, sector_index, "Sector publishing was successful.");
+        tracing::info!(sector_index, "Sector publishing was successful.");
 
         // Release only after publishing is finished
         drop(plotting_permit);
@@ -604,10 +596,9 @@ impl Config {
             // Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
             let handler_id = single_disk_plot.on_sector_plotted(Arc::new(
-                move |(sector_offset, plotted_sector, plotting_permit)| {
+                move |(plotted_sector, plotting_permit)| {
                     let _span_guard = span.enter();
                     handler_on_sector_plotted(
-                        *sector_offset,
                         plotted_sector,
                         Arc::clone(plotting_permit),
                         disk_farm_index,
@@ -728,13 +719,6 @@ pub struct PlotInfo {
     pub genesis_hash: [u8; 32],
     /// Public key of identity used for plot creation
     pub public_key: PublicKey,
-    /// First sector index in this plot
-    ///
-    /// Multiple plots can reuse the same identity, but they have to use
-    /// different ranges for sector indexes or else they'll essentially plot
-    /// the same data and will not result in increased probability of
-    /// winning the reward.
-    pub first_sector_index: SectorIndex,
     /// How much space in bytes is allocated for this plot
     pub allocated_space: ByteSize,
     /// How many pieces are in sector
@@ -747,7 +731,6 @@ impl From<SingleDiskPlotInfo> for PlotInfo {
             id,
             genesis_hash,
             public_key,
-            first_sector_index,
             allocated_space,
             pieces_in_sector,
         } = info;
@@ -755,7 +738,6 @@ impl From<SingleDiskPlotInfo> for PlotInfo {
             id,
             genesis_hash,
             public_key: PublicKey(public_key),
-            first_sector_index,
             allocated_space: ByteSize::b(allocated_space),
             pieces_in_sector,
         }
@@ -793,8 +775,7 @@ pub struct InitialPlottingProgress {
 #[derive(Debug)]
 pub struct Plot<T: subspace_proof_of_space::Table> {
     directory: PathBuf,
-    progress:
-        watch::Receiver<Option<(usize, PlottedSector, Arc<tokio::sync::OwnedSemaphorePermit>)>>,
+    progress: watch::Receiver<Option<(PlottedSector, Arc<tokio::sync::OwnedSemaphorePermit>)>>,
     solutions: watch::Receiver<Option<SolutionResponse>>,
     initial_plotting_progress: Arc<Mutex<InitialPlottingProgress>>,
     allocated_space: u64,
@@ -905,7 +886,6 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
             erasure_coding,
             piece_getter,
             concurrent_plotting_semaphore,
-            piece_memory_cache: node.dsn().piece_memory_cache.clone(),
         };
         let single_disk_plot = SingleDiskPlot::new::<_, _, T>(description, disk_farm_idx).await?;
         let mut drop_at_exit = DropCollection::new();
