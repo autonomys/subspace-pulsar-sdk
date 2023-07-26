@@ -24,7 +24,6 @@ pub trait Farmer {
                 Option<subspace_farmer::utils::readers_and_pieces::ReadersAndPieces>,
             >,
         >,
-        piece_memory_cache: &subspace_farmer_components::piece_caching::PieceMemoryCache,
     ) -> Option<subspace_core_primitives::Piece>;
 }
 
