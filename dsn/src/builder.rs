@@ -11,7 +11,6 @@ use futures::prelude::*;
 use sdk_utils::{self, DropCollection, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
-use subspace_farmer_components::piece_caching::PieceMemoryCache;
 use subspace_networking::libp2p::kad::ProviderRecord;
 use subspace_networking::{
     PeerInfoProvider, PieceAnnouncementRequestHandler, PieceAnnouncementResponse,
@@ -203,10 +202,6 @@ pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
     /// Farmer piece cache
     #[derivative(Debug = "ignore")]
     pub piece_cache: NodePieceCache<C>,
-    /// Farmer memory cache
-    #[derivative(Debug = "ignore")]
-    pub piece_memory_cache: PieceMemoryCache,
-
     _drop: DropCollection,
 }
 
@@ -228,7 +223,6 @@ impl Dsn {
                 Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
                 Arc<tokio::sync::Mutex<Option<PieceStore>>>,
                 NodePieceCache<C>,
-                PieceMemoryCache,
             ) -> F1
             + Send
             + Sync
@@ -252,7 +246,6 @@ impl Dsn {
         let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
         let farmer_piece_store = Arc::new(tokio::sync::Mutex::new(None));
         let farmer_provider_storage = MaybeProviderStorage::none();
-        let piece_memory_cache = PieceMemoryCache::default();
         let protocol_version = hex::encode(client.info().genesis_hash);
 
         tracing::debug!(genesis_hash = protocol_version, "Setting DSN protocol version...");
@@ -397,19 +390,16 @@ impl Dsn {
                     let weak_readers_and_pieces = Arc::downgrade(&farmer_readers_and_pieces);
                     let farmer_piece_store = Arc::clone(&farmer_piece_store);
                     let piece_cache = piece_cache.clone();
-                    let piece_memory_cache = piece_memory_cache.clone();
                     move |_, req| {
                         let weak_readers_and_pieces = weak_readers_and_pieces.clone();
                         let farmer_piece_store = Arc::clone(&farmer_piece_store);
                         let piece_cache = piece_cache.clone();
-                        let piece_memory_cache = piece_memory_cache.clone();
 
                         get_piece_by_hash(
                             req,
                             weak_readers_and_pieces,
                             farmer_piece_store,
                             piece_cache,
-                            piece_memory_cache,
                         )
                     }
                 }),
@@ -463,7 +453,6 @@ impl Dsn {
                 farmer_provider_storage,
                 farmer_readers_and_pieces,
                 piece_cache,
-                piece_memory_cache,
                 _drop: drop_collection,
             },
             runner,
