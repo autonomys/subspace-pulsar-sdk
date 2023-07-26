@@ -743,7 +743,6 @@ fn get_piece_by_hash<F: Farmer>(
     >,
     farmer_piece_store: Arc<tokio::sync::Mutex<Option<sdk_dsn::PieceStore>>>,
     piece_cache: NodePieceCache<impl sc_client_api::AuxStore>,
-    piece_memory_cache: subspace_farmer_components::piece_caching::PieceMemoryCache,
 ) -> impl std::future::Future<Output = Option<PieceByHashResponse>> {
     async move {
         match node_get_piece_by_hash(piece_index_hash, &piece_cache) {
@@ -752,13 +751,8 @@ fn get_piece_by_hash<F: Farmer>(
         }
 
         if let Some(piece_store) = farmer_piece_store.lock().await.as_ref() {
-            let piece = F::get_piece_by_hash(
-                piece_index_hash,
-                piece_store,
-                &weak_readers_and_pieces,
-                &piece_memory_cache,
-            )
-            .await;
+            let piece =
+                F::get_piece_by_hash(piece_index_hash, piece_store, &weak_readers_and_pieces).await;
             Some(PieceByHashResponse { piece })
         } else {
             None
