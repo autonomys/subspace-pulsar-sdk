@@ -10,6 +10,8 @@ use either::*;
 use futures::prelude::*;
 use sdk_utils::{self, DropCollection, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
+use subspace_core_primitives::Piece;
+use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_networking::libp2p::kad::ProviderRecord;
 use subspace_networking::{
@@ -175,6 +177,8 @@ pub struct DsnOptions<C, ASNS, PieceByHash, SegmentHeaderByIndexes> {
     pub get_piece_by_hash: PieceByHash,
     /// Get segment header by segment indexes handler
     pub get_segment_header_by_segment_indexes: SegmentHeaderByIndexes,
+    /// Farmer total allocated space across all plots
+    pub farmer_total_space_pledged: usize,
 }
 
 /// Farmer piece store
@@ -199,6 +203,8 @@ pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
         parking_lot::Mutex<Option<futures::channel::mpsc::Receiver<ProviderRecord>>>,
     /// Farmer provider storage
     pub farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
+    /// Farmer archival storage pieces
+    pub farmer_archival_storage_pieces: ArchivalStoragePieces,
     /// Farmer piece cache
     #[derivative(Debug = "ignore")]
     pub piece_cache: NodePieceCache<C>,
@@ -242,11 +248,15 @@ impl Dsn {
             piece_cache_size,
             get_piece_by_hash,
             get_segment_header_by_segment_indexes,
+            farmer_total_space_pledged,
         } = options;
         let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
         let farmer_piece_store = Arc::new(tokio::sync::Mutex::new(None));
         let farmer_provider_storage = MaybeProviderStorage::none();
         let protocol_version = hex::encode(client.info().genesis_hash);
+
+        let cuckoo_filter_size = farmer_total_space_pledged / Piece::SIZE + 1usize;
+        let farmer_archival_storage_pieces = ArchivalStoragePieces::new(cuckoo_filter_size);
 
         tracing::debug!(genesis_hash = protocol_version, "Setting DSN protocol version...");
 
@@ -329,7 +339,7 @@ impl Dsn {
             protocol_version,
             keypair,
             provider_storage.clone(),
-            PeerInfoProvider::new_node(),
+            PeerInfoProvider::new_farmer(Box::new(farmer_archival_storage_pieces.clone())),
         );
         default_networking_config.kademlia.set_provider_record_ttl(KADEMLIA_PROVIDER_TTL_IN_SECS);
 
@@ -454,6 +464,7 @@ impl Dsn {
                 farmer_readers_and_pieces,
                 piece_cache,
                 _drop: drop_collection,
+                farmer_archival_storage_pieces,
             },
             runner,
         ))

@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 pub use builder::{Builder, Config};
 use derivative::Derivative;
 use futures::prelude::*;
@@ -28,20 +28,20 @@ use sdk_utils::{AsyncDropFutures, ByteSize, DropCollection, PublicKey};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::crypto::kzg;
 use subspace_core_primitives::{
-    ArchivedHistorySegment, PieceIndex, PieceIndexHash, PieceOffset, Record, SectorIndex,
-    SegmentIndex,
+    ArchivedHistorySegment, PieceIndex, PieceIndexHash, Record, SectorIndex, SegmentIndex,
 };
 use subspace_erasure_coding::ErasureCoding;
 use subspace_farmer::single_disk_plot::{
     SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
     SingleDiskPlotOptions, SingleDiskPlotSummary,
 };
+use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
 use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 use subspace_farmer::utils::node_piece_getter::NodePieceGetter as DsnPieceGetter;
 use subspace_farmer::utils::parity_db_store::ParityDbStore;
 use subspace_farmer::utils::piece_cache::PieceCache;
 use subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
-use subspace_farmer::utils::readers_and_pieces::{PieceDetails, ReadersAndPieces};
+use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::plotting::{PieceGetter, PieceGetterRetryPolicy, PlottedSector};
 use subspace_networking::utils::multihash::ToMultihash;
 use subspace_networking::ParityDbProviderStorage;
@@ -290,58 +290,51 @@ impl<T: subspace_proof_of_space::Table> sdk_traits::Farmer for Farmer<T> {
 const SEGMENT_COMMITMENTS_CACHE_SIZE: NonZeroUsize =
     NonZeroUsize::new(1_000_000).expect("Not zero; qed");
 
-fn create_readers_and_pieces(single_disk_plots: &[SingleDiskPlot]) -> ReadersAndPieces {
+fn create_readers_and_pieces(
+    single_disk_plots: &[SingleDiskPlot],
+    archival_storage_pieces: ArchivalStoragePieces,
+) -> Result<ReadersAndPieces, BuildError> {
     // Store piece readers so we can reference them later
     let readers = single_disk_plots.iter().map(SingleDiskPlot::piece_reader).collect();
+    let mut readers_and_pieces = ReadersAndPieces::new(readers, archival_storage_pieces);
 
     tracing::debug!("Collecting already plotted pieces");
 
     // Collect already plotted pieces
-    let plotted_pieces: HashMap<PieceIndexHash, PieceDetails> = single_disk_plots
-        .iter()
-        .enumerate()
-        .flat_map(|(disk_farm_index, single_disk_plot)| {
-            (0 as SectorIndex..)
-                .zip(single_disk_plot.plotted_sectors())
-                .filter_map(
-                    move |(sector_index, plotted_sector_result)| match plotted_sector_result {
-                        Ok(plotted_sector) => Some(plotted_sector),
-                        Err(error) => {
-                            tracing::error!(
-                                %error,
-                                %disk_farm_index,
-                                %sector_index,
-                                "Failed reading plotted sector on startup, skipping"
-                            );
-                            None
-                        }
-                    },
-                )
-                .flat_map(move |plotted_sector| {
-                    (PieceOffset::ZERO..).zip(plotted_sector.piece_indexes).map(
-                        move |(piece_offset, piece_index)| {
-                            (
-                                piece_index.hash(),
-                                PieceDetails {
-                                    disk_farm_index,
-                                    sector_index: plotted_sector.sector_index,
-                                    piece_offset,
-                                },
-                            )
-                        },
-                    )
-                })
-        })
-        // We implicitly ignore duplicates here, reading just from one of the plots
-        .collect();
+    single_disk_plots.iter().enumerate().try_for_each(|(disk_farm_index, single_disk_plot)| {
+        let disk_farm_index = disk_farm_index.try_into().map_err(|_error| {
+            anyhow!(
+                "More than 256 plots are not supported, consider running multiple farmer instances"
+            )
+        })?;
+
+        (0 as SectorIndex..).zip(single_disk_plot.plotted_sectors()).for_each(
+            |(sector_index, plotted_sector_result)| match plotted_sector_result {
+                Ok(plotted_sector) => {
+                    readers_and_pieces.add_sector(disk_farm_index, &plotted_sector);
+                }
+                Err(error) => {
+                    error!(
+                        %error,
+                        %disk_farm_index,
+                        %sector_index,
+                        "Failed reading plotted sector on startup, skipping"
+                    );
+                }
+            },
+        );
+
+        Ok::<_, anyhow::Error>(())
+    })?;
     tracing::debug!("Finished collecting already plotted pieces");
 
-    ReadersAndPieces::new(readers, plotted_pieces)
+    Ok(readers_and_pieces)
 }
 
 #[allow(clippy::too_many_arguments)]
 fn handler_on_sector_plotted(
-    plotted_sector: &subspace_farmer_components::plotting::PlottedSector,
+    plotted_sector: &PlottedSector,
+    maybe_old_plotted_sector: &Option<PlottedSector>,
     plotting_permit: Arc<impl Send + Sync + 'static>,
     disk_farm_index: usize,
     node: &subspace_networking::Node,
@@ -351,46 +344,28 @@ fn handler_on_sector_plotted(
 ) {
     let sector_index = plotted_sector.sector_index;
 
-    let new_pieces = {
+    let disk_farm_index = disk_farm_index
+        .try_into()
+        .expect("More than 256 plots are not supported, this is checked above already; qed");
+
+    {
         let mut readers_and_pieces = readers_and_pieces.lock();
         let readers_and_pieces =
-            readers_and_pieces.as_mut().expect("Initial value was populated above; qed");
+            readers_and_pieces.as_mut().expect("Initial value was populated before; qed");
 
-        let new_pieces = plotted_sector
-            .piece_indexes
-            .iter()
-            .filter(|&&piece_index| {
-                // Skip pieces that are already plotted and thus were announced
-                // before
-                !readers_and_pieces.contains_piece(&piece_index.hash())
-            })
-            .copied()
-            .collect::<Vec<_>>();
-
-        readers_and_pieces.add_pieces(
-            (PieceOffset::ZERO..).zip(plotted_sector.piece_indexes.iter().copied()).map(
-                |(piece_offset, piece_index)| {
-                    (
-                        piece_index.hash(),
-                        PieceDetails { disk_farm_index, sector_index, piece_offset },
-                    )
-                },
-            ),
-        );
-
-        new_pieces
-    };
-
-    if new_pieces.is_empty() {
-        // None of the pieces are new, nothing left to do here
-        return;
+        if let Some(old_plotted_sector) = maybe_old_plotted_sector {
+            readers_and_pieces.delete_sector(disk_farm_index, old_plotted_sector);
+        }
+        readers_and_pieces.add_sector(disk_farm_index, plotted_sector);
     }
+
+    let piece_indexes = plotted_sector.piece_indexes.clone();
 
     let node = node.clone();
 
     // TODO: Skip those that were already announced (because they cached)
     let publish_fut = async move {
-        new_pieces
+        piece_indexes
             .into_iter()
             .map(|piece_index| {
                 subspace_networking::utils::piece_announcement::announce_single_piece_index_hash_with_backoff(
@@ -577,7 +552,10 @@ impl Config {
             single_disk_plots.push(single_disk_plot);
         }
 
-        readers_and_pieces.lock().replace(create_readers_and_pieces(&single_disk_plots));
+        readers_and_pieces.lock().replace(create_readers_and_pieces(
+            &single_disk_plots,
+            node.dsn().farmer_archival_storage_pieces.clone(),
+        )?);
 
         for (disk_farm_index, single_disk_plot) in single_disk_plots.iter().enumerate() {
             let readers_and_pieces = Arc::clone(&readers_and_pieces);
@@ -596,10 +574,11 @@ impl Config {
             // Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
             let handler_id = single_disk_plot.on_sector_plotted(Arc::new(
-                move |(plotted_sector, plotting_permit)| {
+                move |(plotted_sector, maybe_old_plotted_sector, plotting_permit)| {
                     let _span_guard = span.enter();
                     handler_on_sector_plotted(
                         plotted_sector,
+                        maybe_old_plotted_sector,
                         Arc::clone(plotting_permit),
                         disk_farm_index,
                         &node,
@@ -771,11 +750,15 @@ pub struct InitialPlottingProgress {
     pub total_sectors: u64,
 }
 
+/// Progress data received from sender, used to monitor plotting progress
+pub type ProgressData =
+    Option<(PlottedSector, Option<PlottedSector>, Arc<tokio::sync::OwnedSemaphorePermit>)>;
+
 /// Plot structure
 #[derive(Debug)]
 pub struct Plot<T: subspace_proof_of_space::Table> {
     directory: PathBuf,
-    progress: watch::Receiver<Option<(PlottedSector, Arc<tokio::sync::OwnedSemaphorePermit>)>>,
+    progress: watch::Receiver<ProgressData>,
     solutions: watch::Receiver<Option<SolutionResponse>>,
     initial_plotting_progress: Arc<Mutex<InitialPlottingProgress>>,
     allocated_space: u64,
