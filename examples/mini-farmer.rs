@@ -116,6 +116,7 @@ async fn main() -> anyhow::Result<()> {
                 Chain::Devnet => node::chain_spec::devnet_config(),
                 Chain::Dev => node::chain_spec::dev_config(),
             },
+            plot_size.as_u64() as usize,
         )
         .await?;
 

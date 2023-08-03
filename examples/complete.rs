@@ -5,18 +5,20 @@ use subspace_sdk::{chain_spec, node, ByteSize, Farmer, Node, PlotDescription, Pu
 
 #[tokio::main]
 async fn main() {
+    let plots = [PlotDescription::new("plot", ByteSize::gb(10))];
+    let farmer_total_space_pledged =
+        plots.iter().map(|p| p.space_pledged.as_u64() as usize).sum::<usize>();
     let node: Node = Node::builder()
         .blocks_pruning(node::BlocksPruning::Some(1000))
         .state_pruning(node::PruningMode::ArchiveCanonical)
         .network(NetworkBuilder::new().name("i1i1"))
-        .build("node", chain_spec::dev_config())
+        .build("node", chain_spec::dev_config(), farmer_total_space_pledged)
         .await
         .expect("Failed to init a node");
 
     node.sync().await.unwrap();
 
     let reward_address = PublicKey::from([0; 32]);
-    let plots = [PlotDescription::new("plot", ByteSize::gb(10))];
     let farmer: Farmer = Farmer::builder()
         // .ws_rpc("127.0.0.1:9955".parse().unwrap())
         // .listen_on("/ip4/0.0.0.0/tcp/40333".parse().unwrap())
@@ -57,7 +59,7 @@ async fn main() {
     let node = Node::builder()
         .blocks_pruning(node::BlocksPruning::Some(1000))
         .state_pruning(node::PruningMode::ArchiveCanonical)
-        .build("node", chain_spec::dev_config())
+        .build("node", chain_spec::dev_config(), farmer_total_space_pledged)
         .await
         .expect("Failed to init a node");
     node.sync().await.unwrap();
