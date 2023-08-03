@@ -3,16 +3,17 @@ use futures::prelude::*;
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt().init();
-
+    let plots = [subspace_sdk::PlotDescription::new("plot", subspace_sdk::ByteSize::mb(100))];
+    let farmer_total_space_pledged =
+        plots.iter().map(|p| p.space_pledged.as_u64() as usize).sum::<usize>();
     let node = subspace_sdk::Node::builder()
         .force_authoring(true)
         .role(subspace_sdk::node::Role::Authority)
         // Starting a new chain
-        .build("node", subspace_sdk::chain_spec::dev_config())
+        .build("node", subspace_sdk::chain_spec::dev_config(), farmer_total_space_pledged)
         .await
         .unwrap();
 
-    let plots = [subspace_sdk::PlotDescription::new("plot", subspace_sdk::ByteSize::mb(100))];
     let cache =
         subspace_sdk::farmer::CacheDescription::new("cache", subspace_sdk::ByteSize::mb(10))
             .unwrap();

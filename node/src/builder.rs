@@ -142,8 +142,9 @@ impl<F: Farmer + 'static> Builder<F> {
         self,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,
+        farmer_total_space_pledged: usize,
     ) -> anyhow::Result<Node<F>> {
-        self.configuration().build(directory, chain_spec).await
+        self.configuration().build(directory, chain_spec, farmer_total_space_pledged).await
     }
 }
 
