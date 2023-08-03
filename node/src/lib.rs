@@ -59,6 +59,7 @@ impl<F: Farmer + 'static> Config<F> {
         self,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,
+        farmer_total_space_pledged: usize,
     ) -> anyhow::Result<Node<F>> {
         let Self {
             base,
@@ -121,6 +122,7 @@ impl<F: Farmer + 'static> Config<F> {
                 base_path: directory.as_ref().to_path_buf(),
                 get_piece_by_hash: get_piece_by_hash::<F>,
                 get_segment_header_by_segment_indexes,
+                farmer_total_space_pledged,
             })?;
 
             tracing::debug!("Subspace networking initialized: Node ID is {}", dsn.node.id());
