@@ -14,12 +14,7 @@ use subspace_core_primitives::Piece;
 use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_networking::libp2p::kad::ProviderRecord;
-use subspace_networking::{
-    PeerInfoProvider, PieceAnnouncementRequestHandler, PieceAnnouncementResponse,
-    PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse, ProviderStorage as _,
-    SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
-    KADEMLIA_PROVIDER_TTL_IN_SECS,
-};
+use subspace_networking::{PeerInfoProvider, PieceAnnouncementRequestHandler, PieceAnnouncementResponse, PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse, ProviderStorage as _, SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse, KADEMLIA_PROVIDER_TTL_IN_SECS, PeerInfo};
 use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::Error;
 
@@ -432,7 +427,11 @@ impl Dsn {
             reserved_peers: reserved_nodes.into_iter().map(Into::into).collect(),
             max_established_incoming_connections,
             max_established_outgoing_connections,
-            target_connections,
+            general_target_connections: target_connections,
+            // maintain permanent connections between farmers
+            special_connected_peers_handler: Arc::new(PeerInfo::is_farmer),
+            // other (non-farmer) connections
+            general_connected_peers_handler: Arc::new(|peer_info| !PeerInfo::is_farmer(peer_info)),
             max_pending_incoming_connections,
             max_pending_outgoing_connections,
             ..default_networking_config
