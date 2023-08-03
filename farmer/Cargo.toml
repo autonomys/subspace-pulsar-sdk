@@ -25,10 +25,10 @@ sdk-utils = { path = "../utils" }
 sdk-dsn = { path = "../dsn" }
 sdk-traits = { path = "../traits" }
 
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "a98573ec87cf9b3f2ffb5face4ff1592ff919647" }
-subspace-erasure-coding = { git = "https://github.com/subspace/subspace", rev = "a98573ec87cf9b3f2ffb5face4ff1592ff919647" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "a98573ec87cf9b3f2ffb5face4ff1592ff919647" }
-subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "a98573ec87cf9b3f2ffb5face4ff1592ff919647" }
-subspace-networking = { git = "https://github.com/subspace/subspace", rev = "a98573ec87cf9b3f2ffb5face4ff1592ff919647" }
-subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "a98573ec87cf9b3f2ffb5face4ff1592ff919647", features = ["parallel", "chia"] }
-subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "a98573ec87cf9b3f2ffb5face4ff1592ff919647" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "8cdff7d364d90663f99479db059a4fcf082a24df" }
+subspace-erasure-coding = { git = "https://github.com/subspace/subspace", rev = "8cdff7d364d90663f99479db059a4fcf082a24df" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "8cdff7d364d90663f99479db059a4fcf082a24df" }
+subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "8cdff7d364d90663f99479db059a4fcf082a24df" }
+subspace-networking = { git = "https://github.com/subspace/subspace", rev = "8cdff7d364d90663f99479db059a4fcf082a24df" }
+subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "8cdff7d364d90663f99479db059a4fcf082a24df", features = ["parallel", "chia"] }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "8cdff7d364d90663f99479db059a4fcf082a24df" }
