@@ -1057,8 +1057,8 @@ async fn populate_pieces_cache<PG, PC>(
 
         match result {
             Ok(Some(piece)) => {
-                debug!(%piece_index, "Added piece to cache.");
                 piece_cache.lock().await.add_piece(key, piece);
+                debug!(%piece_index, "Added piece to cache.");
             }
             Ok(None) => {
                 debug!(%piece_index, "Couldn't find piece.");
@@ -1121,10 +1121,7 @@ async fn fill_piece_cache_from_archived_segments(
 
                         match piece {
                             Ok(Some(piece)) => {
-                                {
-                                    piece_cache.lock().await.add_piece(key, piece);
-                                }
-
+                                piece_cache.lock().await.add_piece(key, piece);
                                 trace!(%piece_index, "Got piece for archived segment.");
 
                                 break 'retry;
