@@ -128,6 +128,7 @@ impl ClientT for Rpc {
         self.inner.call(method, params).await
     }
 
+    #[allow(clippy::diverging_sub_expression)]
     async fn batch_request<'a, R>(
         &self,
         _batch: BatchRequestBuilder<'a>,
@@ -167,6 +168,7 @@ impl SubscriptionClientT for Rpc {
         Ok(Subscription::new(to_back, notifs_rx, SubscriptionKind::Subscription(kind)))
     }
 
+    #[allow(clippy::diverging_sub_expression)]
     async fn subscribe_to_method<'a, Notif>(
         &self,
         _method: &'a str,
