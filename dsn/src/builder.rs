@@ -208,7 +208,7 @@ pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
     pub farmer_archival_storage_pieces: ArchivalStoragePieces,
     /// Farmer archival storage info
     pub farmer_archival_storage_info: ArchivalStorageInfo,
-    /// Farmer piece cache
+    /// Node piece cache
     #[derivative(Debug = "ignore")]
     pub piece_cache: NodePieceCache<C>,
     _drop: DropCollection,
