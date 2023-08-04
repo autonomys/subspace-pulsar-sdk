@@ -233,10 +233,13 @@ impl Base {
         // endpoints
         let telemetry_endpoints = match chain_spec.telemetry_endpoints() {
             Some(endpoints) => {
-                let Ok(serde_json::Value::Array(extra_telemetry)) = serde_json::to_value(&telemetry) else {
+                let Ok(serde_json::Value::Array(extra_telemetry)) =
+                    serde_json::to_value(&telemetry)
+                else {
                     unreachable!("Will always return an array")
                 };
-                let Ok(serde_json::Value::Array(telemetry)) = serde_json::to_value(endpoints) else {
+                let Ok(serde_json::Value::Array(telemetry)) = serde_json::to_value(endpoints)
+                else {
                     unreachable!("Will always return an array")
                 };
 

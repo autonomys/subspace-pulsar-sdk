@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
-async-trait = "0.1"
 derivative = "2.2.0"
 derive_builder = "0.12"
 derive_more = "0.99"
@@ -25,9 +24,8 @@ sc-client-api = { version = "4.0.0-dev", git = "https://github.com/subspace/subs
 sp-runtime = { version = "24.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 sp-blockchain = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 
-subspace-networking = { git = "https://github.com/subspace/subspace", rev = "561f0e5b2e22e88af18402ca82e784bb9f97c552" }
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "561f0e5b2e22e88af18402ca82e784bb9f97c552" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "561f0e5b2e22e88af18402ca82e784bb9f97c552" }
-subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "561f0e5b2e22e88af18402ca82e784bb9f97c552" }
-subspace-service = { git = "https://github.com/subspace/subspace", rev = "561f0e5b2e22e88af18402ca82e784bb9f97c552" }
-sc-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "561f0e5b2e22e88af18402ca82e784bb9f97c552" }
+subspace-networking = { git = "https://github.com/subspace/subspace", rev = "3640edde1832bd5db94677b542c336c65cef564b" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "3640edde1832bd5db94677b542c336c65cef564b" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "3640edde1832bd5db94677b542c336c65cef564b" }
+subspace-service = { git = "https://github.com/subspace/subspace", rev = "3640edde1832bd5db94677b542c336c65cef564b" }
+sc-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "3640edde1832bd5db94677b542c336c65cef564b" }

@@ -5,7 +5,8 @@ use sc_consensus_subspace_rpc::SubspaceRpcApiClient;
 use subspace_core_primitives::{Piece, PieceIndex, SegmentCommitment, SegmentHeader, SegmentIndex};
 use subspace_farmer::node_client::{Error, NodeClient};
 use subspace_rpc_primitives::{
-    FarmerAppInfo, RewardSignatureResponse, RewardSigningInfo, SlotInfo, SolutionResponse,
+    FarmerAppInfo, NodeSyncStatus, RewardSignatureResponse, RewardSigningInfo, SlotInfo,
+    SolutionResponse,
 };
 
 #[async_trait::async_trait]
@@ -53,6 +54,16 @@ impl NodeClient for crate::Rpc {
     ) -> Result<Pin<Box<dyn Stream<Item = SegmentHeader> + Send + 'static>>, Error> {
         Ok(Box::pin(
             SubspaceRpcApiClient::subscribe_archived_segment_header(self)
+                .await?
+                .filter_map(|result| futures::future::ready(result.ok())),
+        ))
+    }
+
+    async fn subscribe_node_sync_status_change(
+        &self,
+    ) -> Result<Pin<Box<dyn Stream<Item = NodeSyncStatus> + Send + 'static>>, Error> {
+        Ok(Box::pin(
+            SubspaceRpcApiClient::subscribe_node_sync_status_change(self)
                 .await?
                 .filter_map(|result| futures::future::ready(result.ok())),
         ))
