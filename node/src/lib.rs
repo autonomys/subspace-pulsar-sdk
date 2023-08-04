@@ -19,7 +19,7 @@ use anyhow::Context;
 use derivative::Derivative;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
-use sc_consensus_subspace_rpc::SegmentHeaderProvider;
+use sc_consensus_subspace::SegmentHeadersStore;
 use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, SyncState};
 use sc_rpc_api::state::StateApiClient;
@@ -37,7 +37,6 @@ use subspace_networking::{
 };
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
-use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::SubspaceConfiguration;
 
 mod builder;
@@ -109,6 +108,8 @@ impl<F: Farmer + 'static> Config<F> {
             let bootstrap_nodes =
                 dsn.boot_nodes.clone().into_iter().map(Into::into).collect::<Vec<_>>();
 
+            let segment_header_store = partial_components.other.2.clone();
+
             let (dsn, runner) = dsn.build_dsn(DsnOptions {
                 client: partial_components.client.clone(),
                 node_name: name.clone(),
@@ -123,6 +124,7 @@ impl<F: Farmer + 'static> Config<F> {
                 get_piece_by_hash: get_piece_by_hash::<F>,
                 get_segment_header_by_segment_indexes,
                 farmer_total_space_pledged,
+                segment_header_store
             })?;
 
             tracing::debug!("Subspace networking initialized: Node ID is {}", dsn.node.id());
@@ -701,7 +703,7 @@ const ROOT_BLOCK_NUMBER_LIMIT: u64 = 100;
 
 fn get_segment_header_by_segment_indexes(
     req: &SegmentHeaderRequest,
-    segment_header_cache: &SegmentHeaderCache<impl sc_client_api::AuxStore>,
+    segment_header_store: &SegmentHeadersStore<impl sc_client_api::AuxStore>,
 ) -> Option<SegmentHeaderResponse> {
     let segment_indexes = match req {
         SegmentHeaderRequest::SegmentIndexes { segment_indexes } => segment_indexes.clone(),
@@ -713,7 +715,7 @@ fn get_segment_header_by_segment_indexes(
                 block_limit = ROOT_BLOCK_NUMBER_LIMIT;
             }
 
-            let max_segment_index = segment_header_cache.max_segment_index();
+            let max_segment_index = segment_header_store.max_segment_index();
 
             // several last segment indexes
             (SegmentIndex::ZERO..=max_segment_index)
@@ -723,17 +725,15 @@ fn get_segment_header_by_segment_indexes(
         }
     };
 
-    let internal_result = segment_indexes
+    let maybe_segment_headers = segment_indexes
         .iter()
-        .map(|segment_index| segment_header_cache.get_segment_header(*segment_index))
-        .collect::<Result<Option<Vec<subspace_core_primitives::SegmentHeader>>, _>>();
+        .map(|segment_index| segment_header_store.get_segment_header(*segment_index))
+        .collect::<Option<Vec<subspace_core_primitives::SegmentHeader>>>();
 
-    match internal_result {
-        Ok(Some(segment_headers)) => Some(SegmentHeaderResponse { segment_headers }),
-        Ok(None) => None,
-        Err(error) => {
-            tracing::error!(%error, "Failed to get segment header from cache");
-
+    match maybe_segment_headers {
+        Some(segment_headers) => Some(SegmentHeaderResponse { segment_headers }),
+        None => {
+            tracing::error!("Segment header collection contained empty segment headers.");
             None
         }
     }

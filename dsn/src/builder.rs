@@ -8,6 +8,7 @@ use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
 use either::*;
 use futures::prelude::*;
+use sc_consensus_subspace::SegmentHeadersStore;
 use sdk_utils::{self, DropCollection, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::Piece;
@@ -21,8 +22,6 @@ use subspace_networking::{
     SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
     KADEMLIA_PROVIDER_TTL_IN_SECS,
 };
-use subspace_service::segment_headers::SegmentHeaderCache;
-use subspace_service::Error;
 
 use super::provider_storage_utils::MaybeProviderStorage;
 use super::{FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage};
@@ -180,6 +179,8 @@ pub struct DsnOptions<C, ASNS, PieceByHash, SegmentHeaderByIndexes> {
     pub get_segment_header_by_segment_indexes: SegmentHeaderByIndexes,
     /// Farmer total allocated space across all plots
     pub farmer_total_space_pledged: usize,
+    /// Segment header store
+    pub segment_header_store: SegmentHeadersStore<C>
 }
 
 /// Farmer piece store
@@ -237,7 +238,7 @@ impl Dsn {
             + Sync
             + 'static,
         F1: Future<Output = Option<PieceByHashResponse>> + Send + 'static,
-        SegmentHeaderByIndexes: Fn(&SegmentHeaderRequest, &SegmentHeaderCache<C>) -> Option<SegmentHeaderResponse>
+        SegmentHeaderByIndexes: Fn(&SegmentHeaderRequest, &SegmentHeadersStore<C>) -> Option<SegmentHeaderResponse>
             + Send
             + Sync
             + 'static,
@@ -252,6 +253,7 @@ impl Dsn {
             get_piece_by_hash,
             get_segment_header_by_segment_indexes,
             farmer_total_space_pledged,
+            segment_header_store
         } = options;
         let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
         let farmer_piece_store = Arc::new(tokio::sync::Mutex::new(None));
@@ -418,17 +420,11 @@ impl Dsn {
                     }
                 }),
                 SegmentHeaderBySegmentIndexesRequestHandler::create({
-                    let segment_header_cache =
-                        SegmentHeaderCache::new(client).map_err(|error| {
-                            Error::Other(
-                                format!("Failed to instantiate segment header cache: {error}")
-                                    .into(),
-                            )
-                        })?;
+                    let segment_header_store = segment_header_store.clone();
                     move |_, req| {
                         futures::future::ready(get_segment_header_by_segment_indexes(
                             req,
-                            &segment_header_cache,
+                            &segment_header_store,
                         ))
                     }
                 }),

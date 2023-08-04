@@ -2,7 +2,7 @@ use std::pin::Pin;
 
 use futures::prelude::*;
 use sc_consensus_subspace_rpc::SubspaceRpcApiClient;
-use subspace_core_primitives::{Piece, PieceIndex, SegmentCommitment, SegmentHeader, SegmentIndex};
+use subspace_core_primitives::{Piece, PieceIndex, SegmentHeader, SegmentIndex};
 use subspace_farmer::node_client::{Error, NodeClient};
 use subspace_rpc_primitives::{
     FarmerAppInfo, NodeSyncStatus, RewardSignatureResponse, RewardSigningInfo, SlotInfo,
@@ -67,13 +67,6 @@ impl NodeClient for crate::Rpc {
                 .await?
                 .filter_map(|result| futures::future::ready(result.ok())),
         ))
-    }
-
-    async fn segment_commitments(
-        &self,
-        segment_indexes: Vec<SegmentIndex>,
-    ) -> Result<Vec<Option<SegmentCommitment>>, Error> {
-        Ok(SubspaceRpcApiClient::segment_commitments(self, segment_indexes).await?)
     }
 
     async fn segment_headers(
