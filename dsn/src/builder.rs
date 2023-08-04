@@ -11,10 +11,16 @@ use futures::prelude::*;
 use sdk_utils::{self, DropCollection, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::Piece;
+use subspace_farmer::utils::archival_storage_info::ArchivalStorageInfo;
 use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_networking::libp2p::kad::ProviderRecord;
-use subspace_networking::{PeerInfoProvider, PieceAnnouncementRequestHandler, PieceAnnouncementResponse, PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse, ProviderStorage as _, SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse, KADEMLIA_PROVIDER_TTL_IN_SECS, PeerInfo};
+use subspace_networking::{
+    PeerInfo, PeerInfoProvider, PieceAnnouncementRequestHandler, PieceAnnouncementResponse,
+    PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse, ProviderStorage as _,
+    SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
+    KADEMLIA_PROVIDER_TTL_IN_SECS,
+};
 use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::Error;
 
@@ -200,6 +206,8 @@ pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
     pub farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
     /// Farmer archival storage pieces
     pub farmer_archival_storage_pieces: ArchivalStoragePieces,
+    /// Farmer archival storage info
+    pub farmer_archival_storage_info: ArchivalStorageInfo,
     /// Farmer piece cache
     #[derivative(Debug = "ignore")]
     pub piece_cache: NodePieceCache<C>,
@@ -252,6 +260,7 @@ impl Dsn {
 
         let cuckoo_filter_size = farmer_total_space_pledged / Piece::SIZE + 1usize;
         let farmer_archival_storage_pieces = ArchivalStoragePieces::new(cuckoo_filter_size);
+        let farmer_archival_storage_info = ArchivalStorageInfo::default();
 
         tracing::debug!(genesis_hash = protocol_version, "Setting DSN protocol version...");
 
@@ -454,6 +463,33 @@ impl Dsn {
         }));
         drop_collection.push(on_new_listener);
 
+        let on_peer_info = node.on_peer_info(Arc::new({
+            let archival_storage_info = farmer_archival_storage_info.clone();
+
+            move |new_peer_info| {
+                let peer_id = new_peer_info.peer_id;
+                let peer_info = &new_peer_info.peer_info;
+
+                if let PeerInfo::Farmer { cuckoo_filter } = peer_info {
+                    archival_storage_info.update_cuckoo_filter(peer_id, cuckoo_filter.clone());
+
+                    tracing::debug!(%peer_id, ?peer_info, "Peer info cached",);
+                }
+            }
+        }));
+        drop_collection.push(on_peer_info);
+
+        let on_disconnected_peer = node.on_disconnected_peer(Arc::new({
+            let archival_storage_info = farmer_archival_storage_info.clone();
+
+            move |peer_id| {
+                if archival_storage_info.remove_peer_filter(peer_id) {
+                    tracing::debug!(%peer_id, "Peer filter removed.",);
+                }
+            }
+        }));
+        drop_collection.push(on_disconnected_peer);
+
         Ok((
             DsnShared {
                 node,
@@ -464,6 +500,7 @@ impl Dsn {
                 piece_cache,
                 _drop: drop_collection,
                 farmer_archival_storage_pieces,
+                farmer_archival_storage_info,
             },
             runner,
         ))

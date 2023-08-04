@@ -22,7 +22,7 @@ pub use builder::{Builder, Config};
 use derivative::Derivative;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
-use sdk_dsn::{FarmerPieceCache, FarmerProviderStorage, NodePieceGetter};
+use sdk_dsn::{FarmerPieceCache, FarmerProviderStorage};
 use sdk_traits::Node;
 use sdk_utils::{AsyncDropFutures, ByteSize, DropCollection, PublicKey};
 use serde::{Deserialize, Serialize};
@@ -37,13 +37,13 @@ use subspace_farmer::single_disk_plot::{
 };
 use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
 use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
-use subspace_farmer::utils::node_piece_getter::NodePieceGetter as DsnPieceGetter;
 use subspace_farmer::utils::parity_db_store::ParityDbStore;
 use subspace_farmer::utils::piece_cache::PieceCache;
 use subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::plotting::{PieceGetter, PieceGetterRetryPolicy, PlottedSector};
 use subspace_networking::utils::multihash::ToMultihash;
+use subspace_networking::utils::piece_provider::PieceValidator;
 use subspace_networking::ParityDbProviderStorage;
 use subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
 use tokio::sync::{oneshot, watch, Mutex};
@@ -335,15 +335,9 @@ fn create_readers_and_pieces(
 fn handler_on_sector_plotted(
     plotted_sector: &PlottedSector,
     maybe_old_plotted_sector: &Option<PlottedSector>,
-    plotting_permit: Arc<impl Send + Sync + 'static>,
     disk_farm_index: usize,
-    node: &subspace_networking::Node,
     readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
-    mut dropped_receiver: tokio::sync::broadcast::Receiver<()>,
-    node_name: &str,
 ) {
-    let sector_index = plotted_sector.sector_index;
-
     let disk_farm_index = disk_farm_index
         .try_into()
         .expect("More than 256 plots are not supported, this is checked above already; qed");
@@ -358,44 +352,6 @@ fn handler_on_sector_plotted(
         }
         readers_and_pieces.add_sector(disk_farm_index, plotted_sector);
     }
-
-    let piece_indexes = plotted_sector.piece_indexes.clone();
-
-    let node = node.clone();
-
-    // TODO: Skip those that were already announced (because they cached)
-    let publish_fut = async move {
-        piece_indexes
-            .into_iter()
-            .map(|piece_index| {
-                subspace_networking::utils::piece_announcement::announce_single_piece_index_hash_with_backoff(
-                    piece_index.hash(),
-                    &node,
-                )
-            })
-            .collect::<FuturesUnordered<_>>()
-            .map(drop)
-            .collect::<Vec<()>>()
-            .await;
-
-        tracing::info!(sector_index, "Sector publishing was successful.");
-
-        // Release only after publishing is finished
-        drop(plotting_permit);
-    }
-    .in_current_span();
-
-    drop(sdk_utils::task_spawn(
-        format!("subspace-sdk-farmer-{node_name}-piece-publishing"),
-        async move {
-            use futures::future::{select, Either};
-
-            let result = select(Box::pin(publish_fut), Box::pin(dropped_receiver.recv())).await;
-            if matches!(result, Either::Right(_)) {
-                tracing::debug!("Piece publishing was cancelled due to shutdown.");
-            }
-        },
-    ));
 }
 
 impl Config {
@@ -412,7 +368,7 @@ impl Config {
         }
 
         let Self {
-            max_concurrent_plots,
+            max_concurrent_plots: _,
             piece_cache_size: PieceCacheSize(piece_cache_size),
             provided_keys_limit: ProvidedKeysLimit(provided_keys_limit),
             max_pieces_in_sector,
@@ -425,9 +381,6 @@ impl Config {
 
         let mut single_disk_plots = Vec::with_capacity(plots.len());
         let mut plot_info = HashMap::with_capacity(plots.len());
-
-        let concurrent_plotting_semaphore =
-            Arc::new(tokio::sync::Semaphore::new(max_concurrent_plots.get()));
 
         let base_path = cache.directory;
         let readers_and_pieces = Arc::clone(&node.dsn().farmer_readers_and_pieces);
@@ -496,11 +449,10 @@ impl Config {
             )),
         );
         let piece_getter = Arc::new(FarmerPieceGetter::new(
-            NodePieceGetter::new(
-                DsnPieceGetter::new(piece_provider),
-                node.dsn().piece_cache.clone(),
-            ),
-            Arc::clone(&piece_cache),
+            node.dsn().node.clone(),
+            piece_provider,
+            piece_cache.clone(),
+            node.dsn().farmer_archival_storage_info.clone(),
         ));
 
         let farmer_app_info = subspace_farmer::NodeClient::farmer_app_info(node.rpc())
@@ -543,7 +495,6 @@ impl Config {
                 node,
                 max_pieces_in_sector,
                 piece_getter: Arc::clone(&piece_getter),
-                concurrent_plotting_semaphore: Arc::clone(&concurrent_plotting_semaphore),
                 description,
                 kzg: kzg.clone(),
                 erasure_coding: erasure_coding.clone(),
@@ -562,30 +513,16 @@ impl Config {
             let readers_and_pieces = Arc::clone(&readers_and_pieces);
             let span = tracing::info_span!("farm", %disk_farm_index);
 
-            // We are not going to send anything here, but dropping of sender on dropping of
-            // corresponding `SingleDiskPlot` will allow us to stop background tasks.
-            let (dropped_sender, _dropped_receiver) = tokio::sync::broadcast::channel::<()>(1);
-            drop_at_exit.defer({
-                let dropped_sender = dropped_sender.clone();
-                move || drop(dropped_sender.send(()))
-            });
-
-            let node = node.dsn().node.clone();
-            let node_name = node_name.clone();
             // Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
             let handler_id = single_disk_plot.on_sector_plotted(Arc::new(
-                move |(plotted_sector, maybe_old_plotted_sector, plotting_permit)| {
+                move |(plotted_sector, maybe_old_plotted_sector)| {
                     let _span_guard = span.enter();
                     handler_on_sector_plotted(
                         plotted_sector,
                         maybe_old_plotted_sector,
-                        Arc::clone(plotting_permit),
                         disk_farm_index,
-                        &node,
                         readers_and_pieces.clone(),
-                        dropped_sender.subscribe(),
-                        &node_name,
                     )
                 },
             ));
@@ -752,8 +689,7 @@ pub struct InitialPlottingProgress {
 }
 
 /// Progress data received from sender, used to monitor plotting progress
-pub type ProgressData =
-    Option<(PlottedSector, Option<PlottedSector>, Arc<tokio::sync::OwnedSemaphorePermit>)>;
+pub type ProgressData = Option<(PlottedSector, Option<PlottedSector>)>;
 
 /// Plot structure
 #[derive(Debug)]
@@ -829,7 +765,6 @@ struct PlotOptions<'a, PG, N: sdk_traits::Node> {
     pub reward_address: PublicKey,
     pub node: &'a N,
     pub piece_getter: PG,
-    pub concurrent_plotting_semaphore: Arc<tokio::sync::Semaphore>,
     pub description: &'a PlotDescription,
     pub kzg: kzg::Kzg,
     pub erasure_coding: ErasureCoding,
@@ -843,7 +778,6 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
             reward_address,
             node,
             piece_getter,
-            concurrent_plotting_semaphore,
             description,
             kzg,
             erasure_coding,
@@ -869,7 +803,6 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
             kzg,
             erasure_coding,
             piece_getter,
-            concurrent_plotting_semaphore,
         };
         let single_disk_plot = SingleDiskPlot::new::<_, _, T>(description, disk_farm_idx).await?;
         let mut drop_at_exit = DropCollection::new();
@@ -1023,13 +956,13 @@ const POPULATE_PIECE_DELAY: Duration = Duration::from_secs(10);
 /// Populates piece cache on startup. It waits for the new segment index and
 /// check all pieces from previous segments to see if they are already in the
 /// cache. If they are not, they are added from DSN.
-async fn populate_pieces_cache<PG, PC>(
+async fn populate_pieces_cache<PV, PC>(
     dsn_node: subspace_networking::Node,
     segment_index: SegmentIndex,
-    piece_getter: Arc<FarmerPieceGetter<PG, PC>>,
+    piece_getter: Arc<FarmerPieceGetter<PV, PC>>,
     piece_cache: Arc<tokio::sync::Mutex<FarmerPieceCache>>,
 ) where
-    PG: PieceGetter + Send + Sync,
+    PV: PieceValidator + Send + Sync + 'static,
     PC: PieceCache + Send + 'static,
 {
     let _ = dsn_node.wait_for_connected_peers(POPULATE_PIECE_DELAY).await;
