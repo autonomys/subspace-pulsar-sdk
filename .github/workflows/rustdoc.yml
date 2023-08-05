@@ -34,7 +34,6 @@ jobs:
       # Build the rust crate docs
       # Use `RUSTC_BOOTSTRAP` in order to use the `--enable-index-page` flag of rustdoc
       # This is needed in order to generate a landing page `index.html` for workspaces
-
       - name: Build Documentation
         run: cargo doc --all --no-deps --lib
         env:
