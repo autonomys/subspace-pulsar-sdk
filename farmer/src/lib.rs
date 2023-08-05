@@ -446,9 +446,8 @@ impl Config {
             Box::pin({
                 let piece_cache = piece_cache.clone();
                 let piece_getter = piece_getter.clone();
-                let dsn_node = node.dsn().node.clone();
 
-                populate_pieces_cache(dsn_node, last_segment_index, piece_getter, piece_cache)
+                populate_pieces_cache(last_segment_index, piece_getter, piece_cache)
             }),
             format!("subspace-sdk-farmer-{node_name}-pieces-cache-population"),
         )
@@ -933,13 +932,11 @@ impl<T: subspace_proof_of_space::Table> Farmer<T> {
 
 const GET_PIECE_MAX_RETRIES_COUNT: u16 = 3;
 const GET_PIECE_DELAY_IN_SECS: u64 = 3;
-const POPULATE_PIECE_DELAY: Duration = Duration::from_secs(10);
 
 /// Populates piece cache on startup. It waits for the new segment index and
 /// check all pieces from previous segments to see if they are already in the
 /// cache. If they are not, they are added from DSN.
 async fn populate_pieces_cache<PV, PC>(
-    dsn_node: subspace_networking::Node,
     segment_index: SegmentIndex,
     piece_getter: Arc<FarmerPieceGetter<PV, PC>>,
     piece_cache: Arc<tokio::sync::Mutex<FarmerPieceCache>>,
@@ -947,8 +944,6 @@ async fn populate_pieces_cache<PV, PC>(
     PV: PieceValidator + Send + Sync + 'static,
     PC: PieceCache + Send + 'static,
 {
-    let _ = dsn_node.wait_for_connected_peers(POPULATE_PIECE_DELAY).await;
-
     debug!(%segment_index, "Started syncing piece cache...");
     let final_piece_index =
         u64::from(segment_index.first_piece_index()) + ArchivedHistorySegment::NUM_PIECES as u64;
