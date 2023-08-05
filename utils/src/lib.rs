@@ -346,6 +346,18 @@ impl ByteSize {
 #[serde(transparent)]
 pub struct Multiaddr(pub libp2p_core::Multiaddr);
 
+impl From<Multiaddr> for sc_network::Multiaddr {
+    fn from(value: Multiaddr) -> Self {
+        value.0.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
+    }
+}
+
+impl From<sc_network::Multiaddr> for Multiaddr {
+    fn from(value: sc_network::Multiaddr) -> Self {
+        value.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
+    }
+}
+
 /// Multiaddr with peer id
 #[derive(
     Debug, Clone, Deserialize, Serialize, PartialEq, From, Into, FromStr, Deref, DerefMut, Display,
@@ -360,6 +372,12 @@ impl MultiaddrWithPeerId {
             multiaddr: multiaddr.into().into(),
             peer_id,
         })
+    }
+}
+
+impl From<MultiaddrWithPeerId> for libp2p_core::Multiaddr {
+    fn from(value: MultiaddrWithPeerId) -> Self {
+        value.0.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
     }
 }
 
