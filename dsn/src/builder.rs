@@ -379,9 +379,9 @@ impl Dsn {
             move |address| {
                 tracing::info!(
                     "DSN listening on {}",
-                    address.clone().with(subspace_networking::libp2p::multiaddr::Protocol::P2p(
-                        node.id().into()
-                    ))
+                    address
+                        .clone()
+                        .with(subspace_networking::libp2p::multiaddr::Protocol::P2p(node.id()))
                 );
             }
         }));
