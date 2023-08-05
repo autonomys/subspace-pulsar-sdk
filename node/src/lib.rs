@@ -124,7 +124,7 @@ impl<F: Farmer + 'static> Config<F> {
                 get_piece_by_hash: get_piece_by_hash::<F>,
                 get_segment_header_by_segment_indexes,
                 farmer_total_space_pledged,
-                segment_header_store
+                segment_header_store,
             })?;
 
             tracing::debug!("Subspace networking initialized: Node ID is {}", dsn.node.id());

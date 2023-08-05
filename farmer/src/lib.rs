@@ -44,13 +44,12 @@ use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::plotting::{PieceGetter, PieceGetterRetryPolicy, PlottedSector};
 use subspace_networking::utils::multihash::ToMultihash;
 use subspace_networking::utils::piece_provider::PieceValidator;
-use subspace_networking::ParityDbProviderStorage;
 use subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
 use tokio::sync::{oneshot, watch, Mutex};
 use tracing::{debug, error, trace, warn};
 use tracing_futures::Instrument;
 
-use self::builder::{PieceCacheSize, ProvidedKeysLimit};
+use self::builder::PieceCacheSize;
 
 /// Description of the cache
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -370,7 +369,7 @@ impl Config {
         let Self {
             max_concurrent_plots: _,
             piece_cache_size: PieceCacheSize(piece_cache_size),
-            provided_keys_limit: ProvidedKeysLimit(provided_keys_limit),
+            provided_keys_limit: _,
             max_pieces_in_sector,
         } = self;
 
@@ -390,19 +389,7 @@ impl Config {
         let piece_cache_db_path = base_path.join("piece_cache_db");
 
         let (piece_store, piece_cache, farmer_provider_storage) = {
-            let provider_db_path = base_path.join("providers_db");
-
-            tracing::info!(
-                db_path = ?provider_db_path,
-                keys_limit = ?provided_keys_limit,
-                "Initializing provider storage..."
-            );
-
             let peer_id = node.dsn().node.id();
-
-            let db_provider_storage =
-                ParityDbProviderStorage::new(&provider_db_path, provided_keys_limit, peer_id)
-                    .context("Failed to create parity db provider storage")?;
 
             tracing::info!(
                 db_path = ?piece_cache_db_path,
@@ -419,12 +406,7 @@ impl Config {
                 current_size = ?piece_cache.size(),
                 "Piece cache initialized successfully"
             );
-            let farmer_provider_storage = FarmerProviderStorage::new(
-                peer_id,
-                Arc::clone(&readers_and_pieces),
-                db_provider_storage,
-                piece_cache.clone(),
-            );
+            let farmer_provider_storage = FarmerProviderStorage::new(peer_id, piece_cache.clone());
 
             (piece_store, Arc::new(Mutex::new(piece_cache)), farmer_provider_storage)
         };

@@ -1,4 +1,3 @@
-use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 
@@ -6,7 +5,6 @@ use anyhow::Context;
 use derivative::Derivative;
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
-use either::*;
 use futures::prelude::*;
 use sc_consensus_subspace::SegmentHeadersStore;
 use sdk_utils::{self, DropCollection, Multiaddr, MultiaddrWithPeerId};
@@ -15,16 +13,14 @@ use subspace_core_primitives::Piece;
 use subspace_farmer::utils::archival_storage_info::ArchivalStorageInfo;
 use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
-use subspace_networking::libp2p::kad::ProviderRecord;
 use subspace_networking::{
-    PeerInfo, PeerInfoProvider, PieceAnnouncementRequestHandler, PieceAnnouncementResponse,
-    PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse, ProviderStorage as _,
+    PeerInfo, PeerInfoProvider, PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
     SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
     KADEMLIA_PROVIDER_TTL_IN_SECS,
 };
 
 use super::provider_storage_utils::MaybeProviderStorage;
-use super::{FarmerProviderStorage, NodePieceCache, NodeProviderStorage, ProviderStorage};
+use super::{FarmerProviderStorage, NodePieceCache, ProviderStorage};
 
 /// Wrapper with default value for listen address
 #[derive(
@@ -155,10 +151,6 @@ impl DsnBuilder {
     }
 }
 
-const MAX_PROVIDER_RECORDS_LIMIT: NonZeroUsize = NonZeroUsize::new(100000).expect("100000 > 0"); // ~ 10 MB
-const MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE: NonZeroUsize =
-    NonZeroUsize::new(2000).expect("Not zero; qed");
-
 /// Options for DSN
 pub struct DsnOptions<C, ASNS, PieceByHash, SegmentHeaderByIndexes> {
     /// Client to aux storage for node piece cache
@@ -180,7 +172,7 @@ pub struct DsnOptions<C, ASNS, PieceByHash, SegmentHeaderByIndexes> {
     /// Farmer total allocated space across all plots
     pub farmer_total_space_pledged: usize,
     /// Segment header store
-    pub segment_header_store: SegmentHeadersStore<C>
+    pub segment_header_store: SegmentHeadersStore<C>,
 }
 
 /// Farmer piece store
@@ -200,9 +192,6 @@ pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
     /// Farmer piece store
     #[derivative(Debug = "ignore")]
     pub farmer_piece_store: Arc<tokio::sync::Mutex<Option<PieceStore>>>,
-    /// Provider records receiver
-    pub provider_records_receiver:
-        parking_lot::Mutex<Option<futures::channel::mpsc::Receiver<ProviderRecord>>>,
     /// Farmer provider storage
     pub farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
     /// Farmer archival storage pieces
@@ -253,7 +242,7 @@ impl Dsn {
             get_piece_by_hash,
             get_segment_header_by_segment_indexes,
             farmer_total_space_pledged,
-            segment_header_store
+            segment_header_store,
         } = options;
         let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
         let farmer_piece_store = Arc::new(tokio::sync::Mutex::new(None));
@@ -303,7 +292,7 @@ impl Dsn {
             listen_addresses,
             reserved_nodes,
             allow_non_global_addresses_in_dht,
-            provider_storage_path,
+            provider_storage_path: _,
             in_connections: InConnections(max_established_incoming_connections),
             out_connections: OutConnections(max_established_outgoing_connections),
             target_connections: TargetConnections(target_connections),
@@ -312,96 +301,32 @@ impl Dsn {
             boot_nodes,
         } = self;
 
-        let peer_id = subspace_networking::peer_id(&keypair);
         let bootstrap_nodes = boot_nodes.into_iter().map(Into::into).collect::<Vec<_>>();
 
         let listen_on = listen_addresses.0.into_iter().map(Into::into).collect();
 
         let networking_parameters_registry = subspace_networking::NetworkingParametersManager::new(
             &base_path.join("known_addresses_db"),
-            bootstrap_nodes,
         )
         .context("Failed to open known addresses database for DSN")?
         .boxed();
 
-        let external_provider_storage = match provider_storage_path {
-            Some(path) => Either::Left(subspace_networking::ParityDbProviderStorage::new(
-                &path,
-                MAX_PROVIDER_RECORDS_LIMIT,
-                peer_id,
-            )?),
-            None => Either::Right(subspace_networking::MemoryProviderStorage::new(peer_id)),
-        };
-
-        let node_provider_storage =
-            NodeProviderStorage::new(peer_id, piece_cache.clone(), external_provider_storage);
         let provider_storage =
-            ProviderStorage::new(farmer_provider_storage.clone(), node_provider_storage);
-
-        let (provider_records_sender, provider_records_receiver) =
-            futures::channel::mpsc::channel(MAX_CONCURRENT_ANNOUNCEMENTS_QUEUE.get());
+            ProviderStorage::new(farmer_provider_storage.clone(), piece_cache.clone());
 
         let mut default_networking_config = subspace_networking::Config::new(
             protocol_version,
             keypair,
             provider_storage.clone(),
-            PeerInfoProvider::new_farmer(Box::new(farmer_archival_storage_pieces.clone())),
+            Some(PeerInfoProvider::new_farmer(Box::new(farmer_archival_storage_pieces.clone()))),
         );
         default_networking_config.kademlia.set_provider_record_ttl(KADEMLIA_PROVIDER_TTL_IN_SECS);
 
         let config = subspace_networking::Config {
             listen_on,
             allow_non_global_addresses_in_dht,
-            networking_parameters_registry,
+            networking_parameters_registry: Some(networking_parameters_registry),
             request_response_protocols: vec![
-                PieceAnnouncementRequestHandler::create({
-                    move |peer_id, req| {
-                        tracing::trace!(?req, %peer_id, "Piece announcement request received.");
-
-                        let mut provider_records_sender = provider_records_sender.clone();
-                        let provider_record = ProviderRecord {
-                            provider: peer_id,
-                            key: req.piece_index_hash.into(),
-                            addresses: req.addresses.clone(),
-                            expires: KADEMLIA_PROVIDER_TTL_IN_SECS
-                                .map(|ttl| std::time::Instant::now() + ttl),
-                        };
-
-                        let result = match provider_storage.add_provider(provider_record.clone()) {
-                            Ok(()) => {
-                                if let Err(error) =
-                                    provider_records_sender.try_send(provider_record)
-                                {
-                                    if !error.is_disconnected() {
-                                        let record = error.into_inner();
-                                        // TODO: This should be made a warning, but due to
-                                        //  https://github.com/libp2p/rust-libp2p/discussions/3411 it'll
-                                        //  take us some time to resolve
-                                        tracing::debug!(
-                                            ?record.key,
-                                            ?record.provider,
-                                            "Failed to add provider record to the channel."
-                                        );
-                                    }
-                                };
-
-                                Some(PieceAnnouncementResponse::Success)
-                            }
-                            Err(error) => {
-                                tracing::error!(
-                                    %error,
-                                    %peer_id,
-                                    ?req,
-                                    "Failed to add provider for received key."
-                                );
-
-                                None
-                            }
-                        };
-
-                        futures::future::ready(result)
-                    }
-                }),
                 PieceByHashRequestHandler::create({
                     let weak_readers_and_pieces = Arc::downgrade(&farmer_readers_and_pieces);
                     let farmer_piece_store = Arc::clone(&farmer_piece_store);
@@ -434,11 +359,14 @@ impl Dsn {
             max_established_outgoing_connections,
             general_target_connections: target_connections,
             // maintain permanent connections between farmers
-            special_connected_peers_handler: Arc::new(PeerInfo::is_farmer),
+            special_connected_peers_handler: Some(Arc::new(PeerInfo::is_farmer)),
             // other (non-farmer) connections
-            general_connected_peers_handler: Arc::new(|peer_info| !PeerInfo::is_farmer(peer_info)),
+            general_connected_peers_handler: Some(Arc::new(|peer_info| {
+                !PeerInfo::is_farmer(peer_info)
+            })),
             max_pending_incoming_connections,
             max_pending_outgoing_connections,
+            bootstrap_addresses: bootstrap_nodes,
             ..default_networking_config
         };
 
@@ -490,7 +418,6 @@ impl Dsn {
             DsnShared {
                 node,
                 farmer_piece_store,
-                provider_records_receiver: parking_lot::Mutex::new(Some(provider_records_receiver)),
                 farmer_provider_storage,
                 farmer_readers_and_pieces,
                 piece_cache,
