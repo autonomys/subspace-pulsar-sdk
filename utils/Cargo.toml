@@ -34,11 +34,11 @@ sp-core-hashing = { version = "9.0.0", git = "https://github.com/subspace/substr
 sp-runtime = { version = "24.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 sp-storage = { version = "13.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 
-sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "ecd8c8fc4da522a36eb667c702e9cf6e25862051" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "ecd8c8fc4da522a36eb667c702e9cf6e25862051" }
-subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "ecd8c8fc4da522a36eb667c702e9cf6e25862051" }
-subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "ecd8c8fc4da522a36eb667c702e9cf6e25862051" }
-subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "ecd8c8fc4da522a36eb667c702e9cf6e25862051" }
+sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "c304e1f671ce5d929724d3411b4f6826e4fc05e8" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "c304e1f671ce5d929724d3411b4f6826e4fc05e8" }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "c304e1f671ce5d929724d3411b4f6826e4fc05e8" }
+subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "c304e1f671ce5d929724d3411b4f6826e4fc05e8" }
+subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "c304e1f671ce5d929724d3411b4f6826e4fc05e8" }
 
 # Unused for now. TODO: add `serde` feature to `subspace-core-primitives` in `subspace-archiver`
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "ecd8c8fc4da522a36eb667c702e9cf6e25862051" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "c304e1f671ce5d929724d3411b4f6826e4fc05e8" }
