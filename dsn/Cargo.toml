@@ -14,7 +14,7 @@ either = "1.9"
 hex = "0.4.3"
 parking_lot = "0.12"
 futures = "0.3"
-tokio = { version = "1.26", features = ["fs", "rt", "tracing"] }
+tokio = { version = "1.28.2", features = ["fs", "rt", "tracing", "macros", "parking_lot", "rt-multi-thread", "signal"] }
 tracing = "0.1"
 serde = { version = "1", features = ["derive"] }
 ouroboros = "0.15.5"
@@ -24,8 +24,8 @@ sc-client-api = { version = "4.0.0-dev", git = "https://github.com/subspace/subs
 sp-runtime = { version = "24.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 sp-blockchain = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 
-subspace-networking = { git = "https://github.com/subspace/subspace", rev = "ed9c3baea6b9d917bd8a6c5118f089e4230bf7ec" }
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "ed9c3baea6b9d917bd8a6c5118f089e4230bf7ec" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "ed9c3baea6b9d917bd8a6c5118f089e4230bf7ec" }
-subspace-service = { git = "https://github.com/subspace/subspace", rev = "ed9c3baea6b9d917bd8a6c5118f089e4230bf7ec" }
-sc-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "ed9c3baea6b9d917bd8a6c5118f089e4230bf7ec" }
+subspace-networking = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
+subspace-service = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
+sc-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }

@@ -10,7 +10,7 @@ use crate::common::{Farmer, Node};
 async fn sync_block_inner() {
     crate::common::setup();
 
-    let number_of_sectors = 1;
+    let number_of_sectors = 10;
     let pieces_in_sector = 50u16;
     let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
     let space_pledged = sector_size * number_of_sectors;
@@ -57,7 +57,7 @@ async fn sync_block() {
 async fn sync_plot_inner() {
     crate::common::setup();
 
-    let number_of_sectors = 1;
+    let number_of_sectors = 10;
     let pieces_in_sector = 50u16;
     let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
     let space_pledged = sector_size * number_of_sectors;
@@ -138,7 +138,7 @@ async fn node_events() {
     crate::common::setup();
 
     tokio::time::timeout(std::time::Duration::from_secs(30 * 60), async {
-        let number_of_sectors = 1;
+        let number_of_sectors = 10;
         let pieces_in_sector = 50u16;
         let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
         let space_pledged = sector_size * number_of_sectors;
@@ -177,7 +177,7 @@ async fn fetch_block_author() {
     crate::common::setup();
 
     tokio::time::timeout(std::time::Duration::from_secs(30 * 60), async {
-        let number_of_sectors = 1;
+        let number_of_sectors = 10;
         let pieces_in_sector = 50u16;
         let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
         let space_pledged = sector_size * number_of_sectors;

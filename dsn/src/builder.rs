@@ -10,6 +10,7 @@ use sc_consensus_subspace::SegmentHeadersStore;
 use sdk_utils::{self, DropCollection, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::Piece;
+use subspace_farmer::piece_cache::PieceCache;
 use subspace_farmer::utils::archival_storage_info::ArchivalStorageInfo;
 use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
@@ -94,6 +95,10 @@ pub struct Dsn {
     #[builder(default)]
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub boot_nodes: Vec<MultiaddrWithPeerId>,
+    /// Known external addresses
+    #[builder(setter(into), default)]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
+    pub external_addresses: Vec<Multiaddr>,
     /// Reserved nodes
     #[builder(default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
@@ -175,12 +180,6 @@ pub struct DsnOptions<C, ASNS, PieceByHash, SegmentHeaderByIndexes> {
     pub segment_header_store: SegmentHeadersStore<C>,
 }
 
-/// Farmer piece store
-pub type PieceStore = subspace_farmer::utils::parity_db_store::ParityDbStore<
-    subspace_networking::libp2p::kad::record::Key,
-    subspace_core_primitives::Piece,
->;
-
 /// Shared Dsn structure between node and farmer
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -189,9 +188,8 @@ pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
     pub node: subspace_networking::Node,
     /// Farmer readers and pieces
     pub farmer_readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
-    /// Farmer piece store
-    #[derivative(Debug = "ignore")]
-    pub farmer_piece_store: Arc<tokio::sync::Mutex<Option<PieceStore>>>,
+    /// Farmer piece cache
+    pub farmer_piece_cache: Arc<tokio::sync::RwLock<Option<PieceCache>>>,
     /// Farmer provider storage
     pub farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
     /// Farmer archival storage pieces
@@ -200,7 +198,7 @@ pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
     pub farmer_archival_storage_info: ArchivalStorageInfo,
     /// Node piece cache
     #[derivative(Debug = "ignore")]
-    pub piece_cache: NodePieceCache<C>,
+    pub node_piece_cache: NodePieceCache<C>,
     _drop: DropCollection,
 }
 
@@ -220,7 +218,7 @@ impl Dsn {
         PieceByHash: Fn(
                 &PieceByHashRequest,
                 Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
-                Arc<tokio::sync::Mutex<Option<PieceStore>>>,
+                Arc<tokio::sync::RwLock<Option<PieceCache>>>,
                 NodePieceCache<C>,
             ) -> F1
             + Send
@@ -245,9 +243,9 @@ impl Dsn {
             segment_header_store,
         } = options;
         let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
-        let farmer_piece_store = Arc::new(tokio::sync::Mutex::new(None));
         let farmer_provider_storage = MaybeProviderStorage::none();
         let protocol_version = hex::encode(client.info().genesis_hash);
+        let farmer_piece_cache = Arc::new(tokio::sync::RwLock::new(None));
 
         let cuckoo_filter_size = farmer_total_space_pledged / Piece::SIZE + 1usize;
         let farmer_archival_storage_pieces = ArchivalStoragePieces::new(cuckoo_filter_size);
@@ -255,7 +253,7 @@ impl Dsn {
 
         tracing::debug!(genesis_hash = protocol_version, "Setting DSN protocol version...");
 
-        let piece_cache = NodePieceCache::new(
+        let node_piece_cache = NodePieceCache::new(
             client.clone(),
             piece_cache_size.as_u64(),
             subspace_networking::peer_id(&keypair),
@@ -264,7 +262,7 @@ impl Dsn {
         // Start before archiver, so we don't have potential race condition and
         // miss pieces
         sdk_utils::task_spawn(format!("subspace-sdk-node-{node_name}-piece-caching"), {
-            let mut piece_cache = piece_cache.clone();
+            let mut piece_cache = node_piece_cache.clone();
 
             async move {
                 while let Some(archived_segment_notification) =
@@ -299,6 +297,7 @@ impl Dsn {
             pending_in_connections: PendingInConnections(max_pending_incoming_connections),
             pending_out_connections: PendingOutConnections(max_pending_outgoing_connections),
             boot_nodes,
+            external_addresses,
         } = self;
 
         let bootstrap_nodes = boot_nodes.into_iter().map(Into::into).collect::<Vec<_>>();
@@ -312,7 +311,7 @@ impl Dsn {
         .boxed();
 
         let provider_storage =
-            ProviderStorage::new(farmer_provider_storage.clone(), piece_cache.clone());
+            ProviderStorage::new(farmer_provider_storage.clone(), node_piece_cache.clone());
 
         let mut default_networking_config = subspace_networking::Config::new(
             protocol_version,
@@ -329,18 +328,18 @@ impl Dsn {
             request_response_protocols: vec![
                 PieceByHashRequestHandler::create({
                     let weak_readers_and_pieces = Arc::downgrade(&farmer_readers_and_pieces);
-                    let farmer_piece_store = Arc::clone(&farmer_piece_store);
-                    let piece_cache = piece_cache.clone();
+                    let farmer_piece_cache = farmer_piece_cache.clone();
+                    let node_piece_cache = node_piece_cache.clone();
                     move |_, req| {
                         let weak_readers_and_pieces = weak_readers_and_pieces.clone();
-                        let farmer_piece_store = Arc::clone(&farmer_piece_store);
-                        let piece_cache = piece_cache.clone();
+                        let farmer_piece_cache = farmer_piece_cache.clone();
+                        let node_piece_cache = node_piece_cache.clone();
 
                         get_piece_by_hash(
                             req,
                             weak_readers_and_pieces,
-                            farmer_piece_store,
-                            piece_cache,
+                            farmer_piece_cache,
+                            node_piece_cache,
                         )
                     }
                 }),
@@ -367,6 +366,7 @@ impl Dsn {
             max_pending_incoming_connections,
             max_pending_outgoing_connections,
             bootstrap_addresses: bootstrap_nodes,
+            external_addresses: external_addresses.into_iter().map(Into::into).collect(),
             ..default_networking_config
         };
 
@@ -417,13 +417,13 @@ impl Dsn {
         Ok((
             DsnShared {
                 node,
-                farmer_piece_store,
                 farmer_provider_storage,
                 farmer_readers_and_pieces,
-                piece_cache,
+                node_piece_cache,
                 _drop: drop_collection,
                 farmer_archival_storage_pieces,
                 farmer_archival_storage_info,
+                farmer_piece_cache,
             },
             runner,
         ))
