@@ -31,6 +31,7 @@ use sp_consensus_subspace::digests::PreDigest;
 use sp_runtime::DigestItem;
 use subspace_core_primitives::{HistorySize, PieceIndexHash, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
+use subspace_farmer::piece_cache::PieceCache;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{
     PieceByHashRequest, PieceByHashResponse, SegmentHeaderRequest, SegmentHeaderResponse,
@@ -284,7 +285,6 @@ pub(crate) type NewFull = subspace_service::NewFull<
         RuntimeBlock,
         FullClient,
         subspace_service::FraudProofVerifier<RuntimeApi, ExecutorDispatch>,
-        subspace_transaction_pool::bundle_validator::BundleValidator<RuntimeBlock, FullClient>,
     >,
 >;
 
@@ -699,35 +699,41 @@ impl<F: Farmer + 'static> Node<F> {
     }
 }
 
-const ROOT_BLOCK_NUMBER_LIMIT: u64 = 100;
+const SEGMENT_HEADERS_NUMBER_LIMIT: u64 = 1000;
 
 fn get_segment_header_by_segment_indexes(
     req: &SegmentHeaderRequest,
-    segment_header_store: &SegmentHeadersStore<impl sc_client_api::AuxStore>,
+    segment_headers_store: &SegmentHeadersStore<impl sc_client_api::AuxStore>,
 ) -> Option<SegmentHeaderResponse> {
     let segment_indexes = match req {
         SegmentHeaderRequest::SegmentIndexes { segment_indexes } => segment_indexes.clone(),
         SegmentHeaderRequest::LastSegmentHeaders { segment_header_number } => {
-            let mut block_limit = *segment_header_number;
-            if *segment_header_number > ROOT_BLOCK_NUMBER_LIMIT {
+            let mut segment_headers_limit = *segment_header_number;
+            if *segment_header_number > SEGMENT_HEADERS_NUMBER_LIMIT {
                 tracing::debug!(%segment_header_number, "Segment header number exceeded the limit.");
 
-                block_limit = ROOT_BLOCK_NUMBER_LIMIT;
+                segment_headers_limit = SEGMENT_HEADERS_NUMBER_LIMIT;
             }
 
-            let max_segment_index = segment_header_store.max_segment_index();
-
-            // several last segment indexes
-            (SegmentIndex::ZERO..=max_segment_index)
-                .rev()
-                .take(block_limit as usize)
-                .collect::<Vec<_>>()
+            match segment_headers_store.max_segment_index() {
+                Some(max_segment_index) => {
+                    // Several last segment indexes
+                    (SegmentIndex::ZERO..=max_segment_index)
+                        .rev()
+                        .take(segment_headers_limit as usize)
+                        .collect::<Vec<_>>()
+                }
+                None => {
+                    // Nothing yet
+                    Vec::new()
+                }
+            }
         }
     };
 
     let maybe_segment_headers = segment_indexes
         .iter()
-        .map(|segment_index| segment_header_store.get_segment_header(*segment_index))
+        .map(|segment_index| segment_headers_store.get_segment_header(*segment_index))
         .collect::<Option<Vec<subspace_core_primitives::SegmentHeader>>>();
 
     match maybe_segment_headers {
@@ -744,7 +750,7 @@ fn get_piece_by_hash<F: Farmer>(
     weak_readers_and_pieces: std::sync::Weak<
         parking_lot::Mutex<Option<subspace_farmer::utils::readers_and_pieces::ReadersAndPieces>>,
     >,
-    farmer_piece_store: Arc<tokio::sync::Mutex<Option<sdk_dsn::PieceStore>>>,
+    farmer_piece_cache: Arc<tokio::sync::RwLock<Option<PieceCache>>>,
     piece_cache: NodePieceCache<impl sc_client_api::AuxStore>,
 ) -> impl std::future::Future<Output = Option<PieceByHashResponse>> {
     async move {
@@ -753,9 +759,13 @@ fn get_piece_by_hash<F: Farmer>(
             result => return result,
         }
 
-        if let Some(piece_store) = farmer_piece_store.lock().await.as_ref() {
-            let piece =
-                F::get_piece_by_hash(piece_index_hash, piece_store, &weak_readers_and_pieces).await;
+        if let Some(farmer_piece_cache) = farmer_piece_cache.read().await.as_ref() {
+            let piece = F::get_piece_by_hash(
+                piece_index_hash,
+                farmer_piece_cache,
+                &weak_readers_and_pieces,
+            )
+            .await;
             Some(PieceByHashResponse { piece })
         } else {
             None

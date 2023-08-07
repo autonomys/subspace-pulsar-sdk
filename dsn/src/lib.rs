@@ -14,15 +14,13 @@ mod builder;
 mod provider_storage_utils;
 
 pub use builder::*;
-/// Farmer piece cache
-pub use subspace_farmer::utils::farmer_piece_cache::FarmerPieceCache;
 use tracing::warn;
 
 /// Node piece cache
 pub type NodePieceCache<C> = subspace_service::piece_cache::PieceCache<C>;
 /// Farmer provider storage
 pub type FarmerProviderStorage =
-    subspace_farmer::utils::farmer_provider_storage::FarmerProviderStorage<FarmerPieceCache>;
+    subspace_farmer::utils::farmer_provider_storage::FarmerProviderStorage;
 
 /// General provider storage
 pub type ProviderStorage<C> = provider_storage_utils::AndProviderStorage<
