@@ -10,6 +10,8 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![feature(const_option)]
 
+mod combined_piece_getter;
+
 use std::collections::HashMap;
 use std::io;
 use std::num::NonZeroUsize;
@@ -34,7 +36,6 @@ use subspace_farmer::single_disk_plot::{
     SingleDiskPlotOptions, SingleDiskPlotSummary,
 };
 use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
-use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 use subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::plotting::PlottedSector;
@@ -44,6 +45,8 @@ use subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
 use tokio::sync::{oneshot, watch, Mutex};
 use tracing::{debug, error, warn};
 use tracing_futures::Instrument;
+
+use crate::combined_piece_getter::CombinedPieceGetter;
 
 /// Description of the cache
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -397,10 +400,11 @@ impl Config {
                 parking_lot::Mutex::new(lru::LruCache::new(SEGMENT_COMMITMENTS_CACHE_SIZE)),
             )),
         );
-        let piece_getter = Arc::new(FarmerPieceGetter::new(
+        let piece_getter = Arc::new(CombinedPieceGetter::new(
             node.dsn().node.clone(),
             piece_provider,
             farmer_piece_cache.clone(),
+            node.dsn().node_piece_cache.clone(),
             node.dsn().farmer_archival_storage_info.clone(),
         ));
 

@@ -63,7 +63,6 @@ pub struct Node {
     #[deref]
     #[deref_mut]
     node: subspace_sdk::Node,
-    _node: subspace_sdk::Node,
     pub path: Arc<TempDir>,
     pub chain: ChainSpec,
 }
@@ -106,32 +105,7 @@ impl NodeBuilder {
         let node =
             node.build(path.path().join("node"), chain.clone(), space_pledged).await.unwrap();
 
-        // TODO: remove me once bug with infinite announcements while offline gets fixed
-        let _node = {
-            let node = subspace_sdk::Node::dev()
-                .dsn(
-                    DsnBuilder::dev()
-                        .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
-                        .boot_nodes(node.dsn_listen_addresses().await.unwrap()),
-                )
-                .network(
-                    NetworkBuilder::dev()
-                        .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
-                        .boot_nodes(node.listen_addresses().await.unwrap()),
-                );
-            #[cfg(all(feature = "core-payments", feature = "executor"))]
-            let node = if enable_core {
-                node.system_domain(subspace_sdk::node::domains::ConfigBuilder::new().core_payments(
-                    subspace_sdk::node::domains::core_payments::ConfigBuilder::new().build(),
-                ))
-            } else {
-                node
-            };
-
-            node.build(path.path().join(".sync-node"), chain.clone(), space_pledged).await.unwrap()
-        };
-
-        Node { node, path, chain, _node }
+        Node { node, path, chain }
     }
 }
 
@@ -146,7 +120,6 @@ impl Node {
 
     pub async fn close(self) {
         self.node.close().await.unwrap();
-        self._node.close().await.unwrap();
     }
 }
 
