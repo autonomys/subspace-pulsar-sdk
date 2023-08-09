@@ -42,7 +42,7 @@ use subspace_farmer_components::plotting::PlottedSector;
 use subspace_networking::libp2p::kad::RecordKey;
 use subspace_networking::utils::multihash::ToMultihash;
 use subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
-use tokio::sync::{oneshot, watch, Mutex};
+use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tracing::{debug, error, warn};
 use tracing_futures::Instrument;
 
@@ -505,8 +505,9 @@ impl Config {
         let mut single_disk_plots_stream =
             single_disk_plots.into_iter().map(SingleDiskPlot::run).collect::<FuturesUnordered<_>>();
 
-        let (plot_driver_drop_sender, plot_driver_drop_receiver) = oneshot::channel::<()>();
-        let (plot_driver_result_sender, plot_driver_result_receiver) = oneshot::channel::<_>();
+        let (plot_driver_drop_sender, mut plot_driver_drop_receiver) = oneshot::channel::<()>();
+        let (plot_driver_result_sender, plot_driver_result_receiver) =
+            mpsc::channel::<_>(u8::MAX as usize + 1);
 
         let plot_driver_join_handle = sdk_utils::task_spawn_blocking(
             format!("subspace-sdk-farmer-{node_name}-plots-driver"),
@@ -516,16 +517,33 @@ impl Config {
                 move || {
                     use future::Either::*;
 
-                    let result = match handle.block_on(future::select(
-                        single_disk_plots_stream.next(),
-                        plot_driver_drop_receiver,
-                    )) {
-                        Left((maybe_result, _)) => maybe_result
-                            .expect("We have at least one plot")
-                            .context("Farmer exited with error"),
-                        Right((_, _)) => Ok(()),
-                    };
-                    let _ = plot_driver_result_sender.send(result);
+                    loop {
+                        let result = handle.block_on(future::select(
+                            single_disk_plots_stream.next(),
+                            &mut plot_driver_drop_receiver,
+                        ));
+
+                        match result {
+                            Left((maybe_result, _)) => {
+                                let result = handle.block_on(
+                                    plot_driver_result_sender.send(
+                                        maybe_result
+                                            .expect("We have at least one plot")
+                                            .context("Farmer exited with error"),
+                                    ),
+                                );
+
+                                // Receiver is closed which would mean we are shutting down
+                                if result.is_err() {
+                                    break;
+                                }
+                            }
+                            Right((_, _)) => {
+                                let _ = handle.block_on(plot_driver_result_sender.send(Ok(())));
+                                break;
+                            }
+                        };
+                    }
                 }
             },
         );
@@ -597,7 +615,7 @@ impl Config {
 pub struct Farmer<T: subspace_proof_of_space::Table> {
     reward_address: PublicKey,
     plot_info: HashMap<PathBuf, Plot<T>>,
-    result_receiver: Option<oneshot::Receiver<anyhow::Result<()>>>,
+    result_receiver: Option<mpsc::Receiver<anyhow::Result<()>>>,
     base_path: PathBuf,
     node_name: String,
     app_info: FarmerAppInfo,
@@ -919,12 +937,17 @@ impl<T: subspace_proof_of_space::Table> Farmer<T> {
 
     /// Stops farming, closes plots, and sends signal to the node
     pub async fn close(mut self) -> anyhow::Result<()> {
-        let result_receiver = self.result_receiver.take().expect("Handle is always there");
+        let mut result_receiver = self.result_receiver.take().expect("Handle is always there");
+        result_receiver.close();
+        while let Some(msg) = result_receiver.recv().await {
+            msg?;
+        }
+
         let async_drop = self._async_drop.take().expect("Always set").async_drop();
 
         drop(self);
         async_drop.await;
 
-        result_receiver.await?
+        Ok(())
     }
 }
