@@ -25,7 +25,7 @@ use futures::prelude::*;
 use futures::stream::FuturesUnordered;
 use sdk_dsn::FarmerProviderStorage;
 use sdk_traits::Node;
-use sdk_utils::{AsyncDropFutures, ByteSize, DropCollection, PublicKey};
+use sdk_utils::{ByteSize, Destructors, PublicKey};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::crypto::kzg;
 use subspace_core_primitives::{PieceIndexHash, Record, SectorIndex};
@@ -42,7 +42,7 @@ use subspace_farmer_components::plotting::PlottedSector;
 use subspace_networking::libp2p::kad::RecordKey;
 use subspace_networking::utils::multihash::ToMultihash;
 use subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
-use tokio::sync::{oneshot, watch, Mutex};
+use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tracing::{debug, error, warn};
 use tracing_futures::Instrument;
 
@@ -361,12 +361,12 @@ impl Config {
             return Err(BuildError::NoPlotsSupplied);
         }
 
+        let mut destructors = Destructors::new();
+
         let Self { max_concurrent_plots: _, provided_keys_limit: _, max_pieces_in_sector } = self;
 
         let mut single_disk_plots = Vec::with_capacity(plots.len());
         let mut plot_info = HashMap::with_capacity(plots.len());
-
-        let mut async_drop = AsyncDropFutures::new();
 
         let base_path = cache.directory;
         let readers_and_pieces = Arc::clone(&node.dsn().farmer_readers_and_pieces);
@@ -381,7 +381,6 @@ impl Config {
         let farmer_provider_storage =
             FarmerProviderStorage::new(peer_id, farmer_piece_cache.clone());
 
-        let mut drop_at_exit = DropCollection::new();
         let kzg = kzg::Kzg::new(kzg::embedded_kzg_settings());
         let erasure_coding = ErasureCoding::new(
             NonZeroUsize::new(Record::NUM_S_BUCKETS.next_power_of_two().ilog2() as usize).expect(
@@ -428,14 +427,14 @@ impl Config {
             },
         );
 
-        async_drop.push({
+        destructors.add_async_destructor({
             async move {
                 let _ = piece_cache_worker_drop_sender.send(());
                 farmer_piece_cache_worker_join_handle.await.expect(
                     "awaiting worker should not fail except panic by the worker itself; qed",
                 );
             }
-        });
+        })?;
 
         let farmer_app_info = subspace_farmer::NodeClient::farmer_app_info(node.rpc())
             .await
@@ -463,7 +462,20 @@ impl Config {
         }
 
         *node.dsn().farmer_piece_cache.write().await = Some(farmer_piece_cache.clone());
+        destructors.add_async_destructor({
+            let piece_cache = Arc::clone(&node.dsn().farmer_piece_cache);
+            async move {
+                piece_cache.write().await.take();
+            }
+        })?;
+
         node.dsn().farmer_provider_storage.swap(Some(farmer_provider_storage));
+        destructors.add_sync_destructor({
+            let provider_storage = node.dsn().farmer_provider_storage.clone();
+            move || {
+                provider_storage.swap(None);
+            }
+        })?;
 
         farmer_piece_cache
             .replace_backing_caches(
@@ -479,14 +491,21 @@ impl Config {
             &single_disk_plots,
             node.dsn().farmer_archival_storage_pieces.clone(),
         )?);
+        destructors.add_sync_destructor({
+            let farmer_reader_and_pieces = node.dsn().farmer_readers_and_pieces.clone();
+            move || {
+                farmer_reader_and_pieces.lock().take();
+            }
+        })?;
 
+        let mut sector_plotting_handler_ids = vec![];
         for (disk_farm_index, single_disk_plot) in single_disk_plots.iter().enumerate() {
             let readers_and_pieces = Arc::clone(&readers_and_pieces);
             let span = tracing::info_span!("farm", %disk_farm_index);
 
             // Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
-            let handler_id = single_disk_plot.on_sector_plotted(Arc::new(
+            sector_plotting_handler_ids.push(single_disk_plot.on_sector_plotted(Arc::new(
                 move |(plotted_sector, maybe_old_plotted_sector)| {
                     let _span_guard = span.enter();
                     handler_on_sector_plotted(
@@ -496,16 +515,15 @@ impl Config {
                         readers_and_pieces.clone(),
                     )
                 },
-            ));
-
-            drop_at_exit.push(handler_id);
+            )));
         }
 
         let mut single_disk_plots_stream =
             single_disk_plots.into_iter().map(SingleDiskPlot::run).collect::<FuturesUnordered<_>>();
 
-        let (plot_driver_drop_sender, plot_driver_drop_receiver) = oneshot::channel::<()>();
-        let (plot_driver_result_sender, plot_driver_result_receiver) = oneshot::channel::<_>();
+        let (plot_driver_drop_sender, mut plot_driver_drop_receiver) = oneshot::channel::<()>();
+        let (plot_driver_result_sender, plot_driver_result_receiver) =
+            mpsc::channel::<_>(u8::MAX as usize + 1);
 
         let plot_driver_join_handle = sdk_utils::task_spawn_blocking(
             format!("subspace-sdk-farmer-{node_name}-plots-driver"),
@@ -515,42 +533,45 @@ impl Config {
                 move || {
                     use future::Either::*;
 
-                    let result = match handle.block_on(future::select(
-                        single_disk_plots_stream.next(),
-                        plot_driver_drop_receiver,
-                    )) {
-                        Left((maybe_result, _)) => maybe_result
-                            .expect("We have at least one plot")
-                            .context("Farmer exited with error"),
-                        Right((_, _)) => Ok(()),
-                    };
-                    let _ = plot_driver_result_sender.send(result);
+                    loop {
+                        let result = handle.block_on(future::select(
+                            single_disk_plots_stream.next(),
+                            &mut plot_driver_drop_receiver,
+                        ));
+
+                        match result {
+                            Left((maybe_result, _)) => {
+                                let result = plot_driver_result_sender.try_send(
+                                    maybe_result
+                                        .expect("We have at least one plot")
+                                        .context("Farmer exited with error"),
+                                );
+
+                                // Receiver is closed which would mean we are shutting down
+                                if result.is_err() {
+                                    break;
+                                }
+                            }
+                            Right((_, _)) => {
+                                let _ = plot_driver_result_sender.try_send(Ok(()));
+                                break;
+                            }
+                        };
+                    }
                 }
             },
         );
 
-        async_drop.push({
+        destructors.add_async_destructor({
             async move {
                 let _ = plot_driver_drop_sender.send(());
                 plot_driver_join_handle.await.expect("joining should not fail; qed");
             }
-        });
+        })?;
 
-        async_drop.push({
-            let piece_cache = Arc::clone(&node.dsn().farmer_piece_cache);
-            async move {
-                piece_cache.write().await.take();
-            }
-        });
-
-        drop_at_exit.defer({
-            let provider_storage = node.dsn().farmer_provider_storage.clone();
-            let farmer_reader_and_pieces = node.dsn().farmer_readers_and_pieces.clone();
-            move || {
-                provider_storage.swap(None);
-                farmer_reader_and_pieces.lock().take();
-            }
-        });
+        for handler_id in sector_plotting_handler_ids.drain(..) {
+            destructors.add_items_to_drop(handler_id)?;
+        }
 
         // TODO: check for piece cache to exit
         // async_drop.push(async move {
@@ -582,8 +603,7 @@ impl Config {
             app_info: subspace_farmer::NodeClient::farmer_app_info(node.rpc())
                 .await
                 .expect("Node is always reachable"),
-            _drop_at_exit: drop_at_exit,
-            _async_drop: Some(async_drop),
+            _destructors: destructors,
         })
     }
 }
@@ -595,12 +615,11 @@ impl Config {
 pub struct Farmer<T: subspace_proof_of_space::Table> {
     reward_address: PublicKey,
     plot_info: HashMap<PathBuf, Plot<T>>,
-    result_receiver: Option<oneshot::Receiver<anyhow::Result<()>>>,
+    result_receiver: Option<mpsc::Receiver<anyhow::Result<()>>>,
     base_path: PathBuf,
     node_name: String,
     app_info: FarmerAppInfo,
-    _drop_at_exit: DropCollection,
-    _async_drop: Option<AsyncDropFutures>,
+    _destructors: Destructors,
 }
 
 /// Info about some plot
@@ -677,7 +696,7 @@ pub struct Plot<T: subspace_proof_of_space::Table> {
     solutions: watch::Receiver<Option<SolutionResponse>>,
     initial_plotting_progress: Arc<Mutex<InitialPlottingProgress>>,
     allocated_space: u64,
-    _drop_at_exit: DropCollection,
+    _destructors: Destructors,
     _table: std::marker::PhantomData<T>,
 }
 
@@ -783,20 +802,24 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
             piece_getter,
         };
         let single_disk_plot = SingleDiskPlot::new::<_, _, T>(description, disk_farm_idx).await?;
-        let mut drop_at_exit = DropCollection::new();
+        let mut destructors = Destructors::new();
 
         let progress = {
             let (sender, receiver) = watch::channel::<Option<_>>(None);
-            drop_at_exit.push(single_disk_plot.on_sector_plotted(Arc::new(move |sector| {
-                let _ = sender.send(Some(sector.clone()));
-            })));
+            destructors.add_items_to_drop(single_disk_plot.on_sector_plotted(Arc::new(
+                move |sector| {
+                    let _ = sender.send(Some(sector.clone()));
+                },
+            )))?;
             receiver
         };
         let solutions = {
             let (sender, receiver) = watch::channel::<Option<_>>(None);
-            drop_at_exit.push(single_disk_plot.on_solution(Arc::new(move |solution| {
-                let _ = sender.send(Some(solution.clone()));
-            })));
+            destructors.add_items_to_drop(single_disk_plot.on_solution(Arc::new(
+                move |solution| {
+                    let _ = sender.send(Some(solution.clone()));
+                },
+            )))?;
             receiver
         };
 
@@ -815,7 +838,7 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
                         / subspace_farmer_components::sector::sector_size(max_pieces_in_sector)
                             as u64,
                 })),
-                _drop_at_exit: drop_at_exit,
+                _destructors: destructors,
                 _table: Default::default(),
             },
             single_disk_plot,
@@ -917,12 +940,11 @@ impl<T: subspace_proof_of_space::Table> Farmer<T> {
 
     /// Stops farming, closes plots, and sends signal to the node
     pub async fn close(mut self) -> anyhow::Result<()> {
-        let result_receiver = self.result_receiver.take().expect("Handle is always there");
-        let async_drop = self._async_drop.take().expect("Always set").async_drop();
-
-        drop(self);
-        async_drop.await;
-
-        result_receiver.await?
+        let mut result_receiver = self.result_receiver.take().expect("Handle is always there");
+        result_receiver.close();
+        while let Some(msg) = result_receiver.recv().await {
+            msg?;
+        }
+        self._destructors.run().await
     }
 }
