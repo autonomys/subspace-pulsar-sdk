@@ -7,7 +7,7 @@ use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
 use futures::prelude::*;
 use sc_consensus_subspace::SegmentHeadersStore;
-use sdk_utils::{self, DropCollection, Multiaddr, MultiaddrWithPeerId};
+use sdk_utils::{self, Destructors, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::Piece;
 use subspace_farmer::piece_cache::PieceCache;
@@ -199,7 +199,7 @@ pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
     /// Node piece cache
     #[derivative(Debug = "ignore")]
     pub node_piece_cache: NodePieceCache<C>,
-    _drop: DropCollection,
+    _destructors: Destructors,
 }
 
 impl Dsn {
@@ -372,7 +372,7 @@ impl Dsn {
 
         let (node, runner) = subspace_networking::create(config)?;
 
-        let mut drop_collection = DropCollection::new();
+        let mut destructors = Destructors::new();
         let on_new_listener = node.on_new_listener(Arc::new({
             let node = node.clone();
 
@@ -385,7 +385,7 @@ impl Dsn {
                 );
             }
         }));
-        drop_collection.push(on_new_listener);
+        destructors.add_items_to_drop(on_new_listener)?;
 
         let on_peer_info = node.on_peer_info(Arc::new({
             let archival_storage_info = farmer_archival_storage_info.clone();
@@ -401,7 +401,7 @@ impl Dsn {
                 }
             }
         }));
-        drop_collection.push(on_peer_info);
+        destructors.add_items_to_drop(on_peer_info)?;
 
         let on_disconnected_peer = node.on_disconnected_peer(Arc::new({
             let archival_storage_info = farmer_archival_storage_info.clone();
@@ -412,7 +412,7 @@ impl Dsn {
                 }
             }
         }));
-        drop_collection.push(on_disconnected_peer);
+        destructors.add_items_to_drop(on_disconnected_peer)?;
 
         Ok((
             DsnShared {
@@ -420,7 +420,7 @@ impl Dsn {
                 farmer_provider_storage,
                 farmer_readers_and_pieces,
                 node_piece_cache,
-                _drop: drop_collection,
+                _destructors: destructors,
                 farmer_archival_storage_pieces,
                 farmer_archival_storage_info,
                 farmer_piece_cache,

@@ -25,7 +25,7 @@ use sc_network::{NetworkService, NetworkStateInfo, SyncState};
 use sc_rpc_api::state::StateApiClient;
 use sdk_dsn::{DsnOptions, DsnShared, NodePieceCache};
 use sdk_traits::Farmer;
-use sdk_utils::{DropCollection, MultiaddrWithPeerId, PublicKey};
+use sdk_utils::{Destructors, MultiaddrWithPeerId, PublicKey};
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
 use sp_runtime::DigestItem;
@@ -220,7 +220,7 @@ impl<F: Farmer + 'static> Config<F> {
             }
         });
 
-        let drop_collection = DropCollection::new();
+        let destructor = Destructors::new();
 
         // Disable proper exit for now. Because RPC server looses waker and can't exit
         // in background.
@@ -245,7 +245,7 @@ impl<F: Farmer + 'static> Config<F> {
             rpc_handle,
             dsn,
             stop_sender,
-            _drop_at_exit: drop_collection,
+            _destructors: destructor,
             _farmer: Default::default(),
         })
     }
@@ -304,7 +304,7 @@ pub struct Node<F: Farmer> {
     name: String,
     dsn: DsnShared<FullClient>,
     #[derivative(Debug = "ignore")]
-    _drop_at_exit: DropCollection,
+    _destructors: Destructors,
     #[derivative(Debug = "ignore")]
     _farmer: std::marker::PhantomData<F>,
 }
