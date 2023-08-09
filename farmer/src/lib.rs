@@ -337,6 +337,7 @@ fn handler_on_sector_plotted(
         .expect("More than 256 plots are not supported, this is checked above already; qed");
 
     {
+        println!("Couteracting the print latency");
         let mut readers_and_pieces = readers_and_pieces.lock();
         let readers_and_pieces =
             readers_and_pieces.as_mut().expect("Initial value was populated before; qed");
