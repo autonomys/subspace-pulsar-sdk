@@ -549,6 +549,7 @@ impl Config {
             move || {
                 provider_storage.swap(None);
                 farmer_reader_and_pieces.lock().take();
+                println!("!!!!!!!! Took farmer reader and pieces");
             }
         });
 
