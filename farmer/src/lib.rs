@@ -495,6 +495,7 @@ impl Config {
             let farmer_reader_and_pieces = node.dsn().farmer_readers_and_pieces.clone();
             move || {
                 farmer_reader_and_pieces.lock().take();
+                println!("!!!!!! Took readers and pieces");
             }
         })?;
 
@@ -566,6 +567,7 @@ impl Config {
             async move {
                 let _ = plot_driver_drop_sender.send(());
                 plot_driver_join_handle.await.expect("joining should not fail; qed");
+                println!("!!!!!! Terminated plot driver");
             }
         })?;
 
