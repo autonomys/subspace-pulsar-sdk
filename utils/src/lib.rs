@@ -29,6 +29,7 @@ use sc_rpc_api::state::StateApiClient;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::PUBLIC_KEY_LENGTH;
+use subspace_farmer::jsonrpsee::tracing;
 
 mod rpc_client;
 
@@ -287,22 +288,32 @@ enum ToDestruct {
 /// reverse order
 #[derive(Default, derivative::Derivative)]
 #[derivative(Debug)]
-pub struct Destructors {
+pub struct DestructorSet {
+    name: String,
     items_to_drop: DropCollection,
     sync_destructors: DropCollection,
     async_destructors: AsyncDropFutures,
     order: Vec<ToDestruct>,
     already_ran: bool,
+    allow_async: bool,
 }
 
-impl Drop for Destructors {
+impl Drop for DestructorSet {
     fn drop(&mut self) {
         // already closed, nothing to do.
         if self.already_ran {
             return;
         }
 
-        // Try to drop as much stuff as we could, except async functions
+        if self.allow_async {
+            tracing::warn!(
+                "Destructor set: {} with async allowed is being dropped. Async destructors won't \
+                 run. Are you missing the `async_drop` call?",
+                self.name
+            );
+        }
+
+        // Try to drop as much stuff as we could
         let mut sync_fns_drain = self.sync_destructors.drain().rev();
         let mut async_fns_drain = self.async_destructors.drain().rev();
         let mut items_drain = self.items_to_drop.drain().rev();
@@ -328,22 +339,37 @@ impl Drop for Destructors {
     }
 }
 
-impl Destructors {
-    /// Creates a empty Destructors object
-    pub fn new() -> Destructors {
-        Destructors {
+impl DestructorSet {
+    /// Creates an empty Destructors object with async destructors allowed
+    pub fn new(name: impl Into<String>) -> DestructorSet {
+        DestructorSet {
+            name: name.into(),
             items_to_drop: DropCollection::new(),
             sync_destructors: DropCollection::new(),
             async_destructors: AsyncDropFutures::new(),
             order: vec![],
             already_ran: false,
+            allow_async: true,
+        }
+    }
+
+    /// Creates an empty Destructors object with async destructors not allowed
+    pub fn new_without_async(name: impl Into<String>) -> DestructorSet {
+        DestructorSet {
+            name: name.into(),
+            items_to_drop: DropCollection::new(),
+            sync_destructors: DropCollection::new(),
+            async_destructors: AsyncDropFutures::new(),
+            order: vec![],
+            already_ran: false,
+            allow_async: false,
         }
     }
 
     /// Add sync destructor in the sync destructor collection
     pub fn add_sync_destructor<F: FnOnce() + Sync + Send + 'static>(&mut self, f: F) -> Result<()> {
         if self.already_ran {
-            return Err(anyhow!("Destructor has been run already"));
+            return Err(anyhow!("Destructor set: {} has been run already", self.name));
         }
         self.order.push(ToDestruct::Sync);
         self.sync_destructors.defer(f);
@@ -356,7 +382,10 @@ impl Destructors {
         fut: F,
     ) -> Result<()> {
         if self.already_ran {
-            return Err(anyhow!("Destructor has been run already"));
+            return Err(anyhow!("Destructor set: {} has been run already", self.name));
+        }
+        if !self.allow_async {
+            return Err(anyhow!("async destructors are disabled in Destructor set: {}", self.name));
         }
         self.order.push(ToDestruct::Async);
         self.async_destructors.push(fut);
@@ -366,7 +395,7 @@ impl Destructors {
     /// Add normal object to drop
     pub fn add_items_to_drop<T: Send + Sync + 'static>(&mut self, t: T) -> Result<()> {
         if self.already_ran {
-            return Err(anyhow!("Destructor has been run already"));
+            return Err(anyhow!("Destructor set: {} has been run already", self.name));
         }
         self.order.push(ToDestruct::Item);
         self.items_to_drop.push(t);
@@ -374,10 +403,18 @@ impl Destructors {
     }
 
     /// run the destructors
-    pub async fn run(mut self) -> Result<()> {
+    pub async fn async_drop(mut self) -> Result<()> {
         // already closed, nothing to do.
         if self.already_ran {
-            return Err(anyhow!("Destructor has been run already"));
+            return Err(anyhow!("Destructor set: {} has been run already", self.name));
+        }
+
+        if !self.allow_async {
+            return Err(anyhow!(
+                "Destructor set: {} is only configured to run sync destructors. To run them drop \
+                 this instance.",
+                self.name
+            ));
         }
 
         let mut sync_fns_drain = self.sync_destructors.drain().rev();

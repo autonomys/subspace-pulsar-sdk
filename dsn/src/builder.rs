@@ -7,7 +7,7 @@ use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
 use futures::prelude::*;
 use sc_consensus_subspace::SegmentHeadersStore;
-use sdk_utils::{self, Destructors, Multiaddr, MultiaddrWithPeerId};
+use sdk_utils::{self, DestructorSet, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::Piece;
 use subspace_farmer::piece_cache::PieceCache;
@@ -199,7 +199,7 @@ pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
     /// Node piece cache
     #[derivative(Debug = "ignore")]
     pub node_piece_cache: NodePieceCache<C>,
-    _destructors: Destructors,
+    _destructors: DestructorSet,
 }
 
 impl Dsn {
@@ -372,7 +372,7 @@ impl Dsn {
 
         let (node, runner) = subspace_networking::create(config)?;
 
-        let mut destructors = Destructors::new();
+        let mut destructors = DestructorSet::new_without_async("dsn-destructors");
         let on_new_listener = node.on_new_listener(Arc::new({
             let node = node.clone();
 

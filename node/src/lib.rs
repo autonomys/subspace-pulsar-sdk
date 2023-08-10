@@ -25,7 +25,7 @@ use sc_network::{NetworkService, NetworkStateInfo, SyncState};
 use sc_rpc_api::state::StateApiClient;
 use sdk_dsn::{DsnOptions, DsnShared, NodePieceCache};
 use sdk_traits::Farmer;
-use sdk_utils::{Destructors, MultiaddrWithPeerId, PublicKey};
+use sdk_utils::{DestructorSet, MultiaddrWithPeerId, PublicKey};
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
 use sp_runtime::DigestItem;
@@ -220,7 +220,7 @@ impl<F: Farmer + 'static> Config<F> {
             }
         });
 
-        let destructor = Destructors::new();
+        let destructor = DestructorSet::new("node-destructors");
 
         // Disable proper exit for now. Because RPC server looses waker and can't exit
         // in background.
@@ -304,7 +304,7 @@ pub struct Node<F: Farmer> {
     name: String,
     dsn: DsnShared<FullClient>,
     #[derivative(Debug = "ignore")]
-    _destructors: Destructors,
+    _destructors: DestructorSet,
     #[derivative(Debug = "ignore")]
     _farmer: std::marker::PhantomData<F>,
 }
@@ -602,7 +602,7 @@ impl<F: Farmer + 'static> Node<F> {
             Err(_) => return Err(anyhow::anyhow!("Node was already closed")),
             Ok(()) => stop_receiver.await,
         };
-
+        self._destructors.async_drop().await?;
         Ok(())
     }
 
