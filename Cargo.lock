@@ -8369,6 +8369,7 @@ dependencies = [
  "subspace-runtime-primitives",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -25,7 +25,7 @@ use futures::prelude::*;
 use futures::stream::FuturesUnordered;
 use sdk_dsn::FarmerProviderStorage;
 use sdk_traits::Node;
-use sdk_utils::{ByteSize, Destructors, PublicKey};
+use sdk_utils::{ByteSize, DestructorSet, PublicKey};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::crypto::kzg;
 use subspace_core_primitives::{PieceIndexHash, Record, SectorIndex};
@@ -361,7 +361,7 @@ impl Config {
             return Err(BuildError::NoPlotsSupplied);
         }
 
-        let mut destructors = Destructors::new();
+        let mut destructors = DestructorSet::new("farmer-destructors");
 
         let Self { max_concurrent_plots: _, provided_keys_limit: _, max_pieces_in_sector } = self;
 
@@ -619,7 +619,7 @@ pub struct Farmer<T: subspace_proof_of_space::Table> {
     base_path: PathBuf,
     node_name: String,
     app_info: FarmerAppInfo,
-    _destructors: Destructors,
+    _destructors: DestructorSet,
 }
 
 /// Info about some plot
@@ -696,7 +696,7 @@ pub struct Plot<T: subspace_proof_of_space::Table> {
     solutions: watch::Receiver<Option<SolutionResponse>>,
     initial_plotting_progress: Arc<Mutex<InitialPlottingProgress>>,
     allocated_space: u64,
-    _destructors: Destructors,
+    _destructors: DestructorSet,
     _table: std::marker::PhantomData<T>,
 }
 
@@ -802,7 +802,7 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
             piece_getter,
         };
         let single_disk_plot = SingleDiskPlot::new::<_, _, T>(description, disk_farm_idx).await?;
-        let mut destructors = Destructors::new();
+        let mut destructors = DestructorSet::new_without_async("plot-destructors");
 
         let progress = {
             let (sender, receiver) = watch::channel::<Option<_>>(None);
@@ -945,6 +945,6 @@ impl<T: subspace_proof_of_space::Table> Farmer<T> {
         while let Some(msg) = result_receiver.recv().await {
             msg?;
         }
-        self._destructors.run().await
+        self._destructors.async_drop().await
     }
 }

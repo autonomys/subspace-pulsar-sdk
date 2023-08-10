@@ -20,6 +20,7 @@ libp2p-core = "0.40.0"
 parity-scale-codec = "3.6.3"
 serde = { version = "1", features = ["derive"] }
 ss58-registry = "1.33"
+tracing = "0.1"
 thiserror = "1"
 tokio = { version = "1.28.2", features = ["fs", "rt", "tracing", "macros", "parking_lot", "rt-multi-thread", "signal"] }
 
