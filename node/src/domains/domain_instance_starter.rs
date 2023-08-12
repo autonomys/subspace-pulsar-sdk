@@ -1,7 +1,5 @@
-use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use cross_domain_message_gossip::GossipWorkerBuilder;
 use domain_client_operator::OperatorStreams;
 use domain_eth_service::provider::EthProvider;
@@ -31,7 +29,7 @@ use crate::ExecutorDispatch as CExecutorDispatch;
 pub struct DomainInstanceStarter {
     pub service_config: Configuration,
     pub domain_id: DomainId,
-    pub relayer_id: String,
+    pub relayer_id: AccountId32,
     pub runtime_type: RuntimeType,
     pub additional_arguments: Vec<String>,
     pub consensus_client: Arc<CFullClient<CRuntimeApi, CExecutorDispatch>>,
@@ -64,17 +62,9 @@ impl DomainInstanceStarter {
             select_chain,
         } = self;
 
-        let domain_config = {
-            let parsed_relayer_id = AccountId32::from_str(relayer_id.as_str()).map_err(|e| {
-                anyhow!("unable to parse relayer id: {} due to an error: {}", relayer_id, e)
-            })?;
-
-            DomainConfiguration {
-                service_config,
-                maybe_relayer_id: Some(AccountId32ToAccountId20Converter::convert(
-                    parsed_relayer_id,
-                )),
-            }
+        let domain_config = DomainConfiguration {
+            service_config,
+            maybe_relayer_id: Some(AccountId32ToAccountId20Converter::convert(relayer_id)),
         };
 
         let block_importing_notification_stream = || {

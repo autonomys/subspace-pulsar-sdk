@@ -4,7 +4,18 @@ use derivative::Derivative;
 use sc_service::RpcHandlers;
 use sdk_utils::DestructorSet;
 
-/// Node structure
+/// Progress of Domain
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub enum DomainBuildingProgress {
+    Default,
+    BuildingStarted,
+    Bootstrapped,
+    PreparingToStart,
+    Starting,
+}
+
+/// Domain structure
 #[derive(Derivative)]
 #[derivative(Debug)]
 #[must_use = "Domain should be closed"]
@@ -12,6 +23,7 @@ pub struct Domain {
     pub _destructors: DestructorSet,
     #[derivative(Debug = "ignore")]
     pub rpc_handlers: Arc<tokio::sync::RwLock<Option<RpcHandlers>>>,
+    pub current_building_progress: Arc<tokio::sync::RwLock<DomainBuildingProgress>>,
     pub domain_runner_result_receiver: tokio::sync::oneshot::Receiver<anyhow::Result<()>>,
 }
 

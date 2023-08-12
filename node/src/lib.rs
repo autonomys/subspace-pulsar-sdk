@@ -239,7 +239,7 @@ impl<F: Farmer + 'static> Config<F> {
         })?;
 
         let mut maybe_domain = None;
-        if let Some(domain_config) = self.domain_config {
+        if let Some(domain_config) = self.domain {
             let base_directory = directory.as_ref().to_owned().clone();
 
             let domain = domain_config

@@ -10,9 +10,11 @@ use futures::future;
 use futures::future::Either::{Left, Right};
 use sc_consensus_subspace::notification::SubspaceNotificationStream;
 use sc_consensus_subspace::{BlockImportingNotification, NewSlotNotification};
-use sdk_substrate::{Base, BaseBuilder, ExecutionStrategy};
+use sdk_substrate::{Base, BaseBuilder};
+use sdk_utils::chain_spec::get_account_id_from_seed;
 use sdk_utils::DestructorSet;
 use serde::{Deserialize, Serialize};
+use sp_core::crypto::AccountId32;
 use sp_domains::DomainId;
 use sp_runtime::traits::Block as BlockT;
 use subspace_runtime::RuntimeApi as CRuntimeApi;
@@ -20,14 +22,13 @@ use subspace_runtime_primitives::opaque::Block as CBlock;
 use subspace_service::{FullClient as CFullClient, FullSelectChain};
 use tokio::sync::{oneshot, RwLock};
 
-use crate::domains::domain::Domain;
+use crate::domains::domain::{Domain, DomainBuildingProgress};
 use crate::domains::domain_instance_starter::DomainInstanceStarter;
 use crate::domains::evm_chain_spec;
 use crate::ExecutorDispatch as CExecutorDispatch;
 
 #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
-#[derivative(Default(bound = ""))]
-#[builder(pattern = "owned", build_fn(private, name = "_build"), name = "Builder")]
+#[builder(pattern = "owned", build_fn(private, name = "_build"))]
 #[non_exhaustive]
 pub struct DomainConfig {
     #[builder(setter(into), default)]
@@ -38,9 +39,8 @@ pub struct DomainConfig {
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub domain_id: DomainId,
 
-    #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub relayer_id: String,
+    #[builder(setter(into))]
+    pub relayer_id: AccountId32,
 
     #[builder(setter(into), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
@@ -55,7 +55,94 @@ pub struct DomainConfig {
     pub base: Base,
 }
 
-sdk_substrate::derive_base!(@ Base => Builder);
+impl Default for DomainConfig {
+    fn default() -> Self {
+        DomainConfig {
+            chain_id: "".to_string(),
+            domain_id: Default::default(),
+            relayer_id: get_account_id_from_seed("Alice"),
+            additional_args: vec![],
+            base: Default::default(),
+        }
+    }
+}
+
+sdk_substrate::derive_base!(@ Base => DomainConfigBuilder);
+
+impl DomainConfig {
+    /// Dev configuraiton
+    pub fn dev() -> DomainConfigBuilder {
+        DomainConfigBuilder::dev()
+    }
+
+    /// Gemini 3e configuraiton
+    pub fn gemini_3e() -> DomainConfigBuilder {
+        DomainConfigBuilder::gemini_3e()
+    }
+
+    /// Devnet configuraiton
+    pub fn devnet() -> DomainConfigBuilder {
+        DomainConfigBuilder::devnet()
+    }
+}
+
+impl DomainConfigBuilder {
+    /// New builder
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Dev chain configuration
+    pub fn dev() -> Self {
+        Self::new()
+            .chain_id("dev")
+            .domain_id(DomainId::new(0))
+            .relayer_id(get_account_id_from_seed("Alice"))
+    }
+
+    /// Gemini 3e configuration
+    pub fn gemini_3e() -> Self {
+        Self::new().chain_id("gemini-3e")
+    }
+
+    /// Devnet chain configuration
+    pub fn devnet() -> Self {
+        Self::new().chain_id("devnet")
+    }
+
+    /// Get configuration for saving on disk
+    pub fn configuration(self) -> DomainConfig {
+        self._build().expect("Build is infallible")
+    }
+
+    /// Start a node with supplied parameters
+    pub async fn build(
+        self,
+        directory: impl AsRef<Path> + Send + 'static,
+        consensus_client: Arc<CFullClient<CRuntimeApi, CExecutorDispatch>>,
+        block_importing_notification_stream: SubspaceNotificationStream<
+            BlockImportingNotification<CBlock>,
+        >,
+        new_slot_notification_stream: SubspaceNotificationStream<NewSlotNotification>,
+        consensus_network_service: Arc<
+            sc_network::NetworkService<CBlock, <CBlock as BlockT>::Hash>,
+        >,
+        consensus_sync_service: Arc<sc_network_sync::SyncingService<CBlock>>,
+        select_chain: FullSelectChain,
+    ) -> Result<Domain> {
+        self.configuration()
+            .build(
+                directory,
+                consensus_client,
+                block_importing_notification_stream,
+                new_slot_notification_stream,
+                consensus_network_service,
+                consensus_sync_service,
+                select_chain,
+            )
+            .await
+    }
+}
 
 impl DomainConfig {
     pub async fn build(
@@ -78,6 +165,7 @@ impl DomainConfig {
             <DomainId as Into<u32>>::into(self.domain_id)
         ));
         let shared_rpc_handler = Arc::new(RwLock::new(None));
+        let shared_progress_data = Arc::new(RwLock::new(DomainBuildingProgress::Default));
 
         let (bootstrapping_result_sender, bootstrapping_result_receiver) = oneshot::channel();
         let (bootstrapping_worker_drop_sender, bootstrapping_worker_drop_receiver) =
@@ -86,7 +174,9 @@ impl DomainConfig {
             format!("domain/domain-{}/bootstrapping", printable_domain_id),
             {
                 let consensus_client = consensus_client.clone();
+                let shared_progress_data = shared_progress_data.clone();
                 async move {
+                    *shared_progress_data.write().await = DomainBuildingProgress::BuildingStarted;
                     let bootstrapper =
                         Bootstrapper::<DomainBlock, _, _>::new(consensus_client.clone());
                     match future::select(
@@ -136,6 +226,7 @@ impl DomainConfig {
         let domain_runner_join_handle =
             sdk_utils::task_spawn(format!("domain/domain-{}/running", printable_domain_id), {
                 let shared_rpc_handler = shared_rpc_handler.clone();
+                let shared_progress_data = shared_progress_data.clone();
                 async move {
                     let bootstrap_result = match future::select(
                         bootstrapping_result_receiver,
@@ -181,11 +272,15 @@ impl DomainConfig {
                         }
                     };
 
+                    *shared_progress_data.write().await = DomainBuildingProgress::Bootstrapped;
+
                     let BootstrapResult {
                         domain_instance_data,
                         domain_created_at,
                         imported_block_notification_stream,
                     } = bootstrap_result;
+
+                    let runtime_type = domain_instance_data.runtime_type.clone();
 
                     let domain_spec_result = evm_chain_spec::create_domain_spec(
                         self.domain_id,
@@ -214,7 +309,7 @@ impl DomainConfig {
                         service_config,
                         domain_id: self.domain_id,
                         relayer_id: self.relayer_id.clone(),
-                        runtime_type: Default::default(),
+                        runtime_type,
                         additional_arguments: self.additional_args.clone(),
                         consensus_client,
                         block_importing_notification_stream,
@@ -223,6 +318,8 @@ impl DomainConfig {
                         consensus_sync_service,
                         select_chain,
                     };
+
+                    *shared_progress_data.write().await = DomainBuildingProgress::PreparingToStart;
 
                     let maybe_start_data = domain_starter
                         .prepare_for_start(domain_created_at, imported_block_notification_stream)
@@ -242,6 +339,8 @@ impl DomainConfig {
 
                     let shared_rpc_handler = shared_rpc_handler.clone();
                     shared_rpc_handler.write().await.replace(rpc_handler);
+
+                    *shared_progress_data.write().await = DomainBuildingProgress::Starting;
 
                     match future::select(domain_start_handle, &mut domain_runner_drop_receiver)
                         .await
@@ -299,6 +398,7 @@ impl DomainConfig {
             _destructors: destructor_set,
             rpc_handlers: shared_rpc_handler,
             domain_runner_result_receiver,
+            current_building_progress: shared_progress_data,
         })
     }
 }
