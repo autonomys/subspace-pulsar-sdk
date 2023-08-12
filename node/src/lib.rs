@@ -27,7 +27,7 @@ use sdk_traits::Farmer;
 use sdk_utils::{DestructorSet, MultiaddrWithPeerId, PublicKey};
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
-use sp_domains::{DomainId, GenerateGenesisStateRoot};
+use sp_domains::GenerateGenesisStateRoot;
 use sp_runtime::DigestItem;
 use subspace_core_primitives::{HistorySize, PieceIndexHash, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
@@ -49,6 +49,8 @@ pub use builder::*;
 use domains::domain_genesis_block_builder::DomainGenesisBlockBuilder;
 pub use subspace_runtime::RuntimeEvent as Event;
 use tracing::Instrument;
+
+use crate::domains::domain::Domain;
 
 /// Events from subspace pallet
 pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
@@ -236,38 +238,23 @@ impl<F: Farmer + 'static> Config<F> {
             }
         })?;
 
-        let mut maybe_domain_work_result_receiver = None;
+        let mut maybe_domain = None;
         if let Some(domain_config) = self.domain_config {
-            let (domain_worker_drop_sender, domain_worker_drop_receiver) = oneshot::channel();
-            let (domain_worker_result_sender, domain_worker_result_receiver) = oneshot::channel();
-
             let base_directory = directory.as_ref().to_owned().clone();
 
-            let domain_worker_join_handle = sdk_utils::task_spawn(
-                format!(
-                    "domain-worker-domain-{}",
-                    <DomainId as Into<u32>>::into(domain_config.domain_id)
-                ),
-                domain_config.run(
+            let domain = domain_config
+                .build(
                     base_directory,
-                    domain_worker_drop_receiver,
-                    domain_worker_result_sender,
                     client.clone(),
                     block_importing_notification_stream.clone(),
                     new_slot_notification_stream.clone(),
                     network_service.clone(),
                     sync_service.clone(),
                     select_chain.clone(),
-                ),
-            );
+                )
+                .await?;
 
-            destructors.add_async_destructor({
-                async move {
-                    let _ = domain_worker_drop_sender.send(Ok(()));
-                    domain_worker_join_handle.await.expect("joining should not fail; qed");
-                }
-            })?;
-            maybe_domain_work_result_receiver = Some(domain_worker_result_receiver);
+            maybe_domain = Some(domain);
         }
 
         let rpc_handle = sdk_utils::Rpc::new(&rpc_handlers);
@@ -298,7 +285,7 @@ impl<F: Farmer + 'static> Config<F> {
             _destructors: destructors,
             _farmer: Default::default(),
             task_manager_result_receiver,
-            domain_worker_result_receiver: maybe_domain_work_result_receiver,
+            maybe_domain,
         })
     }
 }
@@ -361,7 +348,7 @@ pub struct Node<F: Farmer> {
     #[derivative(Debug = "ignore")]
     task_manager_result_receiver: oneshot::Receiver<anyhow::Result<()>>,
     #[derivative(Debug = "ignore")]
-    domain_worker_result_receiver: Option<oneshot::Receiver<anyhow::Result<()>>>,
+    maybe_domain: Option<Domain>,
 }
 
 impl<F: Farmer> sdk_traits::Node for Node<F> {
@@ -652,11 +639,11 @@ impl<F: Farmer + 'static> Node<F> {
 
     /// Leaves the network and gracefully shuts down
     pub async fn close(self) -> anyhow::Result<()> {
+        if let Some(domain) = self.maybe_domain {
+            domain.close().await?;
+        }
         self._destructors.async_drop().await?;
         self.task_manager_result_receiver.await??;
-        if let Some(domain_worker_result_receiver) = self.domain_worker_result_receiver {
-            domain_worker_result_receiver.await??;
-        }
         Ok(())
     }
 

@@ -105,9 +105,7 @@ pub fn get_testnet_genesis_by_spec_id(spec_id: SpecId) -> GenesisConfig {
                 Some(accounts[0]),
                 vec![(
                     accounts[0],
-                    AccountId32ToAccountId20Converter::convert(
-                        get_account_id_from_seed("Alice"),
-                    ),
+                    AccountId32ToAccountId20Converter::convert(get_account_id_from_seed("Alice")),
                 )],
                 1000,
             )

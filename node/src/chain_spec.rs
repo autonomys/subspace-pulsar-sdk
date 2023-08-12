@@ -4,12 +4,17 @@ use sc_service::ChainType;
 use sc_subspace_chain_specs::SerializableChainSpec;
 use sc_telemetry::TelemetryEndpoints;
 use sdk_utils::chain_spec as utils;
+use sdk_utils::chain_spec::get_public_key_from_seed;
 use sp_core::crypto::{Ss58Codec, UncheckedFrom};
 use sp_domains::{OperatorPublicKey, RuntimeType};
 use sp_runtime::Percent;
-use subspace_runtime::{AllowAuthoringBy, BalancesConfig, GenesisConfig, RuntimeConfigsConfig, SubspaceConfig, SudoConfig, SystemConfig, VestingConfig, MILLISECS_PER_BLOCK, WASM_BINARY, MaxDomainBlockSize, MaxDomainBlockWeight, DomainsConfig};
+use subspace_runtime::{
+    AllowAuthoringBy, BalancesConfig, DomainsConfig, GenesisConfig, MaxDomainBlockSize,
+    MaxDomainBlockWeight, RuntimeConfigsConfig, SubspaceConfig, SudoConfig, SystemConfig,
+    VestingConfig, MILLISECS_PER_BLOCK, WASM_BINARY,
+};
 use subspace_runtime_primitives::{AccountId, Balance, BlockNumber, SSC};
-use sdk_utils::chain_spec::get_public_key_from_seed;
+
 use crate::domains::evm_chain_spec;
 
 const SUBSPACE_TELEMETRY_URL: &str = "wss://telemetry.subspace.network/submit/";
@@ -340,8 +345,10 @@ fn subspace_genesis_config(
     } = genesis_params;
 
     let raw_evm_domain_genesis_config = {
-        let mut domain_genesis_config = evm_chain_spec::get_testnet_genesis_by_spec_id(evm_domain_spec_id);
-        // Clear the WASM code of the genesis config since it is duplicated with `GenesisDomain::code`
+        let mut domain_genesis_config =
+            evm_chain_spec::get_testnet_genesis_by_spec_id(evm_domain_spec_id);
+        // Clear the WASM code of the genesis config since it is duplicated with
+        // `GenesisDomain::code`
         domain_genesis_config.system.code = Default::default();
         serde_json::to_vec(&domain_genesis_config)
             .expect("Genesis config serialization never fails; qed")

@@ -12,7 +12,7 @@ use futures::StreamExt;
 use sc_client_api::ImportNotifications;
 use sc_consensus_subspace::notification::SubspaceNotificationStream;
 use sc_consensus_subspace::{BlockImportingNotification, NewSlotNotification};
-use sc_service::{BasePath, Configuration};
+use sc_service::{BasePath, Configuration, RpcHandlers};
 use sp_core::crypto::AccountId32;
 use sp_core::traits::SpawnEssentialNamed;
 use sp_domains::{DomainId, RuntimeType};
@@ -20,6 +20,7 @@ use sp_runtime::traits::{Block as BlockT, Convert, NumberFor};
 use subspace_runtime::RuntimeApi as CRuntimeApi;
 use subspace_runtime_primitives::opaque::Block as CBlock;
 use subspace_service::{FullClient as CFullClient, FullSelectChain};
+use tokio::task::JoinHandle;
 
 use crate::domains::evm_domain_executor_dispatch::EVMDomainExecutorDispatch;
 use crate::domains::utils::{AccountId20, AccountId32ToAccountId20Converter};
@@ -44,11 +45,11 @@ pub struct DomainInstanceStarter {
 }
 
 impl DomainInstanceStarter {
-    pub async fn start(
+    pub async fn prepare_for_start(
         self,
         domain_created_at: NumberFor<CBlock>,
         imported_block_notification_stream: ImportNotifications<CBlock>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<(RpcHandlers, JoinHandle<anyhow::Result<()>>)> {
         let DomainInstanceStarter {
             domain_id,
             runtime_type,
@@ -164,11 +165,15 @@ impl DomainInstanceStarter {
                     Box::pin(cross_domain_message_gossip_worker.run()),
                 );
 
-                domain_node.network_starter.start_network();
+                let domain_start_join_handle = sdk_utils::task_spawn(
+                    format!("domain-{}/start-domain", <DomainId as Into<u32>>::into(domain_id)),
+                    async move {
+                        domain_node.network_starter.start_network();
+                        domain_node.task_manager.future().await.map_err(anyhow::Error::new)
+                    },
+                );
 
-                domain_node.task_manager.future().await.map_err(anyhow::Error::new)?;
-
-                Ok(())
+                Ok((domain_node.rpc_handlers.clone(), domain_start_join_handle))
             }
         }
     }
