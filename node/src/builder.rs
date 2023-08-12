@@ -13,6 +13,7 @@ use sdk_utils::ByteSize;
 use serde::{Deserialize, Serialize};
 
 use super::{ChainSpec, Farmer, Node};
+use crate::domains::builder::{DomainConfig, DomainConfigBuilder};
 
 /// Wrapper with default value for piece cache size
 #[derive(
@@ -73,10 +74,13 @@ pub struct Config<F: Farmer> {
     #[builder(default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub enable_subspace_block_relay: bool,
-
     #[builder(setter(skip), default)]
     #[serde(skip, default)]
     _farmer: std::marker::PhantomData<F>,
+    /// Optional domain configuration
+    #[builder(setter(into), default)]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
+    pub domain: Option<DomainConfig>,
 }
 
 impl<F: Farmer + 'static> Config<F> {
@@ -100,6 +104,7 @@ impl<F: Farmer + 'static> Builder<F> {
     /// Dev chain configuration
     pub fn dev() -> Self {
         Self::new()
+            .domain(Some(DomainConfigBuilder::dev().configuration()))
             .force_authoring(true)
             .network(NetworkBuilder::dev())
             .dsn(DsnBuilder::dev())

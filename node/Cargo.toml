@@ -11,8 +11,10 @@ backoff = "0.4"
 derivative = "2.2.0"
 derive_builder = "0.12"
 derive_more = "0.99"
+fp-evm = { version = "3.0.0-dev", git = "https://github.com/subspace/frontier", rev = "74483666645e121c0c5e6616f43fdfd8664ea0d3" }
 futures = "0.3"
 hex-literal = "0.4"
+once_cell = "1.18.0"
 parity-scale-codec = "3.6.3"
 parking_lot = "0.12"
 pin-project = "1"
@@ -42,6 +44,12 @@ sp-core = { version = "21.0.0", git = "https://github.com/subspace/substrate", r
 sp-runtime = { version = "24.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 sp-version = { version = "22.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 
+cross-domain-message-gossip = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
+domain-client-operator = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
+domain-eth-service = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
+domain-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
+domain-service = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
+evm-domain-runtime = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
 pallet-rewards = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
 pallet-subspace = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
 sc-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }

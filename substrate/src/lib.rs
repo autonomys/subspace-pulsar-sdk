@@ -79,6 +79,10 @@ pub struct Base {
     #[builder(default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub telemetry: Vec<(Multiaddr, u8)>,
+    /// Dev key seed
+    #[builder(setter(strip_option), default)]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
+    pub dev_key_seed: Option<String>,
 }
 
 #[doc(hidden)]
@@ -131,6 +135,8 @@ macro_rules! derive_base {
             informant_enable_color: bool,
             /// Additional telemetry endpoints
             telemetry: Vec<(sdk_utils::Multiaddr, u8)>,
+            /// Dev key seed
+            dev_key_seed: String
         });
     }
 }
@@ -176,6 +182,7 @@ impl Base {
             offchain_worker,
             informant_enable_color,
             telemetry,
+            dev_key_seed,
         } = self;
 
         let base_path = BasePath::new(directory.as_ref());
@@ -285,7 +292,7 @@ impl Base {
             offchain_worker: offchain_worker.into(),
             force_authoring,
             disable_grandpa: false,
-            dev_key_seed: None,
+            dev_key_seed,
             tracing_targets: None,
             tracing_receiver: TracingReceiver::Log,
             chain_spec: Box::new(chain_spec),
