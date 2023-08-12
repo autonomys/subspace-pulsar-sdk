@@ -17,8 +17,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use derivative::Derivative;
-use futures::channel::{mpsc, oneshot};
-use futures::{FutureExt, SinkExt, Stream, StreamExt};
+use futures::{FutureExt, Stream, StreamExt};
 use sc_consensus_subspace::SegmentHeadersStore;
 use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, SyncState};
@@ -28,6 +27,7 @@ use sdk_traits::Farmer;
 use sdk_utils::{DestructorSet, MultiaddrWithPeerId, PublicKey};
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
+use sp_domains::{DomainId, GenerateGenesisStateRoot};
 use sp_runtime::DigestItem;
 use subspace_core_primitives::{HistorySize, PieceIndexHash, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
@@ -39,11 +39,14 @@ use subspace_networking::{
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::SubspaceConfiguration;
+use tokio::sync::oneshot;
 
 mod builder;
 pub mod chain_spec;
+mod domains;
 
 pub use builder::*;
+use domains::domain_genesis_block_builder::DomainGenesisBlockBuilder;
 pub use subspace_runtime::RuntimeEvent as Event;
 use tracing::Instrument;
 
@@ -74,9 +77,16 @@ impl<F: Farmer + 'static> Config<F> {
         let name = base.network.node_name.clone();
         let database_source = base.database.clone();
 
-        let partial_components =
-            subspace_service::new_partial::<F::Table, RuntimeApi, ExecutorDispatch>(&base, None)
-                .context("Failed to build a partial subspace node")?;
+        let construct_domain_genesis_block_builder =
+            |backend, executor| -> Arc<dyn GenerateGenesisStateRoot> {
+                Arc::new(DomainGenesisBlockBuilder::new(backend, executor))
+            };
+        let partial_components = subspace_service::new_partial::<
+            F::Table,
+            RuntimeApi,
+            ExecutorDispatch,
+        >(&base, Some(&construct_domain_genesis_block_builder))
+        .context("Failed to build a partial subspace node")?;
 
         let (subspace_networking, dsn, mut runner) = {
             let keypair = {
@@ -170,15 +180,6 @@ impl<F: Farmer + 'static> Config<F> {
         .await
         .context("Failed to build a full subspace node")?;
 
-        if let Some(storage_monitor) = storage_monitor {
-            sc_storage_monitor::StorageMonitorService::try_spawn(
-                storage_monitor.into(),
-                database_source,
-                &full_client.task_manager.spawn_essential_handle(),
-            )
-            .context("Failed to start storage monitor")?;
-        }
-
         let NewFull {
             mut task_manager,
             client,
@@ -188,39 +189,89 @@ impl<F: Farmer + 'static> Config<F> {
             network_service,
 
             backend: _,
-            select_chain: _,
+            select_chain,
             reward_signing_notification_stream: _,
             archived_segment_notification_stream: _,
             transaction_pool: _,
-            block_importing_notification_stream: _,
-            new_slot_notification_stream: _,
+            block_importing_notification_stream,
+            new_slot_notification_stream,
         } = full_client;
 
-        let rpc_handle = sdk_utils::Rpc::new(&rpc_handlers);
-        network_starter.start_network();
-        let (stop_sender, mut stop_receiver) = mpsc::channel::<oneshot::Sender<()>>(1);
+        if let Some(storage_monitor) = storage_monitor {
+            sc_storage_monitor::StorageMonitorService::try_spawn(
+                storage_monitor.into(),
+                database_source,
+                &task_manager.spawn_essential_handle(),
+            )
+            .context("Failed to start storage monitor")?;
+        }
 
-        sdk_utils::task_spawn(format!("subspace-sdk-node-{name}-task-manager"), {
-            async move {
-                let opt_stop_sender = async move {
+        let mut destructors = DestructorSet::new("node-destructors");
+
+        let (task_manager_drop_sender, task_manager_drop_receiver) = oneshot::channel();
+        let (task_manager_result_sender, task_manager_result_receiver) = oneshot::channel();
+        let task_manager_join_handle = sdk_utils::task_spawn(
+            format!("subspace-sdk-node-{name}-task-manager"),
+            {
+                async move {
                     futures::select! {
-                        opt_sender = stop_receiver.next() => opt_sender,
+                        _ = task_manager_drop_receiver.fuse() => {
+                            let _ = task_manager_result_sender.send(Ok(()));
+                        },
                         result = task_manager.future().fuse() => {
-                            result.expect("Task from manager paniced");
-                            None
+                            let _ = task_manager_result_sender.send(result.map_err(anyhow::Error::new));
                         }
                         _ = node_runner_future.fuse() => {
-                            tracing::info!("Node runner exited");
-                            None
+                            let _ = task_manager_result_sender.send(Ok(()));
                         }
                     }
                 }
-                .await;
-                opt_stop_sender.map(|stop_sender| stop_sender.send(()));
-            }
-        });
+            },
+        );
 
-        let destructor = DestructorSet::new("node-destructors");
+        destructors.add_async_destructor({
+            async move {
+                let _ = task_manager_drop_sender.send(());
+                task_manager_join_handle.await.expect("joining should not fail; qed");
+            }
+        })?;
+
+        let mut maybe_domain_work_result_receiver = None;
+        if let Some(domain_config) = self.domain_config {
+            let (domain_worker_drop_sender, domain_worker_drop_receiver) = oneshot::channel();
+            let (domain_worker_result_sender, domain_worker_result_receiver) = oneshot::channel();
+
+            let base_directory = directory.as_ref().to_owned().clone();
+
+            let domain_worker_join_handle = sdk_utils::task_spawn(
+                format!(
+                    "domain-worker-domain-{}",
+                    <DomainId as Into<u32>>::into(domain_config.domain_id)
+                ),
+                domain_config.run(
+                    base_directory,
+                    domain_worker_drop_receiver,
+                    domain_worker_result_sender,
+                    client.clone(),
+                    block_importing_notification_stream.clone(),
+                    new_slot_notification_stream.clone(),
+                    network_service.clone(),
+                    sync_service.clone(),
+                    select_chain.clone(),
+                ),
+            );
+
+            destructors.add_async_destructor({
+                async move {
+                    let _ = domain_worker_drop_sender.send(Ok(()));
+                    domain_worker_join_handle.await.expect("joining should not fail; qed");
+                }
+            })?;
+            maybe_domain_work_result_receiver = Some(domain_worker_result_receiver);
+        }
+
+        let rpc_handle = sdk_utils::Rpc::new(&rpc_handlers);
+        network_starter.start_network();
 
         // Disable proper exit for now. Because RPC server looses waker and can't exit
         // in background.
@@ -244,9 +295,10 @@ impl<F: Farmer + 'static> Config<F> {
             name,
             rpc_handle,
             dsn,
-            stop_sender,
-            _destructors: destructor,
+            _destructors: destructors,
             _farmer: Default::default(),
+            task_manager_result_receiver,
+            domain_worker_result_receiver: maybe_domain_work_result_receiver,
         })
     }
 }
@@ -300,13 +352,16 @@ pub struct Node<F: Farmer> {
     #[derivative(Debug = "ignore")]
     network_service: Arc<NetworkService<RuntimeBlock, Hash>>,
     rpc_handle: sdk_utils::Rpc,
-    stop_sender: mpsc::Sender<oneshot::Sender<()>>,
     name: String,
     dsn: DsnShared<FullClient>,
     #[derivative(Debug = "ignore")]
     _destructors: DestructorSet,
     #[derivative(Debug = "ignore")]
     _farmer: std::marker::PhantomData<F>,
+    #[derivative(Debug = "ignore")]
+    task_manager_result_receiver: oneshot::Receiver<anyhow::Result<()>>,
+    #[derivative(Debug = "ignore")]
+    domain_worker_result_receiver: Option<oneshot::Receiver<anyhow::Result<()>>>,
 }
 
 impl<F: Farmer> sdk_traits::Node for Node<F> {
@@ -596,19 +651,18 @@ impl<F: Farmer + 'static> Node<F> {
     }
 
     /// Leaves the network and gracefully shuts down
-    pub async fn close(mut self) -> anyhow::Result<()> {
-        let (stop_sender, stop_receiver) = oneshot::channel();
-        let _ = match self.stop_sender.send(stop_sender).await {
-            Err(_) => return Err(anyhow::anyhow!("Node was already closed")),
-            Ok(()) => stop_receiver.await,
-        };
+    pub async fn close(self) -> anyhow::Result<()> {
         self._destructors.async_drop().await?;
+        self.task_manager_result_receiver.await??;
+        if let Some(domain_worker_result_receiver) = self.domain_worker_result_receiver {
+            domain_worker_result_receiver.await??;
+        }
         Ok(())
     }
 
     /// Tells if the node was closed
     pub async fn is_closed(&self) -> bool {
-        self.stop_sender.is_closed()
+        self._destructors.already_ran()
     }
 
     /// Runs `.close()` and also wipes node's state

@@ -353,6 +353,11 @@ impl DestructorSet {
         }
     }
 
+    /// Returns a bool indicating if the destructor set has already ran
+    pub fn already_ran(&self) -> bool {
+        self.already_ran
+    }
+
     /// Creates an empty Destructors object with async destructors not allowed
     pub fn new_without_async(name: impl Into<String>) -> DestructorSet {
         DestructorSet {

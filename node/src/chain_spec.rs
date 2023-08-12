@@ -5,11 +5,12 @@ use sc_subspace_chain_specs::SerializableChainSpec;
 use sc_telemetry::TelemetryEndpoints;
 use sdk_utils::chain_spec as utils;
 use sp_core::crypto::{Ss58Codec, UncheckedFrom};
-use subspace_runtime::{
-    AllowAuthoringBy, BalancesConfig, GenesisConfig, RuntimeConfigsConfig, SubspaceConfig,
-    SudoConfig, SystemConfig, VestingConfig, MILLISECS_PER_BLOCK, WASM_BINARY,
-};
+use sp_domains::{OperatorPublicKey, RuntimeType};
+use sp_runtime::Percent;
+use subspace_runtime::{AllowAuthoringBy, BalancesConfig, GenesisConfig, RuntimeConfigsConfig, SubspaceConfig, SudoConfig, SystemConfig, VestingConfig, MILLISECS_PER_BLOCK, WASM_BINARY, MaxDomainBlockSize, MaxDomainBlockWeight, DomainsConfig};
 use subspace_runtime_primitives::{AccountId, Balance, BlockNumber, SSC};
+use sdk_utils::chain_spec::get_public_key_from_seed;
+use crate::domains::evm_chain_spec;
 
 const SUBSPACE_TELEMETRY_URL: &str = "wss://telemetry.subspace.network/submit/";
 const GEMINI_3D_CHAIN_SPEC: &[u8] = include_bytes!("../res/chain-spec-raw-gemini-3e.json");
@@ -97,6 +98,7 @@ pub fn gemini_3e_compiled() -> ChainSpec {
                 })
                 .collect::<Vec<_>>();
             subspace_genesis_config(
+                evm_chain_spec::SpecId::Gemini,
                 WASM_BINARY.expect("Wasm binary must be built for Gemini"),
                 sudo_account,
                 balances,
@@ -182,6 +184,7 @@ pub fn devnet_config_compiled() -> ChainSpec {
                 })
                 .collect::<Vec<_>>();
             subspace_genesis_config(
+                evm_chain_spec::SpecId::DevNet,
                 WASM_BINARY.expect("Wasm binary must be built for Gemini"),
                 sudo_account,
                 balances,
@@ -225,6 +228,7 @@ pub fn dev_config() -> ChainSpec {
         ChainType::Development,
         || {
             subspace_genesis_config(
+                evm_chain_spec::SpecId::Dev,
                 wasm_binary,
                 // Sudo account
                 utils::get_account_id_from_seed("Alice"),
@@ -272,6 +276,7 @@ pub fn local_config() -> ChainSpec {
         ChainType::Local,
         || {
             subspace_genesis_config(
+                evm_chain_spec::SpecId::Local,
                 wasm_binary,
                 // Sudo account
                 utils::get_account_id_from_seed("Alice"),
@@ -317,6 +322,7 @@ pub fn local_config() -> ChainSpec {
 
 /// Configure initial storage state for FRAME modules.
 fn subspace_genesis_config(
+    evm_domain_spec_id: evm_chain_spec::SpecId,
     wasm_binary: &[u8],
     sudo_account: AccountId,
     balances: Vec<(AccountId, Balance)>,
@@ -333,8 +339,38 @@ fn subspace_genesis_config(
         confirmation_depth_k,
     } = genesis_params;
 
+    let raw_evm_domain_genesis_config = {
+        let mut domain_genesis_config = evm_chain_spec::get_testnet_genesis_by_spec_id(evm_domain_spec_id);
+        // Clear the WASM code of the genesis config since it is duplicated with `GenesisDomain::code`
+        domain_genesis_config.system.code = Default::default();
+        serde_json::to_vec(&domain_genesis_config)
+            .expect("Genesis config serialization never fails; qed")
+    };
+
     GenesisConfig {
-        domains: Default::default(),
+        domains: DomainsConfig {
+            genesis_domain: Some(sp_domains::GenesisDomain {
+                runtime_name: b"evm".to_vec(),
+                runtime_type: RuntimeType::Evm,
+                runtime_version: evm_domain_runtime::VERSION,
+                code: evm_domain_runtime::WASM_BINARY
+                    .unwrap_or_else(|| panic!("EVM domain runtime not available"))
+                    .to_owned(),
+
+                // Domain config, mainly for placeholder the concrete value TBD
+                owner_account_id: sudo_account.clone(),
+                domain_name: b"evm-domain".to_vec(),
+                max_block_size: MaxDomainBlockSize::get(),
+                max_block_weight: MaxDomainBlockWeight::get(),
+                bundle_slot_probability: (1, 1),
+                target_bundles_per_block: 10,
+                raw_genesis_config: raw_evm_domain_genesis_config,
+                // TODO: Configurable genesis operator signing key.
+                signing_key: get_public_key_from_seed::<OperatorPublicKey>("Alice"),
+                nomination_tax: Percent::from_percent(5),
+                minimum_nominator_stake: 100 * SSC,
+            }),
+        },
         system: SystemConfig {
             // Add Wasm runtime to storage.
             code: wasm_binary.to_vec(),
