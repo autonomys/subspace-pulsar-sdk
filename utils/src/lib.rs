@@ -33,6 +33,15 @@ use subspace_farmer::jsonrpsee::tracing;
 
 mod rpc_client;
 
+/// Output that indicates whether the task was cancelled or successfully
+/// completed
+pub enum TaskOutput<T, E> {
+    /// Task completed with value of type `T`
+    Value(T),
+    /// Task was cancelled due to reason `E`
+    Cancelled(E),
+}
+
 /// Rpc implementation over jsonrpsee_core debug rpc module
 #[derive(Clone, Debug)]
 pub struct Rpc {
