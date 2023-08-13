@@ -21,6 +21,7 @@ use subspace_runtime::RuntimeApi as CRuntimeApi;
 use subspace_runtime_primitives::opaque::Block as CBlock;
 use subspace_service::{FullClient as CFullClient, FullSelectChain};
 use tokio::sync::{oneshot, RwLock};
+use tracing::trace_span;
 
 use crate::domains::domain::{Domain, DomainBuildingProgress};
 use crate::domains::domain_instance_starter::DomainInstanceStarter;
@@ -160,10 +161,8 @@ impl DomainConfig {
         select_chain: FullSelectChain,
     ) -> Result<Domain> {
         let printable_domain_id: u32 = self.domain_id.into();
-        let mut destructor_set = DestructorSet::new(format!(
-            "domain-{}-worker-destructor",
-            <DomainId as Into<u32>>::into(self.domain_id)
-        ));
+        let mut destructor_set =
+            DestructorSet::new(format!("domain-{}-worker-destructor", printable_domain_id));
         let shared_rpc_handler = Arc::new(RwLock::new(None));
         let shared_progress_data = Arc::new(RwLock::new(DomainBuildingProgress::Default));
 

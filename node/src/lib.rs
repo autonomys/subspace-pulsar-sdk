@@ -43,7 +43,7 @@ use tokio::sync::oneshot;
 
 mod builder;
 pub mod chain_spec;
-mod domains;
+pub mod domains;
 
 pub use builder::*;
 use domains::domain_genesis_block_builder::DomainGenesisBlockBuilder;
