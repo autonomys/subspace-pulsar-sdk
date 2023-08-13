@@ -25,7 +25,7 @@ use futures::prelude::*;
 use futures::stream::FuturesUnordered;
 use sdk_dsn::FarmerProviderStorage;
 use sdk_traits::Node;
-use sdk_utils::{ByteSize, DestructorSet, PublicKey};
+use sdk_utils::{ByteSize, DestructorSet, PublicKey, TaskOutput};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::crypto::kzg;
 use subspace_core_primitives::{PieceIndexHash, Record, SectorIndex};
@@ -541,19 +541,27 @@ impl Config {
 
                         match result {
                             Left((maybe_result, _)) => {
-                                let result = plot_driver_result_sender.try_send(
-                                    maybe_result
-                                        .expect("We have at least one plot")
-                                        .context("Farmer exited with error"),
-                                );
+                                let send_result = match maybe_result {
+                                    None => plot_driver_result_sender
+                                        .try_send(Ok(TaskOutput::Value(()))),
+                                    Some(result) => match result {
+                                        Ok(()) => plot_driver_result_sender
+                                            .try_send(Ok(TaskOutput::Value(()))),
+                                        Err(e) => plot_driver_result_sender.try_send(Err(e)),
+                                    },
+                                };
 
                                 // Receiver is closed which would mean we are shutting down
-                                if result.is_err() {
+                                if send_result.is_err() {
                                     break;
                                 }
                             }
                             Right((_, _)) => {
-                                let _ = plot_driver_result_sender.try_send(Ok(()));
+                                warn!("Received drop signal for plot driver, exiting...");
+                                let _ =
+                                    plot_driver_result_sender.try_send(Ok(TaskOutput::Cancelled(
+                                        "Received drop signal for plot driver".into(),
+                                    )));
                                 break;
                             }
                         };
@@ -615,7 +623,7 @@ impl Config {
 pub struct Farmer<T: subspace_proof_of_space::Table> {
     reward_address: PublicKey,
     plot_info: HashMap<PathBuf, Plot<T>>,
-    result_receiver: Option<mpsc::Receiver<anyhow::Result<()>>>,
+    result_receiver: Option<mpsc::Receiver<anyhow::Result<TaskOutput<(), String>>>>,
     base_path: PathBuf,
     node_name: String,
     app_info: FarmerAppInfo,
@@ -940,11 +948,19 @@ impl<T: subspace_proof_of_space::Table> Farmer<T> {
 
     /// Stops farming, closes plots, and sends signal to the node
     pub async fn close(mut self) -> anyhow::Result<()> {
+        self._destructors.async_drop().await?;
         let mut result_receiver = self.result_receiver.take().expect("Handle is always there");
         result_receiver.close();
-        while let Some(msg) = result_receiver.recv().await {
-            msg?;
+        while let Some(task_result) = result_receiver.recv().await {
+            let output = task_result?;
+            match output {
+                TaskOutput::Value(_) => {}
+                TaskOutput::Cancelled(reason) => {
+                    warn!("Plot driver was cancelled due to reason: {:?}", reason);
+                }
+            }
         }
-        self._destructors.async_drop().await
+
+        Ok(())
     }
 }

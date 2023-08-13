@@ -12,7 +12,7 @@ use sc_consensus_subspace::notification::SubspaceNotificationStream;
 use sc_consensus_subspace::{BlockImportingNotification, NewSlotNotification};
 use sdk_substrate::{Base, BaseBuilder};
 use sdk_utils::chain_spec::get_account_id_from_seed;
-use sdk_utils::DestructorSet;
+use sdk_utils::{DestructorSet, TaskOutput};
 use serde::{Deserialize, Serialize};
 use sp_core::crypto::AccountId32;
 use sp_domains::DomainId;
@@ -21,28 +21,32 @@ use subspace_runtime::RuntimeApi as CRuntimeApi;
 use subspace_runtime_primitives::opaque::Block as CBlock;
 use subspace_service::{FullClient as CFullClient, FullSelectChain};
 use tokio::sync::{oneshot, RwLock};
-use tracing::trace_span;
 
 use crate::domains::domain::{Domain, DomainBuildingProgress};
 use crate::domains::domain_instance_starter::DomainInstanceStarter;
 use crate::domains::evm_chain_spec;
 use crate::ExecutorDispatch as CExecutorDispatch;
 
+/// Domain node configuration
 #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
 #[builder(pattern = "owned", build_fn(private, name = "_build"))]
 #[non_exhaustive]
 pub struct DomainConfig {
+    /// ChainID of the domain e.g dev, Gemini
     #[builder(setter(into), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub chain_id: String,
 
+    /// Id of the domain
     #[builder(setter(into), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub domain_id: DomainId,
 
+    /// Account id of the relayer
     #[builder(setter(into))]
     pub relayer_id: AccountId32,
 
+    /// Additional arguments to be passed to the domain instance starter
     #[builder(setter(into), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub additional_args: Vec<String>,
@@ -185,13 +189,15 @@ impl DomainConfig {
                     .await
                     {
                         Left((result, _)) => {
-                            let result = result.map_err(|bootstrapping_error| {
-                                anyhow!(
-                                    "Error while bootstrapping the domain:{} : {:?}",
-                                    printable_domain_id,
-                                    bootstrapping_error
-                                )
-                            });
+                            let result = result
+                                .map_err(|bootstrapping_error| {
+                                    anyhow!(
+                                        "Error while bootstrapping the domain:{} : {:?}",
+                                        printable_domain_id,
+                                        bootstrapping_error
+                                    )
+                                })
+                                .map(TaskOutput::Value);
                             let _ = bootstrapping_result_sender.send(result);
                         }
                         Right(_) => {
@@ -200,9 +206,12 @@ impl DomainConfig {
                                  domain_id: {:?}. exiting...",
                                 printable_domain_id
                             );
-                            let _ = bootstrapping_result_sender.send(Err(anyhow!(
-                                "received cancellation signal while bootstrapping the domain: {}.",
-                                printable_domain_id
+                            let _ = bootstrapping_result_sender.send(Ok(TaskOutput::Cancelled(
+                                format!(
+                                    "received cancellation signal while bootstrapping the domain: \
+                                     {}.",
+                                    printable_domain_id
+                                ),
                             )));
                         }
                     };
@@ -235,7 +244,25 @@ impl DomainConfig {
                     {
                         Left((wrapped_result, _)) => match wrapped_result {
                             Ok(result) => match result {
-                                Ok(boostrap_result) => boostrap_result,
+                                Ok(boostrap_task_output) => match boostrap_task_output {
+                                    TaskOutput::Value(bootstrap_result) => bootstrap_result,
+                                    TaskOutput::Cancelled(reason) => {
+                                        tracing::info!(
+                                            "Bootstrapping task was cancelled for reason: {:?} \
+                                             for domain_id: {:?}. exiting...",
+                                            reason,
+                                            printable_domain_id
+                                        );
+                                        let _ = domain_runner_result_sender.send(Ok(
+                                            TaskOutput::Cancelled(format!(
+                                                "Bootstrapping task was cancelled for reason: \
+                                                 {:?} for domain_id: {:?}. exiting...",
+                                                reason, printable_domain_id
+                                            )),
+                                        ));
+                                        return;
+                                    }
+                                },
                                 Err(bootstrap_error) => {
                                     let _ = domain_runner_result_sender.send(Err(anyhow!(
                                         "received an error from domain bootstrapper for domain \
@@ -262,10 +289,12 @@ impl DomainConfig {
                                  domain_id: {:?}. exiting...",
                                 self.domain_id
                             );
-                            let _ = domain_runner_result_sender.send(Err(anyhow!(
-                                "received cancellation signal while waiting for bootstrapping \
-                                 result for domain: {}.",
-                                printable_domain_id
+                            let _ = domain_runner_result_sender.send(Ok(TaskOutput::Cancelled(
+                                format!(
+                                    "received cancellation signal while waiting for bootstrapping \
+                                     result for domain: {}.",
+                                    printable_domain_id
+                                ),
                             )));
                             return;
                         }
@@ -347,7 +376,8 @@ impl DomainConfig {
                         Left((wrapped_result, _)) => match wrapped_result {
                             Ok(result) => match result {
                                 Ok(_) => {
-                                    let _ = domain_runner_result_sender.send(Ok(()));
+                                    let _ =
+                                        domain_runner_result_sender.send(Ok(TaskOutput::Value(())));
                                 }
                                 Err(run_error) => {
                                     let _ = domain_runner_result_sender.send(Err(anyhow!(
@@ -373,10 +403,12 @@ impl DomainConfig {
                                  {:?}. exiting...",
                                 self.domain_id
                             );
-                            let _ = domain_runner_result_sender.send(Err(anyhow!(
-                                "received cancellation signal while waiting for domain runner for \
-                                 domain: {}.",
-                                printable_domain_id
+                            let _ = domain_runner_result_sender.send(Ok(TaskOutput::Cancelled(
+                                format!(
+                                    "Received cancellation signal while waiting for domain runner \
+                                     for domain: {}.",
+                                    printable_domain_id
+                                ),
                             )));
                         }
                     };

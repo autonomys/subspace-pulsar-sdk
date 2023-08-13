@@ -24,7 +24,7 @@ use sc_network::{NetworkService, NetworkStateInfo, SyncState};
 use sc_rpc_api::state::StateApiClient;
 use sdk_dsn::{DsnOptions, DsnShared, NodePieceCache};
 use sdk_traits::Farmer;
-use sdk_utils::{DestructorSet, MultiaddrWithPeerId, PublicKey};
+use sdk_utils::{DestructorSet, MultiaddrWithPeerId, PublicKey, TaskOutput};
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
 use sp_domains::GenerateGenesisStateRoot;
@@ -43,14 +43,14 @@ use tokio::sync::oneshot;
 
 mod builder;
 pub mod chain_spec;
-pub mod domains;
+mod domains;
 
 pub use builder::*;
+pub use domains::builder::{DomainConfig, DomainConfigBuilder};
+pub use domains::domain::Domain;
 use domains::domain_genesis_block_builder::DomainGenesisBlockBuilder;
 pub use subspace_runtime::RuntimeEvent as Event;
 use tracing::Instrument;
-
-use crate::domains::domain::Domain;
 
 /// Events from subspace pallet
 pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
@@ -218,13 +218,13 @@ impl<F: Farmer + 'static> Config<F> {
                 async move {
                     futures::select! {
                         _ = task_manager_drop_receiver.fuse() => {
-                            let _ = task_manager_result_sender.send(Ok(()));
+                            let _ = task_manager_result_sender.send(Ok(TaskOutput::Cancelled("received drop signal for task manager".into())));
                         },
                         result = task_manager.future().fuse() => {
-                            let _ = task_manager_result_sender.send(result.map_err(anyhow::Error::new));
+                            let _ = task_manager_result_sender.send(result.map_err(anyhow::Error::new).map(TaskOutput::Value));
                         }
                         _ = node_runner_future.fuse() => {
-                            let _ = task_manager_result_sender.send(Ok(()));
+                            let _ = task_manager_result_sender.send(Ok(TaskOutput::Value(())));
                         }
                     }
                 }
@@ -346,7 +346,7 @@ pub struct Node<F: Farmer> {
     #[derivative(Debug = "ignore")]
     _farmer: std::marker::PhantomData<F>,
     #[derivative(Debug = "ignore")]
-    task_manager_result_receiver: oneshot::Receiver<anyhow::Result<()>>,
+    task_manager_result_receiver: oneshot::Receiver<anyhow::Result<TaskOutput<(), String>>>,
     #[derivative(Debug = "ignore")]
     maybe_domain: Option<Domain>,
 }
@@ -643,7 +643,13 @@ impl<F: Farmer + 'static> Node<F> {
             domain.close().await?;
         }
         self._destructors.async_drop().await?;
-        self.task_manager_result_receiver.await??;
+        let output = self.task_manager_result_receiver.await??;
+        match output {
+            TaskOutput::Value(_) => {}
+            TaskOutput::Cancelled(reason) => {
+                tracing::warn!("node task manager was cancelled due to reason: {}", reason);
+            }
+        }
         Ok(())
     }
 
