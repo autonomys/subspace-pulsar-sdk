@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use derivative::Derivative;
 use sc_service::RpcHandlers;
-use sdk_utils::DestructorSet;
+use sdk_utils::{DestructorSet, TaskOutput};
 
 /// Progress of Domain
 #[derive(Derivative)]
@@ -28,13 +28,22 @@ pub struct Domain {
     /// Domain building progress tracker
     pub current_building_progress: Arc<tokio::sync::RwLock<DomainBuildingProgress>>,
     /// Oneshot channel to receive result of domain runner
-    pub domain_runner_result_receiver: tokio::sync::oneshot::Receiver<anyhow::Result<()>>,
+    #[derivative(Debug = "ignore")]
+    pub domain_runner_result_receiver:
+        tokio::sync::oneshot::Receiver<anyhow::Result<TaskOutput<(), String>>>,
 }
 
 impl Domain {
     /// Shuts down domain node
     pub async fn close(self) -> anyhow::Result<()> {
         self._destructors.async_drop().await?;
-        self.domain_runner_result_receiver.await?
+        let output = self.domain_runner_result_receiver.await??;
+        match output {
+            TaskOutput::Value(_) => Ok(()),
+            TaskOutput::Cancelled(reason) => {
+                tracing::warn!("Domain runner task was cancelled due to reason: {}", reason);
+                Ok(())
+            }
+        }
     }
 }
