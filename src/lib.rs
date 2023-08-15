@@ -28,7 +28,7 @@ pub type Node = sdk_node::Node<Farmer>;
 
 /// Farmer related things located here
 pub mod farmer {
-    pub use sdk_farmer::{CacheDescription, PlotDescription};
+    pub use sdk_farmer::PlotDescription;
 
     pub use super::{Farmer, Plot};
 }

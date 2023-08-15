@@ -1,10 +1,12 @@
+use std::num::NonZeroU8;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut};
+use sdk_node::{DomainConfigBuilder, PotConfiguration};
 use sdk_utils::ByteSize;
-use subspace_sdk::farmer::{CacheDescription, PlotDescription};
+use subspace_sdk::farmer::PlotDescription;
 use subspace_sdk::node::{chain_spec, ChainSpec, DsnBuilder, NetworkBuilder, Role};
 use subspace_sdk::MultiaddrWithPeerId;
 use tempfile::TempDir;
@@ -68,7 +70,7 @@ pub struct Node {
 }
 
 impl NodeBuilder {
-    pub async fn build(self, space_pledged: usize) -> Node {
+    pub async fn build(self, space_pledged: usize, enable_domains: bool) -> Node {
         let InnerNode {
             not_force_synced,
             boot_nodes,
@@ -93,6 +95,12 @@ impl NodeBuilder {
             )
             .role(if not_authority { Role::Full } else { Role::Authority });
 
+        let node = if enable_domains {
+            node.domain(Some(DomainConfigBuilder::dev().configuration()))
+        } else {
+            node
+        };
+
         #[cfg(all(feature = "core-payments", feature = "executor"))]
         let node = if enable_core {
             node.system_domain(subspace_sdk::node::domains::ConfigBuilder::new().core_payments(
@@ -102,8 +110,15 @@ impl NodeBuilder {
             node
         };
 
-        let node =
-            node.build(path.path().join("node"), chain.clone(), space_pledged).await.unwrap();
+        let node = node
+            .build(
+                path.path().join("node"),
+                chain.clone(),
+                PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
+                space_pledged,
+            )
+            .await
+            .unwrap();
 
         Node { node, path, chain }
     }
@@ -153,7 +168,7 @@ impl FarmerBuilder {
                     // TODO: account for overhead here
                     space_pledged,
                 )],
-                CacheDescription::minimal(node.path().path().join("cache")),
+                NonZeroU8::new(20).expect("Static value should not fail; qed"),
             )
             .await
             .unwrap();

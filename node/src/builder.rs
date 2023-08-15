@@ -13,7 +13,8 @@ use sdk_utils::ByteSize;
 use serde::{Deserialize, Serialize};
 
 use super::{ChainSpec, Farmer, Node};
-use crate::domains::builder::{DomainConfig, DomainConfigBuilder};
+use crate::domains::builder::DomainConfig;
+use crate::PotConfiguration;
 
 /// Wrapper with default value for piece cache size
 #[derive(
@@ -102,7 +103,6 @@ impl<F: Farmer + 'static> Builder<F> {
     /// Dev chain configuration
     pub fn dev() -> Self {
         Self::new()
-            .domain(Some(DomainConfigBuilder::dev().configuration()))
             .force_authoring(true)
             .network(NetworkBuilder::dev())
             .dsn(DsnBuilder::dev())
@@ -145,9 +145,12 @@ impl<F: Farmer + 'static> Builder<F> {
         self,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,
+        pot_configuration: PotConfiguration,
         farmer_total_space_pledged: usize,
     ) -> anyhow::Result<Node<F>> {
-        self.configuration().build(directory, chain_spec, farmer_total_space_pledged).await
+        self.configuration()
+            .build(directory, chain_spec, pot_configuration, farmer_total_space_pledged)
+            .await
     }
 }
 

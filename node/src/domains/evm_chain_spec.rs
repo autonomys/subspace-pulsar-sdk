@@ -58,12 +58,20 @@ pub fn create_domain_spec(
 static GENESIS_CONFIG: OnceCell<Vec<u8>> = OnceCell::new();
 
 fn load_chain_spec_with(spec_id: &str, genesis_config: GenesisConfig) -> Result<ChainSpec, String> {
-    GENESIS_CONFIG
-        .set(
-            serde_json::to_vec(&genesis_config)
-                .expect("Genesis config serialization never fails; qed"),
-        )
-        .expect("This function should only call once upon node initialization");
+    let result = GENESIS_CONFIG.set(
+        serde_json::to_vec(&genesis_config).expect("Genesis config serialization never fails; qed"),
+    );
+    // We need this feature gate since as part of the integration tests we spin up
+    // multiple nodes/farmers. #[cfg(test)] does not work with integration test.
+    #[cfg(feature = "integration-test")]
+    result.unwrap_or_else(|_prev_value| {
+        tracing::warn!("Genesis config global variable was set twice.");
+        ()
+    });
+
+    #[cfg(not(feature = "integration-test"))]
+    result.expect("This function should only call once upon node initialization");
+
     let constructor = || {
         let raw_genesis_config = GENESIS_CONFIG.get().expect("Value just set; qed");
         serde_json::from_slice(raw_genesis_config)

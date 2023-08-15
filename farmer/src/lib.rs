@@ -14,7 +14,7 @@ mod combined_piece_getter;
 
 use std::collections::HashMap;
 use std::io;
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU8, NonZeroUsize};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -23,14 +23,13 @@ pub use builder::{Builder, Config};
 use derivative::Derivative;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
-use sdk_dsn::FarmerProviderStorage;
 use sdk_traits::Node;
 use sdk_utils::{ByteSize, DestructorSet, PublicKey, TaskOutput};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::crypto::kzg;
 use subspace_core_primitives::{PieceIndexHash, Record, SectorIndex};
 use subspace_erasure_coding::ErasureCoding;
-use subspace_farmer::piece_cache::PieceCache;
+use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
 use subspace_farmer::single_disk_plot::{
     SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
     SingleDiskPlotOptions, SingleDiskPlotSummary,
@@ -38,56 +37,18 @@ use subspace_farmer::single_disk_plot::{
 use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
 use subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
+use subspace_farmer::Identity;
 use subspace_farmer_components::plotting::PlottedSector;
+use subspace_farmer_components::sector::{sector_size, SectorMetadataChecksummed};
 use subspace_networking::libp2p::kad::RecordKey;
 use subspace_networking::utils::multihash::ToMultihash;
+use subspace_networking::NetworkingParametersManager;
 use subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tracing::{debug, error, warn};
 use tracing_futures::Instrument;
 
 use crate::combined_piece_getter::CombinedPieceGetter;
-
-/// Description of the cache
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-#[non_exhaustive]
-pub struct CacheDescription {
-    /// Path to the cache description
-    pub directory: PathBuf,
-    /// Space which you want to dedicate
-    pub space_dedicated: ByteSize,
-}
-
-/// Error type for cache description constructor
-#[derive(Debug, Clone, Copy, thiserror::Error)]
-#[error("Cache should be larger than {}", CacheDescription::MIN_SIZE)]
-pub struct CacheTooSmall;
-
-impl CacheDescription {
-    /// Minimal cache size
-    pub const MIN_SIZE: ByteSize = ByteSize::mib(1);
-
-    /// Construct cache description
-    pub fn new(
-        directory: impl Into<PathBuf>,
-        space_dedicated: ByteSize,
-    ) -> Result<Self, CacheTooSmall> {
-        if space_dedicated < Self::MIN_SIZE {
-            return Err(CacheTooSmall);
-        }
-        Ok(Self { directory: directory.into(), space_dedicated })
-    }
-
-    /// Creates minimal cache description
-    pub fn minimal(directory: impl Into<PathBuf>) -> Self {
-        Self { directory: directory.into(), space_dedicated: Self::MIN_SIZE }
-    }
-
-    /// Wipe all the data from the plot
-    pub async fn wipe(self) -> io::Result<()> {
-        tokio::fs::remove_dir_all(self.directory).await
-    }
-}
 
 /// Description of the plot
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -112,7 +73,7 @@ impl PlotDescription {
 }
 
 mod builder {
-    use std::num::NonZeroUsize;
+    use std::num::{NonZeroU8, NonZeroUsize};
 
     use derivative::Derivative;
     use derive_builder::Builder;
@@ -121,7 +82,7 @@ mod builder {
     use sdk_utils::{ByteSize, PublicKey};
     use serde::{Deserialize, Serialize};
 
-    use super::{BuildError, CacheDescription};
+    use super::BuildError;
     use crate::{Farmer, PlotDescription};
 
     #[derive(
@@ -214,11 +175,27 @@ mod builder {
             reward_address: PublicKey,
             node: &N,
             plots: &[PlotDescription],
-            cache: CacheDescription,
+            cache_percentage: NonZeroU8,
         ) -> Result<Farmer<N::Table>, BuildError> {
-            self.configuration().build(reward_address, node, plots, cache).await
+            self.configuration().build(reward_address, node, plots, cache_percentage).await
         }
     }
+}
+
+/// Error when plot creation fails
+#[derive(Debug, thiserror::Error)]
+pub enum SingleDiskPlotCreationError {
+    /// Insufficient disk while creating single disk plot
+    #[error("Unable to create plot as Allocated space {} ({}) is not enough, minimum is ~{} (~{}, {} bytes to be exact", bytesize::to_string(*.allocated_space, true), bytesize::to_string(*.allocated_space, false), bytesize::to_string(*.min_space, true), bytesize::to_string(*.min_space, false), *.min_space)]
+    InsufficientSpaceForPlot {
+        /// Minimum space required for plot
+        min_space: u64,
+        /// Allocated space for plot
+        allocated_space: u64,
+    },
+    /// Other error while creating single disk plot
+    #[error("Single disk plot creation error: {0}")]
+    Other(#[from] SingleDiskPlotError),
 }
 
 /// Build Error
@@ -226,7 +203,7 @@ mod builder {
 pub enum BuildError {
     /// Failed to create single disk plot
     #[error("Single disk plot creation error: {0}")]
-    SingleDiskPlotCreate(#[from] SingleDiskPlotError),
+    SingleDiskPlotCreate(#[from] SingleDiskPlotCreationError),
     /// No plots were supplied during building
     #[error("Supply at least one plot")]
     NoPlotsSupplied,
@@ -244,7 +221,7 @@ impl<T: subspace_proof_of_space::Table> sdk_traits::Farmer for Farmer<T> {
 
     async fn get_piece_by_hash(
         piece_index_hash: PieceIndexHash,
-        piece_cache: &PieceCache,
+        piece_cache: &FarmerPieceCache,
         weak_readers_and_pieces: &std::sync::Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
     ) -> Option<subspace_core_primitives::Piece> {
         use tracing::debug;
@@ -281,8 +258,7 @@ impl<T: subspace_proof_of_space::Table> sdk_traits::Farmer for Farmer<T> {
     }
 }
 
-const SEGMENT_COMMITMENTS_CACHE_SIZE: NonZeroUsize =
-    NonZeroUsize::new(1_000_000).expect("Not zero; qed");
+const RECORDS_ROOTS_CACHE_SIZE: NonZeroUsize = NonZeroUsize::new(1_000_000).expect("Not zero; qed");
 
 fn create_readers_and_pieces(
     single_disk_plots: &[SingleDiskPlot],
@@ -355,7 +331,7 @@ impl Config {
         reward_address: PublicKey,
         node: &N,
         plots: &[PlotDescription],
-        cache: CacheDescription,
+        cache_percentage: NonZeroU8,
     ) -> Result<Farmer<T>, BuildError> {
         if plots.is_empty() {
             return Err(BuildError::NoPlotsSupplied);
@@ -368,7 +344,6 @@ impl Config {
         let mut single_disk_plots = Vec::with_capacity(plots.len());
         let mut plot_info = HashMap::with_capacity(plots.len());
 
-        let base_path = cache.directory;
         let readers_and_pieces = Arc::clone(&node.dsn().farmer_readers_and_pieces);
 
         let node_name = node.name().to_owned();
@@ -376,10 +351,7 @@ impl Config {
         let peer_id = node.dsn().node.id();
 
         let (farmer_piece_cache, farmer_piece_cache_worker) =
-            PieceCache::new(node.rpc().clone(), peer_id);
-
-        let farmer_provider_storage =
-            FarmerProviderStorage::new(peer_id, farmer_piece_cache.clone());
+            FarmerPieceCache::new(node.rpc().clone(), peer_id);
 
         let kzg = kzg::Kzg::new(kzg::embedded_kzg_settings());
         let erasure_coding = ErasureCoding::new(
@@ -396,7 +368,7 @@ impl Config {
                 node.rpc().clone(),
                 kzg.clone(),
                 // TODO: Consider introducing and using global in-memory segment commitments cache
-                parking_lot::Mutex::new(lru::LruCache::new(SEGMENT_COMMITMENTS_CACHE_SIZE)),
+                parking_lot::Mutex::new(lru::LruCache::new(RECORDS_ROOTS_CACHE_SIZE)),
             )),
         );
         let piece_getter = Arc::new(CombinedPieceGetter::new(
@@ -405,6 +377,7 @@ impl Config {
             farmer_piece_cache.clone(),
             node.dsn().node_piece_cache.clone(),
             node.dsn().farmer_archival_storage_info.clone(),
+            readers_and_pieces.clone(),
         ));
 
         let (piece_cache_worker_drop_sender, piece_cache_worker_drop_receiver) =
@@ -448,6 +421,7 @@ impl Config {
         for (disk_farm_idx, description) in plots.iter().enumerate() {
             let (plot, single_disk_plot) = Plot::new(PlotOptions {
                 disk_farm_idx,
+                cache_percentage,
                 reward_address,
                 node,
                 max_pieces_in_sector,
@@ -461,19 +435,11 @@ impl Config {
             single_disk_plots.push(single_disk_plot);
         }
 
-        *node.dsn().farmer_piece_cache.write().await = Some(farmer_piece_cache.clone());
-        destructors.add_async_destructor({
-            let piece_cache = Arc::clone(&node.dsn().farmer_piece_cache);
-            async move {
-                piece_cache.write().await.take();
-            }
-        })?;
-
-        node.dsn().farmer_provider_storage.swap(Some(farmer_provider_storage));
+        *node.dsn().farmer_piece_cache.write() = Some(farmer_piece_cache.clone());
         destructors.add_sync_destructor({
-            let provider_storage = node.dsn().farmer_provider_storage.clone();
+            let piece_cache = Arc::clone(&node.dsn().farmer_piece_cache);
             move || {
-                provider_storage.swap(None);
+                piece_cache.write().take();
             }
         })?;
 
@@ -607,7 +573,6 @@ impl Config {
             plot_info,
             result_receiver: Some(plot_driver_result_receiver),
             node_name,
-            base_path,
             app_info: subspace_farmer::NodeClient::farmer_app_info(node.rpc())
                 .await
                 .expect("Node is always reachable"),
@@ -624,7 +589,6 @@ pub struct Farmer<T: subspace_proof_of_space::Table> {
     reward_address: PublicKey,
     plot_info: HashMap<PathBuf, Plot<T>>,
     result_receiver: Option<mpsc::Receiver<anyhow::Result<TaskOutput<(), String>>>>,
-    base_path: PathBuf,
     node_name: String,
     app_info: FarmerAppInfo,
     _destructors: DestructorSet,
@@ -767,6 +731,7 @@ impl Stream for InitialPlottingProgressStream {
 
 struct PlotOptions<'a, PG, N: sdk_traits::Node> {
     pub disk_farm_idx: usize,
+    pub cache_percentage: NonZeroU8,
     pub reward_address: PublicKey,
     pub node: &'a N,
     pub piece_getter: PG,
@@ -780,6 +745,7 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
     async fn new(
         PlotOptions {
             disk_farm_idx,
+            cache_percentage,
             reward_address,
             node,
             piece_getter,
@@ -808,8 +774,25 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
             kzg,
             erasure_coding,
             piece_getter,
+            cache_percentage,
         };
-        let single_disk_plot = SingleDiskPlot::new::<_, _, T>(description, disk_farm_idx).await?;
+        let single_disk_plot_fut = SingleDiskPlot::new::<_, _, T>(description, disk_farm_idx);
+        let single_disk_plot = match single_disk_plot_fut.await {
+            Ok(single_disk_plot) => single_disk_plot,
+            Err(SingleDiskPlotError::InsufficientAllocatedSpace { min_space, allocated_space }) => {
+                return Err(BuildError::SingleDiskPlotCreate(
+                    SingleDiskPlotCreationError::InsufficientSpaceForPlot {
+                        min_space,
+                        allocated_space,
+                    },
+                ));
+            }
+            Err(error) => {
+                return Err(BuildError::SingleDiskPlotCreate(SingleDiskPlotCreationError::Other(
+                    error,
+                )));
+            }
+        };
         let mut destructors = DestructorSet::new_without_async("plot-destructors");
 
         let progress = {
@@ -831,6 +814,23 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
             receiver
         };
 
+        // TODO: This calculation is directly imported from the monorepo and relies on
+        // internal calculation of plot. Remove it once we have public function.
+        let fixed_space_usage = 2 * 1024 * 1024
+            + Identity::file_size() as u64
+            + NetworkingParametersManager::file_size() as u64;
+        // Calculate how many sectors can fit
+        let target_sector_count = {
+            let potentially_plottable_space = allocated_space.saturating_sub(fixed_space_usage)
+                / 100
+                * (100 - u64::from(cache_percentage.get()));
+            // Do the rounding to make sure we have exactly as much space as fits whole
+            // number of sectors
+            potentially_plottable_space
+                / (sector_size(max_pieces_in_sector) + SectorMetadataChecksummed::encoded_size())
+                    as u64
+        };
+
         Ok((
             Self {
                 directory: directory.clone(),
@@ -842,9 +842,7 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
                         .expect("Sector count is less than u64::MAX"),
                     current_sector: u64::try_from(single_disk_plot.plotted_sectors_count())
                         .expect("Sector count is less than u64::MAX"),
-                    total_sectors: allocated_space
-                        / subspace_farmer_components::sector::sector_size(max_pieces_in_sector)
-                            as u64,
+                    total_sectors: target_sector_count,
                 })),
                 _destructors: destructors,
                 _table: Default::default(),
