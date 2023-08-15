@@ -24,3 +24,9 @@ sc-service = { version = "0.10.0-dev", git = "https://github.com/subspace/substr
 sc-state-db = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 sc-storage-monitor = { version = "0.1.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71", default-features = false }
 sp-runtime = { version = "24.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
+
+[features]
+default = []
+integration-test = [
+    "sdk-utils/integration-test"
+]

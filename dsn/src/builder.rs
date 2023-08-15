@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 
@@ -10,18 +11,19 @@ use sc_consensus_subspace::SegmentHeadersStore;
 use sdk_utils::{self, DestructorSet, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::Piece;
-use subspace_farmer::piece_cache::PieceCache;
+use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
 use subspace_farmer::utils::archival_storage_info::ArchivalStorageInfo;
 use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
+use subspace_networking::utils::strip_peer_id;
 use subspace_networking::{
     PeerInfo, PeerInfoProvider, PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
     SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
     KADEMLIA_PROVIDER_TTL_IN_SECS,
 };
 
-use super::provider_storage_utils::MaybeProviderStorage;
-use super::{FarmerProviderStorage, NodePieceCache, ProviderStorage};
+use super::local_provider_record_utils::MaybeLocalRecordProvider;
+use super::{LocalRecordProvider, NodePieceCache};
 
 /// Wrapper with default value for listen address
 #[derive(
@@ -189,9 +191,7 @@ pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
     /// Farmer readers and pieces
     pub farmer_readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
     /// Farmer piece cache
-    pub farmer_piece_cache: Arc<tokio::sync::RwLock<Option<PieceCache>>>,
-    /// Farmer provider storage
-    pub farmer_provider_storage: MaybeProviderStorage<FarmerProviderStorage>,
+    pub farmer_piece_cache: Arc<parking_lot::RwLock<Option<FarmerPieceCache>>>,
     /// Farmer archival storage pieces
     pub farmer_archival_storage_pieces: ArchivalStoragePieces,
     /// Farmer archival storage info
@@ -207,7 +207,7 @@ impl Dsn {
     pub fn build_dsn<B, C, ASNS, PieceByHash, F1, SegmentHeaderByIndexes>(
         self,
         options: DsnOptions<C, ASNS, PieceByHash, SegmentHeaderByIndexes>,
-    ) -> anyhow::Result<(DsnShared<C>, subspace_networking::NodeRunner<ProviderStorage<C>>)>
+    ) -> anyhow::Result<(DsnShared<C>, subspace_networking::NodeRunner<LocalRecordProvider<C>>)>
     where
         B: sp_runtime::traits::Block,
         C: sc_client_api::AuxStore + sp_blockchain::HeaderBackend<B> + Send + Sync + 'static,
@@ -218,7 +218,7 @@ impl Dsn {
         PieceByHash: Fn(
                 &PieceByHashRequest,
                 Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
-                Arc<tokio::sync::RwLock<Option<PieceCache>>>,
+                Arc<parking_lot::RwLock<Option<FarmerPieceCache>>>,
                 NodePieceCache<C>,
             ) -> F1
             + Send
@@ -243,9 +243,10 @@ impl Dsn {
             segment_header_store,
         } = options;
         let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
-        let farmer_provider_storage = MaybeProviderStorage::none();
         let protocol_version = hex::encode(client.info().genesis_hash);
-        let farmer_piece_cache = Arc::new(tokio::sync::RwLock::new(None));
+        let farmer_piece_cache = Arc::new(parking_lot::RwLock::new(None));
+        let maybe_farmer_local_record_provider =
+            MaybeLocalRecordProvider::new(farmer_piece_cache.clone());
 
         let cuckoo_filter_size = farmer_total_space_pledged / Piece::SIZE + 1usize;
         let farmer_archival_storage_pieces = ArchivalStoragePieces::new(cuckoo_filter_size);
@@ -305,18 +306,24 @@ impl Dsn {
         let listen_on = listen_addresses.0.into_iter().map(Into::into).collect();
 
         let networking_parameters_registry = subspace_networking::NetworkingParametersManager::new(
-            &base_path.join("known_addresses_db"),
+            &base_path.join("known_addresses.bin"),
+            strip_peer_id(bootstrap_nodes.clone())
+                .into_iter()
+                .map(|(peer_id, _)| peer_id)
+                .collect::<HashSet<_>>(),
         )
         .context("Failed to open known addresses database for DSN")?
         .boxed();
 
-        let provider_storage =
-            ProviderStorage::new(farmer_provider_storage.clone(), node_piece_cache.clone());
+        let local_records_provider = LocalRecordProvider::new(
+            maybe_farmer_local_record_provider.clone(),
+            node_piece_cache.clone(),
+        );
 
         let mut default_networking_config = subspace_networking::Config::new(
             protocol_version,
             keypair,
-            provider_storage.clone(),
+            local_records_provider.clone(),
             Some(PeerInfoProvider::new_farmer(Box::new(farmer_archival_storage_pieces.clone()))),
         );
         default_networking_config.kademlia.set_provider_record_ttl(KADEMLIA_PROVIDER_TTL_IN_SECS);
@@ -417,7 +424,6 @@ impl Dsn {
         Ok((
             DsnShared {
                 node,
-                farmer_provider_storage,
                 farmer_readers_and_pieces,
                 node_piece_cache,
                 _destructors: destructors,

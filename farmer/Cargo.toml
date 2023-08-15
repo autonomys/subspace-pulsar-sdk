@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1"
 anyhow = "1"
+bytesize = "1.2.0"
 derivative = "2.2.0"
 derive_builder = "0.12"
 derive_more = "0.99"
@@ -27,10 +28,18 @@ sdk-traits = { path = "../traits" }
 
 sc-client-api = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
-subspace-erasure-coding = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
-subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
-subspace-networking = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
-subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781", features = ["parallel", "chia"] }
-subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "6207815937cf0109d629dbe2a7143d22e2468781" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
+subspace-erasure-coding = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
+subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
+subspace-networking = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
+subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd", features = ["parallel", "chia"] }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
+
+[features]
+default = []
+integration-test = [
+    "sdk-utils/integration-test",
+    "sdk-dsn/integration-test",
+    "sdk-traits/integration-test"
+]

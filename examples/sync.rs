@@ -1,8 +1,9 @@
+use std::num::NonZeroU8;
 use std::path::PathBuf;
 
 use clap::Parser;
 use futures::stream::StreamExt;
-use subspace_sdk::farmer::CacheDescription;
+use sdk_node::PotConfiguration;
 use subspace_sdk::node::NetworkBuilder;
 use subspace_sdk::{
     chain_spec, ByteSize, Farmer, MultiaddrWithPeerId, Node, PlotDescription, PublicKey,
@@ -56,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
             tokio::fs::write(path, serde_json::to_string_pretty(&chain_spec::dev_config())?).await?,
         Args::Farm { plot, plot_size, node, spec } => {
             let chain_spec = serde_json::from_str(&tokio::fs::read_to_string(spec).await?)?;
-            let (plot_size, cache_size) =
+            let (plot_size, _cache_size) =
                 (ByteSize::b(plot_size.as_u64() * 9 / 10), ByteSize::b(plot_size.as_u64() / 10));
             let plots = [PlotDescription::new(plot.join("plot"), plot_size)];
             let farmer_total_space_pledged =
@@ -69,7 +70,12 @@ async fn main() -> anyhow::Result<()> {
                 )
                 .force_authoring(true)
                 .role(subspace_sdk::node::Role::Authority)
-                .build(node, chain_spec, farmer_total_space_pledged)
+                .build(
+                    node,
+                    chain_spec,
+                    PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
+                    farmer_total_space_pledged,
+                )
                 .await?;
 
             let _farmer: Farmer = Farmer::builder()
@@ -77,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
                     PublicKey::from([13; 32]),
                     &node,
                     &plots,
-                    CacheDescription::new(plot.join("cache"), cache_size)?,
+                    NonZeroU8::new(1).expect("Static value should not fail; qed"),
                 )
                 .await?;
 
@@ -96,7 +102,12 @@ async fn main() -> anyhow::Result<()> {
                 .force_authoring(true)
                 .role(subspace_sdk::node::Role::Authority)
                 .network(NetworkBuilder::new().boot_nodes(boot_nodes))
-                .build(node.as_ref(), chain_spec, farmer_total_space_pledged.as_u64() as usize)
+                .build(
+                    node.as_ref(),
+                    chain_spec,
+                    PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
+                    farmer_total_space_pledged.as_u64() as usize,
+                )
                 .await?;
 
             node.sync().await.unwrap();

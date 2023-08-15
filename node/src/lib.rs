@@ -21,6 +21,7 @@ use futures::{FutureExt, Stream, StreamExt};
 use sc_consensus_subspace::SegmentHeadersStore;
 use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, SyncState};
+use sc_proof_of_time::PotComponents;
 use sc_rpc_api::state::StateApiClient;
 use sdk_dsn::{DsnOptions, DsnShared, NodePieceCache};
 use sdk_traits::Farmer;
@@ -31,7 +32,7 @@ use sp_domains::GenerateGenesisStateRoot;
 use sp_runtime::DigestItem;
 use subspace_core_primitives::{HistorySize, PieceIndexHash, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
-use subspace_farmer::piece_cache::PieceCache;
+use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{
     PieceByHashRequest, PieceByHashResponse, SegmentHeaderRequest, SegmentHeaderResponse,
@@ -60,12 +61,21 @@ pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
 /// Events from subspace pallet
 pub type RewardsEvent = pallet_rewards::Event<subspace_runtime::Runtime>;
 
+/// Proof of time configuration for node
+pub struct PotConfiguration {
+    /// Flag indicating if Proof of time is enabled
+    pub is_pot_enabled: bool,
+    /// Flag indicating if the node is authority for Proof of time consensus
+    pub is_node_time_keeper: bool,
+}
+
 impl<F: Farmer + 'static> Config<F> {
     /// Start a node with supplied parameters
     pub async fn build(
         self,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,
+        pot_configuration: PotConfiguration,
         farmer_total_space_pledged: usize,
     ) -> anyhow::Result<Node<F>> {
         let Self {
@@ -77,6 +87,9 @@ impl<F: Farmer + 'static> Config<F> {
             enable_subspace_block_relay,
             ..
         } = self;
+
+        let PotConfiguration { is_pot_enabled, is_node_time_keeper } = pot_configuration;
+
         let base = base.configuration(directory.as_ref(), chain_spec.clone()).await;
         let name = base.network.node_name.clone();
         let database_source = base.database.clone();
@@ -85,12 +98,13 @@ impl<F: Farmer + 'static> Config<F> {
             |backend, executor| -> Arc<dyn GenerateGenesisStateRoot> {
                 Arc::new(DomainGenesisBlockBuilder::new(backend, executor))
             };
-        let partial_components = subspace_service::new_partial::<
-            F::Table,
-            RuntimeApi,
-            ExecutorDispatch,
-        >(&base, Some(&construct_domain_genesis_block_builder))
-        .context("Failed to build a partial subspace node")?;
+        let partial_components =
+            subspace_service::new_partial::<F::Table, RuntimeApi, ExecutorDispatch>(
+                &base,
+                Some(&construct_domain_genesis_block_builder),
+                if is_pot_enabled { Some(PotComponents::new(is_node_time_keeper)) } else { None },
+            )
+            .context("Failed to build a partial subspace node")?;
 
         let (subspace_networking, dsn, mut runner) = {
             let keypair = {
@@ -802,7 +816,7 @@ fn get_piece_by_hash<F: Farmer>(
     weak_readers_and_pieces: std::sync::Weak<
         parking_lot::Mutex<Option<subspace_farmer::utils::readers_and_pieces::ReadersAndPieces>>,
     >,
-    farmer_piece_cache: Arc<tokio::sync::RwLock<Option<PieceCache>>>,
+    farmer_piece_cache: Arc<parking_lot::RwLock<Option<FarmerPieceCache>>>,
     piece_cache: NodePieceCache<impl sc_client_api::AuxStore>,
 ) -> impl std::future::Future<Output = Option<PieceByHashResponse>> {
     async move {
@@ -811,10 +825,14 @@ fn get_piece_by_hash<F: Farmer>(
             result => return result,
         }
 
-        if let Some(farmer_piece_cache) = farmer_piece_cache.read().await.as_ref() {
+        // Have to clone due to RAII guard is not `Send`, no impact on
+        // behaviour/performance as `FarmerPieceCache` uses `Arc` and
+        // `mpsc::Sender` underneath.
+        let maybe_farmer_piece_cache = farmer_piece_cache.read().clone();
+        if let Some(farmer_piece_cache) = maybe_farmer_piece_cache {
             let piece = F::get_piece_by_hash(
                 piece_index_hash,
-                farmer_piece_cache,
+                &farmer_piece_cache,
                 &weak_readers_and_pieces,
             )
             .await;

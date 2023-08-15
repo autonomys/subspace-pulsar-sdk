@@ -121,6 +121,7 @@ impl DomainConfigBuilder {
             .chain_id("dev")
             .domain_id(DomainId::new(0))
             .relayer_id(get_account_id_from_seed("Alice"))
+            .dev_key_seed("//Alice")
     }
 
     /// Gemini 3e configuration

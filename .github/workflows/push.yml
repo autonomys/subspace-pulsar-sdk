@@ -141,7 +141,7 @@ jobs:
         run: cargo cache
 
       - name: Build and run tests
-        run: cargo test --locked --test integration --release -- --test-threads=1 --nocapture
+        run: cargo test --locked --test integration --release --features=integration-test -- --test-threads=1 --nocapture
 
       - name: Clean unused artifacts
         if: runner.os != 'Windows'

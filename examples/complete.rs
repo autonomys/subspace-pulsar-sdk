@@ -1,5 +1,7 @@
+use std::num::NonZeroU8;
+
 use futures::StreamExt;
-use subspace_sdk::farmer::CacheDescription;
+use sdk_node::PotConfiguration;
 use subspace_sdk::node::NetworkBuilder;
 use subspace_sdk::{chain_spec, node, ByteSize, Farmer, Node, PlotDescription, PublicKey};
 
@@ -12,7 +14,12 @@ async fn main() {
         .blocks_pruning(node::BlocksPruning::Some(1000))
         .state_pruning(node::PruningMode::ArchiveCanonical)
         .network(NetworkBuilder::new().name("i1i1"))
-        .build("node", chain_spec::dev_config(), farmer_total_space_pledged)
+        .build(
+            "node",
+            chain_spec::dev_config(),
+            PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
+            farmer_total_space_pledged,
+        )
         .await
         .expect("Failed to init a node");
 
@@ -26,7 +33,7 @@ async fn main() {
             reward_address,
             &node,
             &plots,
-            CacheDescription::new("cache", ByteSize::mib(100)).unwrap(),
+            NonZeroU8::new(1).expect("Static value should not fail; qed"),
         )
         .await
         .expect("Failed to init a farmer");
@@ -59,7 +66,12 @@ async fn main() {
     let node = Node::builder()
         .blocks_pruning(node::BlocksPruning::Some(1000))
         .state_pruning(node::PruningMode::ArchiveCanonical)
-        .build("node", chain_spec::dev_config(), farmer_total_space_pledged)
+        .build(
+            "node",
+            chain_spec::dev_config(),
+            PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
+            farmer_total_space_pledged,
+        )
         .await
         .expect("Failed to init a node");
     node.sync().await.unwrap();
@@ -69,7 +81,7 @@ async fn main() {
             reward_address,
             &node,
             &[PlotDescription::new("plot", ByteSize::gb(10))],
-            CacheDescription::new("cache", ByteSize::mib(100)).unwrap(),
+            NonZeroU8::new(1).expect("Static value should not fail; qed"),
         )
         .await
         .expect("Failed to init a farmer");

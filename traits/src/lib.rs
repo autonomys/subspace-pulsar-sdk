@@ -9,7 +9,7 @@
 )]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
-use subspace_farmer::piece_cache::PieceCache;
+use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
 
 /// Trait which abstracts farmer for node
 #[async_trait::async_trait]
@@ -20,7 +20,7 @@ pub trait Farmer {
     /// Fetch piece by its hash
     async fn get_piece_by_hash(
         piece_index_hash: subspace_core_primitives::PieceIndexHash,
-        piece_cache: &PieceCache,
+        piece_cache: &FarmerPieceCache,
         weak_readers_and_pieces: &std::sync::Weak<
             parking_lot::Mutex<
                 Option<subspace_farmer::utils::readers_and_pieces::ReadersAndPieces>,

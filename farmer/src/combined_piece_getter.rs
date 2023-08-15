@@ -1,12 +1,15 @@
 use std::collections::HashSet;
 use std::error::Error;
+use std::sync::Arc;
 
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use sc_client_api::AuxStore;
 use sdk_dsn::NodePieceCache;
 use subspace_core_primitives::{Piece, PieceIndex};
-use subspace_farmer::piece_cache::PieceCache;
+use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
 use subspace_farmer::utils::archival_storage_info::ArchivalStorageInfo;
+use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer_components::plotting::{PieceGetter, PieceGetterRetryPolicy};
 use subspace_networking::libp2p::kad::RecordKey;
 use subspace_networking::libp2p::PeerId;
@@ -17,20 +20,29 @@ use subspace_networking::Node;
 pub struct CombinedPieceGetter<PV, C> {
     node: Node,
     piece_provider: PieceProvider<PV>,
-    farmer_piece_cache: PieceCache,
+    farmer_piece_cache: FarmerPieceCache,
     node_piece_cache: NodePieceCache<C>,
     archival_storage_info: ArchivalStorageInfo,
+    readers_and_pieces: Arc<Mutex<Option<ReadersAndPieces>>>,
 }
 
 impl<PV, C> CombinedPieceGetter<PV, C> {
     pub fn new(
         node: Node,
         piece_provider: PieceProvider<PV>,
-        farmer_piece_cache: PieceCache,
+        farmer_piece_cache: FarmerPieceCache,
         node_piece_cache: NodePieceCache<C>,
         archival_storage_info: ArchivalStorageInfo,
+        readers_and_pieces: Arc<Mutex<Option<ReadersAndPieces>>>,
     ) -> Self {
-        Self { node, piece_provider, node_piece_cache, farmer_piece_cache, archival_storage_info }
+        Self {
+            node,
+            piece_provider,
+            node_piece_cache,
+            farmer_piece_cache,
+            archival_storage_info,
+            readers_and_pieces,
+        }
     }
 
     fn convert_retry_policy(retry_policy: PieceGetterRetryPolicy) -> RetryPolicy {
@@ -62,6 +74,18 @@ where
         // We will try to query our own node piece cache before querying network
         if let Some(piece) = self.node_piece_cache.get_piece(piece_index_hash)? {
             return Ok(Some(piece));
+        }
+
+        let maybe_read_piece_fut = self
+            .readers_and_pieces
+            .lock()
+            .as_ref()
+            .and_then(|readers_and_pieces| readers_and_pieces.read_piece(&piece_index_hash));
+
+        if let Some(read_piece_fut) = maybe_read_piece_fut {
+            if let Some(piece) = read_piece_fut.await {
+                return Ok(Some(piece));
+            }
         }
 
         // L2 piece acquisition

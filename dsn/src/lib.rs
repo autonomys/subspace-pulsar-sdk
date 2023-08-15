@@ -11,19 +11,18 @@
 #![feature(concat_idents, const_option)]
 
 mod builder;
-mod provider_storage_utils;
+mod local_provider_record_utils;
 
 pub use builder::*;
+use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
 use tracing::warn;
 
 /// Node piece cache
 pub type NodePieceCache<C> = subspace_service::piece_cache::PieceCache<C>;
-/// Farmer provider storage
-pub type FarmerProviderStorage =
-    subspace_farmer::utils::farmer_provider_storage::FarmerProviderStorage;
 
-/// General provider storage
-pub type ProviderStorage<C> = provider_storage_utils::AndProviderStorage<
-    provider_storage_utils::MaybeProviderStorage<FarmerProviderStorage>,
+/// Combined record provider that uses both farmer piece cache and node piece
+/// cache underneath
+pub type LocalRecordProvider<C> = local_provider_record_utils::AndLocalRecordProvider<
+    local_provider_record_utils::MaybeLocalRecordProvider<FarmerPieceCache>,
     NodePieceCache<C>,
 >;
