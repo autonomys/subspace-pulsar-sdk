@@ -19,7 +19,6 @@ use subspace_networking::utils::strip_peer_id;
 use subspace_networking::{
     PeerInfo, PeerInfoProvider, PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
     SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
-    KADEMLIA_PROVIDER_TTL_IN_SECS,
 };
 
 use super::local_provider_record_utils::MaybeLocalRecordProvider;
@@ -320,13 +319,12 @@ impl Dsn {
             node_piece_cache.clone(),
         );
 
-        let mut default_networking_config = subspace_networking::Config::new(
+        let default_networking_config = subspace_networking::Config::new(
             protocol_version,
             keypair,
             local_records_provider.clone(),
             Some(PeerInfoProvider::new_farmer(Box::new(farmer_archival_storage_pieces.clone()))),
         );
-        default_networking_config.kademlia.set_provider_record_ttl(KADEMLIA_PROVIDER_TTL_IN_SECS);
 
         let config = subspace_networking::Config {
             listen_on,

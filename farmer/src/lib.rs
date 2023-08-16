@@ -258,7 +258,8 @@ impl<T: subspace_proof_of_space::Table> sdk_traits::Farmer for Farmer<T> {
     }
 }
 
-const RECORDS_ROOTS_CACHE_SIZE: NonZeroUsize = NonZeroUsize::new(1_000_000).expect("Not zero; qed");
+const SEGMENT_COMMITMENTS_CACHE_SIZE: NonZeroUsize =
+    NonZeroUsize::new(1_000_000).expect("Not zero; qed");
 
 fn create_readers_and_pieces(
     single_disk_plots: &[SingleDiskPlot],
@@ -368,7 +369,7 @@ impl Config {
                 node.rpc().clone(),
                 kzg.clone(),
                 // TODO: Consider introducing and using global in-memory segment commitments cache
-                parking_lot::Mutex::new(lru::LruCache::new(RECORDS_ROOTS_CACHE_SIZE)),
+                parking_lot::Mutex::new(lru::LruCache::new(SEGMENT_COMMITMENTS_CACHE_SIZE)),
             )),
         );
         let piece_getter = Arc::new(CombinedPieceGetter::new(
@@ -546,25 +547,6 @@ impl Config {
         for handler_id in sector_plotting_handler_ids.drain(..) {
             destructors.add_items_to_drop(handler_id)?;
         }
-
-        // TODO: check for piece cache to exit
-        // async_drop.push(async move {
-        //     const PIECE_STORE_POLL: Duration = Duration::from_millis(100);
-
-        //     // HACK: Poll on piece store creation just to be sure
-        //     loop {
-        //         let result = ParityDbStore::<
-        //             subspace_networking::libp2p::kad::record::Key,
-        //             subspace_core_primitives::Piece,
-        //         >::new(&piece_cache_db_path);
-
-        //         match result.map(drop) {
-        //             // If parity db is still locked wait on it
-        //             Err(parity_db::Error::Locked(_)) =>
-        // tokio::time::sleep(PIECE_STORE_POLL).await,             _ => break,
-        //         }
-        //     }
-        // });
 
         tracing::debug!("Started farmer");
 

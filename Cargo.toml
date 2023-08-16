@@ -4,13 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-static_assertions = "1.1.0"
-
-sdk-utils = { path = "utils" }
-sdk-node = { path = "node" }
 sdk-dsn = { path = "dsn" }
-sdk-substrate = { path = "substrate" }
 sdk-farmer = { path = "farmer" }
+sdk-node = { path = "node" }
+sdk-substrate = { path = "substrate" }
+sdk-utils = { path = "utils" }
+static_assertions = "1.1.0"
 
 subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
 
@@ -29,13 +28,12 @@ derive_more = "0.99"
 fdlimit = "0.2"
 futures = "0.3"
 serde_json = "1"
+subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
 tempfile = "3"
 tokio = { version = "1.26", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1"
 tracing-futures = "0.2"
 tracing-subscriber = "0.3"
-
-subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
 # that are suspected to be CPU-intensive, and that are unlikely to require debugging (as some of
@@ -133,12 +131,12 @@ substrate-prometheus-endpoint = { version = "0.10.0-dev", git = "https://github.
 [workspace]
 resolver = "2"
 members = [
-    "utils",
     "dsn",
-    "substrate",
-    "node",
     "farmer",
+    "node",
+    "substrate",
     "traits",
+    "utils",
 ]
 
 [features]
