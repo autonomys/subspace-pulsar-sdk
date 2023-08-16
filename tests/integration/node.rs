@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use futures::prelude::*;
+use sdk_utils::ByteSize;
 use tempfile::TempDir;
 use tracing_futures::Instrument;
 
@@ -9,10 +10,18 @@ use crate::common::{Farmer, Node};
 async fn sync_block_inner() {
     crate::common::setup();
 
-    let node = Node::dev().build().await;
-    let farmer = Farmer::dev().build(&node).await;
+    let number_of_sectors = 10;
+    let pieces_in_sector = 50u16;
+    let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
+    let space_pledged = sector_size * number_of_sectors;
 
-    let farm_blocks = 4;
+    let node = Node::dev().build(space_pledged, true).await;
+    let farmer = Farmer::dev()
+        .pieces_in_sector(pieces_in_sector)
+        .build(&node, ByteSize::b(space_pledged as u64))
+        .await;
+
+    let farm_blocks = 5;
 
     node.subscribe_new_heads()
         .await
@@ -29,7 +38,7 @@ async fn sync_block_inner() {
         .boot_nodes(node.listen_addresses().await.unwrap())
         .not_force_synced(true)
         .not_authority(true)
-        .build()
+        .build(space_pledged, false)
         .await;
 
     other_node.subscribe_syncing_progress().await.unwrap().for_each(|_| async {}).await;
@@ -48,10 +57,19 @@ async fn sync_block() {
 async fn sync_plot_inner() {
     crate::common::setup();
 
-    let node_span = tracing::trace_span!("node 1");
-    let node = Node::dev().build().instrument(node_span.clone()).await;
+    let number_of_sectors = 10;
+    let pieces_in_sector = 50u16;
+    let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
+    let space_pledged = sector_size * number_of_sectors;
 
-    let farmer = Farmer::dev().build(&node).instrument(node_span.clone()).await;
+    let node_span = tracing::trace_span!("node 1");
+    let node = Node::dev().build(space_pledged, true).instrument(node_span.clone()).await;
+
+    let farmer = Farmer::dev()
+        .pieces_in_sector(pieces_in_sector)
+        .build(&node, ByteSize::b(space_pledged as u64))
+        .instrument(node_span.clone())
+        .await;
 
     let farm_blocks = 4;
 
@@ -69,7 +87,7 @@ async fn sync_plot_inner() {
         .boot_nodes(node.listen_addresses().await.unwrap())
         .not_force_synced(true)
         .chain(node.chain.clone())
-        .build()
+        .build(space_pledged, false)
         .instrument(other_node_span.clone())
         .await;
 
@@ -79,7 +97,11 @@ async fn sync_plot_inner() {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 
-    let other_farmer = Farmer::dev().build(&other_node).instrument(other_node_span.clone()).await;
+    let other_farmer = Farmer::dev()
+        .pieces_in_sector(pieces_in_sector)
+        .build(&other_node, ByteSize::b(space_pledged as u64))
+        .instrument(other_node_span.clone())
+        .await;
 
     let plot = other_farmer.iter_plots().await.next().unwrap();
     plot.subscribe_initial_plotting_progress().await.for_each(|_| async {}).await;
@@ -106,7 +128,7 @@ async fn node_restart() {
 
     for i in 0..4 {
         tracing::error!(i, "Running new node");
-        Node::dev().path(dir.clone()).build().await.close().await;
+        Node::dev().path(dir.clone()).build(1 * 1024 * 1024, true).await.close().await;
     }
 }
 
@@ -116,8 +138,16 @@ async fn node_events() {
     crate::common::setup();
 
     tokio::time::timeout(std::time::Duration::from_secs(30 * 60), async {
-        let node = Node::dev().build().await;
-        let farmer = Farmer::dev().build(&node).await;
+        let number_of_sectors = 10;
+        let pieces_in_sector = 50u16;
+        let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
+        let space_pledged = sector_size * number_of_sectors;
+
+        let node = Node::dev().build(space_pledged, true).await;
+        let farmer = Farmer::dev()
+            .pieces_in_sector(pieces_in_sector)
+            .build(&node, ByteSize::b(space_pledged as u64))
+            .await;
 
         let events = node
             .subscribe_new_heads()
@@ -147,9 +177,18 @@ async fn fetch_block_author() {
     crate::common::setup();
 
     tokio::time::timeout(std::time::Duration::from_secs(30 * 60), async {
-        let node = Node::dev().build().await;
+        let number_of_sectors = 10;
+        let pieces_in_sector = 50u16;
+        let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
+        let space_pledged = sector_size * number_of_sectors;
+
+        let node = Node::dev().build(space_pledged, false).await;
         let reward_address = Default::default();
-        let farmer = Farmer::dev().reward_address(reward_address).build(&node).await;
+        let farmer = Farmer::dev()
+            .reward_address(reward_address)
+            .pieces_in_sector(pieces_in_sector)
+            .build(&node, ByteSize::b(space_pledged as u64))
+            .await;
 
         let block = node.subscribe_new_heads().await.unwrap().skip(1).take(1).next().await.unwrap();
         assert_eq!(block.pre_digest.unwrap().solution.reward_address, reward_address);

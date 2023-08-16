@@ -17,35 +17,43 @@ use std::time::Duration;
 
 use anyhow::Context;
 use derivative::Derivative;
-use futures::channel::{mpsc, oneshot};
-use futures::{FutureExt, SinkExt, Stream, StreamExt};
-use sc_consensus_subspace_rpc::SegmentHeaderProvider;
+use futures::{FutureExt, Stream, StreamExt};
+use sc_consensus_subspace::SegmentHeadersStore;
 use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, SyncState};
+use sc_proof_of_time::PotComponents;
 use sc_rpc_api::state::StateApiClient;
 use sdk_dsn::{DsnOptions, DsnShared, NodePieceCache};
 use sdk_traits::Farmer;
-use sdk_utils::{DropCollection, MultiaddrWithPeerId, PublicKey};
+use sdk_utils::{DestructorSet, MultiaddrWithPeerId, PublicKey, TaskOutput};
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
+use sp_domains::GenerateGenesisStateRoot;
 use sp_runtime::DigestItem;
 use subspace_core_primitives::{HistorySize, PieceIndexHash, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
+use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{
     PieceByHashRequest, PieceByHashResponse, SegmentHeaderRequest, SegmentHeaderResponse,
 };
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
-use subspace_service::segment_headers::SegmentHeaderCache;
 use subspace_service::SubspaceConfiguration;
+use tokio::sync::oneshot;
 
 mod builder;
 pub mod chain_spec;
+mod domains;
 
 pub use builder::*;
+pub use domains::builder::{DomainConfig, DomainConfigBuilder};
+pub use domains::domain::Domain;
+use domains::domain_genesis_block_builder::DomainGenesisBlockBuilder;
 pub use subspace_runtime::RuntimeEvent as Event;
 use tracing::Instrument;
+
+use crate::domains::builder::ConsensusNodeLink;
 
 /// Events from subspace pallet
 pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
@@ -53,12 +61,22 @@ pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
 /// Events from subspace pallet
 pub type RewardsEvent = pallet_rewards::Event<subspace_runtime::Runtime>;
 
+/// Proof of time configuration for node
+pub struct PotConfiguration {
+    /// Flag indicating if Proof of time is enabled
+    pub is_pot_enabled: bool,
+    /// Flag indicating if the node is authority for Proof of time consensus
+    pub is_node_time_keeper: bool,
+}
+
 impl<F: Farmer + 'static> Config<F> {
     /// Start a node with supplied parameters
     pub async fn build(
         self,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,
+        pot_configuration: PotConfiguration,
+        farmer_total_space_pledged: usize,
     ) -> anyhow::Result<Node<F>> {
         let Self {
             base,
@@ -69,13 +87,24 @@ impl<F: Farmer + 'static> Config<F> {
             enable_subspace_block_relay,
             ..
         } = self;
+
+        let PotConfiguration { is_pot_enabled, is_node_time_keeper } = pot_configuration;
+
         let base = base.configuration(directory.as_ref(), chain_spec.clone()).await;
         let name = base.network.node_name.clone();
         let database_source = base.database.clone();
 
+        let construct_domain_genesis_block_builder =
+            |backend, executor| -> Arc<dyn GenerateGenesisStateRoot> {
+                Arc::new(DomainGenesisBlockBuilder::new(backend, executor))
+            };
         let partial_components =
-            subspace_service::new_partial::<F::Table, RuntimeApi, ExecutorDispatch>(&base)
-                .context("Failed to build a partial subspace node")?;
+            subspace_service::new_partial::<F::Table, RuntimeApi, ExecutorDispatch>(
+                &base,
+                Some(&construct_domain_genesis_block_builder),
+                if is_pot_enabled { Some(PotComponents::new(is_node_time_keeper)) } else { None },
+            )
+            .context("Failed to build a partial subspace node")?;
 
         let (subspace_networking, dsn, mut runner) = {
             let keypair = {
@@ -108,6 +137,8 @@ impl<F: Farmer + 'static> Config<F> {
             let bootstrap_nodes =
                 dsn.boot_nodes.clone().into_iter().map(Into::into).collect::<Vec<_>>();
 
+            let segment_header_store = partial_components.other.2.clone();
+
             let (dsn, runner) = dsn.build_dsn(DsnOptions {
                 client: partial_components.client.clone(),
                 node_name: name.clone(),
@@ -121,6 +152,8 @@ impl<F: Farmer + 'static> Config<F> {
                 base_path: directory.as_ref().to_path_buf(),
                 get_piece_by_hash: get_piece_by_hash::<F>,
                 get_segment_header_by_segment_indexes,
+                farmer_total_space_pledged,
+                segment_header_store,
             })?;
 
             tracing::debug!("Subspace networking initialized: Node ID is {}", dsn.node.id());
@@ -165,15 +198,6 @@ impl<F: Farmer + 'static> Config<F> {
         .await
         .context("Failed to build a full subspace node")?;
 
-        if let Some(storage_monitor) = storage_monitor {
-            sc_storage_monitor::StorageMonitorService::try_spawn(
-                storage_monitor.into(),
-                database_source,
-                &full_client.task_manager.spawn_essential_handle(),
-            )
-            .context("Failed to start storage monitor")?;
-        }
-
         let NewFull {
             mut task_manager,
             client,
@@ -183,39 +207,77 @@ impl<F: Farmer + 'static> Config<F> {
             network_service,
 
             backend: _,
-            select_chain: _,
+            select_chain,
             reward_signing_notification_stream: _,
             archived_segment_notification_stream: _,
             transaction_pool: _,
-            block_importing_notification_stream: _,
-            new_slot_notification_stream: _,
+            block_importing_notification_stream,
+            new_slot_notification_stream,
         } = full_client;
 
-        let rpc_handle = sdk_utils::Rpc::new(&rpc_handlers);
-        network_starter.start_network();
-        let (stop_sender, mut stop_receiver) = mpsc::channel::<oneshot::Sender<()>>(1);
+        if let Some(storage_monitor) = storage_monitor {
+            sc_storage_monitor::StorageMonitorService::try_spawn(
+                storage_monitor.into(),
+                database_source,
+                &task_manager.spawn_essential_handle(),
+            )
+            .context("Failed to start storage monitor")?;
+        }
 
-        sdk_utils::task_spawn(format!("subspace-sdk-node-{name}-task-manager"), {
-            async move {
-                let opt_stop_sender = async move {
+        let mut destructors = DestructorSet::new("node-destructors");
+
+        let (task_manager_drop_sender, task_manager_drop_receiver) = oneshot::channel();
+        let (task_manager_result_sender, task_manager_result_receiver) = oneshot::channel();
+        let task_manager_join_handle = sdk_utils::task_spawn(
+            format!("subspace-sdk-node-{name}-task-manager"),
+            {
+                async move {
                     futures::select! {
-                        opt_sender = stop_receiver.next() => opt_sender,
+                        _ = task_manager_drop_receiver.fuse() => {
+                            let _ = task_manager_result_sender.send(Ok(TaskOutput::Cancelled("received drop signal for task manager".into())));
+                        },
                         result = task_manager.future().fuse() => {
-                            result.expect("Task from manager paniced");
-                            None
+                            let _ = task_manager_result_sender.send(result.map_err(anyhow::Error::new).map(TaskOutput::Value));
                         }
                         _ = node_runner_future.fuse() => {
-                            tracing::info!("Node runner exited");
-                            None
+                            let _ = task_manager_result_sender.send(Ok(TaskOutput::Value(())));
                         }
                     }
                 }
-                .await;
-                opt_stop_sender.map(|stop_sender| stop_sender.send(()));
-            }
-        });
+            },
+        );
 
-        let drop_collection = DropCollection::new();
+        destructors.add_async_destructor({
+            async move {
+                let _ = task_manager_drop_sender.send(());
+                task_manager_join_handle.await.expect("joining should not fail; qed");
+            }
+        })?;
+
+        let mut maybe_domain = None;
+        if let Some(domain_config) = self.domain {
+            let base_directory = directory.as_ref().to_owned().clone();
+
+            let domain = domain_config
+                .build(
+                    base_directory,
+                    ConsensusNodeLink {
+                        consensus_client: client.clone(),
+                        block_importing_notification_stream: block_importing_notification_stream
+                            .clone(),
+                        new_slot_notification_stream: new_slot_notification_stream.clone(),
+                        consensus_network_service: network_service.clone(),
+                        consensus_sync_service: sync_service.clone(),
+                        select_chain: select_chain.clone(),
+                    },
+                )
+                .await?;
+
+            maybe_domain = Some(domain);
+        }
+
+        let rpc_handle = sdk_utils::Rpc::new(&rpc_handlers);
+        network_starter.start_network();
 
         // Disable proper exit for now. Because RPC server looses waker and can't exit
         // in background.
@@ -239,9 +301,10 @@ impl<F: Farmer + 'static> Config<F> {
             name,
             rpc_handle,
             dsn,
-            stop_sender,
-            _drop_at_exit: drop_collection,
+            _destructors: destructors,
             _farmer: Default::default(),
+            task_manager_result_receiver,
+            maybe_domain,
         })
     }
 }
@@ -258,7 +321,8 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     // )
     // /// Otherwise we only use the default Substrate host functions.
     // #[cfg(not(feature = "runtime-benchmarks"))]
-    type ExtendHostFunctions = sp_consensus_subspace::consensus::HostFunctions;
+    type ExtendHostFunctions =
+        (sp_consensus_subspace::consensus::HostFunctions, sp_domains::domain::HostFunctions);
 
     fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
         subspace_runtime::api::dispatch(method, data)
@@ -275,11 +339,10 @@ pub(crate) type FullClient =
     subspace_service::FullClient<subspace_runtime::RuntimeApi, ExecutorDispatch>;
 pub(crate) type NewFull = subspace_service::NewFull<
     FullClient,
-    subspace_service::tx_pre_validator::PrimaryChainTxPreValidator<
+    subspace_service::tx_pre_validator::ConsensusChainTxPreValidator<
         RuntimeBlock,
         FullClient,
         subspace_service::FraudProofVerifier<RuntimeApi, ExecutorDispatch>,
-        subspace_transaction_pool::bundle_validator::BundleValidator<RuntimeBlock, FullClient>,
     >,
 >;
 
@@ -295,13 +358,16 @@ pub struct Node<F: Farmer> {
     #[derivative(Debug = "ignore")]
     network_service: Arc<NetworkService<RuntimeBlock, Hash>>,
     rpc_handle: sdk_utils::Rpc,
-    stop_sender: mpsc::Sender<oneshot::Sender<()>>,
     name: String,
     dsn: DsnShared<FullClient>,
     #[derivative(Debug = "ignore")]
-    _drop_at_exit: DropCollection,
+    _destructors: DestructorSet,
     #[derivative(Debug = "ignore")]
     _farmer: std::marker::PhantomData<F>,
+    #[derivative(Debug = "ignore")]
+    task_manager_result_receiver: oneshot::Receiver<anyhow::Result<TaskOutput<(), String>>>,
+    #[derivative(Debug = "ignore")]
+    maybe_domain: Option<Domain>,
 }
 
 impl<F: Farmer> sdk_traits::Node for Node<F> {
@@ -591,19 +657,24 @@ impl<F: Farmer + 'static> Node<F> {
     }
 
     /// Leaves the network and gracefully shuts down
-    pub async fn close(mut self) -> anyhow::Result<()> {
-        let (stop_sender, stop_receiver) = oneshot::channel();
-        let _ = match self.stop_sender.send(stop_sender).await {
-            Err(_) => return Err(anyhow::anyhow!("Node was already closed")),
-            Ok(()) => stop_receiver.await,
-        };
-
+    pub async fn close(self) -> anyhow::Result<()> {
+        if let Some(domain) = self.maybe_domain {
+            domain.close().await?;
+        }
+        self._destructors.async_drop().await?;
+        let output = self.task_manager_result_receiver.await??;
+        match output {
+            TaskOutput::Value(_) => {}
+            TaskOutput::Cancelled(reason) => {
+                tracing::warn!("node task manager was cancelled due to reason: {}", reason);
+            }
+        }
         Ok(())
     }
 
     /// Tells if the node was closed
     pub async fn is_closed(&self) -> bool {
-        self.stop_sender.is_closed()
+        self._destructors.already_ran()
     }
 
     /// Runs `.close()` and also wipes node's state
@@ -694,43 +765,47 @@ impl<F: Farmer + 'static> Node<F> {
     }
 }
 
-const ROOT_BLOCK_NUMBER_LIMIT: u64 = 100;
+const SEGMENT_HEADERS_NUMBER_LIMIT: u64 = 1000;
 
 fn get_segment_header_by_segment_indexes(
     req: &SegmentHeaderRequest,
-    segment_header_cache: &SegmentHeaderCache<impl sc_client_api::AuxStore>,
+    segment_headers_store: &SegmentHeadersStore<impl sc_client_api::AuxStore>,
 ) -> Option<SegmentHeaderResponse> {
     let segment_indexes = match req {
         SegmentHeaderRequest::SegmentIndexes { segment_indexes } => segment_indexes.clone(),
         SegmentHeaderRequest::LastSegmentHeaders { segment_header_number } => {
-            let mut block_limit = *segment_header_number;
-            if *segment_header_number > ROOT_BLOCK_NUMBER_LIMIT {
+            let mut segment_headers_limit = *segment_header_number;
+            if *segment_header_number > SEGMENT_HEADERS_NUMBER_LIMIT {
                 tracing::debug!(%segment_header_number, "Segment header number exceeded the limit.");
 
-                block_limit = ROOT_BLOCK_NUMBER_LIMIT;
+                segment_headers_limit = SEGMENT_HEADERS_NUMBER_LIMIT;
             }
 
-            let max_segment_index = segment_header_cache.max_segment_index();
-
-            // several last segment indexes
-            (SegmentIndex::ZERO..=max_segment_index)
-                .rev()
-                .take(block_limit as usize)
-                .collect::<Vec<_>>()
+            match segment_headers_store.max_segment_index() {
+                Some(max_segment_index) => {
+                    // Several last segment indexes
+                    (SegmentIndex::ZERO..=max_segment_index)
+                        .rev()
+                        .take(segment_headers_limit as usize)
+                        .collect::<Vec<_>>()
+                }
+                None => {
+                    // Nothing yet
+                    Vec::new()
+                }
+            }
         }
     };
 
-    let internal_result = segment_indexes
+    let maybe_segment_headers = segment_indexes
         .iter()
-        .map(|segment_index| segment_header_cache.get_segment_header(*segment_index))
-        .collect::<Result<Option<Vec<subspace_core_primitives::SegmentHeader>>, _>>();
+        .map(|segment_index| segment_headers_store.get_segment_header(*segment_index))
+        .collect::<Option<Vec<subspace_core_primitives::SegmentHeader>>>();
 
-    match internal_result {
-        Ok(Some(segment_headers)) => Some(SegmentHeaderResponse { segment_headers }),
-        Ok(None) => None,
-        Err(error) => {
-            tracing::error!(%error, "Failed to get segment header from cache");
-
+    match maybe_segment_headers {
+        Some(segment_headers) => Some(SegmentHeaderResponse { segment_headers }),
+        None => {
+            tracing::error!("Segment header collection contained empty segment headers.");
             None
         }
     }
@@ -741,9 +816,8 @@ fn get_piece_by_hash<F: Farmer>(
     weak_readers_and_pieces: std::sync::Weak<
         parking_lot::Mutex<Option<subspace_farmer::utils::readers_and_pieces::ReadersAndPieces>>,
     >,
-    farmer_piece_store: Arc<tokio::sync::Mutex<Option<sdk_dsn::PieceStore>>>,
+    farmer_piece_cache: Arc<parking_lot::RwLock<Option<FarmerPieceCache>>>,
     piece_cache: NodePieceCache<impl sc_client_api::AuxStore>,
-    piece_memory_cache: subspace_farmer_components::piece_caching::PieceMemoryCache,
 ) -> impl std::future::Future<Output = Option<PieceByHashResponse>> {
     async move {
         match node_get_piece_by_hash(piece_index_hash, &piece_cache) {
@@ -751,12 +825,15 @@ fn get_piece_by_hash<F: Farmer>(
             result => return result,
         }
 
-        if let Some(piece_store) = farmer_piece_store.lock().await.as_ref() {
+        // Have to clone due to RAII guard is not `Send`, no impact on
+        // behaviour/performance as `FarmerPieceCache` uses `Arc` and
+        // `mpsc::Sender` underneath.
+        let maybe_farmer_piece_cache = farmer_piece_cache.read().clone();
+        if let Some(farmer_piece_cache) = maybe_farmer_piece_cache {
             let piece = F::get_piece_by_hash(
                 piece_index_hash,
-                piece_store,
+                &farmer_piece_cache,
                 &weak_readers_and_pieces,
-                &piece_memory_cache,
             )
             .await;
             Some(PieceByHashResponse { piece })

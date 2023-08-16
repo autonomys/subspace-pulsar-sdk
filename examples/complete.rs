@@ -1,22 +1,31 @@
+use std::num::NonZeroU8;
+
 use futures::StreamExt;
-use subspace_sdk::farmer::CacheDescription;
+use sdk_node::PotConfiguration;
 use subspace_sdk::node::NetworkBuilder;
 use subspace_sdk::{chain_spec, node, ByteSize, Farmer, Node, PlotDescription, PublicKey};
 
 #[tokio::main]
 async fn main() {
+    let plots = [PlotDescription::new("plot", ByteSize::gb(10))];
+    let farmer_total_space_pledged =
+        plots.iter().map(|p| p.space_pledged.as_u64() as usize).sum::<usize>();
     let node: Node = Node::builder()
         .blocks_pruning(node::BlocksPruning::Some(1000))
         .state_pruning(node::PruningMode::ArchiveCanonical)
         .network(NetworkBuilder::new().name("i1i1"))
-        .build("node", chain_spec::dev_config())
+        .build(
+            "node",
+            chain_spec::dev_config(),
+            PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
+            farmer_total_space_pledged,
+        )
         .await
         .expect("Failed to init a node");
 
     node.sync().await.unwrap();
 
     let reward_address = PublicKey::from([0; 32]);
-    let plots = [PlotDescription::new("plot", ByteSize::gb(10))];
     let farmer: Farmer = Farmer::builder()
         // .ws_rpc("127.0.0.1:9955".parse().unwrap())
         // .listen_on("/ip4/0.0.0.0/tcp/40333".parse().unwrap())
@@ -24,7 +33,7 @@ async fn main() {
             reward_address,
             &node,
             &plots,
-            CacheDescription::new("cache", ByteSize::mib(100)).unwrap(),
+            NonZeroU8::new(1).expect("Static value should not fail; qed"),
         )
         .await
         .expect("Failed to init a farmer");
@@ -57,7 +66,12 @@ async fn main() {
     let node = Node::builder()
         .blocks_pruning(node::BlocksPruning::Some(1000))
         .state_pruning(node::PruningMode::ArchiveCanonical)
-        .build("node", chain_spec::dev_config())
+        .build(
+            "node",
+            chain_spec::dev_config(),
+            PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
+            farmer_total_space_pledged,
+        )
         .await
         .expect("Failed to init a node");
     node.sync().await.unwrap();
@@ -67,7 +81,7 @@ async fn main() {
             reward_address,
             &node,
             &[PlotDescription::new("plot", ByteSize::gb(10))],
-            CacheDescription::new("cache", ByteSize::mib(100)).unwrap(),
+            NonZeroU8::new(1).expect("Static value should not fail; qed"),
         )
         .await
         .expect("Failed to init a farmer");

@@ -1,9 +1,12 @@
+use std::num::NonZeroU8;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut};
-use subspace_sdk::farmer::{CacheDescription, PlotDescription};
+use sdk_node::{DomainConfigBuilder, PotConfiguration};
+use sdk_utils::ByteSize;
+use subspace_sdk::farmer::PlotDescription;
 use subspace_sdk::node::{chain_spec, ChainSpec, DsnBuilder, NetworkBuilder, Role};
 use subspace_sdk::MultiaddrWithPeerId;
 use tempfile::TempDir;
@@ -62,13 +65,12 @@ pub struct Node {
     #[deref]
     #[deref_mut]
     node: subspace_sdk::Node,
-    _node: subspace_sdk::Node,
     pub path: Arc<TempDir>,
     pub chain: ChainSpec,
 }
 
 impl NodeBuilder {
-    pub async fn build(self) -> Node {
+    pub async fn build(self, space_pledged: usize, enable_domains: bool) -> Node {
         let InnerNode {
             not_force_synced,
             boot_nodes,
@@ -93,6 +95,12 @@ impl NodeBuilder {
             )
             .role(if not_authority { Role::Full } else { Role::Authority });
 
+        let node = if enable_domains {
+            node.domain(Some(DomainConfigBuilder::dev().configuration()))
+        } else {
+            node
+        };
+
         #[cfg(all(feature = "core-payments", feature = "executor"))]
         let node = if enable_core {
             node.system_domain(subspace_sdk::node::domains::ConfigBuilder::new().core_payments(
@@ -102,34 +110,17 @@ impl NodeBuilder {
             node
         };
 
-        let node = node.build(path.path().join("node"), chain.clone()).await.unwrap();
+        let node = node
+            .build(
+                path.path().join("node"),
+                chain.clone(),
+                PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
+                space_pledged,
+            )
+            .await
+            .unwrap();
 
-        // TODO: remove me once bug with infinite announcements while offline gets fixed
-        let _node = {
-            let node = subspace_sdk::Node::dev()
-                .dsn(
-                    DsnBuilder::dev()
-                        .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
-                        .boot_nodes(node.dsn_listen_addresses().await.unwrap()),
-                )
-                .network(
-                    NetworkBuilder::dev()
-                        .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
-                        .boot_nodes(node.listen_addresses().await.unwrap()),
-                );
-            #[cfg(all(feature = "core-payments", feature = "executor"))]
-            let node = if enable_core {
-                node.system_domain(subspace_sdk::node::domains::ConfigBuilder::new().core_payments(
-                    subspace_sdk::node::domains::core_payments::ConfigBuilder::new().build(),
-                ))
-            } else {
-                node
-            };
-
-            node.build(path.path().join(".sync-node"), chain.clone()).await.unwrap()
-        };
-
-        Node { node, path, chain, _node }
+        Node { node, path, chain }
     }
 }
 
@@ -144,7 +135,6 @@ impl Node {
 
     pub async fn close(self) {
         self.node.close().await.unwrap();
-        self._node.close().await.unwrap();
     }
 }
 
@@ -153,8 +143,8 @@ impl Node {
 pub struct InnerFarmer {
     #[builder(default)]
     reward_address: subspace_sdk::PublicKey,
-    #[builder(default = "1")]
-    n_sectors: u64,
+    #[builder(default = "50")]
+    pieces_in_sector: u16,
 }
 
 #[derive(Deref, DerefMut)]
@@ -166,11 +156,8 @@ pub struct Farmer {
 }
 
 impl FarmerBuilder {
-    pub async fn build(self, node: &Node) -> Farmer {
-        let InnerFarmer { reward_address, n_sectors } = self._build().expect("Infallible");
-        let pieces_in_sector = 50u16;
-        let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
-
+    pub async fn build(self, node: &Node, space_pledged: ByteSize) -> Farmer {
+        let InnerFarmer { reward_address, pieces_in_sector } = self._build().expect("Infallible");
         let farmer = subspace_sdk::Farmer::builder()
             .max_pieces_in_sector(Some(pieces_in_sector))
             .build(
@@ -179,9 +166,9 @@ impl FarmerBuilder {
                 &[PlotDescription::new(
                     node.path().path().join("plot"),
                     // TODO: account for overhead here
-                    subspace_sdk::ByteSize::b(sector_size as u64 * n_sectors),
+                    space_pledged,
                 )],
-                CacheDescription::minimal(node.path().path().join("cache")),
+                NonZeroU8::new(20).expect("Static value should not fail; qed"),
             )
             .await
             .unwrap();

@@ -9,7 +9,10 @@
     "/dns/bootstrap-1.gemini-3e.subspace.network/tcp/30333/p2p/12D3KooWSdYSDDysqP7vQVWYB7yV2eGVcb2VxzUD1FZoBGyGkBDq"
   ],
   "telemetryEndpoints": [
-    ["/dns/telemetry.subspace.network/tcp/443/x-parity-wss/%2Fsubmit%2F", 1]
+    [
+      "/dns/telemetry.subspace.network/tcp/443/x-parity-wss/%2Fsubmit%2F",
+      1
+    ]
   ],
   "protocolId": "subspace-gemini-3e",
   "properties": {

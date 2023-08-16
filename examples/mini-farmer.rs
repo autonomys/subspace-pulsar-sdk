@@ -1,9 +1,10 @@
+use std::num::NonZeroU8;
 use std::path::PathBuf;
 
 use anyhow::Context;
 use clap::{Parser, ValueEnum};
 use futures::prelude::*;
-use subspace_sdk::farmer::CacheDescription;
+use sdk_node::PotConfiguration;
 use subspace_sdk::node::{self, Event, Node, RewardsEvent, SubspaceEvent};
 use subspace_sdk::{ByteSize, Farmer, PlotDescription, PublicKey};
 use tracing_subscriber::prelude::*;
@@ -73,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
         reward_address,
         base_path,
         plot_size,
-        cache_size,
+        cache_size: _,
     } = Args::parse();
     let (base_path, _tmp_dir) = base_path.map(|x| (x, None)).unwrap_or_else(|| {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
@@ -116,6 +117,8 @@ async fn main() -> anyhow::Result<()> {
                 Chain::Devnet => node::chain_spec::devnet_config(),
                 Chain::Dev => node::chain_spec::dev_config(),
             },
+            PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
+            plot_size.as_u64() as usize,
         )
         .await?;
 
@@ -139,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
             reward_address,
             &node,
             &[PlotDescription::new(base_path.join("plot"), plot_size)],
-            CacheDescription::new(base_path.join("cache"), cache_size).unwrap(),
+            NonZeroU8::new(1).expect("static value should not fail; qed"),
         )
         .await?;
 
