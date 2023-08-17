@@ -19,7 +19,7 @@ pub trait Farmer {
 
     /// Fetch piece by its hash
     async fn get_piece_by_hash(
-        piece_index_hash: subspace_core_primitives::PieceIndexHash,
+        piece_index: subspace_core_primitives::PieceIndex,
         piece_cache: &FarmerPieceCache,
         weak_readers_and_pieces: &std::sync::Weak<
             parking_lot::Mutex<

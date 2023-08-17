@@ -4,9 +4,8 @@ use sc_service::ChainType;
 use sc_subspace_chain_specs::SerializableChainSpec;
 use sc_telemetry::TelemetryEndpoints;
 use sdk_utils::chain_spec as utils;
-use sdk_utils::chain_spec::get_public_key_from_seed;
 use sp_core::crypto::{Ss58Codec, UncheckedFrom};
-use sp_domains::{OperatorPublicKey, RuntimeType};
+use sp_domains::RuntimeType;
 use sp_runtime::Percent;
 use subspace_runtime::{
     AllowAuthoringBy, BalancesConfig, DomainsConfig, GenesisConfig, MaxDomainBlockSize,
@@ -344,15 +343,13 @@ fn subspace_genesis_config(
         confirmation_depth_k,
     } = genesis_params;
 
-    let raw_evm_domain_genesis_config = {
-        let mut domain_genesis_config =
-            evm_chain_spec::get_testnet_genesis_by_spec_id(evm_domain_spec_id);
-        // Clear the WASM code of the genesis config since it is duplicated with
-        // `GenesisDomain::code`
-        domain_genesis_config.system.code = Default::default();
-        serde_json::to_vec(&domain_genesis_config)
-            .expect("Genesis config serialization never fails; qed")
-    };
+    let (mut domain_genesis_config, genesis_domain_params) =
+        evm_chain_spec::get_testnet_genesis_by_spec_id(evm_domain_spec_id);
+    // Clear the WASM code of the genesis config since it is duplicated with
+    // `GenesisDomain::code`
+    domain_genesis_config.system.code = Default::default();
+    let raw_evm_domain_genesis_config = serde_json::to_vec(&domain_genesis_config)
+        .expect("Genesis config serialization never fails; qed");
 
     GenesisConfig {
         domains: DomainsConfig {
@@ -373,7 +370,7 @@ fn subspace_genesis_config(
                 target_bundles_per_block: 10,
                 raw_genesis_config: raw_evm_domain_genesis_config,
                 // TODO: Configurable genesis operator signing key.
-                signing_key: get_public_key_from_seed::<OperatorPublicKey>("Alice"),
+                signing_key: genesis_domain_params.operator_signing_key,
                 nomination_tax: Percent::from_percent(5),
                 minimum_nominator_stake: 100 * SSC,
             }),

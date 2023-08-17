@@ -17,8 +17,9 @@ use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_networking::utils::strip_peer_id;
 use subspace_networking::{
-    PeerInfo, PeerInfoProvider, PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
-    SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
+    PeerInfo, PeerInfoProvider, PieceByIndexRequest, PieceByIndexRequestHandler,
+    PieceByIndexResponse, SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest,
+    SegmentHeaderResponse,
 };
 
 use super::local_provider_record_utils::MaybeLocalRecordProvider;
@@ -166,7 +167,7 @@ pub struct DsnOptions<C, PieceByHash, SegmentHeaderByIndexes> {
     /// Keypair for networking
     pub keypair: subspace_networking::libp2p::identity::Keypair,
     /// Get piece by hash handler
-    pub get_piece_by_hash: PieceByHash,
+    pub get_piece_by_index: PieceByHash,
     /// Get segment header by segment indexes handler
     pub get_segment_header_by_segment_indexes: SegmentHeaderByIndexes,
     /// Farmer total allocated space across all plots
@@ -194,22 +195,22 @@ pub struct DsnShared {
 
 impl Dsn {
     /// Build dsn
-    pub fn build_dsn<B, C, PieceByHash, F1, SegmentHeaderByIndexes>(
+    pub fn build_dsn<B, C, PieceByIndex, F1, SegmentHeaderByIndexes>(
         self,
-        options: DsnOptions<C, PieceByHash, SegmentHeaderByIndexes>,
+        options: DsnOptions<C, PieceByIndex, SegmentHeaderByIndexes>,
     ) -> anyhow::Result<(DsnShared, subspace_networking::NodeRunner<LocalRecordProvider>)>
     where
         B: sp_runtime::traits::Block,
         C: sc_client_api::AuxStore + sp_blockchain::HeaderBackend<B> + Send + Sync + 'static,
-        PieceByHash: Fn(
-                &PieceByHashRequest,
+        PieceByIndex: Fn(
+                &PieceByIndexRequest,
                 Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
                 Arc<parking_lot::RwLock<Option<FarmerPieceCache>>>,
             ) -> F1
             + Send
             + Sync
             + 'static,
-        F1: Future<Output = Option<PieceByHashResponse>> + Send + 'static,
+        F1: Future<Output = Option<PieceByIndexResponse>> + Send + 'static,
         SegmentHeaderByIndexes: Fn(&SegmentHeaderRequest, &SegmentHeadersStore<C>) -> Option<SegmentHeaderResponse>
             + Send
             + Sync
@@ -219,7 +220,7 @@ impl Dsn {
             client,
             base_path,
             keypair,
-            get_piece_by_hash,
+            get_piece_by_index,
             get_segment_header_by_segment_indexes,
             farmer_total_space_pledged,
             segment_header_store,
@@ -275,14 +276,14 @@ impl Dsn {
             allow_non_global_addresses_in_dht,
             networking_parameters_registry: Some(networking_parameters_registry),
             request_response_protocols: vec![
-                PieceByHashRequestHandler::create({
+                PieceByIndexRequestHandler::create({
                     let weak_readers_and_pieces = Arc::downgrade(&farmer_readers_and_pieces);
                     let farmer_piece_cache = farmer_piece_cache.clone();
                     move |_, req| {
                         let weak_readers_and_pieces = weak_readers_and_pieces.clone();
                         let farmer_piece_cache = farmer_piece_cache.clone();
 
-                        get_piece_by_hash(req, weak_readers_and_pieces, farmer_piece_cache)
+                        get_piece_by_index(req, weak_readers_and_pieces, farmer_piece_cache)
                     }
                 }),
                 SegmentHeaderBySegmentIndexesRequestHandler::create({

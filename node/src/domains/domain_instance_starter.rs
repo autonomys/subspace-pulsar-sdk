@@ -14,6 +14,7 @@ use sc_service::{BasePath, Configuration, RpcHandlers};
 use sp_core::crypto::AccountId32;
 use sp_core::traits::SpawnEssentialNamed;
 use sp_domains::{DomainId, RuntimeType};
+use sp_messenger::messages::ChainId;
 use sp_runtime::traits::{Block as BlockT, Convert, NumberFor};
 use subspace_runtime::RuntimeApi as CRuntimeApi;
 use subspace_runtime_primitives::opaque::Block as CBlock;
@@ -144,7 +145,7 @@ impl DomainInstanceStarter {
                 .map_err(anyhow::Error::new)?;
 
                 xdm_gossip_worker_builder
-                    .push_domain_tx_pool_sink(domain_id, domain_node.tx_pool_sink);
+                    .push_chain_tx_pool_sink(ChainId::Domain(domain_id), domain_node.tx_pool_sink);
 
                 let cross_domain_message_gossip_worker = xdm_gossip_worker_builder
                     .build::<CBlock, _, _>(consensus_network_service, consensus_sync_service);

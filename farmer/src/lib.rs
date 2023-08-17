@@ -25,7 +25,7 @@ use sdk_traits::Node;
 use sdk_utils::{ByteSize, DestructorSet, PublicKey, TaskOutput};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::crypto::kzg;
-use subspace_core_primitives::{PieceIndexHash, Record, SectorIndex};
+use subspace_core_primitives::{PieceIndex, Record, SectorIndex};
 use subspace_erasure_coding::ErasureCoding;
 use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
 use subspace_farmer::single_disk_plot::{
@@ -217,21 +217,21 @@ impl<T: subspace_proof_of_space::Table> sdk_traits::Farmer for Farmer<T> {
     type Table = T;
 
     async fn get_piece_by_hash(
-        piece_index_hash: PieceIndexHash,
+        piece_index: PieceIndex,
         piece_cache: &FarmerPieceCache,
         weak_readers_and_pieces: &std::sync::Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
     ) -> Option<subspace_core_primitives::Piece> {
         use tracing::debug;
 
         if let Some(piece) =
-            piece_cache.get_piece(RecordKey::from(piece_index_hash.to_multihash())).await
+            piece_cache.get_piece(RecordKey::from(piece_index.to_multihash())).await
         {
             return Some(piece);
         }
 
         let weak_readers_and_pieces = weak_readers_and_pieces.clone();
 
-        debug!(?piece_index_hash, "No piece in the cache. Trying archival storage...");
+        debug!(?piece_index, "No piece in the cache. Trying archival storage...");
 
         let readers_and_pieces = match weak_readers_and_pieces.upgrade() {
             Some(readers_and_pieces) => readers_and_pieces,
@@ -241,9 +241,9 @@ impl<T: subspace_proof_of_space::Table> sdk_traits::Farmer for Farmer<T> {
             }
         };
         let read_piece = match readers_and_pieces.lock().as_ref() {
-            Some(readers_and_pieces) => readers_and_pieces.read_piece(&piece_index_hash),
+            Some(readers_and_pieces) => readers_and_pieces.read_piece(&piece_index),
             None => {
-                debug!(?piece_index_hash, "Readers and pieces are not initialized yet");
+                debug!(?piece_index, "Readers and pieces are not initialized yet");
                 return None;
             }
         };

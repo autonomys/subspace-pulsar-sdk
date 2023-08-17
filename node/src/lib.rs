@@ -35,7 +35,7 @@ use subspace_farmer::node_client::NodeClient;
 use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{
-    PieceByHashRequest, PieceByHashResponse, SegmentHeaderRequest, SegmentHeaderResponse,
+    PieceByIndexRequest, PieceByIndexResponse, SegmentHeaderRequest, SegmentHeaderResponse,
 };
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
@@ -137,7 +137,7 @@ impl<F: Farmer + 'static> Config<F> {
                 client: partial_components.client.clone(),
                 keypair,
                 base_path: directory.as_ref().to_path_buf(),
-                get_piece_by_hash: get_piece_by_hash::<F>,
+                get_piece_by_index: get_piece_by_index::<F>,
                 get_segment_header_by_segment_indexes,
                 farmer_total_space_pledged,
                 segment_header_store,
@@ -798,26 +798,23 @@ fn get_segment_header_by_segment_indexes(
     }
 }
 
-fn get_piece_by_hash<F: Farmer>(
-    &PieceByHashRequest { piece_index_hash }: &PieceByHashRequest,
+fn get_piece_by_index<F: Farmer>(
+    &PieceByIndexRequest { piece_index }: &PieceByIndexRequest,
     weak_readers_and_pieces: std::sync::Weak<
         parking_lot::Mutex<Option<subspace_farmer::utils::readers_and_pieces::ReadersAndPieces>>,
     >,
     farmer_piece_cache: Arc<parking_lot::RwLock<Option<FarmerPieceCache>>>,
-) -> impl std::future::Future<Output = Option<PieceByHashResponse>> {
+) -> impl std::future::Future<Output = Option<PieceByIndexResponse>> {
     async move {
         // Have to clone due to RAII guard is not `Send`, no impact on
         // behaviour/performance as `FarmerPieceCache` uses `Arc` and
         // `mpsc::Sender` underneath.
         let maybe_farmer_piece_cache = farmer_piece_cache.read().clone();
         if let Some(farmer_piece_cache) = maybe_farmer_piece_cache {
-            let piece = F::get_piece_by_hash(
-                piece_index_hash,
-                &farmer_piece_cache,
-                &weak_readers_and_pieces,
-            )
-            .await;
-            Some(PieceByHashResponse { piece })
+            let piece =
+                F::get_piece_by_hash(piece_index, &farmer_piece_cache, &weak_readers_and_pieces)
+                    .await;
+            Some(PieceByIndexResponse { piece })
         } else {
             None
         }
