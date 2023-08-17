@@ -10,8 +10,6 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![feature(const_option)]
 
-mod combined_piece_getter;
-
 use std::collections::HashMap;
 use std::io;
 use std::num::{NonZeroU8, NonZeroUsize};
@@ -35,6 +33,7 @@ use subspace_farmer::single_disk_plot::{
     SingleDiskPlotOptions, SingleDiskPlotSummary,
 };
 use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
+use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 use subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_farmer::Identity;
@@ -47,8 +46,6 @@ use subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tracing::{debug, error, warn};
 use tracing_futures::Instrument;
-
-use crate::combined_piece_getter::CombinedPieceGetter;
 
 /// Description of the plot
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -372,11 +369,11 @@ impl Config {
                 parking_lot::Mutex::new(lru::LruCache::new(SEGMENT_COMMITMENTS_CACHE_SIZE)),
             )),
         );
-        let piece_getter = Arc::new(CombinedPieceGetter::new(
+        let farmer_piece_getter = Arc::new(FarmerPieceGetter::new(
             node.dsn().node.clone(),
             piece_provider,
             farmer_piece_cache.clone(),
-            node.dsn().node_piece_cache.clone(),
+            node.rpc().clone(),
             node.dsn().farmer_archival_storage_info.clone(),
             readers_and_pieces.clone(),
         ));
@@ -387,7 +384,7 @@ impl Config {
             format!("subspace-sdk-farmer-{node_name}-pieces-cache-worker"),
             {
                 let handle = tokio::runtime::Handle::current();
-                let piece_getter = piece_getter.clone();
+                let piece_getter = farmer_piece_getter.clone();
 
                 move || {
                     handle.block_on(future::select(
@@ -426,7 +423,7 @@ impl Config {
                 reward_address,
                 node,
                 max_pieces_in_sector,
-                piece_getter: Arc::clone(&piece_getter),
+                piece_getter: Arc::clone(&farmer_piece_getter),
                 description,
                 kzg: kzg.clone(),
                 erasure_coding: erasure_coding.clone(),

@@ -18,19 +18,19 @@ use std::time::Duration;
 use anyhow::Context;
 use derivative::Derivative;
 use futures::{FutureExt, Stream, StreamExt};
-use sc_consensus_subspace::SegmentHeadersStore;
+use sc_consensus_subspace::archiver::SegmentHeadersStore;
 use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, SyncState};
 use sc_proof_of_time::PotComponents;
 use sc_rpc_api::state::StateApiClient;
-use sdk_dsn::{DsnOptions, DsnShared, NodePieceCache};
+use sdk_dsn::{DsnOptions, DsnShared};
 use sdk_traits::Farmer;
 use sdk_utils::{DestructorSet, MultiaddrWithPeerId, PublicKey, TaskOutput};
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
 use sp_domains::GenerateGenesisStateRoot;
 use sp_runtime::DigestItem;
-use subspace_core_primitives::{HistorySize, PieceIndexHash, SegmentIndex};
+use subspace_core_primitives::{HistorySize, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
 use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
 use subspace_farmer_components::FarmerProtocolInfo;
@@ -79,13 +79,7 @@ impl<F: Farmer + 'static> Config<F> {
         farmer_total_space_pledged: usize,
     ) -> anyhow::Result<Node<F>> {
         let Self {
-            base,
-            piece_cache_size,
-            mut dsn,
-            sync_from_dsn,
-            storage_monitor,
-            enable_subspace_block_relay,
-            ..
+            base, mut dsn, sync_from_dsn, storage_monitor, enable_subspace_block_relay, ..
         } = self;
 
         let PotConfiguration { is_pot_enabled, is_node_time_keeper } = pot_configuration;
@@ -141,13 +135,6 @@ impl<F: Farmer + 'static> Config<F> {
 
             let (dsn, runner) = dsn.build_dsn(DsnOptions {
                 client: partial_components.client.clone(),
-                node_name: name.clone(),
-                archived_segment_notification_stream: partial_components
-                    .other
-                    .1
-                    .archived_segment_notification_stream()
-                    .subscribe(),
-                piece_cache_size: *piece_cache_size,
                 keypair,
                 base_path: directory.as_ref().to_path_buf(),
                 get_piece_by_hash: get_piece_by_hash::<F>,
@@ -359,7 +346,7 @@ pub struct Node<F: Farmer> {
     network_service: Arc<NetworkService<RuntimeBlock, Hash>>,
     rpc_handle: sdk_utils::Rpc,
     name: String,
-    dsn: DsnShared<FullClient>,
+    dsn: DsnShared,
     #[derivative(Debug = "ignore")]
     _destructors: DestructorSet,
     #[derivative(Debug = "ignore")]
@@ -379,7 +366,7 @@ impl<F: Farmer> sdk_traits::Node for Node<F> {
         &self.name
     }
 
-    fn dsn(&self) -> &DsnShared<Self::Client> {
+    fn dsn(&self) -> &DsnShared {
         &self.dsn
     }
 
@@ -817,14 +804,8 @@ fn get_piece_by_hash<F: Farmer>(
         parking_lot::Mutex<Option<subspace_farmer::utils::readers_and_pieces::ReadersAndPieces>>,
     >,
     farmer_piece_cache: Arc<parking_lot::RwLock<Option<FarmerPieceCache>>>,
-    piece_cache: NodePieceCache<impl sc_client_api::AuxStore>,
 ) -> impl std::future::Future<Output = Option<PieceByHashResponse>> {
     async move {
-        match node_get_piece_by_hash(piece_index_hash, &piece_cache) {
-            Some(PieceByHashResponse { piece: None }) | None => (),
-            result => return result,
-        }
-
         // Have to clone due to RAII guard is not `Send`, no impact on
         // behaviour/performance as `FarmerPieceCache` uses `Arc` and
         // `mpsc::Sender` underneath.
@@ -842,19 +823,4 @@ fn get_piece_by_hash<F: Farmer>(
         }
     }
     .in_current_span()
-}
-
-fn node_get_piece_by_hash(
-    piece_index_hash: PieceIndexHash,
-    piece_cache: &NodePieceCache<impl sc_client_api::AuxStore>,
-) -> Option<PieceByHashResponse> {
-    let result = match piece_cache.get_piece(piece_index_hash) {
-        Ok(maybe_piece) => maybe_piece,
-        Err(error) => {
-            tracing::error!(?piece_index_hash, %error, "Failed to get piece from cache");
-            None
-        }
-    };
-
-    Some(PieceByHashResponse { piece: result })
 }

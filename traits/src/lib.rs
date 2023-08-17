@@ -41,7 +41,7 @@ pub trait Node {
     /// Node name in telemetry
     fn name(&self) -> &str;
     /// Shared dsn configuration
-    fn dsn(&self) -> &sdk_dsn::DsnShared<Self::Client>;
+    fn dsn(&self) -> &sdk_dsn::DsnShared;
     /// Rpc
     fn rpc(&self) -> &Self::Rpc;
 }

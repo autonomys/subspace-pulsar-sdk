@@ -11,7 +11,7 @@ sdk-substrate = { path = "substrate" }
 sdk-utils = { path = "utils" }
 static_assertions = "1.1.0"
 
-subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
+subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "34bf29d43b7f30fc27ec8f6383701e0755cb5f48" }
 
 # The only triple tested and confirmed as working in `jemallocator` crate is `x86_64-unknown-linux-gnu`
 [target.'cfg(all(target_arch = "x86_64", target_vendor = "unknown", target_os = "linux", target_env = "gnu"))'.dev-dependencies]
@@ -28,7 +28,7 @@ derive_more = "0.99"
 fdlimit = "0.2"
 futures = "0.3"
 serde_json = "1"
-subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
+subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "34bf29d43b7f30fc27ec8f6383701e0755cb5f48" }
 tempfile = "3"
 tokio = { version = "1.26", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1"

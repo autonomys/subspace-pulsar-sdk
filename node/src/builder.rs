@@ -43,10 +43,6 @@ pub struct SegmentPublishConcurrency(
 #[builder(pattern = "owned", build_fn(private, name = "_build"), name = "Builder")]
 #[non_exhaustive]
 pub struct Config<F: Farmer> {
-    /// Set piece cache size
-    #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub piece_cache_size: PieceCacheSize,
     /// Max number of segments that can be published concurrently, impacts
     /// RAM usage and network bandwidth.
     #[builder(setter(into), default)]

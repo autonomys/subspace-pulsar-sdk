@@ -15,18 +15,16 @@ futures = "0.3"
 lru = "0.10"
 parking_lot = "0.12"
 pin-project = "1"
-sc-client-api = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
-sdk-dsn = { path = "../dsn" }
 sdk-traits = { path = "../traits" }
 sdk-utils = { path = "../utils" }
 serde = { version = "1", features = ["derive"] }
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
-subspace-erasure-coding = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
-subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
-subspace-networking = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
-subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd", features = ["parallel", "chia"] }
-subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "34bf29d43b7f30fc27ec8f6383701e0755cb5f48" }
+subspace-erasure-coding = { git = "https://github.com/subspace/subspace", rev = "34bf29d43b7f30fc27ec8f6383701e0755cb5f48" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "34bf29d43b7f30fc27ec8f6383701e0755cb5f48" }
+subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "34bf29d43b7f30fc27ec8f6383701e0755cb5f48" }
+subspace-networking = { git = "https://github.com/subspace/subspace", rev = "34bf29d43b7f30fc27ec8f6383701e0755cb5f48" }
+subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "34bf29d43b7f30fc27ec8f6383701e0755cb5f48", features = ["parallel", "chia"] }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "34bf29d43b7f30fc27ec8f6383701e0755cb5f48" }
 thiserror = "1"
 tokio = { version = "1.28.2", features = ["fs", "rt", "tracing", "macros", "parking_lot", "rt-multi-thread", "signal"] }
 tokio-stream = { version = "0.1", features = ["sync", "time"] }
@@ -37,6 +35,5 @@ tracing-futures = "0.2"
 default = []
 integration-test = [
     "sdk-utils/integration-test",
-    "sdk-dsn/integration-test",
     "sdk-traits/integration-test"
 ]
