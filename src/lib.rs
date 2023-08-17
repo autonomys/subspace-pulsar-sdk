@@ -38,7 +38,8 @@ pub mod node {
     pub use sdk_dsn::*;
     pub use sdk_node::chain_spec::ChainSpec;
     pub use sdk_node::{
-        chain_spec, BlockNumber, Event, Hash, RewardsEvent, SubspaceEvent, SyncingProgress,
+        chain_spec, BlockNumber, DomainConfigBuilder, Event, Hash, PotConfiguration, RewardsEvent,
+        SubspaceEvent, SyncingProgress,
     };
     pub use sdk_substrate::*;
 

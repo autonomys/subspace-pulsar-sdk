@@ -4,10 +4,11 @@ use std::path::Path;
 use derivative::Derivative;
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
+use sc_service::BlocksPruning;
 use sdk_dsn::{Dsn, DsnBuilder};
 use sdk_substrate::{
-    Base, BaseBuilder, ExecutionStrategy, NetworkBuilder, OffchainWorkerBuilder, RpcBuilder,
-    StorageMonitor,
+    Base, BaseBuilder, ExecutionStrategy, NetworkBuilder, OffchainWorkerBuilder, PruningMode, Role,
+    RpcBuilder, StorageMonitor,
 };
 use sdk_utils::ByteSize;
 use serde::{Deserialize, Serialize};
@@ -116,6 +117,9 @@ impl<F: Farmer + 'static> Builder<F> {
             .dsn(DsnBuilder::gemini_3f())
             .rpc(RpcBuilder::gemini_3f())
             .offchain_worker(OffchainWorkerBuilder::gemini_3f())
+            .role(Role::Authority)
+            .state_pruning(PruningMode::ArchiveAll)
+            .blocks_pruning(BlocksPruning::Some(256))
     }
 
     /// Devnet chain configuration
@@ -126,6 +130,9 @@ impl<F: Farmer + 'static> Builder<F> {
             .dsn(DsnBuilder::devnet())
             .rpc(RpcBuilder::devnet())
             .offchain_worker(OffchainWorkerBuilder::devnet())
+            .role(Role::Authority)
+            .state_pruning(PruningMode::ArchiveAll)
+            .blocks_pruning(BlocksPruning::Some(256))
     }
 
     /// Get configuration for saving on disk

@@ -126,12 +126,12 @@ impl DomainConfigBuilder {
 
     /// Gemini 3f configuration
     pub fn gemini_3f() -> Self {
-        Self::new().chain_id("gemini-3f")
+        Self::new().chain_id("gemini-3f").domain_id(DomainId::new(0))
     }
 
     /// Devnet chain configuration
     pub fn devnet() -> Self {
-        Self::new().chain_id("devnet")
+        Self::new().chain_id("devnet").domain_id(DomainId::new(0))
     }
 
     /// Get configuration for saving on disk
