@@ -504,9 +504,9 @@ impl<F: Farmer + 'static> Node<F> {
         Builder::dev()
     }
 
-    /// Gemini 3e configuration
-    pub fn gemini_3e() -> Builder<F> {
-        Builder::gemini_3e()
+    /// Gemini 3f configuration
+    pub fn gemini_3f() -> Builder<F> {
+        Builder::gemini_3f()
     }
 
     /// Devnet configuration

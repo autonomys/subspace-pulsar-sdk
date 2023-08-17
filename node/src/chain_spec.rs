@@ -17,7 +17,7 @@ use subspace_runtime_primitives::{AccountId, Balance, BlockNumber, SSC};
 use crate::domains::evm_chain_spec;
 
 const SUBSPACE_TELEMETRY_URL: &str = "wss://telemetry.subspace.network/submit/";
-const GEMINI_3D_CHAIN_SPEC: &[u8] = include_bytes!("../res/chain-spec-raw-gemini-3e.json");
+const GEMINI_3F_CHAIN_SPEC: &[u8] = include_bytes!("../res/chain-spec-raw-gemini-3f.json");
 const DEVNET_CHAIN_SPEC: &[u8] = include_bytes!("../res/chain-spec-raw-devnet.json");
 
 /// List of accounts which should receive token grants, amounts are specified in
@@ -55,19 +55,19 @@ pub struct GenesisParams {
 /// Chain spec type for the subspace
 pub type ChainSpec = SerializableChainSpec<GenesisConfig>;
 
-/// Gemini 3e chain spec
-pub fn gemini_3e() -> ChainSpec {
-    ChainSpec::from_json_bytes(GEMINI_3D_CHAIN_SPEC).expect("Always valid")
+/// Gemini 3f chain spec
+pub fn gemini_3f() -> ChainSpec {
+    ChainSpec::from_json_bytes(GEMINI_3F_CHAIN_SPEC).expect("Always valid")
 }
 
-/// Gemini 3e compiled chain spec
-pub fn gemini_3e_compiled() -> ChainSpec {
+/// Gemini 3f compiled chain spec
+pub fn gemini_3f_compiled() -> ChainSpec {
     ChainSpec::from_genesis(
         // Name
-        "Subspace Gemini 3e",
+        "Subspace Gemini 3f",
         // ID
-        "subspace_gemini_3e",
-        ChainType::Custom("Subspace Gemini 3e".to_string()),
+        "subspace_gemini_3f",
+        ChainType::Custom("Subspace Gemini 3f".to_string()),
         || {
             let sudo_account =
                 AccountId::from_ss58check("5CZy4hcmaVZUMZLfB41v1eAKvtZ8W7axeWuDvwjhjPwfhAqt")
@@ -129,7 +129,7 @@ pub fn gemini_3e_compiled() -> ChainSpec {
                 .expect("Telemetry value is valid"),
         ),
         // Protocol ID
-        Some("subspace-gemini-3e"),
+        Some("subspace-gemini-3f"),
         None,
         // Properties
         Some(utils::chain_spec_properties()),
@@ -403,8 +403,8 @@ mod tests {
 
     #[test]
     fn test_chain_specs() {
-        gemini_3e_compiled();
-        gemini_3e();
+        gemini_3f_compiled();
+        gemini_3f();
         devnet_config_compiled();
         devnet_config();
         dev_config();

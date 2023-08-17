@@ -98,9 +98,9 @@ impl DomainConfig {
         DomainConfigBuilder::dev()
     }
 
-    /// Gemini 3e configuraiton
-    pub fn gemini_3e() -> DomainConfigBuilder {
-        DomainConfigBuilder::gemini_3e()
+    /// Gemini 3f configuraiton
+    pub fn gemini_3f() -> DomainConfigBuilder {
+        DomainConfigBuilder::gemini_3f()
     }
 
     /// Devnet configuraiton
@@ -124,9 +124,9 @@ impl DomainConfigBuilder {
             .dev_key_seed("//Alice")
     }
 
-    /// Gemini 3e configuration
-    pub fn gemini_3e() -> Self {
-        Self::new().chain_id("gemini-3e")
+    /// Gemini 3f configuration
+    pub fn gemini_3f() -> Self {
+        Self::new().chain_id("gemini-3f")
     }
 
     /// Devnet chain configuration
