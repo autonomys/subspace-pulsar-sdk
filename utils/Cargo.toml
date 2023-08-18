@@ -2,7 +2,6 @@
 name = "sdk-utils"
 version = "0.1.0"
 edition = "2021"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -14,31 +13,33 @@ bytesize = "1"
 bytesize-serde = "0.2"
 derivative = "2.2.0"
 derive_more = "0.99"
-futures = "0.3"
-jsonrpsee-core = "0.16"
-libp2p-core = "0.39"
-parity-scale-codec = "3"
-serde = { version = "1", features = ["derive"] }
-ss58-registry = "1.33"
-thiserror = "1"
-tokio = { version = "1", features = ["rt", "tracing"] }
-
 frame-support = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 frame-system = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
-sc-service = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71", default-features = false }
+futures = "0.3"
+jsonrpsee-core = "0.16"
+libp2p-core = "0.40.0"
+parity-scale-codec = "3.6.3"
+sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
+sc-network = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71", default-features = false }
 sc-rpc = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71", default-features = false }
 sc-rpc-api = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71", default-features = false }
-sc-network = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71", default-features = false }
+sc-service = { version = "0.10.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71", default-features = false }
+serde = { version = "1", features = ["derive"] }
 sp-core = { version = "21.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 sp-core-hashing = { version = "9.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 sp-runtime = { version = "24.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 sp-storage = { version = "13.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
-
-sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
-subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
-subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
-subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
-
+ss58-registry = "1.33"
 # Unused for now. TODO: add `serde` feature to `subspace-core-primitives` in `subspace-archiver`
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "b9c1ae71d04cca1a2b069dd4a5cbe40883c14d9d" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
+subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
+subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "6b7ed319daa4f4d34dac2ea95c13bc07bd88e5bd" }
+thiserror = "1"
+tokio = { version = "1.28.2", features = ["fs", "rt", "tracing", "macros", "parking_lot", "rt-multi-thread", "signal"] }
+tracing = "0.1"
+
+[features]
+default = []
+integration-test = []

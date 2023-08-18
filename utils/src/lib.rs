@@ -11,8 +11,9 @@
 
 use std::pin::Pin;
 use std::sync::Arc;
+use std::vec::Drain;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context, Result};
 use derive_more::{Deref, DerefMut, Display, From, FromStr, Into};
 use futures::prelude::*;
 use jsonrpsee_core::client::{
@@ -28,8 +29,18 @@ use sc_rpc_api::state::StateApiClient;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::PUBLIC_KEY_LENGTH;
+use subspace_farmer::jsonrpsee::tracing;
 
 mod rpc_client;
+
+/// Output that indicates whether the task was cancelled or successfully
+/// completed
+pub enum TaskOutput<T, E> {
+    /// Task completed with value of type `T`
+    Value(T),
+    /// Task was cancelled due to reason `E`
+    Cancelled(E),
+}
 
 /// Rpc implementation over jsonrpsee_core debug rpc module
 #[derive(Clone, Debug)]
@@ -128,6 +139,7 @@ impl ClientT for Rpc {
         self.inner.call(method, params).await
     }
 
+    #[allow(clippy::diverging_sub_expression)]
     async fn batch_request<'a, R>(
         &self,
         _batch: BatchRequestBuilder<'a>,
@@ -167,6 +179,7 @@ impl SubscriptionClientT for Rpc {
         Ok(Subscription::new(to_back, notifs_rx, SubscriptionKind::Subscription(kind)))
     }
 
+    #[allow(clippy::diverging_sub_expression)]
     async fn subscribe_to_method<'a, Notif>(
         &self,
         _method: &'a str,
@@ -200,7 +213,7 @@ impl<F: FnOnce()> Drop for Defer<F> {
 /// Useful type which will ensure that things will be dropped
 #[derive(Default, derivative::Derivative)]
 #[derivative(Debug)]
-pub struct DropCollection {
+struct DropCollection {
     #[derivative(Debug = "ignore")]
     vec: Vec<Box<dyn Send + Sync>>,
 }
@@ -219,6 +232,11 @@ impl DropCollection {
     /// Add something to drop collection
     pub fn push<T: Send + Sync + 'static>(&mut self, t: T) {
         self.vec.push(Box::new(t))
+    }
+
+    /// Drain the underlying vector
+    pub fn drain(&mut self) -> Drain<'_, Box<dyn Send + Sync>> {
+        self.vec.drain(..)
     }
 }
 
@@ -243,7 +261,7 @@ impl<T: Send + Sync + 'static> Extend<T> for DropCollection {
 /// Type for dropping things asynchronously
 #[derive(Default, derivative::Derivative)]
 #[derivative(Debug)]
-pub struct AsyncDropFutures {
+struct AsyncDropFutures {
     #[derivative(Debug = "ignore")]
     vec: Vec<Pin<Box<dyn Future<Output = ()> + Send + Sync>>>,
 }
@@ -259,11 +277,183 @@ impl AsyncDropFutures {
         self.vec.push(Box::pin(fut))
     }
 
-    /// Drop and wait on every future
-    pub async fn async_drop(self) {
-        for f in self.vec {
-            f.await;
+    /// Drain the underlying vector
+    pub fn drain(&mut self) -> Drain<'_, Pin<Box<dyn Future<Output = ()> + Send + Sync>>> {
+        self.vec.drain(..)
+    }
+}
+
+/// Enum identifying which of the item we should be destructing
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
+enum ToDestruct {
+    Sync,
+    Async,
+    Item,
+}
+
+/// A General purpose set of destructors consist of sync destructor, async
+/// destructor and normal object it invokes destructors and destroy normal in
+/// reverse order
+#[derive(Default, derivative::Derivative)]
+#[derivative(Debug)]
+pub struct DestructorSet {
+    name: String,
+    items_to_drop: DropCollection,
+    sync_destructors: DropCollection,
+    async_destructors: AsyncDropFutures,
+    order: Vec<ToDestruct>,
+    already_ran: bool,
+    allow_async: bool,
+}
+
+impl Drop for DestructorSet {
+    fn drop(&mut self) {
+        // already closed, nothing to do.
+        if self.already_ran {
+            return;
         }
+
+        if self.allow_async {
+            tracing::warn!(
+                "Destructor set: {} with async allowed is being dropped. Async destructors won't \
+                 run. Are you missing the `async_drop` call?",
+                self.name
+            );
+        }
+
+        // Try to drop as much stuff as we could
+        let mut sync_fns_drain = self.sync_destructors.drain().rev();
+        let mut async_fns_drain = self.async_destructors.drain().rev();
+        let mut items_drain = self.items_to_drop.drain().rev();
+        let order_drain = self.order.drain(..).rev();
+
+        for order in order_drain {
+            match order {
+                ToDestruct::Sync => {
+                    let sync_fn = sync_fns_drain.next().expect("sync fn always set");
+                    drop(sync_fn);
+                }
+                ToDestruct::Async => {
+                    let async_fn = async_fns_drain.next().expect("async fn always set");
+                    // We cannot run async function here, we can only drop them.
+                    drop(async_fn);
+                }
+                ToDestruct::Item => {
+                    let item = items_drain.next().expect("item always set");
+                    drop(item);
+                }
+            }
+        }
+    }
+}
+
+impl DestructorSet {
+    /// Creates an empty Destructors object with async destructors allowed
+    pub fn new(name: impl Into<String>) -> DestructorSet {
+        DestructorSet {
+            name: name.into(),
+            items_to_drop: DropCollection::new(),
+            sync_destructors: DropCollection::new(),
+            async_destructors: AsyncDropFutures::new(),
+            order: vec![],
+            already_ran: false,
+            allow_async: true,
+        }
+    }
+
+    /// Returns a bool indicating if the destructor set has already ran
+    pub fn already_ran(&self) -> bool {
+        self.already_ran
+    }
+
+    /// Creates an empty Destructors object with async destructors not allowed
+    pub fn new_without_async(name: impl Into<String>) -> DestructorSet {
+        DestructorSet {
+            name: name.into(),
+            items_to_drop: DropCollection::new(),
+            sync_destructors: DropCollection::new(),
+            async_destructors: AsyncDropFutures::new(),
+            order: vec![],
+            already_ran: false,
+            allow_async: false,
+        }
+    }
+
+    /// Add sync destructor in the sync destructor collection
+    pub fn add_sync_destructor<F: FnOnce() + Sync + Send + 'static>(&mut self, f: F) -> Result<()> {
+        if self.already_ran {
+            return Err(anyhow!("Destructor set: {} has been run already", self.name));
+        }
+        self.order.push(ToDestruct::Sync);
+        self.sync_destructors.defer(f);
+        Ok(())
+    }
+
+    /// Add async destructor in the async destructor collection
+    pub fn add_async_destructor<F: Future<Output = ()> + Send + Sync + 'static>(
+        &mut self,
+        fut: F,
+    ) -> Result<()> {
+        if self.already_ran {
+            return Err(anyhow!("Destructor set: {} has been run already", self.name));
+        }
+        if !self.allow_async {
+            return Err(anyhow!("async destructors are disabled in Destructor set: {}", self.name));
+        }
+        self.order.push(ToDestruct::Async);
+        self.async_destructors.push(fut);
+        Ok(())
+    }
+
+    /// Add normal object to drop
+    pub fn add_items_to_drop<T: Send + Sync + 'static>(&mut self, t: T) -> Result<()> {
+        if self.already_ran {
+            return Err(anyhow!("Destructor set: {} has been run already", self.name));
+        }
+        self.order.push(ToDestruct::Item);
+        self.items_to_drop.push(t);
+        Ok(())
+    }
+
+    /// run the destructors
+    pub async fn async_drop(mut self) -> Result<()> {
+        // already closed, nothing to do.
+        if self.already_ran {
+            return Err(anyhow!("Destructor set: {} has been run already", self.name));
+        }
+
+        if !self.allow_async {
+            return Err(anyhow!(
+                "Destructor set: {} is only configured to run sync destructors. To run them drop \
+                 this instance.",
+                self.name
+            ));
+        }
+
+        let mut sync_fns_drain = self.sync_destructors.drain().rev();
+        let mut async_fns_drain = self.async_destructors.drain().rev();
+        let mut items_drain = self.items_to_drop.drain().rev();
+        let order_drain = self.order.drain(..).rev();
+
+        for order in order_drain {
+            match order {
+                ToDestruct::Sync => {
+                    let sync_fn = sync_fns_drain.next().expect("sync fn always set");
+                    drop(sync_fn);
+                }
+                ToDestruct::Async => {
+                    let async_fn = async_fns_drain.next().expect("async fn always set");
+                    async_fn.await;
+                }
+                ToDestruct::Item => {
+                    let item = items_drain.next().expect("item always set");
+                    drop(item);
+                }
+            }
+        }
+        self.already_ran = true;
+        Ok(())
     }
 }
 
@@ -344,6 +534,18 @@ impl ByteSize {
 #[serde(transparent)]
 pub struct Multiaddr(pub libp2p_core::Multiaddr);
 
+impl From<Multiaddr> for sc_network::Multiaddr {
+    fn from(value: Multiaddr) -> Self {
+        value.0.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
+    }
+}
+
+impl From<sc_network::Multiaddr> for Multiaddr {
+    fn from(value: sc_network::Multiaddr) -> Self {
+        value.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
+    }
+}
+
 /// Multiaddr with peer id
 #[derive(
     Debug, Clone, Deserialize, Serialize, PartialEq, From, Into, FromStr, Deref, DerefMut, Display,
@@ -358,6 +560,12 @@ impl MultiaddrWithPeerId {
             multiaddr: multiaddr.into().into(),
             peer_id,
         })
+    }
+}
+
+impl From<MultiaddrWithPeerId> for libp2p_core::Multiaddr {
+    fn from(value: MultiaddrWithPeerId) -> Self {
+        value.0.to_string().parse().expect("Conversion between 2 libp2p versions is always right")
     }
 }
 

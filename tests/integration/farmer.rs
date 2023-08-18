@@ -1,14 +1,23 @@
 use futures::prelude::*;
+use sdk_utils::ByteSize;
 
 use crate::common::{Farmer, Node};
 
 #[tokio::test(flavor = "multi_thread")]
+#[ignore = "We need api from single disk plot to calculate precise target sector count"]
 async fn track_progress() {
     crate::common::setup();
 
-    let node = Node::dev().build().await;
-    let n_sectors = 2;
-    let farmer = Farmer::dev().n_sectors(n_sectors).build(&node).await;
+    let number_of_sectors = 10;
+    let pieces_in_sector = 50u16;
+    let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
+    let space_pledged = sector_size * number_of_sectors;
+
+    let node = Node::dev().build(space_pledged, true).await;
+    let farmer = Farmer::dev()
+        .pieces_in_sector(pieces_in_sector)
+        .build(&node, ByteSize::b(space_pledged as u64))
+        .await;
 
     let progress = farmer
         .iter_plots()
@@ -19,7 +28,7 @@ async fn track_progress() {
         .await
         .collect::<Vec<_>>()
         .await;
-    assert_eq!(progress.len(), n_sectors as usize);
+    assert_eq!(progress.len(), number_of_sectors);
 
     farmer.close().await;
     node.close().await;
@@ -29,8 +38,16 @@ async fn track_progress() {
 async fn new_solution() {
     crate::common::setup();
 
-    let node = Node::dev().build().await;
-    let farmer = Farmer::dev().build(&node).await;
+    let number_of_sectors = 10;
+    let pieces_in_sector = 50u16;
+    let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
+    let space_pledged = sector_size * number_of_sectors;
+
+    let node = Node::dev().build(space_pledged, true).await;
+    let farmer = Farmer::dev()
+        .pieces_in_sector(pieces_in_sector)
+        .build(&node, ByteSize::b(space_pledged as u64))
+        .await;
 
     farmer
         .iter_plots()
@@ -51,8 +68,16 @@ async fn new_solution() {
 async fn progress_restart() {
     crate::common::setup();
 
-    let node = Node::dev().build().await;
-    let farmer = Farmer::dev().build(&node).await;
+    let number_of_sectors = 10;
+    let pieces_in_sector = 50u16;
+    let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
+    let space_pledged = sector_size * number_of_sectors;
+
+    let node = Node::dev().build(space_pledged, true).await;
+    let farmer = Farmer::dev()
+        .pieces_in_sector(pieces_in_sector)
+        .build(&node, ByteSize::b(space_pledged as u64))
+        .await;
 
     let plot = farmer.iter_plots().await.next().unwrap();
 
@@ -74,20 +99,40 @@ async fn progress_restart() {
 async fn farmer_restart() {
     crate::common::setup();
 
-    let node = Node::dev().build().await;
+    let number_of_sectors = 10;
+    let pieces_in_sector = 50u16;
+    let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
+    let space_pledged = sector_size * number_of_sectors;
+
+    let node = Node::dev().build(space_pledged, true).await;
 
     for _ in 0..10 {
-        Farmer::dev().build(&node).await.close().await;
+        Farmer::dev()
+            .pieces_in_sector(pieces_in_sector)
+            .build(&node, ByteSize::b(space_pledged as u64))
+            .await
+            .close()
+            .await;
     }
 
     node.close().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn farmer_drop() {
+async fn farmer_close() {
     crate::common::setup();
 
-    let node = Node::dev().build().await;
-    drop(Farmer::dev().build(&node).await);
+    let number_of_sectors = 10;
+    let pieces_in_sector = 50u16;
+    let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
+    let space_pledged = sector_size * number_of_sectors;
+
+    let node = Node::dev().build(space_pledged, true).await;
+    let farmer = Farmer::dev()
+        .pieces_in_sector(pieces_in_sector)
+        .build(&node, ByteSize::b(space_pledged as u64))
+        .await;
+
+    farmer.close().await;
     node.close().await;
 }

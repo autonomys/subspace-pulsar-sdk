@@ -13,6 +13,8 @@ use sdk_utils::ByteSize;
 use serde::{Deserialize, Serialize};
 
 use super::{ChainSpec, Farmer, Node};
+use crate::domains::builder::DomainConfig;
+use crate::PotConfiguration;
 
 /// Wrapper with default value for piece cache size
 #[derive(
@@ -20,7 +22,9 @@ use super::{ChainSpec, Farmer, Node};
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct PieceCacheSize(#[derivative(Default(value = "ByteSize::gib(1)"))] pub(crate) ByteSize);
+/// Size of cache of pieces that node produces
+/// TODO: Set it to 1 GB once DSN is fixed
+pub struct PieceCacheSize(#[derivative(Default(value = "ByteSize::gib(3)"))] pub(crate) ByteSize);
 
 /// Wrapper with default value for segment publish concurrent jobs
 #[derive(
@@ -71,10 +75,13 @@ pub struct Config<F: Farmer> {
     #[builder(default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub enable_subspace_block_relay: bool,
-
     #[builder(setter(skip), default)]
     #[serde(skip, default)]
     _farmer: std::marker::PhantomData<F>,
+    /// Optional domain configuration
+    #[builder(setter(into), default)]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
+    pub domain: Option<DomainConfig>,
 }
 
 impl<F: Farmer + 'static> Config<F> {
@@ -140,8 +147,12 @@ impl<F: Farmer + 'static> Builder<F> {
         self,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,
+        pot_configuration: PotConfiguration,
+        farmer_total_space_pledged: usize,
     ) -> anyhow::Result<Node<F>> {
-        self.configuration().build(directory, chain_spec).await
+        self.configuration()
+            .build(directory, chain_spec, pot_configuration, farmer_total_space_pledged)
+            .await
     }
 }
 
