@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["CacheDescription","PlotDescription"]};
+window.SIDEBAR_ITEMS = {"struct":["PlotDescription"]};
