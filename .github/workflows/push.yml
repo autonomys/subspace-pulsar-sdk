@@ -11,8 +11,8 @@ on:
 
   workflow_dispatch:
     inputs:
-      test-macos:
-        description: 'Whether to run macOS tests'
+      test-macos-and-windows:
+        description: "run macOS and Windows tests"
         required: true
         default: false
         type: boolean
@@ -43,7 +43,19 @@ jobs:
           args: --all -- --check
 
   clippy:
-    runs-on: ${{ fromJson(github.repository_owner == 'subspace' && '[["self-hosted", "ubuntu-20.04-x86-64"], ["self-hosted", "macos-12-arm64"], ["self-hosted", "windows-server-2022-x86-64"]]' || '["ubuntu-20.04", "macos-12", "windows-2022"]') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJson(github.repository_owner == 'subspace' && '[["self-hosted", "ubuntu-20.04-x86-64"], ["self-hosted", "macos-12-arm64"], ["self-hosted", "windows-server-2022-x86-64"]]' || '["ubuntu-20.04", "macos-12", "windows-2022"]') }}
+        run-all:
+          - ${{ inputs.test-macos-and-windows == true || github.ref == 'refs/heads/main' }}
+        exclude: # exclude macos-12 and windows-2022 when the condition is false
+          - run-all: false
+            os: macos-12
+          - run-all: false
+            os: windows-2022
+
+    runs-on: ${{ matrix.os }}
     steps:
       - name: git checkout
         uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
@@ -55,7 +67,7 @@ jobs:
           version: "15.0"
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@149f6c87b92550901b26acd1632e11c3662e381f # v1.3.0
+        uses: arduino/setup-protoc@9b1ee5b22b0a3f1feb8c2ff99b32c89b3c3191e9 # v2.0.0
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -98,10 +110,12 @@ jobs:
       matrix:
         os: ${{ fromJson(github.repository_owner == 'subspace' && '[["self-hosted", "ubuntu-20.04-x86-64"], ["self-hosted", "macos-12-arm64"], ["self-hosted", "windows-server-2022-x86-64"]]' || '["ubuntu-20.04", "macos-12", "windows-2022"]') }}
         run-all:
-          - ${{ inputs.test-macos || github.ref == 'refs/heads/master' }}
-        exclude:  # exclude macos-12 when the condition is false
-          - run-all: false
-            os: "macos-12"
+          - ${{ inputs.test-macos-and-windows || github.ref == 'refs/heads/master' }}
+        exclude:  # exclude macos-12 and window-2022 when the condition is false
+        - run-all: false
+          os: macos-12
+        - run-all: false
+          os: windows-2022
 
     runs-on: ${{ matrix.os }}
 
