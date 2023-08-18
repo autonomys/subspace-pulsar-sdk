@@ -43,7 +43,7 @@ jobs:
           args: --all -- --check
 
   clippy:
-    runs-on: ${{ fromJson(github.repository_owner == 'subspace' && '["self-hosted", "ubuntu-20.04-x86-64"]' || 'ubuntu-22.04') }}
+    runs-on: ${{ fromJson(github.repository_owner == 'subspace' && '[["self-hosted", "ubuntu-20.04-x86-64"], ["self-hosted", "macos-12-arm64"], ["self-hosted", "windows-server-2022-x86-64"]]' || '["ubuntu-20.04", "macos-12", "windows-2022"]') }}
     steps:
       - name: git checkout
         uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
@@ -58,6 +58,12 @@ jobs:
         uses: arduino/setup-protoc@149f6c87b92550901b26acd1632e11c3662e381f # v1.3.0
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Workaround to resolve link error with C:\msys64\mingw64\bin\libclang.dll
+      - name: Remove msys64
+        run: Remove-Item -LiteralPath "C:\msys64\" -Force -Recurse
+        if: runner.os == 'Windows'
+        continue-on-error: true
 
       - name: Add cache
         uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
@@ -151,7 +157,7 @@ jobs:
         run: cargo sweep --maxsize ${{ env.MAX_TARGET_SIZE }}
 
   docs:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: git checkout
         uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
