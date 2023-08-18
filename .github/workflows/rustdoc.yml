@@ -3,7 +3,7 @@ name: rustdoc
 on:
   push:
     branches:
-      - master
+      - main
     paths-ignore:
       - '**.md'
       - '.gitignore'
@@ -15,20 +15,21 @@ env:
 
 jobs:
   rustdoc:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
 
-      - name: Install Protoc
-        uses: arduino/setup-protoc@64c0c85d18e984422218383b81c52f8b077404d3 # v1.1.2
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
+      # On macOS, we need a proper Clang version, not Apple's custom version without wasm32 support
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@8852e4d5c58653ed05135c0a5d949d9c2febcb00 # v1.6.1
         with:
           version: "15.0"
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@149f6c87b92550901b26acd1632e11c3662e381f # v1.3.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       # Build the rust crate docs
       # Use `RUSTC_BOOTSTRAP` in order to use the `--enable-index-page` flag of rustdoc
