@@ -20,7 +20,7 @@ async fn track_progress() {
         .await;
 
     let progress = farmer
-        .iter_plots()
+        .iter_farms()
         .await
         .next()
         .unwrap()
@@ -50,7 +50,7 @@ async fn new_solution() {
         .await;
 
     farmer
-        .iter_plots()
+        .iter_farms()
         .await
         .next()
         .unwrap()
@@ -79,7 +79,7 @@ async fn progress_restart() {
         .build(&node, ByteSize::b(space_pledged as u64))
         .await;
 
-    let plot = farmer.iter_plots().await.next().unwrap();
+    let plot = farmer.iter_farms().await.next().unwrap();
 
     plot.subscribe_initial_plotting_progress().await.for_each(|_| async {}).await;
 

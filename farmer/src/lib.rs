@@ -28,9 +28,9 @@ use subspace_core_primitives::crypto::kzg;
 use subspace_core_primitives::{PieceIndex, Record, SectorIndex};
 use subspace_erasure_coding::ErasureCoding;
 use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
-use subspace_farmer::single_disk_plot::{
-    SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
-    SingleDiskPlotOptions, SingleDiskPlotSummary,
+use subspace_farmer::single_disk_farm::{
+    SingleDiskFarm, SingleDiskFarmError, SingleDiskFarmId, SingleDiskFarmInfo,
+    SingleDiskFarmOptions, SingleDiskFarmSummary,
 };
 use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
 use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
@@ -47,23 +47,23 @@ use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tracing::{debug, error, warn};
 use tracing_futures::Instrument;
 
-/// Description of the plot
+/// Description of the farm
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[non_exhaustive]
-pub struct PlotDescription {
-    /// Path of the plot
+pub struct FarmDescription {
+    /// Path of the farm
     pub directory: PathBuf,
     /// Space which you want to pledge
     pub space_pledged: ByteSize,
 }
 
-impl PlotDescription {
-    /// Construct Plot description
+impl FarmDescription {
+    /// Construct Farm description
     pub fn new(directory: impl Into<PathBuf>, space_pledged: ByteSize) -> Self {
         Self { directory: directory.into(), space_pledged }
     }
 
-    /// Wipe all the data from the plot
+    /// Wipe all the data from the farm
     pub async fn wipe(self) -> io::Result<()> {
         tokio::fs::remove_dir_all(self.directory).await
     }
@@ -80,7 +80,7 @@ mod builder {
     use serde::{Deserialize, Serialize};
 
     use super::BuildError;
-    use crate::{Farmer, PlotDescription};
+    use crate::{FarmDescription, Farmer};
 
     #[derive(
         Debug,
@@ -97,7 +97,7 @@ mod builder {
     )]
     #[derivative(Default)]
     #[serde(transparent)]
-    pub struct MaxConcurrentPlots(
+    pub struct MaxConcurrentFarms(
         #[derivative(Default(value = "NonZeroUsize::new(10).expect(\"10 > 0\")"))]
         pub(crate)  NonZeroUsize,
     );
@@ -147,11 +147,11 @@ mod builder {
     #[builder(pattern = "immutable", build_fn(private, name = "_build"), name = "Builder")]
     #[non_exhaustive]
     pub struct Config {
-        /// Number of plots that can be plotted concurrently, impacts RAM usage.
+        /// Number of farms that can be plotted concurrently, impacts RAM usage.
         #[builder(default, setter(into))]
         #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-        pub max_concurrent_plots: MaxConcurrentPlots,
-        /// Number of plots that can be plotted concurrently, impacts RAM usage.
+        pub max_concurrent_farms: MaxConcurrentFarms,
+        /// Number of farms that can be farmted concurrently, impacts RAM usage.
         #[builder(default, setter(into))]
         #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
         pub provided_keys_limit: ProvidedKeysLimit,
@@ -171,39 +171,39 @@ mod builder {
             self,
             reward_address: PublicKey,
             node: &N,
-            plots: &[PlotDescription],
+            farms: &[FarmDescription],
             cache_percentage: NonZeroU8,
         ) -> Result<Farmer<N::Table>, BuildError> {
-            self.configuration().build(reward_address, node, plots, cache_percentage).await
+            self.configuration().build(reward_address, node, farms, cache_percentage).await
         }
     }
 }
 
-/// Error when plot creation fails
+/// Error when farm creation fails
 #[derive(Debug, thiserror::Error)]
-pub enum SingleDiskPlotCreationError {
-    /// Insufficient disk while creating single disk plot
-    #[error("Unable to create plot as Allocated space {} ({}) is not enough, minimum is ~{} (~{}, {} bytes to be exact", bytesize::to_string(*.allocated_space, true), bytesize::to_string(*.allocated_space, false), bytesize::to_string(*.min_space, true), bytesize::to_string(*.min_space, false), *.min_space)]
-    InsufficientSpaceForPlot {
-        /// Minimum space required for plot
+pub enum SingleDiskFarmCreationError {
+    /// Insufficient disk while creating single disk farm
+    #[error("Unable to create farm as Allocated space {} ({}) is not enough, minimum is ~{} (~{}, {} bytes to be exact", bytesize::to_string(*.allocated_space, true), bytesize::to_string(*.allocated_space, false), bytesize::to_string(*.min_space, true), bytesize::to_string(*.min_space, false), *.min_space)]
+    InsufficientSpaceForFarm {
+        /// Minimum space required for farm
         min_space: u64,
-        /// Allocated space for plot
+        /// Allocated space for farm
         allocated_space: u64,
     },
-    /// Other error while creating single disk plot
-    #[error("Single disk plot creation error: {0}")]
-    Other(#[from] SingleDiskPlotError),
+    /// Other error while creating single disk farm
+    #[error("Single disk farm creation error: {0}")]
+    Other(#[from] SingleDiskFarmError),
 }
 
 /// Build Error
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
-    /// Failed to create single disk plot
-    #[error("Single disk plot creation error: {0}")]
-    SingleDiskPlotCreate(#[from] SingleDiskPlotCreationError),
-    /// No plots were supplied during building
-    #[error("Supply at least one plot")]
-    NoPlotsSupplied,
+    /// Failed to create single disk farm
+    #[error("Single disk farm creation error: {0}")]
+    SingleDiskFarmCreate(#[from] SingleDiskFarmCreationError),
+    /// No farms were supplied during building
+    #[error("Supply at least one farm")]
+    NoFarmsSupplied,
     /// Failed to fetch data from the node
     #[error("Failed to fetch data from node: {0}")]
     RPCError(#[source] subspace_farmer::RpcClientError),
@@ -259,24 +259,24 @@ const SEGMENT_COMMITMENTS_CACHE_SIZE: NonZeroUsize =
     NonZeroUsize::new(1_000_000).expect("Not zero; qed");
 
 fn create_readers_and_pieces(
-    single_disk_plots: &[SingleDiskPlot],
+    single_disk_farms: &[SingleDiskFarm],
     archival_storage_pieces: ArchivalStoragePieces,
 ) -> Result<ReadersAndPieces, BuildError> {
     // Store piece readers so we can reference them later
-    let readers = single_disk_plots.iter().map(SingleDiskPlot::piece_reader).collect();
+    let readers = single_disk_farms.iter().map(SingleDiskFarm::piece_reader).collect();
     let mut readers_and_pieces = ReadersAndPieces::new(readers, archival_storage_pieces);
 
     tracing::debug!("Collecting already plotted pieces");
 
     // Collect already plotted pieces
-    single_disk_plots.iter().enumerate().try_for_each(|(disk_farm_index, single_disk_plot)| {
+    single_disk_farms.iter().enumerate().try_for_each(|(disk_farm_index, single_disk_farm)| {
         let disk_farm_index = disk_farm_index.try_into().map_err(|_error| {
             anyhow!(
-                "More than 256 plots are not supported, consider running multiple farmer instances"
+                "More than 256 farms are not supported, consider running multiple farmer instances"
             )
         })?;
 
-        (0 as SectorIndex..).zip(single_disk_plot.plotted_sectors()).for_each(
+        (0 as SectorIndex..).zip(single_disk_farm.plotted_sectors()).for_each(
             |(sector_index, plotted_sector_result)| match plotted_sector_result {
                 Ok(plotted_sector) => {
                     readers_and_pieces.add_sector(disk_farm_index, &plotted_sector);
@@ -308,7 +308,7 @@ fn handler_on_sector_plotted(
 ) {
     let disk_farm_index = disk_farm_index
         .try_into()
-        .expect("More than 256 plots are not supported, this is checked above already; qed");
+        .expect("More than 256 farms are not supported, this is checked above already; qed");
 
     {
         let mut readers_and_pieces = readers_and_pieces.lock();
@@ -328,19 +328,19 @@ impl Config {
         self,
         reward_address: PublicKey,
         node: &N,
-        plots: &[PlotDescription],
+        farms: &[FarmDescription],
         cache_percentage: NonZeroU8,
     ) -> Result<Farmer<T>, BuildError> {
-        if plots.is_empty() {
-            return Err(BuildError::NoPlotsSupplied);
+        if farms.is_empty() {
+            return Err(BuildError::NoFarmsSupplied);
         }
 
         let mut destructors = DestructorSet::new("farmer-destructors");
 
-        let Self { max_concurrent_plots: _, provided_keys_limit: _, max_pieces_in_sector } = self;
+        let Self { max_concurrent_farms: _, provided_keys_limit: _, max_pieces_in_sector } = self;
 
-        let mut single_disk_plots = Vec::with_capacity(plots.len());
-        let mut plot_info = HashMap::with_capacity(plots.len());
+        let mut single_disk_farms = Vec::with_capacity(farms.len());
+        let mut farm_info = HashMap::with_capacity(farms.len());
 
         let readers_and_pieces = Arc::clone(&node.dsn().farmer_readers_and_pieces);
 
@@ -357,7 +357,7 @@ impl Config {
                 "Number of buckets >= 1, therefore next power of 2 >= 2, therefore ilog2 >= 1",
             ),
         )
-        .map_err(|error| anyhow::anyhow!("Failed to create erasure coding for plot: {error}"))?;
+        .map_err(|error| anyhow::anyhow!("Failed to create erasure coding for farm: {error}"))?;
 
         let piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
             node.dsn().node.clone(),
@@ -416,8 +416,8 @@ impl Config {
             None => farmer_app_info.protocol_info.max_pieces_in_sector,
         };
 
-        for (disk_farm_idx, description) in plots.iter().enumerate() {
-            let (plot, single_disk_plot) = Plot::new(PlotOptions {
+        for (disk_farm_idx, description) in farms.iter().enumerate() {
+            let (farm, single_disk_farm) = Farm::new(FarmOptions {
                 disk_farm_idx,
                 cache_percentage,
                 reward_address,
@@ -429,8 +429,8 @@ impl Config {
                 erasure_coding: erasure_coding.clone(),
             })
             .await?;
-            plot_info.insert(plot.directory.clone(), plot);
-            single_disk_plots.push(single_disk_plot);
+            farm_info.insert(farm.directory.clone(), farm);
+            single_disk_farms.push(single_disk_farm);
         }
 
         *node.dsn().farmer_piece_cache.write() = Some(farmer_piece_cache.clone());
@@ -443,16 +443,16 @@ impl Config {
 
         farmer_piece_cache
             .replace_backing_caches(
-                single_disk_plots
+                single_disk_farms
                     .iter()
-                    .map(|single_disk_plot| single_disk_plot.piece_cache())
+                    .map(|single_disk_farm| single_disk_farm.piece_cache())
                     .collect(),
             )
             .await;
         drop(farmer_piece_cache);
 
         readers_and_pieces.lock().replace(create_readers_and_pieces(
-            &single_disk_plots,
+            &single_disk_farms,
             node.dsn().farmer_archival_storage_pieces.clone(),
         )?);
         destructors.add_sync_destructor({
@@ -463,13 +463,13 @@ impl Config {
         })?;
 
         let mut sector_plotting_handler_ids = vec![];
-        for (disk_farm_index, single_disk_plot) in single_disk_plots.iter().enumerate() {
+        for (disk_farm_index, single_disk_farm) in single_disk_farms.iter().enumerate() {
             let readers_and_pieces = Arc::clone(&readers_and_pieces);
             let span = tracing::info_span!("farm", %disk_farm_index);
 
             // Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
-            sector_plotting_handler_ids.push(single_disk_plot.on_sector_plotted(Arc::new(
+            sector_plotting_handler_ids.push(single_disk_farm.on_sector_plotted(Arc::new(
                 move |(plotted_sector, maybe_old_plotted_sector)| {
                     let _span_guard = span.enter();
                     handler_on_sector_plotted(
@@ -482,15 +482,15 @@ impl Config {
             )));
         }
 
-        let mut single_disk_plots_stream =
-            single_disk_plots.into_iter().map(SingleDiskPlot::run).collect::<FuturesUnordered<_>>();
+        let mut single_disk_farms_stream =
+            single_disk_farms.into_iter().map(SingleDiskFarm::run).collect::<FuturesUnordered<_>>();
 
-        let (plot_driver_drop_sender, mut plot_driver_drop_receiver) = oneshot::channel::<()>();
-        let (plot_driver_result_sender, plot_driver_result_receiver) =
+        let (farm_driver_drop_sender, mut farm_driver_drop_receiver) = oneshot::channel::<()>();
+        let (farm_driver_result_sender, farm_driver_result_receiver) =
             mpsc::channel::<_>(u8::MAX as usize + 1);
 
-        let plot_driver_join_handle = sdk_utils::task_spawn_blocking(
-            format!("subspace-sdk-farmer-{node_name}-plots-driver"),
+        let farm_driver_join_handle = sdk_utils::task_spawn_blocking(
+            format!("subspace-sdk-farmer-{node_name}-farms-driver"),
             {
                 let handle = tokio::runtime::Handle::current();
 
@@ -499,19 +499,19 @@ impl Config {
 
                     loop {
                         let result = handle.block_on(future::select(
-                            single_disk_plots_stream.next(),
-                            &mut plot_driver_drop_receiver,
+                            single_disk_farms_stream.next(),
+                            &mut farm_driver_drop_receiver,
                         ));
 
                         match result {
                             Left((maybe_result, _)) => {
                                 let send_result = match maybe_result {
-                                    None => plot_driver_result_sender
+                                    None => farm_driver_result_sender
                                         .try_send(Ok(TaskOutput::Value(()))),
                                     Some(result) => match result {
-                                        Ok(()) => plot_driver_result_sender
+                                        Ok(()) => farm_driver_result_sender
                                             .try_send(Ok(TaskOutput::Value(()))),
-                                        Err(e) => plot_driver_result_sender.try_send(Err(e)),
+                                        Err(e) => farm_driver_result_sender.try_send(Err(e)),
                                     },
                                 };
 
@@ -521,10 +521,10 @@ impl Config {
                                 }
                             }
                             Right((_, _)) => {
-                                warn!("Received drop signal for plot driver, exiting...");
+                                warn!("Received drop signal for farm driver, exiting...");
                                 let _ =
-                                    plot_driver_result_sender.try_send(Ok(TaskOutput::Cancelled(
-                                        "Received drop signal for plot driver".into(),
+                                    farm_driver_result_sender.try_send(Ok(TaskOutput::Cancelled(
+                                        "Received drop signal for farm driver".into(),
                                     )));
                                 break;
                             }
@@ -536,8 +536,8 @@ impl Config {
 
         destructors.add_async_destructor({
             async move {
-                let _ = plot_driver_drop_sender.send(());
-                plot_driver_join_handle.await.expect("joining should not fail; qed");
+                let _ = farm_driver_drop_sender.send(());
+                farm_driver_join_handle.await.expect("joining should not fail; qed");
             }
         })?;
 
@@ -549,8 +549,8 @@ impl Config {
 
         Ok(Farmer {
             reward_address,
-            plot_info,
-            result_receiver: Some(plot_driver_result_receiver),
+            farm_info,
+            result_receiver: Some(farm_driver_result_receiver),
             node_name,
             app_info: subspace_farmer::NodeClient::farmer_app_info(node.rpc())
                 .await
@@ -566,33 +566,33 @@ impl Config {
 #[must_use = "Farmer should be closed"]
 pub struct Farmer<T: subspace_proof_of_space::Table> {
     reward_address: PublicKey,
-    plot_info: HashMap<PathBuf, Plot<T>>,
+    farm_info: HashMap<PathBuf, Farm<T>>,
     result_receiver: Option<mpsc::Receiver<anyhow::Result<TaskOutput<(), String>>>>,
     node_name: String,
     app_info: FarmerAppInfo,
     _destructors: DestructorSet,
 }
 
-/// Info about some plot
+/// Info about some farm
 #[derive(Debug)]
 #[non_exhaustive]
 // TODO: Should it be versioned?
-pub struct PlotInfo {
-    /// ID of the plot
-    pub id: SingleDiskPlotId,
-    /// Genesis hash of the chain used for plot creation
+pub struct FarmInfo {
+    /// ID of the farm
+    pub id: SingleDiskFarmId,
+    /// Genesis hash of the chain used for farm creation
     pub genesis_hash: [u8; 32],
-    /// Public key of identity used for plot creation
+    /// Public key of identity used for farm creation
     pub public_key: PublicKey,
-    /// How much space in bytes is allocated for this plot
+    /// How much space in bytes is allocated for this farm
     pub allocated_space: ByteSize,
     /// How many pieces are in sector
     pub pieces_in_sector: u16,
 }
 
-impl From<SingleDiskPlotInfo> for PlotInfo {
-    fn from(info: SingleDiskPlotInfo) -> Self {
-        let SingleDiskPlotInfo::V0 {
+impl From<SingleDiskFarmInfo> for FarmInfo {
+    fn from(info: SingleDiskFarmInfo) -> Self {
+        let SingleDiskFarmInfo::V0 {
             id,
             genesis_hash,
             public_key,
@@ -619,8 +619,8 @@ pub struct Info {
     pub reward_address: PublicKey,
     // TODO: add dsn peers info
     // pub dsn_peers: u64,
-    /// Info about each plot
-    pub plots_info: HashMap<PathBuf, PlotInfo>,
+    /// Info about each farm
+    pub farms_info: HashMap<PathBuf, FarmInfo>,
     /// Sector size in bits
     pub sector_size: u64,
 }
@@ -639,9 +639,9 @@ pub struct InitialPlottingProgress {
 /// Progress data received from sender, used to monitor plotting progress
 pub type ProgressData = Option<(PlottedSector, Option<PlottedSector>)>;
 
-/// Plot structure
+/// Farm structure
 #[derive(Debug)]
-pub struct Plot<T: subspace_proof_of_space::Table> {
+pub struct Farm<T: subspace_proof_of_space::Table> {
     directory: PathBuf,
     progress: watch::Receiver<ProgressData>,
     solutions: watch::Receiver<Option<SolutionResponse>>,
@@ -708,21 +708,21 @@ impl Stream for InitialPlottingProgressStream {
     }
 }
 
-struct PlotOptions<'a, PG, N: sdk_traits::Node> {
+struct FarmOptions<'a, PG, N: sdk_traits::Node> {
     pub disk_farm_idx: usize,
     pub cache_percentage: NonZeroU8,
     pub reward_address: PublicKey,
     pub node: &'a N,
     pub piece_getter: PG,
-    pub description: &'a PlotDescription,
+    pub description: &'a FarmDescription,
     pub kzg: kzg::Kzg,
     pub erasure_coding: ErasureCoding,
     pub max_pieces_in_sector: u16,
 }
 
-impl<T: subspace_proof_of_space::Table> Plot<T> {
+impl<T: subspace_proof_of_space::Table> Farm<T> {
     async fn new(
-        PlotOptions {
+        FarmOptions {
             disk_farm_idx,
             cache_percentage,
             reward_address,
@@ -732,18 +732,18 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
             kzg,
             erasure_coding,
             max_pieces_in_sector,
-        }: PlotOptions<
+        }: FarmOptions<
             '_,
             impl subspace_farmer_components::plotting::PieceGetter + Send + 'static,
             impl sdk_traits::Node,
         >,
-    ) -> Result<(Self, SingleDiskPlot), BuildError> {
+    ) -> Result<(Self, SingleDiskFarm), BuildError> {
         let directory = description.directory.clone();
         let allocated_space = description.space_pledged.as_u64();
         let farmer_app_info = subspace_farmer::NodeClient::farmer_app_info(node.rpc())
             .await
             .expect("Node is always reachable");
-        let description = SingleDiskPlotOptions {
+        let description = SingleDiskFarmOptions {
             allocated_space,
             directory: directory.clone(),
             farmer_app_info,
@@ -755,28 +755,28 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
             piece_getter,
             cache_percentage,
         };
-        let single_disk_plot_fut = SingleDiskPlot::new::<_, _, T>(description, disk_farm_idx);
-        let single_disk_plot = match single_disk_plot_fut.await {
-            Ok(single_disk_plot) => single_disk_plot,
-            Err(SingleDiskPlotError::InsufficientAllocatedSpace { min_space, allocated_space }) => {
-                return Err(BuildError::SingleDiskPlotCreate(
-                    SingleDiskPlotCreationError::InsufficientSpaceForPlot {
+        let single_disk_farm_fut = SingleDiskFarm::new::<_, _, T>(description, disk_farm_idx);
+        let single_disk_farm = match single_disk_farm_fut.await {
+            Ok(single_disk_farm) => single_disk_farm,
+            Err(SingleDiskFarmError::InsufficientAllocatedSpace { min_space, allocated_space }) => {
+                return Err(BuildError::SingleDiskFarmCreate(
+                    SingleDiskFarmCreationError::InsufficientSpaceForFarm {
                         min_space,
                         allocated_space,
                     },
                 ));
             }
             Err(error) => {
-                return Err(BuildError::SingleDiskPlotCreate(SingleDiskPlotCreationError::Other(
+                return Err(BuildError::SingleDiskFarmCreate(SingleDiskFarmCreationError::Other(
                     error,
                 )));
             }
         };
-        let mut destructors = DestructorSet::new_without_async("plot-destructors");
+        let mut destructors = DestructorSet::new_without_async("farm-destructors");
 
         let progress = {
             let (sender, receiver) = watch::channel::<Option<_>>(None);
-            destructors.add_items_to_drop(single_disk_plot.on_sector_plotted(Arc::new(
+            destructors.add_items_to_drop(single_disk_farm.on_sector_plotted(Arc::new(
                 move |sector| {
                     let _ = sender.send(Some(sector.clone()));
                 },
@@ -785,7 +785,7 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
         };
         let solutions = {
             let (sender, receiver) = watch::channel::<Option<_>>(None);
-            destructors.add_items_to_drop(single_disk_plot.on_solution(Arc::new(
+            destructors.add_items_to_drop(single_disk_farm.on_solution(Arc::new(
                 move |solution| {
                     let _ = sender.send(Some(solution.clone()));
                 },
@@ -794,7 +794,7 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
         };
 
         // TODO: This calculation is directly imported from the monorepo and relies on
-        // internal calculation of plot. Remove it once we have public function.
+        // internal calculation of farm. Remove it once we have public function.
         let fixed_space_usage = 2 * 1024 * 1024
             + Identity::file_size() as u64
             + NetworkingParametersManager::file_size() as u64;
@@ -817,25 +817,25 @@ impl<T: subspace_proof_of_space::Table> Plot<T> {
                 progress,
                 solutions,
                 initial_plotting_progress: Arc::new(Mutex::new(InitialPlottingProgress {
-                    starting_sector: u64::try_from(single_disk_plot.plotted_sectors_count())
+                    starting_sector: u64::try_from(single_disk_farm.plotted_sectors_count())
                         .expect("Sector count is less than u64::MAX"),
-                    current_sector: u64::try_from(single_disk_plot.plotted_sectors_count())
+                    current_sector: u64::try_from(single_disk_farm.plotted_sectors_count())
                         .expect("Sector count is less than u64::MAX"),
                     total_sectors: target_sector_count,
                 })),
                 _destructors: destructors,
                 _table: Default::default(),
             },
-            single_disk_plot,
+            single_disk_farm,
         ))
     }
 
-    /// Plot location
+    /// Farm location
     pub fn directory(&self) -> &PathBuf {
         &self.directory
     }
 
-    /// Plot size
+    /// Farm size
     pub fn allocated_space(&self) -> ByteSize {
         ByteSize::b(self.allocated_space)
     }
@@ -891,25 +891,25 @@ impl<T: subspace_proof_of_space::Table> Farmer<T> {
         Builder::default()
     }
 
-    /// Gets plot info
+    /// Gets farm info
     pub async fn get_info(&self) -> anyhow::Result<Info> {
-        let plots_info = tokio::task::spawn_blocking({
-            let dirs = self.plot_info.keys().cloned().collect::<Vec<_>>();
-            || dirs.into_iter().map(SingleDiskPlot::collect_summary).collect::<Vec<_>>()
+        let farms_info = tokio::task::spawn_blocking({
+            let dirs = self.farm_info.keys().cloned().collect::<Vec<_>>();
+            || dirs.into_iter().map(SingleDiskFarm::collect_summary).collect::<Vec<_>>()
         })
         .await?
         .into_iter()
         .map(|summary| match summary {
-            SingleDiskPlotSummary::Found { info, directory } => Ok((directory, info.into())),
-            SingleDiskPlotSummary::NotFound { directory } =>
-                Err(anyhow::anyhow!("Didn't found plot at `{directory:?}'")),
-            SingleDiskPlotSummary::Error { directory, error } =>
-                Err(error).context(format!("Failed to get plot summary at `{directory:?}'")),
+            SingleDiskFarmSummary::Found { info, directory } => Ok((directory, info.into())),
+            SingleDiskFarmSummary::NotFound { directory } =>
+                Err(anyhow::anyhow!("Didn't found farm at `{directory:?}'")),
+            SingleDiskFarmSummary::Error { directory, error } =>
+                Err(error).context(format!("Failed to get farm summary at `{directory:?}'")),
         })
         .collect::<anyhow::Result<_>>()?;
 
         Ok(Info {
-            plots_info,
+            farms_info,
             version: format!("{}-{}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH")),
             reward_address: self.reward_address,
             sector_size: subspace_farmer_components::sector::sector_size(
@@ -918,12 +918,12 @@ impl<T: subspace_proof_of_space::Table> Farmer<T> {
         })
     }
 
-    /// Iterate over plots
-    pub async fn iter_plots(&'_ self) -> impl Iterator<Item = &'_ Plot<T>> + '_ {
-        self.plot_info.values()
+    /// Iterate over farms
+    pub async fn iter_farms(&'_ self) -> impl Iterator<Item = &'_ Farm<T>> + '_ {
+        self.farm_info.values()
     }
 
-    /// Stops farming, closes plots, and sends signal to the node
+    /// Stops farming, closes farms, and sends signal to the node
     pub async fn close(mut self) -> anyhow::Result<()> {
         self._destructors.async_drop().await?;
         let mut result_receiver = self.result_receiver.take().expect("Handle is always there");
@@ -933,7 +933,7 @@ impl<T: subspace_proof_of_space::Table> Farmer<T> {
             match output {
                 TaskOutput::Value(_) => {}
                 TaskOutput::Cancelled(reason) => {
-                    warn!("Plot driver was cancelled due to reason: {:?}", reason);
+                    warn!("Farm driver was cancelled due to reason: {:?}", reason);
                 }
             }
         }

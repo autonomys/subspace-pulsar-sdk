@@ -6,7 +6,7 @@ use derive_builder::Builder;
 use derive_more::{Deref, DerefMut};
 use sdk_node::{DomainConfigBuilder, PotConfiguration};
 use sdk_utils::ByteSize;
-use subspace_sdk::farmer::PlotDescription;
+use subspace_sdk::farmer::FarmDescription;
 use subspace_sdk::node::{chain_spec, ChainSpec, DsnBuilder, NetworkBuilder, Role};
 use subspace_sdk::MultiaddrWithPeerId;
 use tempfile::TempDir;
@@ -163,7 +163,7 @@ impl FarmerBuilder {
             .build(
                 reward_address,
                 &**node,
-                &[PlotDescription::new(
+                &[FarmDescription::new(
                     node.path().path().join("plot"),
                     // TODO: account for overhead here
                     space_pledged,

@@ -10,27 +10,27 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
 /// Module related to the farmer
-pub use sdk_farmer::{Builder as FarmerBuilder, Info as FarmerInfo, PlotDescription};
+pub use sdk_farmer::{Builder as FarmerBuilder, FarmDescription, Info as FarmerInfo};
 pub use sdk_node::{chain_spec, Builder as NodeBuilder, Info as NodeInfo};
 pub use sdk_utils::{ByteSize, Multiaddr, MultiaddrWithPeerId, PublicKey, Ss58ParsingError};
 use subspace_proof_of_space::chia::ChiaTable;
 
 static_assertions::assert_impl_all!(Node: Send, Sync);
 static_assertions::assert_impl_all!(Farmer: Send, Sync);
-static_assertions::assert_impl_all!(Plot: Send, Sync);
+static_assertions::assert_impl_all!(Farm: Send, Sync);
 
 /// Subspace farmer type
 pub type Farmer = sdk_farmer::Farmer<ChiaTable>;
 /// Subspace farmer's plot
-pub type Plot = sdk_farmer::Plot<ChiaTable>;
+pub type Farm = sdk_farmer::Farm<ChiaTable>;
 /// Subspace primary node
 pub type Node = sdk_node::Node<Farmer>;
 
 /// Farmer related things located here
 pub mod farmer {
-    pub use sdk_farmer::PlotDescription;
+    pub use sdk_farmer::FarmDescription;
 
-    pub use super::{Farmer, Plot};
+    pub use super::{Farm, Farmer};
 }
 
 /// Node related things located here

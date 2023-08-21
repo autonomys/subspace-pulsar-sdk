@@ -54,7 +54,7 @@ async fn sync_block() {
     tokio::time::timeout(std::time::Duration::from_secs(60 * 60), sync_block_inner()).await.unwrap()
 }
 
-async fn sync_plot_inner() {
+async fn sync_farm_inner() {
     crate::common::setup();
 
     let number_of_sectors = 10;
@@ -103,11 +103,11 @@ async fn sync_plot_inner() {
         .instrument(other_node_span.clone())
         .await;
 
-    let plot = other_farmer.iter_plots().await.next().unwrap();
-    plot.subscribe_initial_plotting_progress().await.for_each(|_| async {}).await;
+    let farm = other_farmer.iter_farms().await.next().unwrap();
+    farm.subscribe_initial_plotting_progress().await.for_each(|_| async {}).await;
     farmer.close().await;
 
-    plot.subscribe_new_solutions().await.next().await.expect("Solution stream never ends");
+    farm.subscribe_new_solutions().await.next().await.expect("Solution stream never ends");
 
     node.close().await;
     other_node.close().await;
@@ -116,8 +116,8 @@ async fn sync_plot_inner() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
-async fn sync_plot() {
-    tokio::time::timeout(std::time::Duration::from_secs(60 * 60), sync_plot_inner()).await.unwrap()
+async fn sync_farm() {
+    tokio::time::timeout(std::time::Duration::from_secs(60 * 60), sync_farm_inner()).await.unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread")]
