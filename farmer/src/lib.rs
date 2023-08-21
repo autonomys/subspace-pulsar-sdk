@@ -216,7 +216,7 @@ pub enum BuildError {
 impl<T: subspace_proof_of_space::Table> sdk_traits::Farmer for Farmer<T> {
     type Table = T;
 
-    async fn get_piece_by_hash(
+    async fn get_piece_by_index(
         piece_index: PieceIndex,
         piece_cache: &FarmerPieceCache,
         weak_readers_and_pieces: &std::sync::Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,

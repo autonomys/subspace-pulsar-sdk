@@ -812,7 +812,7 @@ fn get_piece_by_index<F: Farmer>(
         let maybe_farmer_piece_cache = farmer_piece_cache.read().clone();
         if let Some(farmer_piece_cache) = maybe_farmer_piece_cache {
             let piece =
-                F::get_piece_by_hash(piece_index, &farmer_piece_cache, &weak_readers_and_pieces)
+                F::get_piece_by_index(piece_index, &farmer_piece_cache, &weak_readers_and_pieces)
                     .await;
             Some(PieceByIndexResponse { piece })
         } else {

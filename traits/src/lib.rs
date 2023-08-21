@@ -18,7 +18,7 @@ pub trait Farmer {
     type Table: subspace_proof_of_space::Table;
 
     /// Fetch piece by its hash
-    async fn get_piece_by_hash(
+    async fn get_piece_by_index(
         piece_index: subspace_core_primitives::PieceIndex,
         piece_cache: &FarmerPieceCache,
         weak_readers_and_pieces: &std::sync::Weak<

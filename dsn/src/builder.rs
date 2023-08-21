@@ -159,7 +159,7 @@ impl DsnBuilder {
 }
 
 /// Options for DSN
-pub struct DsnOptions<C, PieceByHash, SegmentHeaderByIndexes> {
+pub struct DsnOptions<C, PieceByIndex, SegmentHeaderByIndexes> {
     /// Client to aux storage for node piece cache
     pub client: Arc<C>,
     /// Path for dsn
@@ -167,7 +167,7 @@ pub struct DsnOptions<C, PieceByHash, SegmentHeaderByIndexes> {
     /// Keypair for networking
     pub keypair: subspace_networking::libp2p::identity::Keypair,
     /// Get piece by hash handler
-    pub get_piece_by_index: PieceByHash,
+    pub get_piece_by_index: PieceByIndex,
     /// Get segment header by segment indexes handler
     pub get_segment_header_by_segment_indexes: SegmentHeaderByIndexes,
     /// Farmer total allocated space across all plots
