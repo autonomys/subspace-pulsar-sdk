@@ -6,7 +6,7 @@ use futures::stream::StreamExt;
 use sdk_node::PotConfiguration;
 use subspace_sdk::node::NetworkBuilder;
 use subspace_sdk::{
-    chain_spec, ByteSize, Farmer, MultiaddrWithPeerId, Node, PlotDescription, PublicKey,
+    chain_spec, ByteSize, FarmDescription, Farmer, MultiaddrWithPeerId, Node, PublicKey,
 };
 use tempfile::TempDir;
 
@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
             let chain_spec = serde_json::from_str(&tokio::fs::read_to_string(spec).await?)?;
             let (plot_size, _cache_size) =
                 (ByteSize::b(plot_size.as_u64() * 9 / 10), ByteSize::b(plot_size.as_u64() / 10));
-            let plots = [PlotDescription::new(plot.join("plot"), plot_size)];
+            let plots = [FarmDescription::new(plot.join("plot"), plot_size)];
             let farmer_total_space_pledged =
                 plots.iter().map(|p| p.space_pledged.as_u64() as usize).sum::<usize>();
             let node = Node::builder()

@@ -6,7 +6,7 @@ use clap::{Parser, ValueEnum};
 use futures::prelude::*;
 use sdk_node::PotConfiguration;
 use subspace_sdk::node::{self, Event, Node, RewardsEvent, SubspaceEvent};
-use subspace_sdk::{ByteSize, Farmer, PlotDescription, PublicKey};
+use subspace_sdk::{ByteSize, FarmDescription, Farmer, PublicKey};
 use tracing_subscriber::prelude::*;
 
 #[cfg(all(
@@ -141,14 +141,14 @@ async fn main() -> anyhow::Result<()> {
         .build(
             reward_address,
             &node,
-            &[PlotDescription::new(base_path.join("plot"), plot_size)],
+            &[FarmDescription::new(base_path.join("plot"), plot_size)],
             NonZeroU8::new(1).expect("static value should not fail; qed"),
         )
         .await?;
 
     tokio::spawn({
         let initial_plotting =
-            farmer.iter_plots().await.next().unwrap().subscribe_initial_plotting_progress().await;
+            farmer.iter_farms().await.next().unwrap().subscribe_initial_plotting_progress().await;
         async move {
             initial_plotting
                 .for_each(|progress| async move {
