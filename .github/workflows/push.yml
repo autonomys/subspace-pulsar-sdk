@@ -90,9 +90,16 @@ jobs:
           restore-keys: clippy-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
 
       - name: Install utils for caching
+        if: runner.os != 'Windows'
         run: |
           test -x ~/.cargo/bin/cargo-sweep || cargo install cargo-sweep
           test -x ~/.cargo/bin/cargo-cache || cargo install cargo-cache --no-default-features --features ci-autoclean cargo-cache
+
+      - name: Install utils for caching for Windows
+        if: runner.os == 'Windows'
+        run: |
+          test -x ~/.cargo/bin/cargo-sweep.exe || cargo install cargo-sweep
+          test -x ~/.cargo/bin/cargo-cache.exe || cargo install cargo-cache --no-default-features --features ci-autoclean cargo-cache
 
       - name: Clean unused crate source checkouts and git repo checkouts
         run: cargo cache
