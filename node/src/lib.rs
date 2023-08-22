@@ -768,19 +768,15 @@ fn get_segment_header_by_segment_indexes(
                 segment_headers_limit = SEGMENT_HEADERS_NUMBER_LIMIT;
             }
 
-            match segment_headers_store.max_segment_index() {
-                Some(max_segment_index) => {
-                    // Several last segment indexes
-                    (SegmentIndex::ZERO..=max_segment_index)
-                        .rev()
-                        .take(segment_headers_limit as usize)
-                        .collect::<Vec<_>>()
-                }
-                None => {
-                    // Nothing yet
-                    Vec::new()
-                }
-            }
+            // Currently segment_headers_store.max_segment_index returns None if only
+            // genesis block is archived To maintain parity with monorepo
+            // implementation we are returning SegmentIndex::ZERO in that case.
+            let max_segment_index =
+                segment_headers_store.max_segment_index().unwrap_or(SegmentIndex::ZERO);
+            (SegmentIndex::ZERO..=max_segment_index)
+                .rev()
+                .take(segment_headers_limit as usize)
+                .collect::<Vec<_>>()
         }
     };
 
