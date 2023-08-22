@@ -9421,6 +9421,7 @@ dependencies = [
  "subspace-farmer",
  "subspace-farmer-components",
  "subspace-networking",
+ "subspace-rpc-primitives",
  "subspace-runtime",
  "subspace-runtime-primitives",
  "subspace-service",

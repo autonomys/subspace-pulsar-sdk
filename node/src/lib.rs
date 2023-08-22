@@ -37,6 +37,7 @@ use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{
     PieceByIndexRequest, PieceByIndexResponse, SegmentHeaderRequest, SegmentHeaderResponse,
 };
+use subspace_rpc_primitives::MAX_SEGMENT_HEADERS_PER_REQUEST;
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::SubspaceConfiguration;
@@ -60,6 +61,8 @@ pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
 
 /// Events from subspace pallet
 pub type RewardsEvent = pallet_rewards::Event<subspace_runtime::Runtime>;
+
+const SEGMENT_HEADERS_NUMBER_LIMIT: u64 = MAX_SEGMENT_HEADERS_PER_REQUEST as u64;
 
 /// Proof of time configuration for node
 pub struct PotConfiguration {
@@ -751,8 +754,6 @@ impl<F: Farmer + 'static> Node<F> {
             .collect())
     }
 }
-
-const SEGMENT_HEADERS_NUMBER_LIMIT: u64 = 1000;
 
 fn get_segment_header_by_segment_indexes(
     req: &SegmentHeaderRequest,
