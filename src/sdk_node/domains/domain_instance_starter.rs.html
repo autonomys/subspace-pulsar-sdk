@@ -168,6 +168,7 @@
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>cross_domain_message_gossip::GossipWorkerBuilder;
@@ -184,6 +185,7 @@
 <span class="kw">use </span>sp_core::crypto::AccountId32;
 <span class="kw">use </span>sp_core::traits::SpawnEssentialNamed;
 <span class="kw">use </span>sp_domains::{DomainId, RuntimeType};
+<span class="kw">use </span>sp_messenger::messages::ChainId;
 <span class="kw">use </span>sp_runtime::traits::{Block <span class="kw">as </span>BlockT, Convert, NumberFor};
 <span class="kw">use </span>subspace_runtime::RuntimeApi <span class="kw">as </span>CRuntimeApi;
 <span class="kw">use </span>subspace_runtime_primitives::opaque::Block <span class="kw">as </span>CBlock;
@@ -314,7 +316,7 @@
                 </span>.map_err(anyhow::Error::new)<span class="question-mark">?</span>;
 
                 xdm_gossip_worker_builder
-                    .push_domain_tx_pool_sink(domain_id, domain_node.tx_pool_sink);
+                    .push_chain_tx_pool_sink(ChainId::Domain(domain_id), domain_node.tx_pool_sink);
 
                 <span class="kw">let </span>cross_domain_message_gossip_worker = xdm_gossip_worker_builder
                     .build::&lt;CBlock, <span class="kw">_</span>, <span class="kw">_</span>&gt;(consensus_network_service, consensus_sync_service);

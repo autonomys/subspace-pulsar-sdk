@@ -411,18 +411,14 @@
 <a href="#411" id="411">411</a>
 <a href="#412" id="412">412</a>
 <a href="#413" id="413">413</a>
-<a href="#414" id="414">414</a>
-<a href="#415" id="415">415</a>
-<a href="#416" id="416">416</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Subspace chain configurations.
 
 </span><span class="kw">use </span>sc_service::ChainType;
 <span class="kw">use </span>sc_subspace_chain_specs::SerializableChainSpec;
 <span class="kw">use </span>sc_telemetry::TelemetryEndpoints;
 <span class="kw">use </span>sdk_utils::chain_spec <span class="kw">as </span>utils;
-<span class="kw">use </span>sdk_utils::chain_spec::get_public_key_from_seed;
 <span class="kw">use </span>sp_core::crypto::{Ss58Codec, UncheckedFrom};
-<span class="kw">use </span>sp_domains::{OperatorPublicKey, RuntimeType};
+<span class="kw">use </span>sp_domains::RuntimeType;
 <span class="kw">use </span>sp_runtime::Percent;
 <span class="kw">use </span>subspace_runtime::{
     AllowAuthoringBy, BalancesConfig, DomainsConfig, GenesisConfig, MaxDomainBlockSize,
@@ -434,7 +430,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::domains::evm_chain_spec;
 
 <span class="kw">const </span>SUBSPACE_TELEMETRY_URL: <span class="kw-2">&amp;</span>str = <span class="string">&quot;wss://telemetry.subspace.network/submit/&quot;</span>;
-<span class="kw">const </span>GEMINI_3D_CHAIN_SPEC: <span class="kw-2">&amp;</span>[u8] = <span class="macro">include_bytes!</span>(<span class="string">&quot;../res/chain-spec-raw-gemini-3e.json&quot;</span>);
+<span class="kw">const </span>GEMINI_3F_CHAIN_SPEC: <span class="kw-2">&amp;</span>[u8] = <span class="macro">include_bytes!</span>(<span class="string">&quot;../res/chain-spec-raw-gemini-3f.json&quot;</span>);
 <span class="kw">const </span>DEVNET_CHAIN_SPEC: <span class="kw-2">&amp;</span>[u8] = <span class="macro">include_bytes!</span>(<span class="string">&quot;../res/chain-spec-raw-devnet.json&quot;</span>);
 
 <span class="doccomment">/// List of accounts which should receive token grants, amounts are specified in
@@ -472,19 +468,19 @@
 <span class="doccomment">/// Chain spec type for the subspace
 </span><span class="kw">pub type </span>ChainSpec = SerializableChainSpec&lt;GenesisConfig&gt;;
 
-<span class="doccomment">/// Gemini 3e chain spec
-</span><span class="kw">pub fn </span>gemini_3e() -&gt; ChainSpec {
-    ChainSpec::from_json_bytes(GEMINI_3D_CHAIN_SPEC).expect(<span class="string">&quot;Always valid&quot;</span>)
+<span class="doccomment">/// Gemini 3f chain spec
+</span><span class="kw">pub fn </span>gemini_3f() -&gt; ChainSpec {
+    ChainSpec::from_json_bytes(GEMINI_3F_CHAIN_SPEC).expect(<span class="string">&quot;Always valid&quot;</span>)
 }
 
-<span class="doccomment">/// Gemini 3e compiled chain spec
-</span><span class="kw">pub fn </span>gemini_3e_compiled() -&gt; ChainSpec {
+<span class="doccomment">/// Gemini 3f compiled chain spec
+</span><span class="kw">pub fn </span>gemini_3f_compiled() -&gt; ChainSpec {
     ChainSpec::from_genesis(
         <span class="comment">// Name
-        </span><span class="string">&quot;Subspace Gemini 3e&quot;</span>,
+        </span><span class="string">&quot;Subspace Gemini 3f&quot;</span>,
         <span class="comment">// ID
-        </span><span class="string">&quot;subspace_gemini_3e&quot;</span>,
-        ChainType::Custom(<span class="string">&quot;Subspace Gemini 3e&quot;</span>.to_string()),
+        </span><span class="string">&quot;subspace_gemini_3f&quot;</span>,
+        ChainType::Custom(<span class="string">&quot;Subspace Gemini 3f&quot;</span>.to_string()),
         || {
             <span class="kw">let </span>sudo_account =
                 AccountId::from_ss58check(<span class="string">&quot;5CZy4hcmaVZUMZLfB41v1eAKvtZ8W7axeWuDvwjhjPwfhAqt&quot;</span>)
@@ -546,7 +542,7 @@
                 .expect(<span class="string">&quot;Telemetry value is valid&quot;</span>),
         ),
         <span class="comment">// Protocol ID
-        </span><span class="prelude-val">Some</span>(<span class="string">&quot;subspace-gemini-3e&quot;</span>),
+        </span><span class="prelude-val">Some</span>(<span class="string">&quot;subspace-gemini-3f&quot;</span>),
         <span class="prelude-val">None</span>,
         <span class="comment">// Properties
         </span><span class="prelude-val">Some</span>(utils::chain_spec_properties()),
@@ -760,15 +756,13 @@
         confirmation_depth_k,
     } = genesis_params;
 
-    <span class="kw">let </span>raw_evm_domain_genesis_config = {
-        <span class="kw">let </span><span class="kw-2">mut </span>domain_genesis_config =
-            evm_chain_spec::get_testnet_genesis_by_spec_id(evm_domain_spec_id);
-        <span class="comment">// Clear the WASM code of the genesis config since it is duplicated with
-        // `GenesisDomain::code`
-        </span>domain_genesis_config.system.code = Default::default();
-        serde_json::to_vec(<span class="kw-2">&amp;</span>domain_genesis_config)
-            .expect(<span class="string">&quot;Genesis config serialization never fails; qed&quot;</span>)
-    };
+    <span class="kw">let </span>(<span class="kw-2">mut </span>domain_genesis_config, genesis_domain_params) =
+        evm_chain_spec::get_testnet_genesis_by_spec_id(evm_domain_spec_id);
+    <span class="comment">// Clear the WASM code of the genesis config since it is duplicated with
+    // `GenesisDomain::code`
+    </span>domain_genesis_config.system.code = Default::default();
+    <span class="kw">let </span>raw_evm_domain_genesis_config = serde_json::to_vec(<span class="kw-2">&amp;</span>domain_genesis_config)
+        .expect(<span class="string">&quot;Genesis config serialization never fails; qed&quot;</span>);
 
     GenesisConfig {
         domains: DomainsConfig {
@@ -789,7 +783,7 @@
                 target_bundles_per_block: <span class="number">10</span>,
                 raw_genesis_config: raw_evm_domain_genesis_config,
                 <span class="comment">// TODO: Configurable genesis operator signing key.
-                </span>signing_key: get_public_key_from_seed::&lt;OperatorPublicKey&gt;(<span class="string">&quot;Alice&quot;</span>),
+                </span>signing_key: genesis_domain_params.operator_signing_key,
                 nomination_tax: Percent::from_percent(<span class="number">5</span>),
                 minimum_nominator_stake: <span class="number">100 </span>* SSC,
             }),
@@ -822,8 +816,8 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_chain_specs() {
-        gemini_3e_compiled();
-        gemini_3e();
+        gemini_3f_compiled();
+        gemini_3f();
         devnet_config_compiled();
         devnet_config();
         dev_config();

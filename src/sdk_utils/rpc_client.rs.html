@@ -96,6 +96,10 @@
 <a href="#96" id="96">96</a>
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
 
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
@@ -192,6 +196,10 @@
         segment_index: SegmentIndex,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="prelude-val">Ok</span>(SubspaceRpcApiClient::acknowledge_archived_segment_header(<span class="self">self</span>, segment_index).<span class="kw">await</span><span class="question-mark">?</span>)
+    }
+
+    <span class="kw">async fn </span>last_segment_headers(<span class="kw-2">&amp;</span><span class="self">self</span>, limit: u64) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="prelude-ty">Option</span>&lt;SegmentHeader&gt;&gt;, Error&gt; {
+        <span class="prelude-val">Ok</span>(SubspaceRpcApiClient::last_segment_headers(<span class="self">self</span>, limit).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 }
 </code></pre></div></section></main></body></html>

@@ -157,16 +157,20 @@
 <a href="#157" id="157">157</a>
 <a href="#158" id="158">158</a>
 <a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>derivative::Derivative;
 <span class="kw">use </span>derive_builder::Builder;
 <span class="kw">use </span>derive_more::{Deref, DerefMut, Display, From};
+<span class="kw">use </span>sc_service::BlocksPruning;
 <span class="kw">use </span>sdk_dsn::{Dsn, DsnBuilder};
 <span class="kw">use </span>sdk_substrate::{
-    Base, BaseBuilder, ExecutionStrategy, NetworkBuilder, OffchainWorkerBuilder, RpcBuilder,
-    StorageMonitor,
+    Base, BaseBuilder, ExecutionStrategy, NetworkBuilder, OffchainWorkerBuilder, PruningMode, Role,
+    RpcBuilder, StorageMonitor,
 };
 <span class="kw">use </span>sdk_utils::ByteSize;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -202,10 +206,6 @@
 #[builder(pattern = <span class="string">&quot;owned&quot;</span>, build_fn(private, name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;Builder&quot;</span>)]
 #[non_exhaustive]
 </span><span class="kw">pub struct </span>Config&lt;F: Farmer&gt; {
-    <span class="doccomment">/// Set piece cache size
-    </span><span class="attr">#[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
-    </span><span class="kw">pub </span>piece_cache_size: PieceCacheSize,
     <span class="doccomment">/// Max number of segments that can be published concurrently, impacts
     /// RAM usage and network bandwidth.
     </span><span class="attr">#[builder(setter(into), default)]
@@ -249,9 +249,9 @@
         Builder::dev()
     }
 
-    <span class="doccomment">/// Gemini 3e configuraiton
-    </span><span class="kw">pub fn </span>gemini_3e() -&gt; Builder&lt;F&gt; {
-        Builder::gemini_3e()
+    <span class="doccomment">/// Gemini 3f configuraiton
+    </span><span class="kw">pub fn </span>gemini_3f() -&gt; Builder&lt;F&gt; {
+        Builder::gemini_3f()
     }
 
     <span class="doccomment">/// Devnet configuraiton
@@ -271,14 +271,17 @@
             .offchain_worker(OffchainWorkerBuilder::dev())
     }
 
-    <span class="doccomment">/// Gemini 3e configuration
-    </span><span class="kw">pub fn </span>gemini_3e() -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Gemini 3f configuration
+    </span><span class="kw">pub fn </span>gemini_3f() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new()
             .execution_strategy(ExecutionStrategy::AlwaysWasm)
-            .network(NetworkBuilder::gemini_3e())
-            .dsn(DsnBuilder::gemini_3e())
-            .rpc(RpcBuilder::gemini_3e())
-            .offchain_worker(OffchainWorkerBuilder::gemini_3e())
+            .network(NetworkBuilder::gemini_3f())
+            .dsn(DsnBuilder::gemini_3f())
+            .rpc(RpcBuilder::gemini_3f())
+            .offchain_worker(OffchainWorkerBuilder::gemini_3f())
+            .role(Role::Authority)
+            .state_pruning(PruningMode::ArchiveAll)
+            .blocks_pruning(BlocksPruning::Some(<span class="number">256</span>))
     }
 
     <span class="doccomment">/// Devnet chain configuration
@@ -289,6 +292,9 @@
             .dsn(DsnBuilder::devnet())
             .rpc(RpcBuilder::devnet())
             .offchain_worker(OffchainWorkerBuilder::devnet())
+            .role(Role::Authority)
+            .state_pruning(PruningMode::ArchiveAll)
+            .blocks_pruning(BlocksPruning::Some(<span class="number">256</span>))
     }
 
     <span class="doccomment">/// Get configuration for saving on disk

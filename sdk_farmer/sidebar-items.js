@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["BuildError","SingleDiskPlotCreationError"],"struct":["Builder","Config","Farmer","Info","InitialPlottingProgress","InitialPlottingProgressStream","Plot","PlotDescription","PlotInfo"],"type":["ProgressData"]};
+window.SIDEBAR_ITEMS = {"enum":["BuildError","SingleDiskFarmCreationError"],"struct":["Builder","Config","Farm","FarmDescription","FarmInfo","Farmer","Info","InitialPlottingProgress","InitialPlottingProgressStream"],"type":["ProgressData"]};

@@ -941,9 +941,6 @@
 <a href="#941" id="941">941</a>
 <a href="#942" id="942">942</a>
 <a href="#943" id="943">943</a>
-<a href="#944" id="944">944</a>
-<a href="#945" id="945">945</a>
-<a href="#946" id="946">946</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This crate is related to abstract farmer implementation
 
 </span><span class="attr">#![warn(
@@ -956,9 +953,7 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![feature(const_option)]
 
-</span><span class="kw">mod </span>combined_piece_getter;
-
-<span class="kw">use </span>std::collections::HashMap;
+</span><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::num::{NonZeroU8, NonZeroUsize};
 <span class="kw">use </span>std::path::PathBuf;
@@ -973,14 +968,15 @@
 <span class="kw">use </span>sdk_utils::{ByteSize, DestructorSet, PublicKey, TaskOutput};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>subspace_core_primitives::crypto::kzg;
-<span class="kw">use </span>subspace_core_primitives::{PieceIndexHash, Record, SectorIndex};
+<span class="kw">use </span>subspace_core_primitives::{PieceIndex, Record, SectorIndex};
 <span class="kw">use </span>subspace_erasure_coding::ErasureCoding;
 <span class="kw">use </span>subspace_farmer::piece_cache::PieceCache <span class="kw">as </span>FarmerPieceCache;
-<span class="kw">use </span>subspace_farmer::single_disk_plot::{
-    SingleDiskPlot, SingleDiskPlotError, SingleDiskPlotId, SingleDiskPlotInfo,
-    SingleDiskPlotOptions, SingleDiskPlotSummary,
+<span class="kw">use </span>subspace_farmer::single_disk_farm::{
+    SingleDiskFarm, SingleDiskFarmError, SingleDiskFarmId, SingleDiskFarmInfo,
+    SingleDiskFarmOptions, SingleDiskFarmSummary,
 };
 <span class="kw">use </span>subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
+<span class="kw">use </span>subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 <span class="kw">use </span>subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 <span class="kw">use </span>subspace_farmer::Identity;
@@ -994,25 +990,23 @@
 <span class="kw">use </span>tracing::{debug, error, warn};
 <span class="kw">use </span>tracing_futures::Instrument;
 
-<span class="kw">use </span><span class="kw">crate</span>::combined_piece_getter::CombinedPieceGetter;
-
-<span class="doccomment">/// Description of the plot
+<span class="doccomment">/// Description of the farm
 </span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[non_exhaustive]
-</span><span class="kw">pub struct </span>PlotDescription {
-    <span class="doccomment">/// Path of the plot
+</span><span class="kw">pub struct </span>FarmDescription {
+    <span class="doccomment">/// Path of the farm
     </span><span class="kw">pub </span>directory: PathBuf,
     <span class="doccomment">/// Space which you want to pledge
     </span><span class="kw">pub </span>space_pledged: ByteSize,
 }
 
-<span class="kw">impl </span>PlotDescription {
-    <span class="doccomment">/// Construct Plot description
+<span class="kw">impl </span>FarmDescription {
+    <span class="doccomment">/// Construct Farm description
     </span><span class="kw">pub fn </span>new(directory: <span class="kw">impl </span>Into&lt;PathBuf&gt;, space_pledged: ByteSize) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{ directory: directory.into(), space_pledged }
     }
 
-    <span class="doccomment">/// Wipe all the data from the plot
+    <span class="doccomment">/// Wipe all the data from the farm
     </span><span class="kw">pub async fn </span>wipe(<span class="self">self</span>) -&gt; io::Result&lt;()&gt; {
         tokio::fs::remove_dir_all(<span class="self">self</span>.directory).<span class="kw">await
     </span>}
@@ -1029,7 +1023,7 @@
     <span class="kw">use </span>serde::{Deserialize, Serialize};
 
     <span class="kw">use </span><span class="kw">super</span>::BuildError;
-    <span class="kw">use crate</span>::{Farmer, PlotDescription};
+    <span class="kw">use crate</span>::{FarmDescription, Farmer};
 
     <span class="attr">#[derive(
         Debug,
@@ -1046,7 +1040,7 @@
     )]
     #[derivative(Default)]
     #[serde(transparent)]
-    </span><span class="kw">pub struct </span>MaxConcurrentPlots(
+    </span><span class="kw">pub struct </span>MaxConcurrentFarms(
         <span class="attr">#[derivative(Default(value = <span class="string">&quot;NonZeroUsize::new(10).expect(\&quot;10 &gt; 0\&quot;)&quot;</span>))]
         </span><span class="kw">pub</span>(<span class="kw">crate</span>)  NonZeroUsize,
     );
@@ -1096,11 +1090,11 @@
     #[builder(pattern = <span class="string">&quot;immutable&quot;</span>, build_fn(private, name = <span class="string">&quot;_build&quot;</span>), name = <span class="string">&quot;Builder&quot;</span>)]
     #[non_exhaustive]
     </span><span class="kw">pub struct </span>Config {
-        <span class="doccomment">/// Number of plots that can be plotted concurrently, impacts RAM usage.
+        <span class="doccomment">/// Number of farms that can be plotted concurrently, impacts RAM usage.
         </span><span class="attr">#[builder(default, setter(into))]
         #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
-        </span><span class="kw">pub </span>max_concurrent_plots: MaxConcurrentPlots,
-        <span class="doccomment">/// Number of plots that can be plotted concurrently, impacts RAM usage.
+        </span><span class="kw">pub </span>max_concurrent_farms: MaxConcurrentFarms,
+        <span class="doccomment">/// Number of farms that can be farmted concurrently, impacts RAM usage.
         </span><span class="attr">#[builder(default, setter(into))]
         #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
         </span><span class="kw">pub </span>provided_keys_limit: ProvidedKeysLimit,
@@ -1120,39 +1114,39 @@
             <span class="self">self</span>,
             reward_address: PublicKey,
             node: <span class="kw-2">&amp;</span>N,
-            plots: <span class="kw-2">&amp;</span>[PlotDescription],
+            farms: <span class="kw-2">&amp;</span>[FarmDescription],
             cache_percentage: NonZeroU8,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;Farmer&lt;N::Table&gt;, BuildError&gt; {
-            <span class="self">self</span>.configuration().build(reward_address, node, plots, cache_percentage).<span class="kw">await
+            <span class="self">self</span>.configuration().build(reward_address, node, farms, cache_percentage).<span class="kw">await
         </span>}
     }
 }
 
-<span class="doccomment">/// Error when plot creation fails
+<span class="doccomment">/// Error when farm creation fails
 </span><span class="attr">#[derive(Debug, thiserror::Error)]
-</span><span class="kw">pub enum </span>SingleDiskPlotCreationError {
-    <span class="doccomment">/// Insufficient disk while creating single disk plot
-    </span><span class="attr">#[error(<span class="string">&quot;Unable to create plot as Allocated space {} ({}) is not enough, minimum is ~{} (~{}, {} bytes to be exact&quot;</span>, bytesize::to_string(<span class="kw-2">*</span>.allocated_space, <span class="bool-val">true</span>), bytesize::to_string(<span class="kw-2">*</span>.allocated_space, <span class="bool-val">false</span>), bytesize::to_string(<span class="kw-2">*</span>.min_space, <span class="bool-val">true</span>), bytesize::to_string(<span class="kw-2">*</span>.min_space, <span class="bool-val">false</span>), <span class="kw-2">*</span>.min_space)]
-    </span>InsufficientSpaceForPlot {
-        <span class="doccomment">/// Minimum space required for plot
+</span><span class="kw">pub enum </span>SingleDiskFarmCreationError {
+    <span class="doccomment">/// Insufficient disk while creating single disk farm
+    </span><span class="attr">#[error(<span class="string">&quot;Unable to create farm as Allocated space {} ({}) is not enough, minimum is ~{} (~{}, {} bytes to be exact&quot;</span>, bytesize::to_string(<span class="kw-2">*</span>.allocated_space, <span class="bool-val">true</span>), bytesize::to_string(<span class="kw-2">*</span>.allocated_space, <span class="bool-val">false</span>), bytesize::to_string(<span class="kw-2">*</span>.min_space, <span class="bool-val">true</span>), bytesize::to_string(<span class="kw-2">*</span>.min_space, <span class="bool-val">false</span>), <span class="kw-2">*</span>.min_space)]
+    </span>InsufficientSpaceForFarm {
+        <span class="doccomment">/// Minimum space required for farm
         </span>min_space: u64,
-        <span class="doccomment">/// Allocated space for plot
+        <span class="doccomment">/// Allocated space for farm
         </span>allocated_space: u64,
     },
-    <span class="doccomment">/// Other error while creating single disk plot
-    </span><span class="attr">#[error(<span class="string">&quot;Single disk plot creation error: {0}&quot;</span>)]
-    </span>Other(<span class="attr">#[from] </span>SingleDiskPlotError),
+    <span class="doccomment">/// Other error while creating single disk farm
+    </span><span class="attr">#[error(<span class="string">&quot;Single disk farm creation error: {0}&quot;</span>)]
+    </span>Other(<span class="attr">#[from] </span>SingleDiskFarmError),
 }
 
 <span class="doccomment">/// Build Error
 </span><span class="attr">#[derive(Debug, thiserror::Error)]
 </span><span class="kw">pub enum </span>BuildError {
-    <span class="doccomment">/// Failed to create single disk plot
-    </span><span class="attr">#[error(<span class="string">&quot;Single disk plot creation error: {0}&quot;</span>)]
-    </span>SingleDiskPlotCreate(<span class="attr">#[from] </span>SingleDiskPlotCreationError),
-    <span class="doccomment">/// No plots were supplied during building
-    </span><span class="attr">#[error(<span class="string">&quot;Supply at least one plot&quot;</span>)]
-    </span>NoPlotsSupplied,
+    <span class="doccomment">/// Failed to create single disk farm
+    </span><span class="attr">#[error(<span class="string">&quot;Single disk farm creation error: {0}&quot;</span>)]
+    </span>SingleDiskFarmCreate(<span class="attr">#[from] </span>SingleDiskFarmCreationError),
+    <span class="doccomment">/// No farms were supplied during building
+    </span><span class="attr">#[error(<span class="string">&quot;Supply at least one farm&quot;</span>)]
+    </span>NoFarmsSupplied,
     <span class="doccomment">/// Failed to fetch data from the node
     </span><span class="attr">#[error(<span class="string">&quot;Failed to fetch data from node: {0}&quot;</span>)]
     </span>RPCError(<span class="attr">#[source] </span>subspace_farmer::RpcClientError),
@@ -1165,22 +1159,22 @@
 </span><span class="kw">impl</span>&lt;T: subspace_proof_of_space::Table&gt; sdk_traits::Farmer <span class="kw">for </span>Farmer&lt;T&gt; {
     <span class="kw">type </span>Table = T;
 
-    <span class="kw">async fn </span>get_piece_by_hash(
-        piece_index_hash: PieceIndexHash,
+    <span class="kw">async fn </span>get_piece_by_index(
+        piece_index: PieceIndex,
         piece_cache: <span class="kw-2">&amp;</span>FarmerPieceCache,
         weak_readers_and_pieces: <span class="kw-2">&amp;</span>std::sync::Weak&lt;parking_lot::Mutex&lt;<span class="prelude-ty">Option</span>&lt;ReadersAndPieces&gt;&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;subspace_core_primitives::Piece&gt; {
         <span class="kw">use </span>tracing::debug;
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(piece) =
-            piece_cache.get_piece(RecordKey::from(piece_index_hash.to_multihash())).<span class="kw">await
+            piece_cache.get_piece(RecordKey::from(piece_index.to_multihash())).<span class="kw">await
         </span>{
             <span class="kw">return </span><span class="prelude-val">Some</span>(piece);
         }
 
         <span class="kw">let </span>weak_readers_and_pieces = weak_readers_and_pieces.clone();
 
-        <span class="macro">debug!</span>(<span class="question-mark">?</span>piece_index_hash, <span class="string">&quot;No piece in the cache. Trying archival storage...&quot;</span>);
+        <span class="macro">debug!</span>(<span class="question-mark">?</span>piece_index, <span class="string">&quot;No piece in the cache. Trying archival storage...&quot;</span>);
 
         <span class="kw">let </span>readers_and_pieces = <span class="kw">match </span>weak_readers_and_pieces.upgrade() {
             <span class="prelude-val">Some</span>(readers_and_pieces) =&gt; readers_and_pieces,
@@ -1190,9 +1184,9 @@
             }
         };
         <span class="kw">let </span>read_piece = <span class="kw">match </span>readers_and_pieces.lock().as_ref() {
-            <span class="prelude-val">Some</span>(readers_and_pieces) =&gt; readers_and_pieces.read_piece(<span class="kw-2">&amp;</span>piece_index_hash),
+            <span class="prelude-val">Some</span>(readers_and_pieces) =&gt; readers_and_pieces.read_piece(<span class="kw-2">&amp;</span>piece_index),
             <span class="prelude-val">None </span>=&gt; {
-                <span class="macro">debug!</span>(<span class="question-mark">?</span>piece_index_hash, <span class="string">&quot;Readers and pieces are not initialized yet&quot;</span>);
+                <span class="macro">debug!</span>(<span class="question-mark">?</span>piece_index, <span class="string">&quot;Readers and pieces are not initialized yet&quot;</span>);
                 <span class="kw">return </span><span class="prelude-val">None</span>;
             }
         };
@@ -1208,24 +1202,24 @@
     NonZeroUsize::new(<span class="number">1_000_000</span>).expect(<span class="string">&quot;Not zero; qed&quot;</span>);
 
 <span class="kw">fn </span>create_readers_and_pieces(
-    single_disk_plots: <span class="kw-2">&amp;</span>[SingleDiskPlot],
+    single_disk_farms: <span class="kw-2">&amp;</span>[SingleDiskFarm],
     archival_storage_pieces: ArchivalStoragePieces,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ReadersAndPieces, BuildError&gt; {
     <span class="comment">// Store piece readers so we can reference them later
-    </span><span class="kw">let </span>readers = single_disk_plots.iter().map(SingleDiskPlot::piece_reader).collect();
+    </span><span class="kw">let </span>readers = single_disk_farms.iter().map(SingleDiskFarm::piece_reader).collect();
     <span class="kw">let </span><span class="kw-2">mut </span>readers_and_pieces = ReadersAndPieces::new(readers, archival_storage_pieces);
 
     <span class="macro">tracing::debug!</span>(<span class="string">&quot;Collecting already plotted pieces&quot;</span>);
 
     <span class="comment">// Collect already plotted pieces
-    </span>single_disk_plots.iter().enumerate().try_for_each(|(disk_farm_index, single_disk_plot)| {
+    </span>single_disk_farms.iter().enumerate().try_for_each(|(disk_farm_index, single_disk_farm)| {
         <span class="kw">let </span>disk_farm_index = disk_farm_index.try_into().map_err(|_error| {
             <span class="macro">anyhow!</span>(
-                <span class="string">&quot;More than 256 plots are not supported, consider running multiple farmer instances&quot;
+                <span class="string">&quot;More than 256 farms are not supported, consider running multiple farmer instances&quot;
             </span>)
         })<span class="question-mark">?</span>;
 
-        (<span class="number">0 </span><span class="kw">as </span>SectorIndex..).zip(single_disk_plot.plotted_sectors()).for_each(
+        (<span class="number">0 </span><span class="kw">as </span>SectorIndex..).zip(single_disk_farm.plotted_sectors()).for_each(
             |(sector_index, plotted_sector_result)| <span class="kw">match </span>plotted_sector_result {
                 <span class="prelude-val">Ok</span>(plotted_sector) =&gt; {
                     readers_and_pieces.add_sector(disk_farm_index, <span class="kw-2">&amp;</span>plotted_sector);
@@ -1257,7 +1251,7 @@
 ) {
     <span class="kw">let </span>disk_farm_index = disk_farm_index
         .try_into()
-        .expect(<span class="string">&quot;More than 256 plots are not supported, this is checked above already; qed&quot;</span>);
+        .expect(<span class="string">&quot;More than 256 farms are not supported, this is checked above already; qed&quot;</span>);
 
     {
         <span class="kw">let </span><span class="kw-2">mut </span>readers_and_pieces = readers_and_pieces.lock();
@@ -1277,19 +1271,19 @@
         <span class="self">self</span>,
         reward_address: PublicKey,
         node: <span class="kw-2">&amp;</span>N,
-        plots: <span class="kw-2">&amp;</span>[PlotDescription],
+        farms: <span class="kw-2">&amp;</span>[FarmDescription],
         cache_percentage: NonZeroU8,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Farmer&lt;T&gt;, BuildError&gt; {
-        <span class="kw">if </span>plots.is_empty() {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(BuildError::NoPlotsSupplied);
+        <span class="kw">if </span>farms.is_empty() {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(BuildError::NoFarmsSupplied);
         }
 
         <span class="kw">let </span><span class="kw-2">mut </span>destructors = DestructorSet::new(<span class="string">&quot;farmer-destructors&quot;</span>);
 
-        <span class="kw">let </span><span class="self">Self </span>{ max_concurrent_plots: <span class="kw">_</span>, provided_keys_limit: <span class="kw">_</span>, max_pieces_in_sector } = <span class="self">self</span>;
+        <span class="kw">let </span><span class="self">Self </span>{ max_concurrent_farms: <span class="kw">_</span>, provided_keys_limit: <span class="kw">_</span>, max_pieces_in_sector } = <span class="self">self</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>single_disk_plots = Vec::with_capacity(plots.len());
-        <span class="kw">let </span><span class="kw-2">mut </span>plot_info = HashMap::with_capacity(plots.len());
+        <span class="kw">let </span><span class="kw-2">mut </span>single_disk_farms = Vec::with_capacity(farms.len());
+        <span class="kw">let </span><span class="kw-2">mut </span>farm_info = HashMap::with_capacity(farms.len());
 
         <span class="kw">let </span>readers_and_pieces = Arc::clone(<span class="kw-2">&amp;</span>node.dsn().farmer_readers_and_pieces);
 
@@ -1306,7 +1300,7 @@
                 <span class="string">&quot;Number of buckets &gt;= 1, therefore next power of 2 &gt;= 2, therefore ilog2 &gt;= 1&quot;</span>,
             ),
         )
-        .map_err(|error| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Failed to create erasure coding for plot: {error}&quot;</span>))<span class="question-mark">?</span>;
+        .map_err(|error| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Failed to create erasure coding for farm: {error}&quot;</span>))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>piece_provider = subspace_networking::utils::piece_provider::PieceProvider::new(
             node.dsn().node.clone(),
@@ -1318,11 +1312,11 @@
                 </span>parking_lot::Mutex::new(lru::LruCache::new(SEGMENT_COMMITMENTS_CACHE_SIZE)),
             )),
         );
-        <span class="kw">let </span>piece_getter = Arc::new(CombinedPieceGetter::new(
+        <span class="kw">let </span>farmer_piece_getter = Arc::new(FarmerPieceGetter::new(
             node.dsn().node.clone(),
             piece_provider,
             farmer_piece_cache.clone(),
-            node.dsn().node_piece_cache.clone(),
+            node.rpc().clone(),
             node.dsn().farmer_archival_storage_info.clone(),
             readers_and_pieces.clone(),
         ));
@@ -1333,7 +1327,7 @@
             <span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-farmer-{node_name}-pieces-cache-worker&quot;</span>),
             {
                 <span class="kw">let </span>handle = tokio::runtime::Handle::current();
-                <span class="kw">let </span>piece_getter = piece_getter.clone();
+                <span class="kw">let </span>piece_getter = farmer_piece_getter.clone();
 
                 <span class="kw">move </span>|| {
                     handle.block_on(future::select(
@@ -1365,21 +1359,21 @@
             <span class="prelude-val">None </span>=&gt; farmer_app_info.protocol_info.max_pieces_in_sector,
         };
 
-        <span class="kw">for </span>(disk_farm_idx, description) <span class="kw">in </span>plots.iter().enumerate() {
-            <span class="kw">let </span>(plot, single_disk_plot) = Plot::new(PlotOptions {
+        <span class="kw">for </span>(disk_farm_idx, description) <span class="kw">in </span>farms.iter().enumerate() {
+            <span class="kw">let </span>(farm, single_disk_farm) = Farm::new(FarmOptions {
                 disk_farm_idx,
                 cache_percentage,
                 reward_address,
                 node,
                 max_pieces_in_sector,
-                piece_getter: Arc::clone(<span class="kw-2">&amp;</span>piece_getter),
+                piece_getter: Arc::clone(<span class="kw-2">&amp;</span>farmer_piece_getter),
                 description,
                 kzg: kzg.clone(),
                 erasure_coding: erasure_coding.clone(),
             })
             .<span class="kw">await</span><span class="question-mark">?</span>;
-            plot_info.insert(plot.directory.clone(), plot);
-            single_disk_plots.push(single_disk_plot);
+            farm_info.insert(farm.directory.clone(), farm);
+            single_disk_farms.push(single_disk_farm);
         }
 
         <span class="kw-2">*</span>node.dsn().farmer_piece_cache.write() = <span class="prelude-val">Some</span>(farmer_piece_cache.clone());
@@ -1392,16 +1386,16 @@
 
         farmer_piece_cache
             .replace_backing_caches(
-                single_disk_plots
+                single_disk_farms
                     .iter()
-                    .map(|single_disk_plot| single_disk_plot.piece_cache())
+                    .map(|single_disk_farm| single_disk_farm.piece_cache())
                     .collect(),
             )
             .<span class="kw">await</span>;
         drop(farmer_piece_cache);
 
         readers_and_pieces.lock().replace(create_readers_and_pieces(
-            <span class="kw-2">&amp;</span>single_disk_plots,
+            <span class="kw-2">&amp;</span>single_disk_farms,
             node.dsn().farmer_archival_storage_pieces.clone(),
         )<span class="question-mark">?</span>);
         destructors.add_sync_destructor({
@@ -1412,13 +1406,13 @@
         })<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>sector_plotting_handler_ids = <span class="macro">vec!</span>[];
-        <span class="kw">for </span>(disk_farm_index, single_disk_plot) <span class="kw">in </span>single_disk_plots.iter().enumerate() {
+        <span class="kw">for </span>(disk_farm_index, single_disk_farm) <span class="kw">in </span>single_disk_farms.iter().enumerate() {
             <span class="kw">let </span>readers_and_pieces = Arc::clone(<span class="kw-2">&amp;</span>readers_and_pieces);
             <span class="kw">let </span>span = <span class="macro">tracing::info_span!</span>(<span class="string">&quot;farm&quot;</span>, %disk_farm_index);
 
             <span class="comment">// Collect newly plotted pieces
             // TODO: Once we have replotting, this will have to be updated
-            </span>sector_plotting_handler_ids.push(single_disk_plot.on_sector_plotted(Arc::new(
+            </span>sector_plotting_handler_ids.push(single_disk_farm.on_sector_plotted(Arc::new(
                 <span class="kw">move </span>|(plotted_sector, maybe_old_plotted_sector)| {
                     <span class="kw">let </span>_span_guard = span.enter();
                     handler_on_sector_plotted(
@@ -1431,15 +1425,15 @@
             )));
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>single_disk_plots_stream =
-            single_disk_plots.into_iter().map(SingleDiskPlot::run).collect::&lt;FuturesUnordered&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span><span class="kw-2">mut </span>single_disk_farms_stream =
+            single_disk_farms.into_iter().map(SingleDiskFarm::run).collect::&lt;FuturesUnordered&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let </span>(plot_driver_drop_sender, <span class="kw-2">mut </span>plot_driver_drop_receiver) = oneshot::channel::&lt;()&gt;();
-        <span class="kw">let </span>(plot_driver_result_sender, plot_driver_result_receiver) =
+        <span class="kw">let </span>(farm_driver_drop_sender, <span class="kw-2">mut </span>farm_driver_drop_receiver) = oneshot::channel::&lt;()&gt;();
+        <span class="kw">let </span>(farm_driver_result_sender, farm_driver_result_receiver) =
             mpsc::channel::&lt;<span class="kw">_</span>&gt;(u8::MAX <span class="kw">as </span>usize + <span class="number">1</span>);
 
-        <span class="kw">let </span>plot_driver_join_handle = sdk_utils::task_spawn_blocking(
-            <span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-farmer-{node_name}-plots-driver&quot;</span>),
+        <span class="kw">let </span>farm_driver_join_handle = sdk_utils::task_spawn_blocking(
+            <span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-farmer-{node_name}-farms-driver&quot;</span>),
             {
                 <span class="kw">let </span>handle = tokio::runtime::Handle::current();
 
@@ -1448,19 +1442,19 @@
 
                     <span class="kw">loop </span>{
                         <span class="kw">let </span>result = handle.block_on(future::select(
-                            single_disk_plots_stream.next(),
-                            <span class="kw-2">&amp;mut </span>plot_driver_drop_receiver,
+                            single_disk_farms_stream.next(),
+                            <span class="kw-2">&amp;mut </span>farm_driver_drop_receiver,
                         ));
 
                         <span class="kw">match </span>result {
                             Left((maybe_result, <span class="kw">_</span>)) =&gt; {
                                 <span class="kw">let </span>send_result = <span class="kw">match </span>maybe_result {
-                                    <span class="prelude-val">None </span>=&gt; plot_driver_result_sender
+                                    <span class="prelude-val">None </span>=&gt; farm_driver_result_sender
                                         .try_send(<span class="prelude-val">Ok</span>(TaskOutput::Value(()))),
                                     <span class="prelude-val">Some</span>(result) =&gt; <span class="kw">match </span>result {
-                                        <span class="prelude-val">Ok</span>(()) =&gt; plot_driver_result_sender
+                                        <span class="prelude-val">Ok</span>(()) =&gt; farm_driver_result_sender
                                             .try_send(<span class="prelude-val">Ok</span>(TaskOutput::Value(()))),
-                                        <span class="prelude-val">Err</span>(e) =&gt; plot_driver_result_sender.try_send(<span class="prelude-val">Err</span>(e)),
+                                        <span class="prelude-val">Err</span>(e) =&gt; farm_driver_result_sender.try_send(<span class="prelude-val">Err</span>(e)),
                                     },
                                 };
 
@@ -1470,10 +1464,10 @@
                                 }
                             }
                             Right((<span class="kw">_</span>, <span class="kw">_</span>)) =&gt; {
-                                <span class="macro">warn!</span>(<span class="string">&quot;Received drop signal for plot driver, exiting...&quot;</span>);
+                                <span class="macro">warn!</span>(<span class="string">&quot;Received drop signal for farm driver, exiting...&quot;</span>);
                                 <span class="kw">let _ </span>=
-                                    plot_driver_result_sender.try_send(<span class="prelude-val">Ok</span>(TaskOutput::Cancelled(
-                                        <span class="string">&quot;Received drop signal for plot driver&quot;</span>.into(),
+                                    farm_driver_result_sender.try_send(<span class="prelude-val">Ok</span>(TaskOutput::Cancelled(
+                                        <span class="string">&quot;Received drop signal for farm driver&quot;</span>.into(),
                                     )));
                                 <span class="kw">break</span>;
                             }
@@ -1485,8 +1479,8 @@
 
         destructors.add_async_destructor({
             <span class="kw">async move </span>{
-                <span class="kw">let _ </span>= plot_driver_drop_sender.send(());
-                plot_driver_join_handle.<span class="kw">await</span>.expect(<span class="string">&quot;joining should not fail; qed&quot;</span>);
+                <span class="kw">let _ </span>= farm_driver_drop_sender.send(());
+                farm_driver_join_handle.<span class="kw">await</span>.expect(<span class="string">&quot;joining should not fail; qed&quot;</span>);
             }
         })<span class="question-mark">?</span>;
 
@@ -1498,8 +1492,8 @@
 
         <span class="prelude-val">Ok</span>(Farmer {
             reward_address,
-            plot_info,
-            result_receiver: <span class="prelude-val">Some</span>(plot_driver_result_receiver),
+            farm_info,
+            result_receiver: <span class="prelude-val">Some</span>(farm_driver_result_receiver),
             node_name,
             app_info: subspace_farmer::NodeClient::farmer_app_info(node.rpc())
                 .<span class="kw">await
@@ -1515,33 +1509,33 @@
 #[must_use = <span class="string">&quot;Farmer should be closed&quot;</span>]
 </span><span class="kw">pub struct </span>Farmer&lt;T: subspace_proof_of_space::Table&gt; {
     reward_address: PublicKey,
-    plot_info: HashMap&lt;PathBuf, Plot&lt;T&gt;&gt;,
+    farm_info: HashMap&lt;PathBuf, Farm&lt;T&gt;&gt;,
     result_receiver: <span class="prelude-ty">Option</span>&lt;mpsc::Receiver&lt;anyhow::Result&lt;TaskOutput&lt;(), String&gt;&gt;&gt;&gt;,
     node_name: String,
     app_info: FarmerAppInfo,
     _destructors: DestructorSet,
 }
 
-<span class="doccomment">/// Info about some plot
+<span class="doccomment">/// Info about some farm
 </span><span class="attr">#[derive(Debug)]
 #[non_exhaustive]
 </span><span class="comment">// TODO: Should it be versioned?
-</span><span class="kw">pub struct </span>PlotInfo {
-    <span class="doccomment">/// ID of the plot
-    </span><span class="kw">pub </span>id: SingleDiskPlotId,
-    <span class="doccomment">/// Genesis hash of the chain used for plot creation
+</span><span class="kw">pub struct </span>FarmInfo {
+    <span class="doccomment">/// ID of the farm
+    </span><span class="kw">pub </span>id: SingleDiskFarmId,
+    <span class="doccomment">/// Genesis hash of the chain used for farm creation
     </span><span class="kw">pub </span>genesis_hash: [u8; <span class="number">32</span>],
-    <span class="doccomment">/// Public key of identity used for plot creation
+    <span class="doccomment">/// Public key of identity used for farm creation
     </span><span class="kw">pub </span>public_key: PublicKey,
-    <span class="doccomment">/// How much space in bytes is allocated for this plot
+    <span class="doccomment">/// How much space in bytes is allocated for this farm
     </span><span class="kw">pub </span>allocated_space: ByteSize,
     <span class="doccomment">/// How many pieces are in sector
     </span><span class="kw">pub </span>pieces_in_sector: u16,
 }
 
-<span class="kw">impl </span>From&lt;SingleDiskPlotInfo&gt; <span class="kw">for </span>PlotInfo {
-    <span class="kw">fn </span>from(info: SingleDiskPlotInfo) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>SingleDiskPlotInfo::V0 {
+<span class="kw">impl </span>From&lt;SingleDiskFarmInfo&gt; <span class="kw">for </span>FarmInfo {
+    <span class="kw">fn </span>from(info: SingleDiskFarmInfo) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>SingleDiskFarmInfo::V0 {
             id,
             genesis_hash,
             public_key,
@@ -1568,8 +1562,8 @@
     </span><span class="kw">pub </span>reward_address: PublicKey,
     <span class="comment">// TODO: add dsn peers info
     // pub dsn_peers: u64,
-    </span><span class="doccomment">/// Info about each plot
-    </span><span class="kw">pub </span>plots_info: HashMap&lt;PathBuf, PlotInfo&gt;,
+    </span><span class="doccomment">/// Info about each farm
+    </span><span class="kw">pub </span>farms_info: HashMap&lt;PathBuf, FarmInfo&gt;,
     <span class="doccomment">/// Sector size in bits
     </span><span class="kw">pub </span>sector_size: u64,
 }
@@ -1588,9 +1582,9 @@
 <span class="doccomment">/// Progress data received from sender, used to monitor plotting progress
 </span><span class="kw">pub type </span>ProgressData = <span class="prelude-ty">Option</span>&lt;(PlottedSector, <span class="prelude-ty">Option</span>&lt;PlottedSector&gt;)&gt;;
 
-<span class="doccomment">/// Plot structure
+<span class="doccomment">/// Farm structure
 </span><span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>Plot&lt;T: subspace_proof_of_space::Table&gt; {
+</span><span class="kw">pub struct </span>Farm&lt;T: subspace_proof_of_space::Table&gt; {
     directory: PathBuf,
     progress: watch::Receiver&lt;ProgressData&gt;,
     solutions: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;SolutionResponse&gt;&gt;,
@@ -1657,21 +1651,21 @@
     }
 }
 
-<span class="kw">struct </span>PlotOptions&lt;<span class="lifetime">&#39;a</span>, PG, N: sdk_traits::Node&gt; {
+<span class="kw">struct </span>FarmOptions&lt;<span class="lifetime">&#39;a</span>, PG, N: sdk_traits::Node&gt; {
     <span class="kw">pub </span>disk_farm_idx: usize,
     <span class="kw">pub </span>cache_percentage: NonZeroU8,
     <span class="kw">pub </span>reward_address: PublicKey,
     <span class="kw">pub </span>node: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>N,
     <span class="kw">pub </span>piece_getter: PG,
-    <span class="kw">pub </span>description: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>PlotDescription,
+    <span class="kw">pub </span>description: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>FarmDescription,
     <span class="kw">pub </span>kzg: kzg::Kzg,
     <span class="kw">pub </span>erasure_coding: ErasureCoding,
     <span class="kw">pub </span>max_pieces_in_sector: u16,
 }
 
-<span class="kw">impl</span>&lt;T: subspace_proof_of_space::Table&gt; Plot&lt;T&gt; {
+<span class="kw">impl</span>&lt;T: subspace_proof_of_space::Table&gt; Farm&lt;T&gt; {
     <span class="kw">async fn </span>new(
-        PlotOptions {
+        FarmOptions {
             disk_farm_idx,
             cache_percentage,
             reward_address,
@@ -1681,18 +1675,18 @@
             kzg,
             erasure_coding,
             max_pieces_in_sector,
-        }: PlotOptions&lt;
+        }: FarmOptions&lt;
             <span class="lifetime">&#39;_</span>,
             <span class="kw">impl </span>subspace_farmer_components::plotting::PieceGetter + Send + <span class="lifetime">&#39;static</span>,
             <span class="kw">impl </span>sdk_traits::Node,
         &gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="self">Self</span>, SingleDiskPlot), BuildError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="self">Self</span>, SingleDiskFarm), BuildError&gt; {
         <span class="kw">let </span>directory = description.directory.clone();
         <span class="kw">let </span>allocated_space = description.space_pledged.as_u64();
         <span class="kw">let </span>farmer_app_info = subspace_farmer::NodeClient::farmer_app_info(node.rpc())
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Node is always reachable&quot;</span>);
-        <span class="kw">let </span>description = SingleDiskPlotOptions {
+        <span class="kw">let </span>description = SingleDiskFarmOptions {
             allocated_space,
             directory: directory.clone(),
             farmer_app_info,
@@ -1704,28 +1698,28 @@
             piece_getter,
             cache_percentage,
         };
-        <span class="kw">let </span>single_disk_plot_fut = SingleDiskPlot::new::&lt;<span class="kw">_</span>, <span class="kw">_</span>, T&gt;(description, disk_farm_idx);
-        <span class="kw">let </span>single_disk_plot = <span class="kw">match </span>single_disk_plot_fut.<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(single_disk_plot) =&gt; single_disk_plot,
-            <span class="prelude-val">Err</span>(SingleDiskPlotError::InsufficientAllocatedSpace { min_space, allocated_space }) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(BuildError::SingleDiskPlotCreate(
-                    SingleDiskPlotCreationError::InsufficientSpaceForPlot {
+        <span class="kw">let </span>single_disk_farm_fut = SingleDiskFarm::new::&lt;<span class="kw">_</span>, <span class="kw">_</span>, T&gt;(description, disk_farm_idx);
+        <span class="kw">let </span>single_disk_farm = <span class="kw">match </span>single_disk_farm_fut.<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(single_disk_farm) =&gt; single_disk_farm,
+            <span class="prelude-val">Err</span>(SingleDiskFarmError::InsufficientAllocatedSpace { min_space, allocated_space }) =&gt; {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(BuildError::SingleDiskFarmCreate(
+                    SingleDiskFarmCreationError::InsufficientSpaceForFarm {
                         min_space,
                         allocated_space,
                     },
                 ));
             }
             <span class="prelude-val">Err</span>(error) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(BuildError::SingleDiskPlotCreate(SingleDiskPlotCreationError::Other(
+                <span class="kw">return </span><span class="prelude-val">Err</span>(BuildError::SingleDiskFarmCreate(SingleDiskFarmCreationError::Other(
                     error,
                 )));
             }
         };
-        <span class="kw">let </span><span class="kw-2">mut </span>destructors = DestructorSet::new_without_async(<span class="string">&quot;plot-destructors&quot;</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>destructors = DestructorSet::new_without_async(<span class="string">&quot;farm-destructors&quot;</span>);
 
         <span class="kw">let </span>progress = {
             <span class="kw">let </span>(sender, receiver) = watch::channel::&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw">_</span>&gt;&gt;(<span class="prelude-val">None</span>);
-            destructors.add_items_to_drop(single_disk_plot.on_sector_plotted(Arc::new(
+            destructors.add_items_to_drop(single_disk_farm.on_sector_plotted(Arc::new(
                 <span class="kw">move </span>|sector| {
                     <span class="kw">let _ </span>= sender.send(<span class="prelude-val">Some</span>(sector.clone()));
                 },
@@ -1734,7 +1728,7 @@
         };
         <span class="kw">let </span>solutions = {
             <span class="kw">let </span>(sender, receiver) = watch::channel::&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw">_</span>&gt;&gt;(<span class="prelude-val">None</span>);
-            destructors.add_items_to_drop(single_disk_plot.on_solution(Arc::new(
+            destructors.add_items_to_drop(single_disk_farm.on_solution(Arc::new(
                 <span class="kw">move </span>|solution| {
                     <span class="kw">let _ </span>= sender.send(<span class="prelude-val">Some</span>(solution.clone()));
                 },
@@ -1743,7 +1737,7 @@
         };
 
         <span class="comment">// TODO: This calculation is directly imported from the monorepo and relies on
-        // internal calculation of plot. Remove it once we have public function.
+        // internal calculation of farm. Remove it once we have public function.
         </span><span class="kw">let </span>fixed_space_usage = <span class="number">2 </span>* <span class="number">1024 </span>* <span class="number">1024
             </span>+ Identity::file_size() <span class="kw">as </span>u64
             + NetworkingParametersManager::file_size() <span class="kw">as </span>u64;
@@ -1766,25 +1760,25 @@
                 progress,
                 solutions,
                 initial_plotting_progress: Arc::new(Mutex::new(InitialPlottingProgress {
-                    starting_sector: u64::try_from(single_disk_plot.plotted_sectors_count())
+                    starting_sector: u64::try_from(single_disk_farm.plotted_sectors_count())
                         .expect(<span class="string">&quot;Sector count is less than u64::MAX&quot;</span>),
-                    current_sector: u64::try_from(single_disk_plot.plotted_sectors_count())
+                    current_sector: u64::try_from(single_disk_farm.plotted_sectors_count())
                         .expect(<span class="string">&quot;Sector count is less than u64::MAX&quot;</span>),
                     total_sectors: target_sector_count,
                 })),
                 _destructors: destructors,
                 _table: Default::default(),
             },
-            single_disk_plot,
+            single_disk_farm,
         ))
     }
 
-    <span class="doccomment">/// Plot location
+    <span class="doccomment">/// Farm location
     </span><span class="kw">pub fn </span>directory(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>PathBuf {
         <span class="kw-2">&amp;</span><span class="self">self</span>.directory
     }
 
-    <span class="doccomment">/// Plot size
+    <span class="doccomment">/// Farm size
     </span><span class="kw">pub fn </span>allocated_space(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ByteSize {
         ByteSize::b(<span class="self">self</span>.allocated_space)
     }
@@ -1840,25 +1834,25 @@
         Builder::default()
     }
 
-    <span class="doccomment">/// Gets plot info
+    <span class="doccomment">/// Gets farm info
     </span><span class="kw">pub async fn </span>get_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Info&gt; {
-        <span class="kw">let </span>plots_info = tokio::task::spawn_blocking({
-            <span class="kw">let </span>dirs = <span class="self">self</span>.plot_info.keys().cloned().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-            || dirs.into_iter().map(SingleDiskPlot::collect_summary).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+        <span class="kw">let </span>farms_info = tokio::task::spawn_blocking({
+            <span class="kw">let </span>dirs = <span class="self">self</span>.farm_info.keys().cloned().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+            || dirs.into_iter().map(SingleDiskFarm::collect_summary).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
         })
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into_iter()
         .map(|summary| <span class="kw">match </span>summary {
-            SingleDiskPlotSummary::Found { info, directory } =&gt; <span class="prelude-val">Ok</span>((directory, info.into())),
-            SingleDiskPlotSummary::NotFound { directory } =&gt;
-                <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Didn&#39;t found plot at `{directory:?}&#39;&quot;</span>)),
-            SingleDiskPlotSummary::Error { directory, error } =&gt;
-                <span class="prelude-val">Err</span>(error).context(<span class="macro">format!</span>(<span class="string">&quot;Failed to get plot summary at `{directory:?}&#39;&quot;</span>)),
+            SingleDiskFarmSummary::Found { info, directory } =&gt; <span class="prelude-val">Ok</span>((directory, info.into())),
+            SingleDiskFarmSummary::NotFound { directory } =&gt;
+                <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Didn&#39;t found farm at `{directory:?}&#39;&quot;</span>)),
+            SingleDiskFarmSummary::Error { directory, error } =&gt;
+                <span class="prelude-val">Err</span>(error).context(<span class="macro">format!</span>(<span class="string">&quot;Failed to get farm summary at `{directory:?}&#39;&quot;</span>)),
         })
         .collect::&lt;anyhow::Result&lt;<span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(Info {
-            plots_info,
+            farms_info,
             version: <span class="macro">format!</span>(<span class="string">&quot;{}-{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;CARGO_PKG_VERSION&quot;</span>), <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>)),
             reward_address: <span class="self">self</span>.reward_address,
             sector_size: subspace_farmer_components::sector::sector_size(
@@ -1867,12 +1861,12 @@
         })
     }
 
-    <span class="doccomment">/// Iterate over plots
-    </span><span class="kw">pub async fn </span>iter_plots(<span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span>Plot&lt;T&gt;&gt; + <span class="lifetime">&#39;_ </span>{
-        <span class="self">self</span>.plot_info.values()
+    <span class="doccomment">/// Iterate over farms
+    </span><span class="kw">pub async fn </span>iter_farms(<span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span>Farm&lt;T&gt;&gt; + <span class="lifetime">&#39;_ </span>{
+        <span class="self">self</span>.farm_info.values()
     }
 
-    <span class="doccomment">/// Stops farming, closes plots, and sends signal to the node
+    <span class="doccomment">/// Stops farming, closes farms, and sends signal to the node
     </span><span class="kw">pub async fn </span>close(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         <span class="self">self</span>._destructors.async_drop().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>result_receiver = <span class="self">self</span>.result_receiver.take().expect(<span class="string">&quot;Handle is always there&quot;</span>);
@@ -1882,7 +1876,7 @@
             <span class="kw">match </span>output {
                 TaskOutput::Value(<span class="kw">_</span>) =&gt; {}
                 TaskOutput::Cancelled(reason) =&gt; {
-                    <span class="macro">warn!</span>(<span class="string">&quot;Plot driver was cancelled due to reason: {:?}&quot;</span>, reason);
+                    <span class="macro">warn!</span>(<span class="string">&quot;Farm driver was cancelled due to reason: {:?}&quot;</span>, reason);
                 }
             }
         }

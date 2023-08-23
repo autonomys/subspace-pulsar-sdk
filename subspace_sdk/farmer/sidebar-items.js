@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["PlotDescription"]};
+window.SIDEBAR_ITEMS = {"struct":["FarmDescription"]};

@@ -370,69 +370,6 @@
 <a href="#370" id="370">370</a>
 <a href="#371" id="371">371</a>
 <a href="#372" id="372">372</a>
-<a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
-<a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
-<a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
-<a href="#413" id="413">413</a>
-<a href="#414" id="414">414</a>
-<a href="#415" id="415">415</a>
-<a href="#416" id="416">416</a>
-<a href="#417" id="417">417</a>
-<a href="#418" id="418">418</a>
-<a href="#419" id="419">419</a>
-<a href="#420" id="420">420</a>
-<a href="#421" id="421">421</a>
-<a href="#422" id="422">422</a>
-<a href="#423" id="423">423</a>
-<a href="#424" id="424">424</a>
-<a href="#425" id="425">425</a>
-<a href="#426" id="426">426</a>
-<a href="#427" id="427">427</a>
-<a href="#428" id="428">428</a>
-<a href="#429" id="429">429</a>
-<a href="#430" id="430">430</a>
-<a href="#431" id="431">431</a>
-<a href="#432" id="432">432</a>
-<a href="#433" id="433">433</a>
-<a href="#434" id="434">434</a>
-<a href="#435" id="435">435</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::{Arc, Weak};
@@ -442,7 +379,7 @@
 <span class="kw">use </span>derive_builder::Builder;
 <span class="kw">use </span>derive_more::{Deref, DerefMut, Display, From};
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
-<span class="kw">use </span>sc_consensus_subspace::SegmentHeadersStore;
+<span class="kw">use </span>sc_consensus_subspace::archiver::SegmentHeadersStore;
 <span class="kw">use </span>sdk_utils::{<span class="self">self</span>, DestructorSet, Multiaddr, MultiaddrWithPeerId};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>subspace_core_primitives::Piece;
@@ -452,12 +389,13 @@
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 <span class="kw">use </span>subspace_networking::utils::strip_peer_id;
 <span class="kw">use </span>subspace_networking::{
-    PeerInfo, PeerInfoProvider, PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
-    SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
+    PeerInfo, PeerInfoProvider, PieceByIndexRequest, PieceByIndexRequestHandler,
+    PieceByIndexResponse, SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest,
+    SegmentHeaderResponse,
 };
 
 <span class="kw">use </span><span class="kw">super</span>::local_provider_record_utils::MaybeLocalRecordProvider;
-<span class="kw">use super</span>::{LocalRecordProvider, NodePieceCache};
+<span class="kw">use </span><span class="kw">super</span>::LocalRecordProvider;
 
 <span class="doccomment">/// Wrapper with default value for listen address
 </span><span class="attr">#[derive(
@@ -575,15 +513,15 @@
         <span class="self">Self</span>::new().allow_non_global_addresses_in_dht(<span class="bool-val">true</span>)
     }
 
-    <span class="doccomment">/// Gemini 3e configuration
-    </span><span class="kw">pub fn </span>gemini_3e() -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Gemini 3f configuration
+    </span><span class="kw">pub fn </span>gemini_3f() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new().listen_addresses(<span class="macro">vec!</span>[
             <span class="string">&quot;/ip6/::/tcp/30433&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>),
             <span class="string">&quot;/ip4/0.0.0.0/tcp/30433&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>),
         ])
     }
 
-    <span class="doccomment">/// Gemini 3e configuration
+    <span class="doccomment">/// Gemini 3f configuration
     </span><span class="kw">pub fn </span>devnet() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new().listen_addresses(<span class="macro">vec!</span>[
             <span class="string">&quot;/ip6/::/tcp/30433&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>),
@@ -593,21 +531,15 @@
 }
 
 <span class="doccomment">/// Options for DSN
-</span><span class="kw">pub struct </span>DsnOptions&lt;C, ASNS, PieceByHash, SegmentHeaderByIndexes&gt; {
+</span><span class="kw">pub struct </span>DsnOptions&lt;C, PieceByIndex, SegmentHeaderByIndexes&gt; {
     <span class="doccomment">/// Client to aux storage for node piece cache
     </span><span class="kw">pub </span>client: Arc&lt;C&gt;,
-    <span class="doccomment">/// Node telemetry name
-    </span><span class="kw">pub </span>node_name: String,
-    <span class="doccomment">/// Archived segment notification stream
-    </span><span class="kw">pub </span>archived_segment_notification_stream: ASNS,
-    <span class="doccomment">/// Node piece cache size
-    </span><span class="kw">pub </span>piece_cache_size: sdk_utils::ByteSize,
     <span class="doccomment">/// Path for dsn
     </span><span class="kw">pub </span>base_path: PathBuf,
     <span class="doccomment">/// Keypair for networking
     </span><span class="kw">pub </span>keypair: subspace_networking::libp2p::identity::Keypair,
     <span class="doccomment">/// Get piece by hash handler
-    </span><span class="kw">pub </span>get_piece_by_hash: PieceByHash,
+    </span><span class="kw">pub </span>get_piece_by_index: PieceByIndex,
     <span class="doccomment">/// Get segment header by segment indexes handler
     </span><span class="kw">pub </span>get_segment_header_by_segment_indexes: SegmentHeaderByIndexes,
     <span class="doccomment">/// Farmer total allocated space across all plots
@@ -619,7 +551,7 @@
 <span class="doccomment">/// Shared Dsn structure between node and farmer
 </span><span class="attr">#[derive(Derivative)]
 #[derivative(Debug)]
-</span><span class="kw">pub struct </span>DsnShared&lt;C: sc_client_api::AuxStore + Send + Sync + <span class="lifetime">&#39;static</span>&gt; {
+</span><span class="kw">pub struct </span>DsnShared {
     <span class="doccomment">/// Dsn node
     </span><span class="kw">pub </span>node: subspace_networking::Node,
     <span class="doccomment">/// Farmer readers and pieces
@@ -630,48 +562,37 @@
     </span><span class="kw">pub </span>farmer_archival_storage_pieces: ArchivalStoragePieces,
     <span class="doccomment">/// Farmer archival storage info
     </span><span class="kw">pub </span>farmer_archival_storage_info: ArchivalStorageInfo,
-    <span class="doccomment">/// Node piece cache
-    </span><span class="attr">#[derivative(Debug = <span class="string">&quot;ignore&quot;</span>)]
-    </span><span class="kw">pub </span>node_piece_cache: NodePieceCache&lt;C&gt;,
     _destructors: DestructorSet,
 }
 
 <span class="kw">impl </span>Dsn {
     <span class="doccomment">/// Build dsn
-    </span><span class="kw">pub fn </span>build_dsn&lt;B, C, ASNS, PieceByHash, F1, SegmentHeaderByIndexes&gt;(
+    </span><span class="kw">pub fn </span>build_dsn&lt;B, C, PieceByIndex, F1, SegmentHeaderByIndexes&gt;(
         <span class="self">self</span>,
-        options: DsnOptions&lt;C, ASNS, PieceByHash, SegmentHeaderByIndexes&gt;,
-    ) -&gt; anyhow::Result&lt;(DsnShared&lt;C&gt;, subspace_networking::NodeRunner&lt;LocalRecordProvider&lt;C&gt;&gt;)&gt;
+        options: DsnOptions&lt;C, PieceByIndex, SegmentHeaderByIndexes&gt;,
+    ) -&gt; anyhow::Result&lt;(DsnShared, subspace_networking::NodeRunner&lt;LocalRecordProvider&gt;)&gt;
     <span class="kw">where
         </span>B: sp_runtime::traits::Block,
         C: sc_client_api::AuxStore + sp_blockchain::HeaderBackend&lt;B&gt; + Send + Sync + <span class="lifetime">&#39;static</span>,
-        ASNS: Stream&lt;Item = sc_consensus_subspace::ArchivedSegmentNotification&gt;
-            + Unpin
-            + Send
-            + <span class="lifetime">&#39;static</span>,
-        PieceByHash: Fn(
-                <span class="kw-2">&amp;</span>PieceByHashRequest,
+        PieceByIndex: Fn(
+                <span class="kw-2">&amp;</span>PieceByIndexRequest,
                 Weak&lt;parking_lot::Mutex&lt;<span class="prelude-ty">Option</span>&lt;ReadersAndPieces&gt;&gt;&gt;,
                 Arc&lt;parking_lot::RwLock&lt;<span class="prelude-ty">Option</span>&lt;FarmerPieceCache&gt;&gt;&gt;,
-                NodePieceCache&lt;C&gt;,
             ) -&gt; F1
             + Send
             + Sync
             + <span class="lifetime">&#39;static</span>,
-        F1: Future&lt;Output = <span class="prelude-ty">Option</span>&lt;PieceByHashResponse&gt;&gt; + Send + <span class="lifetime">&#39;static</span>,
+        F1: Future&lt;Output = <span class="prelude-ty">Option</span>&lt;PieceByIndexResponse&gt;&gt; + Send + <span class="lifetime">&#39;static</span>,
         SegmentHeaderByIndexes: Fn(<span class="kw-2">&amp;</span>SegmentHeaderRequest, <span class="kw-2">&amp;</span>SegmentHeadersStore&lt;C&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;SegmentHeaderResponse&gt;
             + Send
             + Sync
             + <span class="lifetime">&#39;static</span>,
     {
         <span class="kw">let </span>DsnOptions {
-            <span class="kw-2">mut </span>archived_segment_notification_stream,
-            node_name,
             client,
             base_path,
             keypair,
-            piece_cache_size,
-            get_piece_by_hash,
+            get_piece_by_index,
             get_segment_header_by_segment_indexes,
             farmer_total_space_pledged,
             segment_header_store,
@@ -679,47 +600,13 @@
         <span class="kw">let </span>farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(<span class="prelude-val">None</span>));
         <span class="kw">let </span>protocol_version = hex::encode(client.info().genesis_hash);
         <span class="kw">let </span>farmer_piece_cache = Arc::new(parking_lot::RwLock::new(<span class="prelude-val">None</span>));
-        <span class="kw">let </span>maybe_farmer_local_record_provider =
-            MaybeLocalRecordProvider::new(farmer_piece_cache.clone());
+        <span class="kw">let </span>local_records_provider = MaybeLocalRecordProvider::new(farmer_piece_cache.clone());
 
         <span class="kw">let </span>cuckoo_filter_size = farmer_total_space_pledged / Piece::SIZE + <span class="number">1usize</span>;
         <span class="kw">let </span>farmer_archival_storage_pieces = ArchivalStoragePieces::new(cuckoo_filter_size);
         <span class="kw">let </span>farmer_archival_storage_info = ArchivalStorageInfo::default();
 
         <span class="macro">tracing::debug!</span>(genesis_hash = protocol_version, <span class="string">&quot;Setting DSN protocol version...&quot;</span>);
-
-        <span class="kw">let </span>node_piece_cache = NodePieceCache::new(
-            client.clone(),
-            piece_cache_size.as_u64(),
-            subspace_networking::peer_id(<span class="kw-2">&amp;</span>keypair),
-        );
-
-        <span class="comment">// Start before archiver, so we don&#39;t have potential race condition and
-        // miss pieces
-        </span>sdk_utils::task_spawn(<span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-node-{node_name}-piece-caching&quot;</span>), {
-            <span class="kw">let </span><span class="kw-2">mut </span>piece_cache = node_piece_cache.clone();
-
-            <span class="kw">async move </span>{
-                <span class="kw">while let </span><span class="prelude-val">Some</span>(archived_segment_notification) =
-                    archived_segment_notification_stream.next().<span class="kw">await
-                </span>{
-                    <span class="kw">let </span>segment_index = archived_segment_notification
-                        .archived_segment
-                        .segment_header
-                        .segment_index();
-                    <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = piece_cache.add_pieces(
-                        segment_index.first_piece_index(),
-                        <span class="kw-2">&amp;</span>archived_segment_notification.archived_segment.pieces,
-                    ) {
-                        <span class="macro">tracing::error!</span>(
-                            %segment_index,
-                            %error,
-                            <span class="string">&quot;Failed to store pieces for segment in cache&quot;
-                        </span>);
-                    }
-                }
-            }
-        });
 
         <span class="kw">let </span><span class="self">Self </span>{
             listen_addresses,
@@ -749,11 +636,6 @@
         .context(<span class="string">&quot;Failed to open known addresses database for DSN&quot;</span>)<span class="question-mark">?
         </span>.boxed();
 
-        <span class="kw">let </span>local_records_provider = LocalRecordProvider::new(
-            maybe_farmer_local_record_provider.clone(),
-            node_piece_cache.clone(),
-        );
-
         <span class="kw">let </span>default_networking_config = subspace_networking::Config::new(
             protocol_version,
             keypair,
@@ -766,21 +648,14 @@
             allow_non_global_addresses_in_dht,
             networking_parameters_registry: <span class="prelude-val">Some</span>(networking_parameters_registry),
             request_response_protocols: <span class="macro">vec!</span>[
-                PieceByHashRequestHandler::create({
+                PieceByIndexRequestHandler::create({
                     <span class="kw">let </span>weak_readers_and_pieces = Arc::downgrade(<span class="kw-2">&amp;</span>farmer_readers_and_pieces);
                     <span class="kw">let </span>farmer_piece_cache = farmer_piece_cache.clone();
-                    <span class="kw">let </span>node_piece_cache = node_piece_cache.clone();
                     <span class="kw">move </span>|<span class="kw">_</span>, req| {
                         <span class="kw">let </span>weak_readers_and_pieces = weak_readers_and_pieces.clone();
                         <span class="kw">let </span>farmer_piece_cache = farmer_piece_cache.clone();
-                        <span class="kw">let </span>node_piece_cache = node_piece_cache.clone();
 
-                        get_piece_by_hash(
-                            req,
-                            weak_readers_and_pieces,
-                            farmer_piece_cache,
-                            node_piece_cache,
-                        )
+                        get_piece_by_index(req, weak_readers_and_pieces, farmer_piece_cache)
                     }
                 }),
                 SegmentHeaderBySegmentIndexesRequestHandler::create({
@@ -858,7 +733,6 @@
             DsnShared {
                 node,
                 farmer_readers_and_pieces,
-                node_piece_cache,
                 _destructors: destructors,
                 farmer_archival_storage_pieces,
                 farmer_archival_storage_info,

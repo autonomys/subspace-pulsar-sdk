@@ -65,8 +65,8 @@
     </span><span class="kw">type </span>Table: subspace_proof_of_space::Table;
 
     <span class="doccomment">/// Fetch piece by its hash
-    </span><span class="kw">async fn </span>get_piece_by_hash(
-        piece_index_hash: subspace_core_primitives::PieceIndexHash,
+    </span><span class="kw">async fn </span>get_piece_by_index(
+        piece_index: subspace_core_primitives::PieceIndex,
         piece_cache: <span class="kw-2">&amp;</span>FarmerPieceCache,
         weak_readers_and_pieces: <span class="kw-2">&amp;</span>std::sync::Weak&lt;
             parking_lot::Mutex&lt;
@@ -88,7 +88,7 @@
     <span class="doccomment">/// Node name in telemetry
     </span><span class="kw">fn </span>name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str;
     <span class="doccomment">/// Shared dsn configuration
-    </span><span class="kw">fn </span>dsn(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>sdk_dsn::DsnShared&lt;<span class="self">Self</span>::Client&gt;;
+    </span><span class="kw">fn </span>dsn(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>sdk_dsn::DsnShared;
     <span class="doccomment">/// Rpc
     </span><span class="kw">fn </span>rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Rpc;
 }

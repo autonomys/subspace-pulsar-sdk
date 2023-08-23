@@ -806,8 +806,8 @@
         <span class="self">Self</span>::default()
     }
 
-    <span class="doccomment">/// Gemini 3e configuration
-    </span><span class="kw">pub fn </span>gemini_3e() -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Gemini 3f configuration
+    </span><span class="kw">pub fn </span>gemini_3f() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new().addr(<span class="string">&quot;127.0.0.1:9944&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>)).cors(<span class="macro">vec!</span>[
             <span class="string">&quot;http://localhost:*&quot;</span>.to_owned(),
             <span class="string">&quot;http://127.0.0.1:*&quot;</span>.to_owned(),
@@ -874,8 +874,8 @@
         <span class="self">Self</span>::default().force_synced(<span class="bool-val">true</span>).allow_private_ip(<span class="bool-val">true</span>)
     }
 
-    <span class="doccomment">/// Gemini 3e configuration
-    </span><span class="kw">pub fn </span>gemini_3e() -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Gemini 3f configuration
+    </span><span class="kw">pub fn </span>gemini_3f() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::default()
             .listen_addresses(<span class="macro">vec!</span>[
                 <span class="string">&quot;/ip6/::/tcp/30333&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>),
@@ -884,7 +884,7 @@
             .enable_mdns(<span class="bool-val">true</span>)
     }
 
-    <span class="doccomment">/// Gemini 3e configuration
+    <span class="doccomment">/// Dev network configuration
     </span><span class="kw">pub fn </span>devnet() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::default()
             .listen_addresses(<span class="macro">vec!</span>[

@@ -44,6 +44,7 @@
 <a href="#44" id="44">44</a>
 <a href="#45" id="45">45</a>
 <a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Subspace SDK for easy running of both Subspace node and farmer
 
 </span><span class="attr">#![warn(
@@ -56,27 +57,27 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
 </span><span class="doccomment">/// Module related to the farmer
-</span><span class="kw">pub use </span>sdk_farmer::{Builder <span class="kw">as </span>FarmerBuilder, Info <span class="kw">as </span>FarmerInfo, PlotDescription};
+</span><span class="kw">pub use </span>sdk_farmer::{Builder <span class="kw">as </span>FarmerBuilder, FarmDescription, Info <span class="kw">as </span>FarmerInfo};
 <span class="kw">pub use </span>sdk_node::{chain_spec, Builder <span class="kw">as </span>NodeBuilder, Info <span class="kw">as </span>NodeInfo};
 <span class="kw">pub use </span>sdk_utils::{ByteSize, Multiaddr, MultiaddrWithPeerId, PublicKey, Ss58ParsingError};
 <span class="kw">use </span>subspace_proof_of_space::chia::ChiaTable;
 
 <span class="macro">static_assertions::assert_impl_all!</span>(Node: Send, Sync);
 <span class="macro">static_assertions::assert_impl_all!</span>(Farmer: Send, Sync);
-<span class="macro">static_assertions::assert_impl_all!</span>(Plot: Send, Sync);
+<span class="macro">static_assertions::assert_impl_all!</span>(Farm: Send, Sync);
 
 <span class="doccomment">/// Subspace farmer type
 </span><span class="kw">pub type </span>Farmer = sdk_farmer::Farmer&lt;ChiaTable&gt;;
 <span class="doccomment">/// Subspace farmer&#39;s plot
-</span><span class="kw">pub type </span>Plot = sdk_farmer::Plot&lt;ChiaTable&gt;;
+</span><span class="kw">pub type </span>Farm = sdk_farmer::Farm&lt;ChiaTable&gt;;
 <span class="doccomment">/// Subspace primary node
 </span><span class="kw">pub type </span>Node = sdk_node::Node&lt;Farmer&gt;;
 
 <span class="doccomment">/// Farmer related things located here
 </span><span class="kw">pub mod </span>farmer {
-    <span class="kw">pub use </span>sdk_farmer::PlotDescription;
+    <span class="kw">pub use </span>sdk_farmer::FarmDescription;
 
-    <span class="kw">pub use super</span>::{Farmer, Plot};
+    <span class="kw">pub use super</span>::{Farm, Farmer};
 }
 
 <span class="doccomment">/// Node related things located here
@@ -84,7 +85,8 @@
     <span class="kw">pub use </span>sdk_dsn::<span class="kw-2">*</span>;
     <span class="kw">pub use </span>sdk_node::chain_spec::ChainSpec;
     <span class="kw">pub use </span>sdk_node::{
-        chain_spec, BlockNumber, Event, Hash, RewardsEvent, SubspaceEvent, SyncingProgress,
+        chain_spec, BlockNumber, DomainConfigBuilder, Event, Hash, PotConfiguration, RewardsEvent,
+        SubspaceEvent, SyncingProgress,
     };
     <span class="kw">pub use </span>sdk_substrate::<span class="kw-2">*</span>;
 

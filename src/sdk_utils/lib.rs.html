@@ -892,6 +892,11 @@
 <a href="#892" id="892">892</a>
 <a href="#893" id="893">893</a>
 <a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Utilities crate shared across all SDK crates
 
 </span><span class="attr">#![warn(
@@ -1407,6 +1412,11 @@
     <span class="doccomment">/// Constructor for gibibytes
     </span><span class="kw">pub const fn </span>gib(n: u64) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(bytesize::ByteSize::gib(n))
+    }
+
+    <span class="doccomment">/// Convert to u64
+    </span><span class="kw">pub fn </span>to_u64(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+        <span class="self">self</span>.<span class="number">0</span>.as_u64()
     }
 }
 

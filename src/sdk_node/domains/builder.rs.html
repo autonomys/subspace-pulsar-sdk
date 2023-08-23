@@ -533,9 +533,9 @@
         DomainConfigBuilder::dev()
     }
 
-    <span class="doccomment">/// Gemini 3e configuraiton
-    </span><span class="kw">pub fn </span>gemini_3e() -&gt; DomainConfigBuilder {
-        DomainConfigBuilder::gemini_3e()
+    <span class="doccomment">/// Gemini 3f configuraiton
+    </span><span class="kw">pub fn </span>gemini_3f() -&gt; DomainConfigBuilder {
+        DomainConfigBuilder::gemini_3f()
     }
 
     <span class="doccomment">/// Devnet configuraiton
@@ -559,14 +559,14 @@
             .dev_key_seed(<span class="string">&quot;//Alice&quot;</span>)
     }
 
-    <span class="doccomment">/// Gemini 3e configuration
-    </span><span class="kw">pub fn </span>gemini_3e() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new().chain_id(<span class="string">&quot;gemini-3e&quot;</span>)
+    <span class="doccomment">/// Gemini 3f configuration
+    </span><span class="kw">pub fn </span>gemini_3f() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new().chain_id(<span class="string">&quot;gemini-3f&quot;</span>).domain_id(DomainId::new(<span class="number">0</span>))
     }
 
     <span class="doccomment">/// Devnet chain configuration
     </span><span class="kw">pub fn </span>devnet() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new().chain_id(<span class="string">&quot;devnet&quot;</span>)
+        <span class="self">Self</span>::new().chain_id(<span class="string">&quot;devnet&quot;</span>).domain_id(DomainId::new(<span class="number">0</span>))
     }
 
     <span class="doccomment">/// Get configuration for saving on disk
