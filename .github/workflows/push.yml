@@ -84,16 +84,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/bin
-            ~/.cargo/git
-            ~/.cargo/.crates.toml
-            ~/.cargo/.crates2.json
-          key: clippy-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: clippy-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
-
-      - name: Install cargo utils
-        run: |
-          cargo install cargo-sweep
-          cargo install cargo-cache --no-default-features --features ci-autoclean cargo-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Clean unused crate source checkouts and git repo checkouts
         run: cargo cache
