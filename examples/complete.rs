@@ -3,11 +3,11 @@ use std::num::NonZeroU8;
 use futures::StreamExt;
 use sdk_node::PotConfiguration;
 use subspace_sdk::node::NetworkBuilder;
-use subspace_sdk::{chain_spec, node, ByteSize, Farmer, Node, PlotDescription, PublicKey};
+use subspace_sdk::{chain_spec, node, ByteSize, FarmDescription, Farmer, Node, PublicKey};
 
 #[tokio::main]
 async fn main() {
-    let plots = [PlotDescription::new("plot", ByteSize::gb(10))];
+    let plots = [FarmDescription::new("plot", ByteSize::gb(10))];
     let farmer_total_space_pledged =
         plots.iter().map(|p| p.space_pledged.as_u64() as usize).sum::<usize>();
     let node: Node = Node::builder()
@@ -40,7 +40,7 @@ async fn main() {
 
     tokio::spawn({
         let mut solutions =
-            farmer.iter_plots().await.next().unwrap().subscribe_new_solutions().await;
+            farmer.iter_farms().await.next().unwrap().subscribe_new_solutions().await;
         async move {
             while let Some(solution) = solutions.next().await {
                 eprintln!("Found solution: {solution:?}");
@@ -80,7 +80,7 @@ async fn main() {
         .build(
             reward_address,
             &node,
-            &[PlotDescription::new("plot", ByteSize::gb(10))],
+            &[FarmDescription::new("plot", ByteSize::gb(10))],
             NonZeroU8::new(1).expect("Static value should not fail; qed"),
         )
         .await

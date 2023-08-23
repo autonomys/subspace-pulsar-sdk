@@ -4,10 +4,11 @@ use std::path::Path;
 use derivative::Derivative;
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
+use sc_service::BlocksPruning;
 use sdk_dsn::{Dsn, DsnBuilder};
 use sdk_substrate::{
-    Base, BaseBuilder, ExecutionStrategy, NetworkBuilder, OffchainWorkerBuilder, RpcBuilder,
-    StorageMonitor,
+    Base, BaseBuilder, ExecutionStrategy, NetworkBuilder, OffchainWorkerBuilder, PruningMode, Role,
+    RpcBuilder, StorageMonitor,
 };
 use sdk_utils::ByteSize;
 use serde::{Deserialize, Serialize};
@@ -43,10 +44,6 @@ pub struct SegmentPublishConcurrency(
 #[builder(pattern = "owned", build_fn(private, name = "_build"), name = "Builder")]
 #[non_exhaustive]
 pub struct Config<F: Farmer> {
-    /// Set piece cache size
-    #[builder(setter(into), default)]
-    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub piece_cache_size: PieceCacheSize,
     /// Max number of segments that can be published concurrently, impacts
     /// RAM usage and network bandwidth.
     #[builder(setter(into), default)]
@@ -90,9 +87,9 @@ impl<F: Farmer + 'static> Config<F> {
         Builder::dev()
     }
 
-    /// Gemini 3e configuraiton
-    pub fn gemini_3e() -> Builder<F> {
-        Builder::gemini_3e()
+    /// Gemini 3f configuraiton
+    pub fn gemini_3f() -> Builder<F> {
+        Builder::gemini_3f()
     }
 
     /// Devnet configuraiton
@@ -112,14 +109,17 @@ impl<F: Farmer + 'static> Builder<F> {
             .offchain_worker(OffchainWorkerBuilder::dev())
     }
 
-    /// Gemini 3e configuration
-    pub fn gemini_3e() -> Self {
+    /// Gemini 3f configuration
+    pub fn gemini_3f() -> Self {
         Self::new()
             .execution_strategy(ExecutionStrategy::AlwaysWasm)
-            .network(NetworkBuilder::gemini_3e())
-            .dsn(DsnBuilder::gemini_3e())
-            .rpc(RpcBuilder::gemini_3e())
-            .offchain_worker(OffchainWorkerBuilder::gemini_3e())
+            .network(NetworkBuilder::gemini_3f())
+            .dsn(DsnBuilder::gemini_3f())
+            .rpc(RpcBuilder::gemini_3f())
+            .offchain_worker(OffchainWorkerBuilder::gemini_3f())
+            .role(Role::Authority)
+            .state_pruning(PruningMode::ArchiveAll)
+            .blocks_pruning(BlocksPruning::Some(256))
     }
 
     /// Devnet chain configuration
@@ -130,6 +130,9 @@ impl<F: Farmer + 'static> Builder<F> {
             .dsn(DsnBuilder::devnet())
             .rpc(RpcBuilder::devnet())
             .offchain_worker(OffchainWorkerBuilder::devnet())
+            .role(Role::Authority)
+            .state_pruning(PruningMode::ArchiveAll)
+            .blocks_pruning(BlocksPruning::Some(256))
     }
 
     /// Get configuration for saving on disk

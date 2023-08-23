@@ -514,6 +514,11 @@ impl ByteSize {
     pub const fn gib(n: u64) -> Self {
         Self(bytesize::ByteSize::gib(n))
     }
+
+    /// Convert to u64
+    pub fn to_u64(&self) -> u64 {
+        self.0.as_u64()
+    }
 }
 
 /// Multiaddr is a wrapper around libp2p one

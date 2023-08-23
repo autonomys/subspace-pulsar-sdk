@@ -6,7 +6,7 @@ use clap::{Parser, ValueEnum};
 use futures::prelude::*;
 use sdk_node::PotConfiguration;
 use subspace_sdk::node::{self, Event, Node, RewardsEvent, SubspaceEvent};
-use subspace_sdk::{ByteSize, Farmer, PlotDescription, PublicKey};
+use subspace_sdk::{ByteSize, FarmDescription, Farmer, PublicKey};
 use tracing_subscriber::prelude::*;
 
 #[cfg(all(
@@ -20,7 +20,7 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 #[derive(ValueEnum, Debug, Clone)]
 enum Chain {
-    Gemini3e,
+    Gemini3f,
     Devnet,
     Dev,
 }
@@ -83,8 +83,8 @@ async fn main() -> anyhow::Result<()> {
 
     let node_dir = base_path.join("node");
     let node = match chain {
-        Chain::Gemini3e => Node::gemini_3e().dsn(
-            subspace_sdk::node::DsnBuilder::gemini_3e()
+        Chain::Gemini3f => Node::gemini_3f().dsn(
+            subspace_sdk::node::DsnBuilder::gemini_3f()
                 .provider_storage_path(node_dir.join("provider_storage")),
         ),
         Chain::Devnet => Node::devnet().dsn(
@@ -113,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
         .build(
             &node_dir,
             match chain {
-                Chain::Gemini3e => node::chain_spec::gemini_3e(),
+                Chain::Gemini3f => node::chain_spec::gemini_3f(),
                 Chain::Devnet => node::chain_spec::devnet_config(),
                 Chain::Dev => node::chain_spec::dev_config(),
             },
@@ -141,14 +141,14 @@ async fn main() -> anyhow::Result<()> {
         .build(
             reward_address,
             &node,
-            &[PlotDescription::new(base_path.join("plot"), plot_size)],
+            &[FarmDescription::new(base_path.join("plot"), plot_size)],
             NonZeroU8::new(1).expect("static value should not fail; qed"),
         )
         .await?;
 
     tokio::spawn({
         let initial_plotting =
-            farmer.iter_plots().await.next().unwrap().subscribe_initial_plotting_progress().await;
+            farmer.iter_farms().await.next().unwrap().subscribe_initial_plotting_progress().await;
         async move {
             initial_plotting
                 .for_each(|progress| async move {

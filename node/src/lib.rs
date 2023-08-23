@@ -18,25 +18,26 @@ use std::time::Duration;
 use anyhow::Context;
 use derivative::Derivative;
 use futures::{FutureExt, Stream, StreamExt};
-use sc_consensus_subspace::SegmentHeadersStore;
+use sc_consensus_subspace::archiver::SegmentHeadersStore;
 use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, SyncState};
 use sc_proof_of_time::PotComponents;
 use sc_rpc_api::state::StateApiClient;
-use sdk_dsn::{DsnOptions, DsnShared, NodePieceCache};
+use sdk_dsn::{DsnOptions, DsnShared};
 use sdk_traits::Farmer;
 use sdk_utils::{DestructorSet, MultiaddrWithPeerId, PublicKey, TaskOutput};
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
 use sp_domains::GenerateGenesisStateRoot;
 use sp_runtime::DigestItem;
-use subspace_core_primitives::{HistorySize, PieceIndexHash, SegmentIndex};
+use subspace_core_primitives::{HistorySize, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
 use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
 use subspace_farmer_components::FarmerProtocolInfo;
 use subspace_networking::{
-    PieceByHashRequest, PieceByHashResponse, SegmentHeaderRequest, SegmentHeaderResponse,
+    PieceByIndexRequest, PieceByIndexResponse, SegmentHeaderRequest, SegmentHeaderResponse,
 };
+use subspace_rpc_primitives::MAX_SEGMENT_HEADERS_PER_REQUEST;
 use subspace_runtime::RuntimeApi;
 use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
 use subspace_service::SubspaceConfiguration;
@@ -61,6 +62,8 @@ pub type SubspaceEvent = pallet_subspace::Event<subspace_runtime::Runtime>;
 /// Events from subspace pallet
 pub type RewardsEvent = pallet_rewards::Event<subspace_runtime::Runtime>;
 
+const SEGMENT_HEADERS_NUMBER_LIMIT: u64 = MAX_SEGMENT_HEADERS_PER_REQUEST as u64;
+
 /// Proof of time configuration for node
 pub struct PotConfiguration {
     /// Flag indicating if Proof of time is enabled
@@ -79,13 +82,7 @@ impl<F: Farmer + 'static> Config<F> {
         farmer_total_space_pledged: usize,
     ) -> anyhow::Result<Node<F>> {
         let Self {
-            base,
-            piece_cache_size,
-            mut dsn,
-            sync_from_dsn,
-            storage_monitor,
-            enable_subspace_block_relay,
-            ..
+            base, mut dsn, sync_from_dsn, storage_monitor, enable_subspace_block_relay, ..
         } = self;
 
         let PotConfiguration { is_pot_enabled, is_node_time_keeper } = pot_configuration;
@@ -141,16 +138,9 @@ impl<F: Farmer + 'static> Config<F> {
 
             let (dsn, runner) = dsn.build_dsn(DsnOptions {
                 client: partial_components.client.clone(),
-                node_name: name.clone(),
-                archived_segment_notification_stream: partial_components
-                    .other
-                    .1
-                    .archived_segment_notification_stream()
-                    .subscribe(),
-                piece_cache_size: *piece_cache_size,
                 keypair,
                 base_path: directory.as_ref().to_path_buf(),
-                get_piece_by_hash: get_piece_by_hash::<F>,
+                get_piece_by_index: get_piece_by_index::<F>,
                 get_segment_header_by_segment_indexes,
                 farmer_total_space_pledged,
                 segment_header_store,
@@ -359,7 +349,7 @@ pub struct Node<F: Farmer> {
     network_service: Arc<NetworkService<RuntimeBlock, Hash>>,
     rpc_handle: sdk_utils::Rpc,
     name: String,
-    dsn: DsnShared<FullClient>,
+    dsn: DsnShared,
     #[derivative(Debug = "ignore")]
     _destructors: DestructorSet,
     #[derivative(Debug = "ignore")]
@@ -379,7 +369,7 @@ impl<F: Farmer> sdk_traits::Node for Node<F> {
         &self.name
     }
 
-    fn dsn(&self) -> &DsnShared<Self::Client> {
+    fn dsn(&self) -> &DsnShared {
         &self.dsn
     }
 
@@ -517,9 +507,9 @@ impl<F: Farmer + 'static> Node<F> {
         Builder::dev()
     }
 
-    /// Gemini 3e configuration
-    pub fn gemini_3e() -> Builder<F> {
-        Builder::gemini_3e()
+    /// Gemini 3f configuration
+    pub fn gemini_3f() -> Builder<F> {
+        Builder::gemini_3f()
     }
 
     /// Devnet configuration
@@ -765,8 +755,6 @@ impl<F: Farmer + 'static> Node<F> {
     }
 }
 
-const SEGMENT_HEADERS_NUMBER_LIMIT: u64 = 1000;
-
 fn get_segment_header_by_segment_indexes(
     req: &SegmentHeaderRequest,
     segment_headers_store: &SegmentHeadersStore<impl sc_client_api::AuxStore>,
@@ -781,19 +769,15 @@ fn get_segment_header_by_segment_indexes(
                 segment_headers_limit = SEGMENT_HEADERS_NUMBER_LIMIT;
             }
 
-            match segment_headers_store.max_segment_index() {
-                Some(max_segment_index) => {
-                    // Several last segment indexes
-                    (SegmentIndex::ZERO..=max_segment_index)
-                        .rev()
-                        .take(segment_headers_limit as usize)
-                        .collect::<Vec<_>>()
-                }
-                None => {
-                    // Nothing yet
-                    Vec::new()
-                }
-            }
+            // Currently segment_headers_store.max_segment_index returns None if only
+            // genesis block is archived To maintain parity with monorepo
+            // implementation we are returning SegmentIndex::ZERO in that case.
+            let max_segment_index =
+                segment_headers_store.max_segment_index().unwrap_or(SegmentIndex::ZERO);
+            (SegmentIndex::ZERO..=max_segment_index)
+                .rev()
+                .take(segment_headers_limit as usize)
+                .collect::<Vec<_>>()
         }
     };
 
@@ -811,50 +795,26 @@ fn get_segment_header_by_segment_indexes(
     }
 }
 
-fn get_piece_by_hash<F: Farmer>(
-    &PieceByHashRequest { piece_index_hash }: &PieceByHashRequest,
+fn get_piece_by_index<F: Farmer>(
+    &PieceByIndexRequest { piece_index }: &PieceByIndexRequest,
     weak_readers_and_pieces: std::sync::Weak<
         parking_lot::Mutex<Option<subspace_farmer::utils::readers_and_pieces::ReadersAndPieces>>,
     >,
     farmer_piece_cache: Arc<parking_lot::RwLock<Option<FarmerPieceCache>>>,
-    piece_cache: NodePieceCache<impl sc_client_api::AuxStore>,
-) -> impl std::future::Future<Output = Option<PieceByHashResponse>> {
+) -> impl std::future::Future<Output = Option<PieceByIndexResponse>> {
     async move {
-        match node_get_piece_by_hash(piece_index_hash, &piece_cache) {
-            Some(PieceByHashResponse { piece: None }) | None => (),
-            result => return result,
-        }
-
         // Have to clone due to RAII guard is not `Send`, no impact on
         // behaviour/performance as `FarmerPieceCache` uses `Arc` and
         // `mpsc::Sender` underneath.
         let maybe_farmer_piece_cache = farmer_piece_cache.read().clone();
         if let Some(farmer_piece_cache) = maybe_farmer_piece_cache {
-            let piece = F::get_piece_by_hash(
-                piece_index_hash,
-                &farmer_piece_cache,
-                &weak_readers_and_pieces,
-            )
-            .await;
-            Some(PieceByHashResponse { piece })
+            let piece =
+                F::get_piece_by_index(piece_index, &farmer_piece_cache, &weak_readers_and_pieces)
+                    .await;
+            Some(PieceByIndexResponse { piece })
         } else {
             None
         }
     }
     .in_current_span()
-}
-
-fn node_get_piece_by_hash(
-    piece_index_hash: PieceIndexHash,
-    piece_cache: &NodePieceCache<impl sc_client_api::AuxStore>,
-) -> Option<PieceByHashResponse> {
-    let result = match piece_cache.get_piece(piece_index_hash) {
-        Ok(maybe_piece) => maybe_piece,
-        Err(error) => {
-            tracing::error!(?piece_index_hash, %error, "Failed to get piece from cache");
-            None
-        }
-    };
-
-    Some(PieceByHashResponse { piece: result })
 }

@@ -357,8 +357,8 @@ impl RpcBuilder {
         Self::default()
     }
 
-    /// Gemini 3e configuration
-    pub fn gemini_3e() -> Self {
+    /// Gemini 3f configuration
+    pub fn gemini_3f() -> Self {
         Self::new().addr("127.0.0.1:9944".parse().expect("hardcoded value is true")).cors(vec![
             "http://localhost:*".to_owned(),
             "http://127.0.0.1:*".to_owned(),
@@ -425,8 +425,8 @@ impl NetworkBuilder {
         Self::default().force_synced(true).allow_private_ip(true)
     }
 
-    /// Gemini 3e configuration
-    pub fn gemini_3e() -> Self {
+    /// Gemini 3f configuration
+    pub fn gemini_3f() -> Self {
         Self::default()
             .listen_addresses(vec![
                 "/ip6/::/tcp/30333".parse().expect("hardcoded value is true"),
@@ -435,7 +435,7 @@ impl NetworkBuilder {
             .enable_mdns(true)
     }
 
-    /// Gemini 3e configuration
+    /// Dev network configuration
     pub fn devnet() -> Self {
         Self::default()
             .listen_addresses(vec![

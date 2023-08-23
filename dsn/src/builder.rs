@@ -7,7 +7,7 @@ use derivative::Derivative;
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
 use futures::prelude::*;
-use sc_consensus_subspace::SegmentHeadersStore;
+use sc_consensus_subspace::archiver::SegmentHeadersStore;
 use sdk_utils::{self, DestructorSet, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
 use subspace_core_primitives::Piece;
@@ -17,12 +17,13 @@ use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_networking::utils::strip_peer_id;
 use subspace_networking::{
-    PeerInfo, PeerInfoProvider, PieceByHashRequest, PieceByHashRequestHandler, PieceByHashResponse,
-    SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
+    PeerInfo, PeerInfoProvider, PieceByIndexRequest, PieceByIndexRequestHandler,
+    PieceByIndexResponse, SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest,
+    SegmentHeaderResponse,
 };
 
 use super::local_provider_record_utils::MaybeLocalRecordProvider;
-use super::{LocalRecordProvider, NodePieceCache};
+use super::LocalRecordProvider;
 
 /// Wrapper with default value for listen address
 #[derive(
@@ -140,15 +141,15 @@ impl DsnBuilder {
         Self::new().allow_non_global_addresses_in_dht(true)
     }
 
-    /// Gemini 3e configuration
-    pub fn gemini_3e() -> Self {
+    /// Gemini 3f configuration
+    pub fn gemini_3f() -> Self {
         Self::new().listen_addresses(vec![
             "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
             "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
         ])
     }
 
-    /// Gemini 3e configuration
+    /// Gemini 3f configuration
     pub fn devnet() -> Self {
         Self::new().listen_addresses(vec![
             "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
@@ -158,21 +159,15 @@ impl DsnBuilder {
 }
 
 /// Options for DSN
-pub struct DsnOptions<C, ASNS, PieceByHash, SegmentHeaderByIndexes> {
+pub struct DsnOptions<C, PieceByIndex, SegmentHeaderByIndexes> {
     /// Client to aux storage for node piece cache
     pub client: Arc<C>,
-    /// Node telemetry name
-    pub node_name: String,
-    /// Archived segment notification stream
-    pub archived_segment_notification_stream: ASNS,
-    /// Node piece cache size
-    pub piece_cache_size: sdk_utils::ByteSize,
     /// Path for dsn
     pub base_path: PathBuf,
     /// Keypair for networking
     pub keypair: subspace_networking::libp2p::identity::Keypair,
     /// Get piece by hash handler
-    pub get_piece_by_hash: PieceByHash,
+    pub get_piece_by_index: PieceByIndex,
     /// Get segment header by segment indexes handler
     pub get_segment_header_by_segment_indexes: SegmentHeaderByIndexes,
     /// Farmer total allocated space across all plots
@@ -184,7 +179,7 @@ pub struct DsnOptions<C, ASNS, PieceByHash, SegmentHeaderByIndexes> {
 /// Shared Dsn structure between node and farmer
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
+pub struct DsnShared {
     /// Dsn node
     pub node: subspace_networking::Node,
     /// Farmer readers and pieces
@@ -195,48 +190,37 @@ pub struct DsnShared<C: sc_client_api::AuxStore + Send + Sync + 'static> {
     pub farmer_archival_storage_pieces: ArchivalStoragePieces,
     /// Farmer archival storage info
     pub farmer_archival_storage_info: ArchivalStorageInfo,
-    /// Node piece cache
-    #[derivative(Debug = "ignore")]
-    pub node_piece_cache: NodePieceCache<C>,
     _destructors: DestructorSet,
 }
 
 impl Dsn {
     /// Build dsn
-    pub fn build_dsn<B, C, ASNS, PieceByHash, F1, SegmentHeaderByIndexes>(
+    pub fn build_dsn<B, C, PieceByIndex, F1, SegmentHeaderByIndexes>(
         self,
-        options: DsnOptions<C, ASNS, PieceByHash, SegmentHeaderByIndexes>,
-    ) -> anyhow::Result<(DsnShared<C>, subspace_networking::NodeRunner<LocalRecordProvider<C>>)>
+        options: DsnOptions<C, PieceByIndex, SegmentHeaderByIndexes>,
+    ) -> anyhow::Result<(DsnShared, subspace_networking::NodeRunner<LocalRecordProvider>)>
     where
         B: sp_runtime::traits::Block,
         C: sc_client_api::AuxStore + sp_blockchain::HeaderBackend<B> + Send + Sync + 'static,
-        ASNS: Stream<Item = sc_consensus_subspace::ArchivedSegmentNotification>
-            + Unpin
-            + Send
-            + 'static,
-        PieceByHash: Fn(
-                &PieceByHashRequest,
+        PieceByIndex: Fn(
+                &PieceByIndexRequest,
                 Weak<parking_lot::Mutex<Option<ReadersAndPieces>>>,
                 Arc<parking_lot::RwLock<Option<FarmerPieceCache>>>,
-                NodePieceCache<C>,
             ) -> F1
             + Send
             + Sync
             + 'static,
-        F1: Future<Output = Option<PieceByHashResponse>> + Send + 'static,
+        F1: Future<Output = Option<PieceByIndexResponse>> + Send + 'static,
         SegmentHeaderByIndexes: Fn(&SegmentHeaderRequest, &SegmentHeadersStore<C>) -> Option<SegmentHeaderResponse>
             + Send
             + Sync
             + 'static,
     {
         let DsnOptions {
-            mut archived_segment_notification_stream,
-            node_name,
             client,
             base_path,
             keypair,
-            piece_cache_size,
-            get_piece_by_hash,
+            get_piece_by_index,
             get_segment_header_by_segment_indexes,
             farmer_total_space_pledged,
             segment_header_store,
@@ -244,47 +228,13 @@ impl Dsn {
         let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
         let protocol_version = hex::encode(client.info().genesis_hash);
         let farmer_piece_cache = Arc::new(parking_lot::RwLock::new(None));
-        let maybe_farmer_local_record_provider =
-            MaybeLocalRecordProvider::new(farmer_piece_cache.clone());
+        let local_records_provider = MaybeLocalRecordProvider::new(farmer_piece_cache.clone());
 
         let cuckoo_filter_size = farmer_total_space_pledged / Piece::SIZE + 1usize;
         let farmer_archival_storage_pieces = ArchivalStoragePieces::new(cuckoo_filter_size);
         let farmer_archival_storage_info = ArchivalStorageInfo::default();
 
         tracing::debug!(genesis_hash = protocol_version, "Setting DSN protocol version...");
-
-        let node_piece_cache = NodePieceCache::new(
-            client.clone(),
-            piece_cache_size.as_u64(),
-            subspace_networking::peer_id(&keypair),
-        );
-
-        // Start before archiver, so we don't have potential race condition and
-        // miss pieces
-        sdk_utils::task_spawn(format!("subspace-sdk-node-{node_name}-piece-caching"), {
-            let mut piece_cache = node_piece_cache.clone();
-
-            async move {
-                while let Some(archived_segment_notification) =
-                    archived_segment_notification_stream.next().await
-                {
-                    let segment_index = archived_segment_notification
-                        .archived_segment
-                        .segment_header
-                        .segment_index();
-                    if let Err(error) = piece_cache.add_pieces(
-                        segment_index.first_piece_index(),
-                        &archived_segment_notification.archived_segment.pieces,
-                    ) {
-                        tracing::error!(
-                            %segment_index,
-                            %error,
-                            "Failed to store pieces for segment in cache"
-                        );
-                    }
-                }
-            }
-        });
 
         let Self {
             listen_addresses,
@@ -314,11 +264,6 @@ impl Dsn {
         .context("Failed to open known addresses database for DSN")?
         .boxed();
 
-        let local_records_provider = LocalRecordProvider::new(
-            maybe_farmer_local_record_provider.clone(),
-            node_piece_cache.clone(),
-        );
-
         let default_networking_config = subspace_networking::Config::new(
             protocol_version,
             keypair,
@@ -331,21 +276,14 @@ impl Dsn {
             allow_non_global_addresses_in_dht,
             networking_parameters_registry: Some(networking_parameters_registry),
             request_response_protocols: vec![
-                PieceByHashRequestHandler::create({
+                PieceByIndexRequestHandler::create({
                     let weak_readers_and_pieces = Arc::downgrade(&farmer_readers_and_pieces);
                     let farmer_piece_cache = farmer_piece_cache.clone();
-                    let node_piece_cache = node_piece_cache.clone();
                     move |_, req| {
                         let weak_readers_and_pieces = weak_readers_and_pieces.clone();
                         let farmer_piece_cache = farmer_piece_cache.clone();
-                        let node_piece_cache = node_piece_cache.clone();
 
-                        get_piece_by_hash(
-                            req,
-                            weak_readers_and_pieces,
-                            farmer_piece_cache,
-                            node_piece_cache,
-                        )
+                        get_piece_by_index(req, weak_readers_and_pieces, farmer_piece_cache)
                     }
                 }),
                 SegmentHeaderBySegmentIndexesRequestHandler::create({
@@ -423,7 +361,6 @@ impl Dsn {
             DsnShared {
                 node,
                 farmer_readers_and_pieces,
-                node_piece_cache,
                 _destructors: destructors,
                 farmer_archival_storage_pieces,
                 farmer_archival_storage_info,

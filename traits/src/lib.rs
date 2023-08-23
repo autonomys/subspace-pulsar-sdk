@@ -18,8 +18,8 @@ pub trait Farmer {
     type Table: subspace_proof_of_space::Table;
 
     /// Fetch piece by its hash
-    async fn get_piece_by_hash(
-        piece_index_hash: subspace_core_primitives::PieceIndexHash,
+    async fn get_piece_by_index(
+        piece_index: subspace_core_primitives::PieceIndex,
         piece_cache: &FarmerPieceCache,
         weak_readers_and_pieces: &std::sync::Weak<
             parking_lot::Mutex<
@@ -41,7 +41,7 @@ pub trait Node {
     /// Node name in telemetry
     fn name(&self) -> &str;
     /// Shared dsn configuration
-    fn dsn(&self) -> &sdk_dsn::DsnShared<Self::Client>;
+    fn dsn(&self) -> &sdk_dsn::DsnShared;
     /// Rpc
     fn rpc(&self) -> &Self::Rpc;
 }

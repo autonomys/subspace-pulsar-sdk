@@ -6,7 +6,7 @@ use sdk_node::PotConfiguration;
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt().init();
-    let plots = [subspace_sdk::PlotDescription::new("plot", subspace_sdk::ByteSize::mb(100))];
+    let plots = [subspace_sdk::FarmDescription::new("plot", subspace_sdk::ByteSize::mb(100))];
     let farmer_total_space_pledged =
         plots.iter().map(|p| p.space_pledged.as_u64() as usize).sum::<usize>();
     let node = subspace_sdk::Node::builder()
@@ -32,7 +32,7 @@ async fn main() {
         .await
         .expect("Failed to init a farmer");
 
-    for plot in farmer.iter_plots().await {
+    for plot in farmer.iter_farms().await {
         let mut plotting_progress = plot.subscribe_initial_plotting_progress().await;
         while plotting_progress.next().await.is_some() {}
     }

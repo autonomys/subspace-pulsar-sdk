@@ -4,9 +4,8 @@ use sc_service::ChainType;
 use sc_subspace_chain_specs::SerializableChainSpec;
 use sc_telemetry::TelemetryEndpoints;
 use sdk_utils::chain_spec as utils;
-use sdk_utils::chain_spec::get_public_key_from_seed;
 use sp_core::crypto::{Ss58Codec, UncheckedFrom};
-use sp_domains::{OperatorPublicKey, RuntimeType};
+use sp_domains::RuntimeType;
 use sp_runtime::Percent;
 use subspace_runtime::{
     AllowAuthoringBy, BalancesConfig, DomainsConfig, GenesisConfig, MaxDomainBlockSize,
@@ -18,7 +17,7 @@ use subspace_runtime_primitives::{AccountId, Balance, BlockNumber, SSC};
 use crate::domains::evm_chain_spec;
 
 const SUBSPACE_TELEMETRY_URL: &str = "wss://telemetry.subspace.network/submit/";
-const GEMINI_3D_CHAIN_SPEC: &[u8] = include_bytes!("../res/chain-spec-raw-gemini-3e.json");
+const GEMINI_3F_CHAIN_SPEC: &[u8] = include_bytes!("../res/chain-spec-raw-gemini-3f.json");
 const DEVNET_CHAIN_SPEC: &[u8] = include_bytes!("../res/chain-spec-raw-devnet.json");
 
 /// List of accounts which should receive token grants, amounts are specified in
@@ -56,19 +55,19 @@ pub struct GenesisParams {
 /// Chain spec type for the subspace
 pub type ChainSpec = SerializableChainSpec<GenesisConfig>;
 
-/// Gemini 3e chain spec
-pub fn gemini_3e() -> ChainSpec {
-    ChainSpec::from_json_bytes(GEMINI_3D_CHAIN_SPEC).expect("Always valid")
+/// Gemini 3f chain spec
+pub fn gemini_3f() -> ChainSpec {
+    ChainSpec::from_json_bytes(GEMINI_3F_CHAIN_SPEC).expect("Always valid")
 }
 
-/// Gemini 3e compiled chain spec
-pub fn gemini_3e_compiled() -> ChainSpec {
+/// Gemini 3f compiled chain spec
+pub fn gemini_3f_compiled() -> ChainSpec {
     ChainSpec::from_genesis(
         // Name
-        "Subspace Gemini 3e",
+        "Subspace Gemini 3f",
         // ID
-        "subspace_gemini_3e",
-        ChainType::Custom("Subspace Gemini 3e".to_string()),
+        "subspace_gemini_3f",
+        ChainType::Custom("Subspace Gemini 3f".to_string()),
         || {
             let sudo_account =
                 AccountId::from_ss58check("5CZy4hcmaVZUMZLfB41v1eAKvtZ8W7axeWuDvwjhjPwfhAqt")
@@ -130,7 +129,7 @@ pub fn gemini_3e_compiled() -> ChainSpec {
                 .expect("Telemetry value is valid"),
         ),
         // Protocol ID
-        Some("subspace-gemini-3e"),
+        Some("subspace-gemini-3f"),
         None,
         // Properties
         Some(utils::chain_spec_properties()),
@@ -344,15 +343,13 @@ fn subspace_genesis_config(
         confirmation_depth_k,
     } = genesis_params;
 
-    let raw_evm_domain_genesis_config = {
-        let mut domain_genesis_config =
-            evm_chain_spec::get_testnet_genesis_by_spec_id(evm_domain_spec_id);
-        // Clear the WASM code of the genesis config since it is duplicated with
-        // `GenesisDomain::code`
-        domain_genesis_config.system.code = Default::default();
-        serde_json::to_vec(&domain_genesis_config)
-            .expect("Genesis config serialization never fails; qed")
-    };
+    let (mut domain_genesis_config, genesis_domain_params) =
+        evm_chain_spec::get_testnet_genesis_by_spec_id(evm_domain_spec_id);
+    // Clear the WASM code of the genesis config since it is duplicated with
+    // `GenesisDomain::code`
+    domain_genesis_config.system.code = Default::default();
+    let raw_evm_domain_genesis_config = serde_json::to_vec(&domain_genesis_config)
+        .expect("Genesis config serialization never fails; qed");
 
     GenesisConfig {
         domains: DomainsConfig {
@@ -373,7 +370,7 @@ fn subspace_genesis_config(
                 target_bundles_per_block: 10,
                 raw_genesis_config: raw_evm_domain_genesis_config,
                 // TODO: Configurable genesis operator signing key.
-                signing_key: get_public_key_from_seed::<OperatorPublicKey>("Alice"),
+                signing_key: genesis_domain_params.operator_signing_key,
                 nomination_tax: Percent::from_percent(5),
                 minimum_nominator_stake: 100 * SSC,
             }),
@@ -406,8 +403,8 @@ mod tests {
 
     #[test]
     fn test_chain_specs() {
-        gemini_3e_compiled();
-        gemini_3e();
+        gemini_3f_compiled();
+        gemini_3f();
         devnet_config_compiled();
         devnet_config();
         dev_config();

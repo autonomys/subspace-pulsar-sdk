@@ -95,4 +95,8 @@ impl NodeClient for crate::Rpc {
     ) -> Result<(), Error> {
         Ok(SubspaceRpcApiClient::acknowledge_archived_segment_header(self, segment_index).await?)
     }
+
+    async fn last_segment_headers(&self, limit: u64) -> Result<Vec<Option<SegmentHeader>>, Error> {
+        Ok(SubspaceRpcApiClient::last_segment_headers(self, limit).await?)
+    }
 }
