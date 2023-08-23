@@ -85,6 +85,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/bin
             ~/.cargo/git
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
           key: clippy-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: clippy-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
 
