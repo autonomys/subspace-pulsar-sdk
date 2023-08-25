@@ -13,7 +13,7 @@ async fn track_progress() {
     let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
     let space_pledged = sector_size * number_of_sectors;
 
-    let node = Node::dev().build(space_pledged, true).await;
+    let node = Node::dev().build(true).await;
     let farmer = Farmer::dev()
         .pieces_in_sector(pieces_in_sector)
         .build(&node, ByteSize::b(space_pledged as u64))
@@ -43,7 +43,7 @@ async fn new_solution() {
     let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
     let space_pledged = sector_size * number_of_sectors;
 
-    let node = Node::dev().build(space_pledged, true).await;
+    let node = Node::dev().build(true).await;
     let farmer = Farmer::dev()
         .pieces_in_sector(pieces_in_sector)
         .build(&node, ByteSize::b(space_pledged as u64))
@@ -73,7 +73,7 @@ async fn progress_restart() {
     let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
     let space_pledged = sector_size * number_of_sectors;
 
-    let node = Node::dev().build(space_pledged, true).await;
+    let node = Node::dev().build(true).await;
     let farmer = Farmer::dev()
         .pieces_in_sector(pieces_in_sector)
         .build(&node, ByteSize::b(space_pledged as u64))
@@ -104,7 +104,7 @@ async fn farmer_restart() {
     let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
     let space_pledged = sector_size * number_of_sectors;
 
-    let node = Node::dev().build(space_pledged, true).await;
+    let node = Node::dev().build(true).await;
 
     for _ in 0..10 {
         Farmer::dev()
@@ -127,7 +127,7 @@ async fn farmer_close() {
     let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
     let space_pledged = sector_size * number_of_sectors;
 
-    let node = Node::dev().build(space_pledged, true).await;
+    let node = Node::dev().build(true).await;
     let farmer = Farmer::dev()
         .pieces_in_sector(pieces_in_sector)
         .build(&node, ByteSize::b(space_pledged as u64))

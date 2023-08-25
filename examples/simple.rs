@@ -7,8 +7,6 @@ use sdk_node::PotConfiguration;
 async fn main() {
     tracing_subscriber::fmt().init();
     let plots = [subspace_sdk::FarmDescription::new("plot", subspace_sdk::ByteSize::mb(100))];
-    let farmer_total_space_pledged =
-        plots.iter().map(|p| p.space_pledged.as_u64() as usize).sum::<usize>();
     let node = subspace_sdk::Node::builder()
         .force_authoring(true)
         .role(subspace_sdk::node::Role::Authority)
@@ -17,7 +15,6 @@ async fn main() {
             "node",
             subspace_sdk::chain_spec::dev_config(),
             PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
-            farmer_total_space_pledged,
         )
         .await
         .unwrap();

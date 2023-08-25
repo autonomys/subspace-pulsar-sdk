@@ -79,7 +79,6 @@ impl<F: Farmer + 'static> Config<F> {
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,
         pot_configuration: PotConfiguration,
-        farmer_total_space_pledged: usize,
     ) -> anyhow::Result<Node<F>> {
         let Self {
             base, mut dsn, sync_from_dsn, storage_monitor, enable_subspace_block_relay, ..
@@ -142,7 +141,6 @@ impl<F: Farmer + 'static> Config<F> {
                 base_path: directory.as_ref().to_path_buf(),
                 get_piece_by_index: get_piece_by_index::<F>,
                 get_segment_header_by_segment_indexes,
-                farmer_total_space_pledged,
                 segment_header_store,
             })?;
 
