@@ -816,8 +816,6 @@
 <a href="#816" id="816">816</a>
 <a href="#817" id="817">817</a>
 <a href="#818" id="818">818</a>
-<a href="#819" id="819">819</a>
-<a href="#820" id="820">820</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Crate with subspace node
 
 </span><span class="attr">#![warn(
@@ -899,7 +897,6 @@
         directory: <span class="kw">impl </span>AsRef&lt;Path&gt;,
         chain_spec: ChainSpec,
         pot_configuration: PotConfiguration,
-        farmer_total_space_pledged: usize,
     ) -&gt; anyhow::Result&lt;Node&lt;F&gt;&gt; {
         <span class="kw">let </span><span class="self">Self </span>{
             base, <span class="kw-2">mut </span>dsn, sync_from_dsn, storage_monitor, enable_subspace_block_relay, ..
@@ -962,7 +959,6 @@
                 base_path: directory.as_ref().to_path_buf(),
                 get_piece_by_index: get_piece_by_index::&lt;F&gt;,
                 get_segment_header_by_segment_indexes,
-                farmer_total_space_pledged,
                 segment_header_store,
             })<span class="question-mark">?</span>;
 

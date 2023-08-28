@@ -935,12 +935,6 @@
 <a href="#935" id="935">935</a>
 <a href="#936" id="936">936</a>
 <a href="#937" id="937">937</a>
-<a href="#938" id="938">938</a>
-<a href="#939" id="939">939</a>
-<a href="#940" id="940">940</a>
-<a href="#941" id="941">941</a>
-<a href="#942" id="942">942</a>
-<a href="#943" id="943">943</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This crate is related to abstract farmer implementation
 
 </span><span class="attr">#![warn(
@@ -975,7 +969,6 @@
     SingleDiskFarm, SingleDiskFarmError, SingleDiskFarmId, SingleDiskFarmInfo,
     SingleDiskFarmOptions, SingleDiskFarmSummary,
 };
-<span class="kw">use </span>subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
 <span class="kw">use </span>subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 <span class="kw">use </span>subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
@@ -1203,11 +1196,10 @@
 
 <span class="kw">fn </span>create_readers_and_pieces(
     single_disk_farms: <span class="kw-2">&amp;</span>[SingleDiskFarm],
-    archival_storage_pieces: ArchivalStoragePieces,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ReadersAndPieces, BuildError&gt; {
     <span class="comment">// Store piece readers so we can reference them later
     </span><span class="kw">let </span>readers = single_disk_farms.iter().map(SingleDiskFarm::piece_reader).collect();
-    <span class="kw">let </span><span class="kw-2">mut </span>readers_and_pieces = ReadersAndPieces::new(readers, archival_storage_pieces);
+    <span class="kw">let </span><span class="kw-2">mut </span>readers_and_pieces = ReadersAndPieces::new(readers);
 
     <span class="macro">tracing::debug!</span>(<span class="string">&quot;Collecting already plotted pieces&quot;</span>);
 
@@ -1317,7 +1309,6 @@
             piece_provider,
             farmer_piece_cache.clone(),
             node.rpc().clone(),
-            node.dsn().farmer_archival_storage_info.clone(),
             readers_and_pieces.clone(),
         ));
 
@@ -1394,10 +1385,7 @@
             .<span class="kw">await</span>;
         drop(farmer_piece_cache);
 
-        readers_and_pieces.lock().replace(create_readers_and_pieces(
-            <span class="kw-2">&amp;</span>single_disk_farms,
-            node.dsn().farmer_archival_storage_pieces.clone(),
-        )<span class="question-mark">?</span>);
+        readers_and_pieces.lock().replace(create_readers_and_pieces(<span class="kw-2">&amp;</span>single_disk_farms)<span class="question-mark">?</span>);
         destructors.add_sync_destructor({
             <span class="kw">let </span>farmer_reader_and_pieces = node.dsn().farmer_readers_and_pieces.clone();
             <span class="kw">move </span>|| {
