@@ -70,7 +70,7 @@ pub struct Node {
 }
 
 impl NodeBuilder {
-    pub async fn build(self, space_pledged: usize, enable_domains: bool) -> Node {
+    pub async fn build(self, enable_domains: bool) -> Node {
         let InnerNode {
             not_force_synced,
             boot_nodes,
@@ -115,7 +115,6 @@ impl NodeBuilder {
                 path.path().join("node"),
                 chain.clone(),
                 PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
-                space_pledged,
             )
             .await
             .unwrap();

@@ -15,7 +15,7 @@ async fn sync_block_inner() {
     let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
     let space_pledged = sector_size * number_of_sectors;
 
-    let node = Node::dev().build(space_pledged, true).await;
+    let node = Node::dev().build(true).await;
     let farmer = Farmer::dev()
         .pieces_in_sector(pieces_in_sector)
         .build(&node, ByteSize::b(space_pledged as u64))
@@ -38,7 +38,7 @@ async fn sync_block_inner() {
         .boot_nodes(node.listen_addresses().await.unwrap())
         .not_force_synced(true)
         .not_authority(true)
-        .build(space_pledged, false)
+        .build(false)
         .await;
 
     other_node.subscribe_syncing_progress().await.unwrap().for_each(|_| async {}).await;
@@ -63,7 +63,7 @@ async fn sync_farm_inner() {
     let space_pledged = sector_size * number_of_sectors;
 
     let node_span = tracing::trace_span!("node 1");
-    let node = Node::dev().build(space_pledged, true).instrument(node_span.clone()).await;
+    let node = Node::dev().build(true).instrument(node_span.clone()).await;
 
     let farmer = Farmer::dev()
         .pieces_in_sector(pieces_in_sector)
@@ -87,7 +87,7 @@ async fn sync_farm_inner() {
         .boot_nodes(node.listen_addresses().await.unwrap())
         .not_force_synced(true)
         .chain(node.chain.clone())
-        .build(space_pledged, false)
+        .build(false)
         .instrument(other_node_span.clone())
         .await;
 
@@ -128,7 +128,7 @@ async fn node_restart() {
 
     for i in 0..4 {
         tracing::error!(i, "Running new node");
-        Node::dev().path(dir.clone()).build(1 * 1024 * 1024, true).await.close().await;
+        Node::dev().path(dir.clone()).build(true).await.close().await;
     }
 }
 
@@ -143,7 +143,7 @@ async fn node_events() {
         let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
         let space_pledged = sector_size * number_of_sectors;
 
-        let node = Node::dev().build(space_pledged, true).await;
+        let node = Node::dev().build(true).await;
         let farmer = Farmer::dev()
             .pieces_in_sector(pieces_in_sector)
             .build(&node, ByteSize::b(space_pledged as u64))
@@ -182,7 +182,7 @@ async fn fetch_block_author() {
         let sector_size = subspace_farmer_components::sector::sector_size(pieces_in_sector as _);
         let space_pledged = sector_size * number_of_sectors;
 
-        let node = Node::dev().build(space_pledged, false).await;
+        let node = Node::dev().build(false).await;
         let reward_address = Default::default();
         let farmer = Farmer::dev()
             .reward_address(reward_address)

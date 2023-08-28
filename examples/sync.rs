@@ -37,10 +37,6 @@ enum Args {
         /// Path to the chain spec
         #[arg(short, long)]
         spec: PathBuf,
-
-        /// Total space pledged by farmer
-        #[arg(short, long)]
-        farmer_total_space_pledged: ByteSize,
     },
     GenerateSpec {
         path: PathBuf,
@@ -60,8 +56,7 @@ async fn main() -> anyhow::Result<()> {
             let (plot_size, _cache_size) =
                 (ByteSize::b(plot_size.as_u64() * 9 / 10), ByteSize::b(plot_size.as_u64() / 10));
             let plots = [FarmDescription::new(plot.join("plot"), plot_size)];
-            let farmer_total_space_pledged =
-                plots.iter().map(|p| p.space_pledged.as_u64() as usize).sum::<usize>();
+
             let node = Node::builder()
                 .network(
                     NetworkBuilder::new()
@@ -74,7 +69,6 @@ async fn main() -> anyhow::Result<()> {
                     node,
                     chain_spec,
                     PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
-                    farmer_total_space_pledged,
                 )
                 .await?;
 
@@ -95,7 +89,7 @@ async fn main() -> anyhow::Result<()> {
                 .for_each(|header| async move { tracing::info!(?header, "New block!") })
                 .await;
         }
-        Args::Sync { boot_nodes, spec, farmer_total_space_pledged } => {
+        Args::Sync { boot_nodes, spec } => {
             let node = TempDir::new()?;
             let chain_spec = serde_json::from_str(&tokio::fs::read_to_string(spec).await?)?;
             let node = Node::builder()
@@ -106,7 +100,6 @@ async fn main() -> anyhow::Result<()> {
                     node.as_ref(),
                     chain_spec,
                     PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
-                    farmer_total_space_pledged.as_u64() as usize,
                 )
                 .await?;
 

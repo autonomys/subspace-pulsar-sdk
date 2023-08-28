@@ -10,10 +10,7 @@ use futures::prelude::*;
 use sc_consensus_subspace::archiver::SegmentHeadersStore;
 use sdk_utils::{self, DestructorSet, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
-use subspace_core_primitives::Piece;
 use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
-use subspace_farmer::utils::archival_storage_info::ArchivalStorageInfo;
-use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
 use subspace_networking::utils::strip_peer_id;
 use subspace_networking::{
@@ -170,8 +167,6 @@ pub struct DsnOptions<C, PieceByIndex, SegmentHeaderByIndexes> {
     pub get_piece_by_index: PieceByIndex,
     /// Get segment header by segment indexes handler
     pub get_segment_header_by_segment_indexes: SegmentHeaderByIndexes,
-    /// Farmer total allocated space across all plots
-    pub farmer_total_space_pledged: usize,
     /// Segment header store
     pub segment_header_store: SegmentHeadersStore<C>,
 }
@@ -186,10 +181,6 @@ pub struct DsnShared {
     pub farmer_readers_and_pieces: Arc<parking_lot::Mutex<Option<ReadersAndPieces>>>,
     /// Farmer piece cache
     pub farmer_piece_cache: Arc<parking_lot::RwLock<Option<FarmerPieceCache>>>,
-    /// Farmer archival storage pieces
-    pub farmer_archival_storage_pieces: ArchivalStoragePieces,
-    /// Farmer archival storage info
-    pub farmer_archival_storage_info: ArchivalStorageInfo,
     _destructors: DestructorSet,
 }
 
@@ -222,17 +213,12 @@ impl Dsn {
             keypair,
             get_piece_by_index,
             get_segment_header_by_segment_indexes,
-            farmer_total_space_pledged,
             segment_header_store,
         } = options;
         let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
         let protocol_version = hex::encode(client.info().genesis_hash);
         let farmer_piece_cache = Arc::new(parking_lot::RwLock::new(None));
         let local_records_provider = MaybeLocalRecordProvider::new(farmer_piece_cache.clone());
-
-        let cuckoo_filter_size = farmer_total_space_pledged / Piece::SIZE + 1usize;
-        let farmer_archival_storage_pieces = ArchivalStoragePieces::new(cuckoo_filter_size);
-        let farmer_archival_storage_info = ArchivalStorageInfo::default();
 
         tracing::debug!(genesis_hash = protocol_version, "Setting DSN protocol version...");
 
@@ -268,7 +254,7 @@ impl Dsn {
             protocol_version,
             keypair,
             local_records_provider.clone(),
-            Some(PeerInfoProvider::new_farmer(Box::new(farmer_archival_storage_pieces.clone()))),
+            Some(PeerInfoProvider::new_farmer()),
         );
 
         let config = subspace_networking::Config {
@@ -313,7 +299,7 @@ impl Dsn {
             ..default_networking_config
         };
 
-        let (node, runner) = subspace_networking::create(config)?;
+        let (node, runner) = subspace_networking::construct(config)?;
 
         let mut destructors = DestructorSet::new_without_async("dsn-destructors");
         let on_new_listener = node.on_new_listener(Arc::new({
@@ -330,40 +316,11 @@ impl Dsn {
         }));
         destructors.add_items_to_drop(on_new_listener)?;
 
-        let on_peer_info = node.on_peer_info(Arc::new({
-            let archival_storage_info = farmer_archival_storage_info.clone();
-
-            move |new_peer_info| {
-                let peer_id = new_peer_info.peer_id;
-                let peer_info = &new_peer_info.peer_info;
-
-                if let PeerInfo::Farmer { cuckoo_filter } = peer_info {
-                    archival_storage_info.update_cuckoo_filter(peer_id, cuckoo_filter.clone());
-
-                    tracing::debug!(%peer_id, ?peer_info, "Peer info cached",);
-                }
-            }
-        }));
-        destructors.add_items_to_drop(on_peer_info)?;
-
-        let on_disconnected_peer = node.on_disconnected_peer(Arc::new({
-            let archival_storage_info = farmer_archival_storage_info.clone();
-
-            move |peer_id| {
-                if archival_storage_info.remove_peer_filter(peer_id) {
-                    tracing::debug!(%peer_id, "Peer filter removed.",);
-                }
-            }
-        }));
-        destructors.add_items_to_drop(on_disconnected_peer)?;
-
         Ok((
             DsnShared {
                 node,
                 farmer_readers_and_pieces,
                 _destructors: destructors,
-                farmer_archival_storage_pieces,
-                farmer_archival_storage_info,
                 farmer_piece_cache,
             },
             runner,
