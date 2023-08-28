@@ -8,8 +8,6 @@ use subspace_sdk::{chain_spec, node, ByteSize, FarmDescription, Farmer, Node, Pu
 #[tokio::main]
 async fn main() {
     let plots = [FarmDescription::new("plot", ByteSize::gb(10))];
-    let farmer_total_space_pledged =
-        plots.iter().map(|p| p.space_pledged.as_u64() as usize).sum::<usize>();
     let node: Node = Node::builder()
         .blocks_pruning(node::BlocksPruning::Some(1000))
         .state_pruning(node::PruningMode::ArchiveCanonical)
@@ -18,7 +16,6 @@ async fn main() {
             "node",
             chain_spec::dev_config(),
             PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
-            farmer_total_space_pledged,
         )
         .await
         .expect("Failed to init a node");
@@ -70,7 +67,6 @@ async fn main() {
             "node",
             chain_spec::dev_config(),
             PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
-            farmer_total_space_pledged,
         )
         .await
         .expect("Failed to init a node");

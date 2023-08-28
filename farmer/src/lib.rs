@@ -32,7 +32,6 @@ use subspace_farmer::single_disk_farm::{
     SingleDiskFarm, SingleDiskFarmError, SingleDiskFarmId, SingleDiskFarmInfo,
     SingleDiskFarmOptions, SingleDiskFarmSummary,
 };
-use subspace_farmer::utils::archival_storage_pieces::ArchivalStoragePieces;
 use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 use subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
@@ -260,11 +259,10 @@ const SEGMENT_COMMITMENTS_CACHE_SIZE: NonZeroUsize =
 
 fn create_readers_and_pieces(
     single_disk_farms: &[SingleDiskFarm],
-    archival_storage_pieces: ArchivalStoragePieces,
 ) -> Result<ReadersAndPieces, BuildError> {
     // Store piece readers so we can reference them later
     let readers = single_disk_farms.iter().map(SingleDiskFarm::piece_reader).collect();
-    let mut readers_and_pieces = ReadersAndPieces::new(readers, archival_storage_pieces);
+    let mut readers_and_pieces = ReadersAndPieces::new(readers);
 
     tracing::debug!("Collecting already plotted pieces");
 
@@ -374,7 +372,6 @@ impl Config {
             piece_provider,
             farmer_piece_cache.clone(),
             node.rpc().clone(),
-            node.dsn().farmer_archival_storage_info.clone(),
             readers_and_pieces.clone(),
         ));
 
@@ -451,10 +448,7 @@ impl Config {
             .await;
         drop(farmer_piece_cache);
 
-        readers_and_pieces.lock().replace(create_readers_and_pieces(
-            &single_disk_farms,
-            node.dsn().farmer_archival_storage_pieces.clone(),
-        )?);
+        readers_and_pieces.lock().replace(create_readers_and_pieces(&single_disk_farms)?);
         destructors.add_sync_destructor({
             let farmer_reader_and_pieces = node.dsn().farmer_readers_and_pieces.clone();
             move || {

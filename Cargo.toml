@@ -11,7 +11,7 @@ sdk-substrate = { path = "substrate" }
 sdk-utils = { path = "utils" }
 static_assertions = "1.1.0"
 
-subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "f782f7297a6d61d8f22a3b10d201396fe30708fd" }
+subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "502e597f5724beaef405172f64c8cee8724b2a47" }
 
 # The only triple tested and confirmed as working in `jemallocator` crate is `x86_64-unknown-linux-gnu`
 [target.'cfg(all(target_arch = "x86_64", target_vendor = "unknown", target_os = "linux", target_env = "gnu"))'.dev-dependencies]
@@ -28,7 +28,7 @@ derive_more = "0.99"
 fdlimit = "0.2"
 futures = "0.3"
 serde_json = "1"
-subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "f782f7297a6d61d8f22a3b10d201396fe30708fd" }
+subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "502e597f5724beaef405172f64c8cee8724b2a47" }
 tempfile = "3"
 tokio = { version = "1.26", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1"
@@ -68,7 +68,6 @@ integer-sqrt = { opt-level = 3 }
 k256 = { opt-level = 3 }
 keccak = { opt-level = 3 }
 kzg = { opt-level = 3 }
-libm = { opt-level = 3 }
 libsecp256k1 = { opt-level = 3 }
 libz-sys = { opt-level = 3 }
 mio = { opt-level = 3 }
