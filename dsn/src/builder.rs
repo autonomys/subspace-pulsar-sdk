@@ -316,18 +316,6 @@ impl Dsn {
         }));
         destructors.add_items_to_drop(on_new_listener)?;
 
-        let on_peer_info = node.on_peer_info(Arc::new({
-            move |new_peer_info| {
-                let peer_id = new_peer_info.peer_id;
-                let peer_info = &new_peer_info.peer_info;
-
-                if let PeerInfo::Farmer { placeholder: _ } = peer_info {
-                    tracing::debug!(%peer_id, ?peer_info, "Peer info cached",);
-                }
-            }
-        }));
-        destructors.add_items_to_drop(on_peer_info)?;
-
         Ok((
             DsnShared {
                 node,
