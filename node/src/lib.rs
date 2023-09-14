@@ -81,7 +81,13 @@ impl<F: Farmer + 'static> Config<F> {
         pot_configuration: PotConfiguration,
     ) -> anyhow::Result<Node<F>> {
         let Self {
-            base, mut dsn, sync_from_dsn, storage_monitor, enable_subspace_block_relay, ..
+            base,
+            mut dsn,
+            sync_from_dsn,
+            storage_monitor,
+            enable_subspace_block_relay,
+            dsn_sync_parallelism_level,
+            ..
         } = self;
 
         let PotConfiguration { is_pot_enabled, is_node_time_keeper } = pot_configuration;
@@ -163,6 +169,7 @@ impl<F: Farmer + 'static> Config<F> {
             subspace_networking,
             sync_from_dsn,
             enable_subspace_block_relay,
+            dsn_sync_parallelism_level,
         };
 
         let node_runner_future = subspace_farmer::utils::run_future_in_dedicated_thread(
