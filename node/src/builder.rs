@@ -53,6 +53,10 @@ pub struct Config<F: Farmer> {
     #[builder(default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub sync_from_dsn: bool,
+    /// DSN Sync parallelism level
+    #[builder(default)]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
+    pub dsn_sync_parallelism_level: usize,
     #[doc(hidden)]
     #[builder(
         setter(into, strip_option),
@@ -107,6 +111,7 @@ impl<F: Farmer + 'static> Builder<F> {
             .dsn(DsnBuilder::dev())
             .rpc(RpcBuilder::dev())
             .offchain_worker(OffchainWorkerBuilder::dev())
+            .dsn_sync_parallelism_level(5)
     }
 
     /// Gemini 3f configuration
@@ -120,6 +125,7 @@ impl<F: Farmer + 'static> Builder<F> {
             .role(Role::Authority)
             .state_pruning(PruningMode::ArchiveAll)
             .blocks_pruning(BlocksPruning::Some(256))
+            .dsn_sync_parallelism_level(5)
     }
 
     /// Devnet chain configuration
@@ -133,6 +139,7 @@ impl<F: Farmer + 'static> Builder<F> {
             .role(Role::Authority)
             .state_pruning(PruningMode::ArchiveAll)
             .blocks_pruning(BlocksPruning::Some(256))
+            .dsn_sync_parallelism_level(5)
     }
 
     /// Get configuration for saving on disk
