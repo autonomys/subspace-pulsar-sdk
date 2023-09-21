@@ -9,9 +9,9 @@ async-trait = "0.1"
 parking_lot = "0.12"
 sc-client-api = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 sdk-dsn = { path = "../dsn" }
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "303e99e57b0938082542a1a59f1cc2f875016aff" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "303e99e57b0938082542a1a59f1cc2f875016aff" }
-subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "303e99e57b0938082542a1a59f1cc2f875016aff" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "c9546e9400215ad95708b8495da30f6cfdcead4a" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "c9546e9400215ad95708b8495da30f6cfdcead4a" }
+subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "c9546e9400215ad95708b8495da30f6cfdcead4a" }
 
 [features]
 default = []
