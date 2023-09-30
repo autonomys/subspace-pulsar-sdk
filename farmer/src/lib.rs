@@ -21,6 +21,7 @@ pub use builder::{Builder, Config};
 use derivative::Derivative;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
+use rayon::{ThreadPool, ThreadPoolBuilder};
 use sdk_traits::Node;
 use sdk_utils::{ByteSize, DestructorSet, PublicKey, TaskOutput};
 use serde::{Deserialize, Serialize};
@@ -77,9 +78,25 @@ mod builder {
     use sdk_traits::Node;
     use sdk_utils::{ByteSize, PublicKey};
     use serde::{Deserialize, Serialize};
+    use tracing::warn;
 
     use super::BuildError;
     use crate::{FarmDescription, Farmer};
+
+    fn available_parallelism() -> usize {
+        match std::thread::available_parallelism() {
+            Ok(parallelism) => parallelism.get(),
+            Err(error) => {
+                warn!(
+                    %error,
+                    "Unable to identify available parallelism, you might want to configure thread pool sizes with CLI \
+                    options manually"
+                );
+
+                0
+            }
+        }
+    }
 
     #[derive(
         Debug,
@@ -157,6 +174,15 @@ mod builder {
         /// Maximum number of pieces in single sector
         #[builder(default)]
         pub max_pieces_in_sector: Option<u16>,
+        /// Farming thread pool size
+        #[builder(default = "available_parallelism()")]
+        pub farming_thread_pool_size: usize,
+        /// Plotting thread pool size
+        #[builder(default = "available_parallelism()")]
+        pub plotting_thread_pool_size: usize,
+        /// Replotting thread pool size
+        #[builder(default = "available_parallelism()")]
+        pub replotting_thread_pool_size: usize,
     }
 
     impl Builder {
@@ -206,6 +232,9 @@ pub enum BuildError {
     /// Failed to fetch data from the node
     #[error("Failed to fetch data from node: {0}")]
     RPCError(#[source] subspace_farmer::RpcClientError),
+    /// Failed to build thread pool
+    #[error("Failed to build thread pool: {0}")]
+    ThreadPoolError(#[from] rayon::ThreadPoolBuildError),
     /// Other error
     #[error("{0}")]
     Other(#[from] anyhow::Error),
@@ -335,7 +364,14 @@ impl Config {
 
         let mut destructors = DestructorSet::new("farmer-destructors");
 
-        let Self { max_concurrent_farms: _, provided_keys_limit: _, max_pieces_in_sector } = self;
+        let Self {
+            max_concurrent_farms: _,
+            provided_keys_limit: _,
+            max_pieces_in_sector,
+            farming_thread_pool_size,
+            plotting_thread_pool_size,
+            replotting_thread_pool_size,
+        } = self;
 
         let mut single_disk_farms = Vec::with_capacity(farms.len());
         let mut farm_info = HashMap::with_capacity(farms.len());
@@ -413,6 +449,25 @@ impl Config {
             None => farmer_app_info.protocol_info.max_pieces_in_sector,
         };
 
+        let farming_thread_pool = Arc::new(
+            ThreadPoolBuilder::new()
+                .thread_name(move |thread_index| format!("farming#{thread_index}"))
+                .num_threads(farming_thread_pool_size)
+                .build()?,
+        );
+        let plotting_thread_pool = Arc::new(
+            ThreadPoolBuilder::new()
+                .thread_name(move |thread_index| format!("plotting#{thread_index}"))
+                .num_threads(plotting_thread_pool_size)
+                .build()?,
+        );
+        let replotting_thread_pool = Arc::new(
+            ThreadPoolBuilder::new()
+                .thread_name(move |thread_index| format!("replotting#{thread_index}"))
+                .num_threads(replotting_thread_pool_size)
+                .build()?,
+        );
+
         for (disk_farm_idx, description) in farms.iter().enumerate() {
             let (farm, single_disk_farm) = Farm::new(FarmOptions {
                 disk_farm_idx,
@@ -424,6 +479,9 @@ impl Config {
                 description,
                 kzg: kzg.clone(),
                 erasure_coding: erasure_coding.clone(),
+                farming_thread_pool: farming_thread_pool.clone(),
+                plotting_thread_pool: plotting_thread_pool.clone(),
+                replotting_thread_pool: replotting_thread_pool.clone(),
             })
             .await?;
             farm_info.insert(farm.directory.clone(), farm);
@@ -712,6 +770,9 @@ struct FarmOptions<'a, PG, N: sdk_traits::Node> {
     pub kzg: kzg::Kzg,
     pub erasure_coding: ErasureCoding,
     pub max_pieces_in_sector: u16,
+    pub farming_thread_pool: Arc<ThreadPool>,
+    pub plotting_thread_pool: Arc<ThreadPool>,
+    pub replotting_thread_pool: Arc<ThreadPool>,
 }
 
 impl<T: subspace_proof_of_space::Table> Farm<T> {
@@ -726,9 +787,12 @@ impl<T: subspace_proof_of_space::Table> Farm<T> {
             kzg,
             erasure_coding,
             max_pieces_in_sector,
+            farming_thread_pool,
+            plotting_thread_pool,
+            replotting_thread_pool,
         }: FarmOptions<
             '_,
-            impl subspace_farmer_components::plotting::PieceGetter + Send + 'static,
+            impl subspace_farmer_components::plotting::PieceGetter + Clone + Send + 'static,
             impl sdk_traits::Node,
         >,
     ) -> Result<(Self, SingleDiskFarm), BuildError> {
@@ -748,6 +812,9 @@ impl<T: subspace_proof_of_space::Table> Farm<T> {
             erasure_coding,
             piece_getter,
             cache_percentage,
+            farming_thread_pool,
+            plotting_thread_pool,
+            replotting_thread_pool,
         };
         let single_disk_farm_fut = SingleDiskFarm::new::<_, _, T>(description, disk_farm_idx);
         let single_disk_farm = match single_disk_farm_fut.await {
