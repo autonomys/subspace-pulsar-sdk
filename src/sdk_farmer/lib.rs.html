@@ -935,6 +935,73 @@
 <a href="#935" id="935">935</a>
 <a href="#936" id="936">936</a>
 <a href="#937" id="937">937</a>
+<a href="#938" id="938">938</a>
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a>
+<a href="#947" id="947">947</a>
+<a href="#948" id="948">948</a>
+<a href="#949" id="949">949</a>
+<a href="#950" id="950">950</a>
+<a href="#951" id="951">951</a>
+<a href="#952" id="952">952</a>
+<a href="#953" id="953">953</a>
+<a href="#954" id="954">954</a>
+<a href="#955" id="955">955</a>
+<a href="#956" id="956">956</a>
+<a href="#957" id="957">957</a>
+<a href="#958" id="958">958</a>
+<a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
+<a href="#961" id="961">961</a>
+<a href="#962" id="962">962</a>
+<a href="#963" id="963">963</a>
+<a href="#964" id="964">964</a>
+<a href="#965" id="965">965</a>
+<a href="#966" id="966">966</a>
+<a href="#967" id="967">967</a>
+<a href="#968" id="968">968</a>
+<a href="#969" id="969">969</a>
+<a href="#970" id="970">970</a>
+<a href="#971" id="971">971</a>
+<a href="#972" id="972">972</a>
+<a href="#973" id="973">973</a>
+<a href="#974" id="974">974</a>
+<a href="#975" id="975">975</a>
+<a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This crate is related to abstract farmer implementation
 
 </span><span class="attr">#![warn(
@@ -958,6 +1025,7 @@
 <span class="kw">use </span>derivative::Derivative;
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
+<span class="kw">use </span>rayon::{ThreadPool, ThreadPoolBuilder};
 <span class="kw">use </span>sdk_traits::Node;
 <span class="kw">use </span>sdk_utils::{ByteSize, DestructorSet, PublicKey, TaskOutput};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1014,9 +1082,25 @@
     <span class="kw">use </span>sdk_traits::Node;
     <span class="kw">use </span>sdk_utils::{ByteSize, PublicKey};
     <span class="kw">use </span>serde::{Deserialize, Serialize};
+    <span class="kw">use </span>tracing::warn;
 
     <span class="kw">use </span><span class="kw">super</span>::BuildError;
     <span class="kw">use crate</span>::{FarmDescription, Farmer};
+
+    <span class="kw">fn </span>available_parallelism() -&gt; usize {
+        <span class="kw">match </span>std::thread::available_parallelism() {
+            <span class="prelude-val">Ok</span>(parallelism) =&gt; parallelism.get(),
+            <span class="prelude-val">Err</span>(error) =&gt; {
+                <span class="macro">warn!</span>(
+                    %error,
+                    <span class="string">&quot;Unable to identify available parallelism, you might want to configure thread pool sizes with CLI \
+                    options manually&quot;
+                </span>);
+
+                <span class="number">0
+            </span>}
+        }
+    }
 
     <span class="attr">#[derive(
         Debug,
@@ -1094,6 +1178,15 @@
         <span class="doccomment">/// Maximum number of pieces in single sector
         </span><span class="attr">#[builder(default)]
         </span><span class="kw">pub </span>max_pieces_in_sector: <span class="prelude-ty">Option</span>&lt;u16&gt;,
+        <span class="doccomment">/// Farming thread pool size
+        </span><span class="attr">#[builder(default = <span class="string">&quot;available_parallelism()&quot;</span>)]
+        </span><span class="kw">pub </span>farming_thread_pool_size: usize,
+        <span class="doccomment">/// Plotting thread pool size
+        </span><span class="attr">#[builder(default = <span class="string">&quot;available_parallelism()&quot;</span>)]
+        </span><span class="kw">pub </span>plotting_thread_pool_size: usize,
+        <span class="doccomment">/// Replotting thread pool size
+        </span><span class="attr">#[builder(default = <span class="string">&quot;available_parallelism()&quot;</span>)]
+        </span><span class="kw">pub </span>replotting_thread_pool_size: usize,
     }
 
     <span class="kw">impl </span>Builder {
@@ -1143,6 +1236,9 @@
     <span class="doccomment">/// Failed to fetch data from the node
     </span><span class="attr">#[error(<span class="string">&quot;Failed to fetch data from node: {0}&quot;</span>)]
     </span>RPCError(<span class="attr">#[source] </span>subspace_farmer::RpcClientError),
+    <span class="doccomment">/// Failed to build thread pool
+    </span><span class="attr">#[error(<span class="string">&quot;Failed to build thread pool: {0}&quot;</span>)]
+    </span>ThreadPoolError(<span class="attr">#[from] </span>rayon::ThreadPoolBuildError),
     <span class="doccomment">/// Other error
     </span><span class="attr">#[error(<span class="string">&quot;{0}&quot;</span>)]
     </span>Other(<span class="attr">#[from] </span>anyhow::Error),
@@ -1272,7 +1368,14 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>destructors = DestructorSet::new(<span class="string">&quot;farmer-destructors&quot;</span>);
 
-        <span class="kw">let </span><span class="self">Self </span>{ max_concurrent_farms: <span class="kw">_</span>, provided_keys_limit: <span class="kw">_</span>, max_pieces_in_sector } = <span class="self">self</span>;
+        <span class="kw">let </span><span class="self">Self </span>{
+            max_concurrent_farms: <span class="kw">_</span>,
+            provided_keys_limit: <span class="kw">_</span>,
+            max_pieces_in_sector,
+            farming_thread_pool_size,
+            plotting_thread_pool_size,
+            replotting_thread_pool_size,
+        } = <span class="self">self</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>single_disk_farms = Vec::with_capacity(farms.len());
         <span class="kw">let </span><span class="kw-2">mut </span>farm_info = HashMap::with_capacity(farms.len());
@@ -1350,6 +1453,25 @@
             <span class="prelude-val">None </span>=&gt; farmer_app_info.protocol_info.max_pieces_in_sector,
         };
 
+        <span class="kw">let </span>farming_thread_pool = Arc::new(
+            ThreadPoolBuilder::new()
+                .thread_name(<span class="kw">move </span>|thread_index| <span class="macro">format!</span>(<span class="string">&quot;farming#{thread_index}&quot;</span>))
+                .num_threads(farming_thread_pool_size)
+                .build()<span class="question-mark">?</span>,
+        );
+        <span class="kw">let </span>plotting_thread_pool = Arc::new(
+            ThreadPoolBuilder::new()
+                .thread_name(<span class="kw">move </span>|thread_index| <span class="macro">format!</span>(<span class="string">&quot;plotting#{thread_index}&quot;</span>))
+                .num_threads(plotting_thread_pool_size)
+                .build()<span class="question-mark">?</span>,
+        );
+        <span class="kw">let </span>replotting_thread_pool = Arc::new(
+            ThreadPoolBuilder::new()
+                .thread_name(<span class="kw">move </span>|thread_index| <span class="macro">format!</span>(<span class="string">&quot;replotting#{thread_index}&quot;</span>))
+                .num_threads(replotting_thread_pool_size)
+                .build()<span class="question-mark">?</span>,
+        );
+
         <span class="kw">for </span>(disk_farm_idx, description) <span class="kw">in </span>farms.iter().enumerate() {
             <span class="kw">let </span>(farm, single_disk_farm) = Farm::new(FarmOptions {
                 disk_farm_idx,
@@ -1361,6 +1483,9 @@
                 description,
                 kzg: kzg.clone(),
                 erasure_coding: erasure_coding.clone(),
+                farming_thread_pool: farming_thread_pool.clone(),
+                plotting_thread_pool: plotting_thread_pool.clone(),
+                replotting_thread_pool: replotting_thread_pool.clone(),
             })
             .<span class="kw">await</span><span class="question-mark">?</span>;
             farm_info.insert(farm.directory.clone(), farm);
@@ -1649,6 +1774,9 @@
     <span class="kw">pub </span>kzg: kzg::Kzg,
     <span class="kw">pub </span>erasure_coding: ErasureCoding,
     <span class="kw">pub </span>max_pieces_in_sector: u16,
+    <span class="kw">pub </span>farming_thread_pool: Arc&lt;ThreadPool&gt;,
+    <span class="kw">pub </span>plotting_thread_pool: Arc&lt;ThreadPool&gt;,
+    <span class="kw">pub </span>replotting_thread_pool: Arc&lt;ThreadPool&gt;,
 }
 
 <span class="kw">impl</span>&lt;T: subspace_proof_of_space::Table&gt; Farm&lt;T&gt; {
@@ -1663,9 +1791,12 @@
             kzg,
             erasure_coding,
             max_pieces_in_sector,
+            farming_thread_pool,
+            plotting_thread_pool,
+            replotting_thread_pool,
         }: FarmOptions&lt;
             <span class="lifetime">&#39;_</span>,
-            <span class="kw">impl </span>subspace_farmer_components::plotting::PieceGetter + Send + <span class="lifetime">&#39;static</span>,
+            <span class="kw">impl </span>subspace_farmer_components::plotting::PieceGetter + Clone + Send + <span class="lifetime">&#39;static</span>,
             <span class="kw">impl </span>sdk_traits::Node,
         &gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="self">Self</span>, SingleDiskFarm), BuildError&gt; {
@@ -1685,6 +1816,9 @@
             erasure_coding,
             piece_getter,
             cache_percentage,
+            farming_thread_pool,
+            plotting_thread_pool,
+            replotting_thread_pool,
         };
         <span class="kw">let </span>single_disk_farm_fut = SingleDiskFarm::new::&lt;<span class="kw">_</span>, <span class="kw">_</span>, T&gt;(description, disk_farm_idx);
         <span class="kw">let </span>single_disk_farm = <span class="kw">match </span>single_disk_farm_fut.<span class="kw">await </span>{
