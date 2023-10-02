@@ -36,6 +36,7 @@ use subspace_farmer::single_disk_farm::{
 use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 use subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
+use subspace_farmer::utils::tokio_rayon_spawn_handler;
 use subspace_farmer::Identity;
 use subspace_farmer_components::plotting::PlottedSector;
 use subspace_farmer_components::sector::{sector_size, SectorMetadataChecksummed};
@@ -181,7 +182,7 @@ mod builder {
         #[builder(default = "available_parallelism()")]
         pub plotting_thread_pool_size: usize,
         /// Replotting thread pool size
-        #[builder(default = "available_parallelism()")]
+        #[builder(default = "available_parallelism() / 2")]
         pub replotting_thread_pool_size: usize,
     }
 
@@ -453,18 +454,21 @@ impl Config {
             ThreadPoolBuilder::new()
                 .thread_name(move |thread_index| format!("farming#{thread_index}"))
                 .num_threads(farming_thread_pool_size)
+                .spawn_handler(tokio_rayon_spawn_handler())
                 .build()?,
         );
         let plotting_thread_pool = Arc::new(
             ThreadPoolBuilder::new()
                 .thread_name(move |thread_index| format!("plotting#{thread_index}"))
                 .num_threads(plotting_thread_pool_size)
+                .spawn_handler(tokio_rayon_spawn_handler())
                 .build()?,
         );
         let replotting_thread_pool = Arc::new(
             ThreadPoolBuilder::new()
                 .thread_name(move |thread_index| format!("replotting#{thread_index}"))
                 .num_threads(replotting_thread_pool_size)
+                .spawn_handler(tokio_rayon_spawn_handler())
                 .build()?,
         );
 
