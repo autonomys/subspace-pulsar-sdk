@@ -449,14 +449,6 @@ impl Config {
             Some(m) => m,
             None => farmer_app_info.protocol_info.max_pieces_in_sector,
         };
-
-        let farming_thread_pool = Arc::new(
-            ThreadPoolBuilder::new()
-                .thread_name(move |thread_index| format!("farming#{thread_index}"))
-                .num_threads(farming_thread_pool_size)
-                .spawn_handler(tokio_rayon_spawn_handler())
-                .build()?,
-        );
         let plotting_thread_pool = Arc::new(
             ThreadPoolBuilder::new()
                 .thread_name(move |thread_index| format!("plotting#{thread_index}"))
@@ -483,7 +475,7 @@ impl Config {
                 description,
                 kzg: kzg.clone(),
                 erasure_coding: erasure_coding.clone(),
-                farming_thread_pool: farming_thread_pool.clone(),
+                farming_thread_pool_size,
                 plotting_thread_pool: plotting_thread_pool.clone(),
                 replotting_thread_pool: replotting_thread_pool.clone(),
             })
@@ -774,7 +766,7 @@ struct FarmOptions<'a, PG, N: sdk_traits::Node> {
     pub kzg: kzg::Kzg,
     pub erasure_coding: ErasureCoding,
     pub max_pieces_in_sector: u16,
-    pub farming_thread_pool: Arc<ThreadPool>,
+    pub farming_thread_pool_size: usize,
     pub plotting_thread_pool: Arc<ThreadPool>,
     pub replotting_thread_pool: Arc<ThreadPool>,
 }
@@ -791,7 +783,7 @@ impl<T: subspace_proof_of_space::Table> Farm<T> {
             kzg,
             erasure_coding,
             max_pieces_in_sector,
-            farming_thread_pool,
+            farming_thread_pool_size,
             plotting_thread_pool,
             replotting_thread_pool,
         }: FarmOptions<
@@ -816,7 +808,7 @@ impl<T: subspace_proof_of_space::Table> Farm<T> {
             erasure_coding,
             piece_getter,
             cache_percentage,
-            farming_thread_pool,
+            farming_thread_pool_size,
             plotting_thread_pool,
             replotting_thread_pool,
         };
