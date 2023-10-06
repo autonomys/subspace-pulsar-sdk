@@ -13,13 +13,13 @@ futures = "0.3"
 hex = "0.4.3"
 parking_lot = "0.12"
 sc-client-api = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
-sc-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "7b120feb0b5976803cde8843cdb9ed185c7ec0ec" }
+sc-consensus-subspace = { git = "https://github.com/subspace/subspace", rev = "5e3f8ef62c8ad52e4db67e1104aa6fefb8f1aa30" }
 sdk-utils = { path = "../utils" }
 serde = { version = "1", features = ["derive"] }
 sp-blockchain = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
 sp-runtime = { version = "24.0.0", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "7b120feb0b5976803cde8843cdb9ed185c7ec0ec" }
-subspace-networking = { git = "https://github.com/subspace/subspace", rev = "7b120feb0b5976803cde8843cdb9ed185c7ec0ec" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "5e3f8ef62c8ad52e4db67e1104aa6fefb8f1aa30" }
+subspace-networking = { git = "https://github.com/subspace/subspace", rev = "5e3f8ef62c8ad52e4db67e1104aa6fefb8f1aa30" }
 tracing = "0.1"
 
 [features]
