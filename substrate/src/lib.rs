@@ -47,10 +47,6 @@ pub struct Base {
     #[builder(default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub state_pruning: PruningMode,
-    /// Set execution strategies
-    #[builder(default)]
-    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub execution_strategy: ExecutionStrategy,
     /// Implementation name
     #[builder(default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
@@ -119,8 +115,6 @@ macro_rules! derive_base {
             blocks_pruning: $crate::BlocksPruning,
             /// State pruning options
             state_pruning: $crate::PruningMode,
-            /// Set execution strategies
-            execution_strategy: $crate::ExecutionStrategy,
             /// Implementation name
             impl_name: $crate::ImplName,
             /// Implementation version
@@ -164,7 +158,6 @@ impl Base {
             role,
             blocks_pruning,
             state_pruning,
-            execution_strategy,
             impl_name: ImplName(impl_name),
             impl_version: ImplVersion(impl_version),
             rpc:
@@ -276,7 +269,6 @@ impl Base {
                 instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
             },
             wasm_runtime_overrides: None,
-            execution_strategies: execution_strategy.into(),
             rpc_addr,
             rpc_port: rpc_port.unwrap_or_default(),
             rpc_methods: rpc_methods.into(),

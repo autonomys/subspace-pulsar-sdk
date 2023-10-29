@@ -15,6 +15,7 @@ use std::vec::Drain;
 
 use anyhow::{anyhow, Context, Result};
 use derive_more::{Deref, DerefMut, Display, From, FromStr, Into};
+use frame_system::pallet_prelude::{BlockNumberFor, HeaderFor};
 use futures::prelude::*;
 use jsonrpsee_core::client::{
     BatchResponse, ClientT, Subscription, SubscriptionClientT, SubscriptionKind,
@@ -58,17 +59,17 @@ impl Rpc {
     /// Subscribe to new block headers
     pub async fn subscribe_new_heads<'a, 'b, T>(
         &'a self,
-    ) -> Result<impl Stream<Item = T::Header> + Send + Sync + Unpin + 'static, Error>
+    ) -> Result<impl Stream<Item = HeaderFor<T>> + Send + Sync + Unpin + 'static, Error>
     where
         T: frame_system::Config + sp_runtime::traits::GetRuntimeBlockType,
         T::RuntimeBlock: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
-        T::Header: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
+        HeaderFor<T>: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
         'a: 'b,
     {
         let stream = sc_rpc::chain::ChainApiClient::<
-            T::BlockNumber,
+            BlockNumberFor<T>,
             T::Hash,
-            T::Header,
+            HeaderFor<T>,
             sp_runtime::generic::SignedBlock<T::RuntimeBlock>,
         >::subscribe_new_heads(self)
         .await?
@@ -80,17 +81,17 @@ impl Rpc {
     /// Subscribe to new finalized block headers
     pub async fn subscribe_finalized_heads<'a, 'b, T>(
         &'a self,
-    ) -> Result<impl Stream<Item = T::Header> + Send + Sync + Unpin + 'static, Error>
+    ) -> Result<impl Stream<Item = HeaderFor<T>> + Send + Sync + Unpin + 'static, Error>
     where
         T: frame_system::Config + sp_runtime::traits::GetRuntimeBlockType,
         T::RuntimeBlock: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
-        T::Header: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
+        HeaderFor<T>: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
         'a: 'b,
     {
         let stream = sc_rpc::chain::ChainApiClient::<
-            T::BlockNumber,
+            BlockNumberFor<T>,
             T::Hash,
-            T::Header,
+            HeaderFor<T>,
             sp_runtime::generic::SignedBlock<T::RuntimeBlock>,
         >::subscribe_finalized_heads(self)
         .await?

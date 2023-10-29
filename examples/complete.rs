@@ -1,7 +1,6 @@
 use std::num::NonZeroU8;
 
 use futures::StreamExt;
-use sdk_node::PotConfiguration;
 use subspace_sdk::node::NetworkBuilder;
 use subspace_sdk::{chain_spec, node, ByteSize, FarmDescription, Farmer, Node, PublicKey};
 
@@ -12,11 +11,7 @@ async fn main() {
         .blocks_pruning(node::BlocksPruning::Some(1000))
         .state_pruning(node::PruningMode::ArchiveCanonical)
         .network(NetworkBuilder::new().name("i1i1"))
-        .build(
-            "node",
-            chain_spec::dev_config(),
-            PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
-        )
+        .build("node", chain_spec::dev_config())
         .await
         .expect("Failed to init a node");
 
@@ -63,11 +58,7 @@ async fn main() {
     let node = Node::builder()
         .blocks_pruning(node::BlocksPruning::Some(1000))
         .state_pruning(node::PruningMode::ArchiveCanonical)
-        .build(
-            "node",
-            chain_spec::dev_config(),
-            PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
-        )
+        .build("node", chain_spec::dev_config())
         .await
         .expect("Failed to init a node");
     node.sync().await.unwrap();

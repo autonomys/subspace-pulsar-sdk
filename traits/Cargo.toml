@@ -7,11 +7,11 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1"
 parking_lot = "0.12"
-sc-client-api = { version = "4.0.0-dev", git = "https://github.com/subspace/substrate", rev = "55c157cff49b638a59d81a9f971f0f9a66829c71" }
+sc-client-api = { version = "4.0.0-dev", git = "https://github.com/subspace/polkadot-sdk", rev = "892bf8e938c6bd2b893d3827d1093cd81baa59a1" }
 sdk-dsn = { path = "../dsn" }
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "7b120feb0b5976803cde8843cdb9ed185c7ec0ec" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "7b120feb0b5976803cde8843cdb9ed185c7ec0ec" }
-subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "7b120feb0b5976803cde8843cdb9ed185c7ec0ec" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "aa2ca80b42b460dd73c1567057d6c07151a626dd" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "aa2ca80b42b460dd73c1567057d6c07151a626dd" }
+subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "aa2ca80b42b460dd73c1567057d6c07151a626dd" }
 
 [features]
 default = []

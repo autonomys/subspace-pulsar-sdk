@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use anyhow::Context;
 use clap::{Parser, ValueEnum};
 use futures::prelude::*;
-use sdk_node::PotConfiguration;
 use subspace_sdk::node::{self, Event, Node, RewardsEvent, SubspaceEvent};
 use subspace_sdk::{ByteSize, FarmDescription, Farmer, PublicKey};
 use tracing_subscriber::prelude::*;
@@ -117,7 +116,6 @@ async fn main() -> anyhow::Result<()> {
                 Chain::Devnet => node::chain_spec::devnet_config(),
                 Chain::Dev => node::chain_spec::dev_config(),
             },
-            PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
         )
         .await?;
 
@@ -184,7 +182,7 @@ async fn main() -> anyhow::Result<()> {
                 }
 
                 if let Some(pre_digest) = header.pre_digest {
-                    if pre_digest.solution.reward_address == reward_address {
+                    if pre_digest.solution().reward_address == reward_address {
                         tracing::error!("We authored a block");
                     }
                 }

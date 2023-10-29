@@ -3,17 +3,18 @@
 use std::str::FromStr;
 
 use evm_domain_runtime::{
-    AccountId, BalancesConfig, EVMChainIdConfig, EVMConfig, GenesisConfig, MessengerConfig,
-    Precompiles, SelfDomainIdConfig, SudoConfig, SystemConfig, WASM_BINARY,
+    AccountId, BalancesConfig, EVMChainIdConfig, EVMConfig, Precompiles, RuntimeGenesisConfig,
+    SelfDomainIdConfig, SudoConfig, SystemConfig, WASM_BINARY,
 };
 use hex_literal::hex;
 use once_cell::sync::OnceCell;
-use sc_service::ChainType;
-use sc_subspace_chain_specs::SerializableChainSpec;
+use sc_service::{ChainSpec as _, ChainType};
+use sc_subspace_chain_specs::ExecutionChainSpec;
 use sdk_utils::chain_spec::{
     chain_spec_properties, get_account_id_from_seed, get_public_key_from_seed,
 };
 use sp_core::crypto::UncheckedFrom;
+use sp_domains::storage::RawGenesis;
 use sp_domains::{DomainId, DomainInstanceData, OperatorPublicKey, RuntimeType};
 use sp_runtime::traits::Convert;
 use subspace_runtime_primitives::SSC;
@@ -21,7 +22,7 @@ use subspace_runtime_primitives::SSC;
 use crate::domains::utils::AccountId32ToAccountId20Converter;
 
 /// Chain spec type for the system domain
-pub type ChainSpec = SerializableChainSpec<GenesisConfig>;
+pub type ChainSpec = ExecutionChainSpec<RuntimeGenesisConfig>;
 
 pub enum SpecId {
     Dev,
@@ -34,58 +35,11 @@ pub struct GenesisDomainParams {
     pub operator_signing_key: OperatorPublicKey,
 }
 
-pub fn create_domain_spec(
-    domain_id: DomainId,
-    chain_id: &str,
-    domain_instance_data: DomainInstanceData,
-) -> Result<ChainSpec, String> {
-    let DomainInstanceData { runtime_type, runtime_code, raw_genesis_config } =
-        domain_instance_data;
-
-    match runtime_type {
-        RuntimeType::Evm => {
-            let mut genesis_config = match raw_genesis_config {
-                Some(raw_genesis_config) =>
-                    serde_json::from_slice(&raw_genesis_config).map_err(|_| {
-                        "Failed to deserialize genesis config of the evm domain".to_string()
-                    })?,
-                None => GenesisConfig::default(),
-            };
-            genesis_config.system.code = runtime_code;
-            genesis_config.self_domain_id.domain_id = Some(domain_id);
-            let spec = load_chain_spec_with(chain_id, genesis_config)?;
-            Ok(spec)
-        }
-    }
-}
-
-// HACK: `ChainSpec::from_genesis` is only allow to create hardcoded spec and
-// `GenesisConfig` dosen't derive `Clone`, using global variable and
-// serialization/deserialization to workaround these limits.
-static GENESIS_CONFIG: OnceCell<Vec<u8>> = OnceCell::new();
-
-fn load_chain_spec_with(spec_id: &str, genesis_config: GenesisConfig) -> Result<ChainSpec, String> {
-    let result = GENESIS_CONFIG.set(
-        serde_json::to_vec(&genesis_config).expect("Genesis config serialization never fails; qed"),
-    );
-    // We need this feature gate since as part of the integration tests we spin up
-    // multiple nodes/farmers. #[cfg(test)] does not work with integration test.
-    #[cfg(feature = "integration-test")]
-    result.unwrap_or_else(|_prev_value| {
-        tracing::warn!("Genesis config global variable was set twice.");
-        ()
-    });
-
-    #[cfg(not(feature = "integration-test"))]
-    result.expect("This function should only call once upon node initialization");
-
-    let constructor = || {
-        let raw_genesis_config = GENESIS_CONFIG.get().expect("Value just set; qed");
-        serde_json::from_slice(raw_genesis_config)
-            .expect("Genesis config deserialization never fails; qed")
-    };
-
-    let chain_spec = match spec_id {
+pub fn create_domain_spec(chain_id: &str, raw_genesis: RawGenesis) -> Result<ChainSpec, String> {
+    // The value of the `RuntimeGenesisConfig` doesn't matter since it will be
+    // overwritten later
+    let constructor = RuntimeGenesisConfig::default;
+    let mut chain_spec = match chain_id {
         "dev" => development_config(constructor),
         "gemini-3f" => gemini_3f_config(constructor),
         "devnet" => devnet_config(constructor),
@@ -93,8 +47,15 @@ fn load_chain_spec_with(spec_id: &str, genesis_config: GenesisConfig) -> Result<
         path => ChainSpec::from_json_file(std::path::PathBuf::from(path))?,
     };
 
+    chain_spec.set_storage(raw_genesis.into_storage());
+
     Ok(chain_spec)
 }
+
+// HACK: `ChainSpec::from_genesis` is only allow to create hardcoded spec and
+// `RuntimeGenesisConfig` dosen't derive `Clone`, using global variable and
+// serialization/deserialization to workaround these limits.
+static GENESIS_CONFIG: OnceCell<Vec<u8>> = OnceCell::new();
 
 /// Development keys that will be injected automatically on polkadotjs apps
 fn get_dev_accounts() -> Vec<AccountId> {
@@ -110,7 +71,9 @@ fn get_dev_accounts() -> Vec<AccountId> {
     ]
 }
 
-pub fn get_testnet_genesis_by_spec_id(spec_id: SpecId) -> (GenesisConfig, GenesisDomainParams) {
+pub fn get_testnet_genesis_by_spec_id(
+    spec_id: SpecId,
+) -> (RuntimeGenesisConfig, GenesisDomainParams) {
     match spec_id {
         SpecId::Dev => {
             let accounts = get_dev_accounts();
@@ -195,7 +158,7 @@ pub fn get_testnet_genesis_by_spec_id(spec_id: SpecId) -> (GenesisConfig, Genesi
 }
 
 /// Development config
-pub fn development_config<F: Fn() -> GenesisConfig + 'static + Send + Sync>(
+pub fn development_config<F: Fn() -> RuntimeGenesisConfig + 'static + Send + Sync>(
     constructor: F,
 ) -> ChainSpec {
     ChainSpec::from_genesis(
@@ -215,7 +178,7 @@ pub fn development_config<F: Fn() -> GenesisConfig + 'static + Send + Sync>(
 }
 
 /// Local config
-pub fn local_testnet_config<F: Fn() -> GenesisConfig + 'static + Send + Sync>(
+pub fn local_testnet_config<F: Fn() -> RuntimeGenesisConfig + 'static + Send + Sync>(
     constructor: F,
 ) -> ChainSpec {
     ChainSpec::from_genesis(
@@ -240,7 +203,7 @@ pub fn local_testnet_config<F: Fn() -> GenesisConfig + 'static + Send + Sync>(
 }
 
 /// Gemini 3f config
-pub fn gemini_3f_config<F: Fn() -> GenesisConfig + 'static + Send + Sync>(
+pub fn gemini_3f_config<F: Fn() -> RuntimeGenesisConfig + 'static + Send + Sync>(
     constructor: F,
 ) -> ChainSpec {
     ChainSpec::from_genesis(
@@ -264,7 +227,7 @@ pub fn gemini_3f_config<F: Fn() -> GenesisConfig + 'static + Send + Sync>(
     )
 }
 
-pub fn devnet_config<F: Fn() -> GenesisConfig + 'static + Send + Sync>(
+pub fn devnet_config<F: Fn() -> RuntimeGenesisConfig + 'static + Send + Sync>(
     constructor: F,
 ) -> ChainSpec {
     ChainSpec::from_genesis(
@@ -293,24 +256,24 @@ fn testnet_genesis(
     maybe_sudo_account: Option<AccountId>,
     relayers: Vec<(AccountId, AccountId)>,
     chain_id: u64,
-) -> GenesisConfig {
+) -> RuntimeGenesisConfig {
     // This is the simplest bytecode to revert without returning any data.
     // We will pre-deploy it under all of our precompiles to ensure they can be
     // called from within contracts.
     // (PUSH1 0x00 PUSH1 0x00 REVERT)
     let revert_bytecode = vec![0x60, 0x00, 0x60, 0x00, 0xFD];
 
-    GenesisConfig {
+    RuntimeGenesisConfig {
         system: SystemConfig {
             code: WASM_BINARY.expect("WASM binary was not build, please build it!").to_vec(),
+            ..Default::default()
         },
         sudo: SudoConfig { key: maybe_sudo_account },
         transaction_payment: Default::default(),
         balances: BalancesConfig {
             balances: endowed_accounts.iter().cloned().map(|k| (k, 1_000_000 * SSC)).collect(),
         },
-        messenger: MessengerConfig { relayers },
-        evm_chain_id: EVMChainIdConfig { chain_id },
+        evm_chain_id: EVMChainIdConfig { chain_id, ..Default::default() },
         evm: EVMConfig {
             // We need _some_ code inserted at the precompile address so that
             // the evm will actually call the address.
@@ -328,12 +291,8 @@ fn testnet_genesis(
                     )
                 })
                 .collect(),
+            ..Default::default()
         },
-        ethereum: Default::default(),
-        base_fee: Default::default(),
-        self_domain_id: SelfDomainIdConfig {
-            // Id of the genesis domain
-            domain_id: Some(DomainId::new(0)),
-        },
+        ..Default::default()
     }
 }

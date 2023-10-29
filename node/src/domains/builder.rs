@@ -10,6 +10,9 @@ use futures::future;
 use futures::future::Either::{Left, Right};
 use sc_consensus_subspace::notification::SubspaceNotificationStream;
 use sc_consensus_subspace::{BlockImportingNotification, NewSlotNotification};
+use sc_transaction_pool::FullPool;
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
+use sc_utils::mpsc::tracing_unbounded;
 use sdk_substrate::{Base, BaseBuilder};
 use sdk_utils::chain_spec::get_account_id_from_seed;
 use sdk_utils::{DestructorSet, TaskOutput};
@@ -43,6 +46,9 @@ pub struct ConsensusNodeLink {
     pub consensus_sync_service: Arc<sc_network_sync::SyncingService<CBlock>>,
     /// Consensus node's select chain
     pub select_chain: FullSelectChain,
+    /// Consensus tx pool
+    pub consensus_transaction_pool:
+        Arc<FullPool<CBlock, CFullClient<CRuntimeApi, CExecutorDispatch>>>,
 }
 
 /// Domain node configuration
@@ -163,6 +169,7 @@ impl DomainConfig {
             consensus_network_service,
             consensus_sync_service,
             select_chain,
+            consensus_transaction_pool,
         } = consensus_node_link;
         let printable_domain_id: u32 = self.domain_id.into();
         let mut destructor_set =
@@ -311,9 +318,8 @@ impl DomainConfig {
                     let runtime_type = domain_instance_data.runtime_type.clone();
 
                     let domain_spec_result = evm_chain_spec::create_domain_spec(
-                        self.domain_id,
                         self.chain_id.as_str(),
-                        domain_instance_data,
+                        domain_instance_data.raw_genesis,
                     );
 
                     let domain_spec = match domain_spec_result {
@@ -333,6 +339,9 @@ impl DomainConfig {
                     let service_config =
                         self.base.configuration(domains_directory, domain_spec).await;
 
+                    let (domain_message_sink, domain_message_receiver) =
+                        tracing_unbounded("domain_message_channel", 100);
+
                     let domain_starter = DomainInstanceStarter {
                         service_config,
                         domain_id: self.domain_id,
@@ -345,6 +354,11 @@ impl DomainConfig {
                         consensus_network_service,
                         consensus_sync_service,
                         select_chain,
+                        consensus_offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+                            consensus_transaction_pool.clone(),
+                        ),
+                        domain_message_sink,
+                        domain_message_receiver,
                     };
 
                     *shared_progress_data.write().await = DomainBuildingProgress::PreparingToStart;

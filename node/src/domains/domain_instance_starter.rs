@@ -5,12 +5,14 @@ use domain_client_operator::OperatorStreams;
 use domain_eth_service::provider::EthProvider;
 use domain_eth_service::DefaultEthConfig;
 use domain_runtime_primitives::opaque::Block as DomainBlock;
-use domain_service::{DomainConfiguration, FullBackend, FullClient};
+use domain_service::{FullBackend, FullClient};
 use futures::StreamExt;
 use sc_client_api::ImportNotifications;
 use sc_consensus_subspace::notification::SubspaceNotificationStream;
 use sc_consensus_subspace::{BlockImportingNotification, NewSlotNotification};
 use sc_service::{BasePath, Configuration, RpcHandlers};
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
+use sc_utils::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_core::crypto::AccountId32;
 use sp_core::traits::SpawnEssentialNamed;
 use sp_domains::{DomainId, RuntimeType};
@@ -41,6 +43,9 @@ pub struct DomainInstanceStarter {
         Arc<sc_network::NetworkService<CBlock, <CBlock as BlockT>::Hash>>,
     pub consensus_sync_service: Arc<sc_network_sync::SyncingService<CBlock>>,
     pub select_chain: FullSelectChain,
+    pub consensus_offchain_tx_pool_factory: OffchainTransactionPoolFactory<CBlock>,
+    pub domain_message_sink: TracingUnboundedSender<Vec<u8>>,
+    pub domain_message_receiver: TracingUnboundedReceiver<Vec<u8>>,
 }
 
 impl DomainInstanceStarter {
@@ -61,12 +66,10 @@ impl DomainInstanceStarter {
             consensus_network_service,
             consensus_sync_service,
             select_chain,
+            consensus_offchain_tx_pool_factory,
+            domain_message_receiver,
+            domain_message_sink,
         } = self;
-
-        let domain_config = DomainConfiguration {
-            service_config,
-            maybe_relayer_id: Some(AccountId32ToAccountId20Converter::convert(relayer_id)),
-        };
 
         let block_importing_notification_stream = || {
             block_importing_notification_stream.subscribe().then(
@@ -84,7 +87,6 @@ impl DomainInstanceStarter {
                 (
                     slot_notification.new_slot_info.slot,
                     slot_notification.new_slot_info.global_randomness,
-                    None::<futures::channel::mpsc::Sender<()>>,
                 )
             })
         };
@@ -96,6 +98,7 @@ impl DomainInstanceStarter {
             imported_block_notification_stream,
             new_slot_notification_stream: new_slot_notification_stream(),
             _phantom: Default::default(),
+            acknowledgement_sender_stream: futures::stream::empty(),
         };
 
         match runtime_type {
@@ -113,19 +116,20 @@ impl DomainInstanceStarter {
                         FullBackend<DomainBlock>,
                     >,
                 >::new(
-                    Some(BasePath::new(domain_config.service_config.base_path.path())),
+                    Some(BasePath::new(service_config.base_path.path())),
                     additional_arguments.drain(..),
                 );
 
                 let domain_params = domain_service::DomainParams {
                     domain_id,
-                    domain_config,
+                    domain_config: service_config,
                     domain_created_at,
                     consensus_client,
+                    consensus_offchain_tx_pool_factory,
                     consensus_network_sync_oracle: consensus_sync_service.clone(),
-                    select_chain,
                     operator_streams,
                     gossip_message_sink: xdm_gossip_worker_builder.gossip_msg_sink(),
+                    domain_message_receiver,
                     provider: eth_provider,
                 };
 
@@ -145,7 +149,7 @@ impl DomainInstanceStarter {
                 .map_err(anyhow::Error::new)?;
 
                 xdm_gossip_worker_builder
-                    .push_chain_tx_pool_sink(ChainId::Domain(domain_id), domain_node.tx_pool_sink);
+                    .push_chain_tx_pool_sink(ChainId::Domain(domain_id), domain_message_sink);
 
                 let cross_domain_message_gossip_worker = xdm_gossip_worker_builder
                     .build::<CBlock, _, _>(consensus_network_service, consensus_sync_service);

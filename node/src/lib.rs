@@ -17,18 +17,18 @@ use std::time::Duration;
 
 use anyhow::Context;
 use derivative::Derivative;
+use frame_system::pallet_prelude::BlockNumberFor;
 use futures::{FutureExt, Stream, StreamExt};
 use sc_consensus_subspace::archiver::SegmentHeadersStore;
 use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, SyncState};
-use sc_proof_of_time::PotComponents;
 use sc_rpc_api::state::StateApiClient;
+use sc_service::Configuration;
 use sdk_dsn::{DsnOptions, DsnShared};
 use sdk_traits::Farmer;
 use sdk_utils::{DestructorSet, MultiaddrWithPeerId, PublicKey, TaskOutput};
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
-use sp_domains::GenerateGenesisStateRoot;
 use sp_runtime::DigestItem;
 use subspace_core_primitives::{HistorySize, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
@@ -50,9 +50,8 @@ mod domains;
 pub use builder::*;
 pub use domains::builder::{DomainConfig, DomainConfigBuilder};
 pub use domains::domain::Domain;
-use domains::domain_genesis_block_builder::DomainGenesisBlockBuilder;
 pub use subspace_runtime::RuntimeEvent as Event;
-use tracing::Instrument;
+use tracing::{log, Instrument};
 
 use crate::domains::builder::ConsensusNodeLink;
 
@@ -64,12 +63,30 @@ pub type RewardsEvent = pallet_rewards::Event<subspace_runtime::Runtime>;
 
 const SEGMENT_HEADERS_NUMBER_LIMIT: u64 = MAX_SEGMENT_HEADERS_PER_REQUEST as u64;
 
-/// Proof of time configuration for node
-pub struct PotConfiguration {
-    /// Flag indicating if Proof of time is enabled
-    pub is_pot_enabled: bool,
-    /// Flag indicating if the node is authority for Proof of time consensus
-    pub is_node_time_keeper: bool,
+fn pot_external_entropy(
+    consensus_chain_config: &Configuration,
+    config_pot_external_entropy: Option<Vec<u8>>,
+) -> Result<Vec<u8>, sc_service::Error> {
+    let maybe_chain_spec_pot_external_entropy = consensus_chain_config
+        .chain_spec
+        .properties()
+        .get("potExternalEntropy")
+        .map(|d| serde_json::from_value(d.clone()))
+        .transpose()
+        .map_err(|error| {
+            sc_service::Error::Other(format!("Failed to decode PoT initial key: {error:?}"))
+        })?
+        .flatten();
+    if maybe_chain_spec_pot_external_entropy.is_some()
+        && config_pot_external_entropy.is_some()
+        && maybe_chain_spec_pot_external_entropy != config_pot_external_entropy
+    {
+        tracing::warn!(
+            "--pot-external-entropy CLI argument was ignored due to chain spec having a different \
+             explicit value"
+        );
+    }
+    Ok(maybe_chain_spec_pot_external_entropy.or(config_pot_external_entropy).unwrap_or_default())
 }
 
 impl<F: Farmer + 'static> Config<F> {
@@ -78,7 +95,6 @@ impl<F: Farmer + 'static> Config<F> {
         self,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,
-        pot_configuration: PotConfiguration,
     ) -> anyhow::Result<Node<F>> {
         let Self {
             base,
@@ -86,25 +102,21 @@ impl<F: Farmer + 'static> Config<F> {
             sync_from_dsn,
             storage_monitor,
             enable_subspace_block_relay,
-            dsn_sync_parallelism_level,
+            is_timekeeper,
+            timekeeper_cpu_cores,
+            pot_external_entropy: config_pot_external_entropy,
             ..
         } = self;
-
-        let PotConfiguration { is_pot_enabled, is_node_time_keeper } = pot_configuration;
 
         let base = base.configuration(directory.as_ref(), chain_spec.clone()).await;
         let name = base.network.node_name.clone();
         let database_source = base.database.clone();
 
-        let construct_domain_genesis_block_builder =
-            |backend, executor| -> Arc<dyn GenerateGenesisStateRoot> {
-                Arc::new(DomainGenesisBlockBuilder::new(backend, executor))
-            };
         let partial_components =
             subspace_service::new_partial::<F::Table, RuntimeApi, ExecutorDispatch>(
                 &base,
-                Some(&construct_domain_genesis_block_builder),
-                if is_pot_enabled { Some(PotComponents::new(is_node_time_keeper)) } else { None },
+                &pot_external_entropy(&base, config_pot_external_entropy)
+                    .context("Failed to get proof of time external entropy")?,
             )
             .context("Failed to build a partial subspace node")?;
 
@@ -139,15 +151,18 @@ impl<F: Farmer + 'static> Config<F> {
             let bootstrap_nodes =
                 dsn.boot_nodes.clone().into_iter().map(Into::into).collect::<Vec<_>>();
 
-            let segment_header_store = partial_components.other.2.clone();
+            let segment_header_store = partial_components.other.segment_headers_store.clone();
 
-            let (dsn, runner) = dsn.build_dsn(DsnOptions {
+            let is_metrics_enabled = base.prometheus_config.is_some();
+
+            let (dsn, runner, metrics_registry) = dsn.build_dsn(DsnOptions {
                 client: partial_components.client.clone(),
                 keypair,
                 base_path: directory.as_ref().to_path_buf(),
                 get_piece_by_index: get_piece_by_index::<F>,
                 get_segment_header_by_segment_indexes,
                 segment_header_store,
+                is_metrics_enabled,
             })?;
 
             tracing::debug!("Subspace networking initialized: Node ID is {}", dsn.node.id());
@@ -156,6 +171,7 @@ impl<F: Farmer + 'static> Config<F> {
                 subspace_service::SubspaceNetworking::Reuse {
                     node: dsn.node.clone(),
                     bootstrap_nodes,
+                    metrics_registry,
                 },
                 dsn,
                 runner,
@@ -169,7 +185,8 @@ impl<F: Farmer + 'static> Config<F> {
             subspace_networking,
             sync_from_dsn,
             enable_subspace_block_relay,
-            dsn_sync_parallelism_level,
+            is_timekeeper,
+            timekeeper_cpu_cores,
         };
 
         let node_runner_future = subspace_farmer::utils::run_future_in_dedicated_thread(
@@ -184,7 +201,7 @@ impl<F: Farmer + 'static> Config<F> {
         .context("Failed to run node runner future")?;
 
         let slot_proportion = sc_consensus_slots::SlotProportion::new(3f32 / 4f32);
-        let full_client = subspace_service::new_full::<F::Table, _, _, _>(
+        let full_client = subspace_service::new_full::<F::Table, _, _>(
             configuration,
             partial_components,
             true,
@@ -205,7 +222,7 @@ impl<F: Farmer + 'static> Config<F> {
             select_chain,
             reward_signing_notification_stream: _,
             archived_segment_notification_stream: _,
-            transaction_pool: _,
+            transaction_pool,
             block_importing_notification_stream,
             new_slot_notification_stream,
         } = full_client;
@@ -264,6 +281,7 @@ impl<F: Farmer + 'static> Config<F> {
                         consensus_network_service: network_service.clone(),
                         consensus_sync_service: sync_service.clone(),
                         select_chain: select_chain.clone(),
+                        consensus_transaction_pool: transaction_pool.clone(),
                     },
                 )
                 .await?;
@@ -317,7 +335,7 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
     // /// Otherwise we only use the default Substrate host functions.
     // #[cfg(not(feature = "runtime-benchmarks"))]
     type ExtendHostFunctions =
-        (sp_consensus_subspace::consensus::HostFunctions, sp_domains::domain::HostFunctions);
+        (sp_consensus_subspace::consensus::HostFunctions, sp_domains_fraud_proof::HostFunctions);
 
     fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
         subspace_runtime::api::dispatch(method, data)
@@ -332,14 +350,7 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 pub type ChainSpec = chain_spec::ChainSpec;
 pub(crate) type FullClient =
     subspace_service::FullClient<subspace_runtime::RuntimeApi, ExecutorDispatch>;
-pub(crate) type NewFull = subspace_service::NewFull<
-    FullClient,
-    subspace_service::tx_pre_validator::ConsensusChainTxPreValidator<
-        RuntimeBlock,
-        FullClient,
-        subspace_service::FraudProofVerifier<RuntimeApi, ExecutorDispatch>,
-    >,
->;
+pub(crate) type NewFull = subspace_service::NewFull<FullClient>;
 
 /// Node structure
 #[derive(Derivative)]
@@ -386,7 +397,7 @@ impl<F: Farmer> sdk_traits::Node for Node<F> {
 /// Hash type
 pub type Hash = <subspace_runtime::Runtime as frame_system::Config>::Hash;
 /// Block number
-pub type BlockNumber = <subspace_runtime::Runtime as frame_system::Config>::BlockNumber;
+pub type BlockNumber = BlockNumberFor<subspace_runtime::Runtime>;
 
 /// Chain info
 #[derive(Debug, Clone)]
