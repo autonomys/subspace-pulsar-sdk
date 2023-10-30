@@ -13,18 +13,17 @@ use sc_consensus_subspace::{BlockImportingNotification, NewSlotNotification};
 use sc_service::{BasePath, Configuration, RpcHandlers};
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sc_utils::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
-use sp_core::crypto::AccountId32;
 use sp_core::traits::SpawnEssentialNamed;
 use sp_domains::{DomainId, RuntimeType};
 use sp_messenger::messages::ChainId;
-use sp_runtime::traits::{Block as BlockT, Convert, NumberFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use subspace_runtime::RuntimeApi as CRuntimeApi;
 use subspace_runtime_primitives::opaque::Block as CBlock;
-use subspace_service::{FullClient as CFullClient, FullSelectChain};
+use subspace_service::FullClient as CFullClient;
 use tokio::task::JoinHandle;
 
 use crate::domains::evm_domain_executor_dispatch::EVMDomainExecutorDispatch;
-use crate::domains::utils::{AccountId20, AccountId32ToAccountId20Converter};
+use crate::domains::utils::AccountId20;
 use crate::ExecutorDispatch as CExecutorDispatch;
 
 /// `DomainInstanceStarter` used to start a domain instance node based on the
@@ -32,7 +31,6 @@ use crate::ExecutorDispatch as CExecutorDispatch;
 pub struct DomainInstanceStarter {
     pub service_config: Configuration,
     pub domain_id: DomainId,
-    pub relayer_id: AccountId32,
     pub runtime_type: RuntimeType,
     pub additional_arguments: Vec<String>,
     pub consensus_client: Arc<CFullClient<CRuntimeApi, CExecutorDispatch>>,
@@ -42,7 +40,6 @@ pub struct DomainInstanceStarter {
     pub consensus_network_service:
         Arc<sc_network::NetworkService<CBlock, <CBlock as BlockT>::Hash>>,
     pub consensus_sync_service: Arc<sc_network_sync::SyncingService<CBlock>>,
-    pub select_chain: FullSelectChain,
     pub consensus_offchain_tx_pool_factory: OffchainTransactionPoolFactory<CBlock>,
     pub domain_message_sink: TracingUnboundedSender<Vec<u8>>,
     pub domain_message_receiver: TracingUnboundedReceiver<Vec<u8>>,
@@ -57,7 +54,6 @@ impl DomainInstanceStarter {
         let DomainInstanceStarter {
             domain_id,
             runtime_type,
-            relayer_id,
             mut additional_arguments,
             service_config,
             consensus_client,
@@ -65,7 +61,6 @@ impl DomainInstanceStarter {
             new_slot_notification_stream,
             consensus_network_service,
             consensus_sync_service,
-            select_chain,
             consensus_offchain_tx_pool_factory,
             domain_message_receiver,
             domain_message_sink,

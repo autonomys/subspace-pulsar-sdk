@@ -4,22 +4,16 @@ use std::str::FromStr;
 
 use evm_domain_runtime::{
     AccountId, BalancesConfig, EVMChainIdConfig, EVMConfig, Precompiles, RuntimeGenesisConfig,
-    SelfDomainIdConfig, SudoConfig, SystemConfig, WASM_BINARY,
+    SudoConfig, SystemConfig, WASM_BINARY,
 };
 use hex_literal::hex;
-use once_cell::sync::OnceCell;
 use sc_service::{ChainSpec as _, ChainType};
 use sc_subspace_chain_specs::ExecutionChainSpec;
-use sdk_utils::chain_spec::{
-    chain_spec_properties, get_account_id_from_seed, get_public_key_from_seed,
-};
+use sdk_utils::chain_spec::{chain_spec_properties, get_public_key_from_seed};
 use sp_core::crypto::UncheckedFrom;
 use sp_domains::storage::RawGenesis;
-use sp_domains::{DomainId, DomainInstanceData, OperatorPublicKey, RuntimeType};
-use sp_runtime::traits::Convert;
+use sp_domains::OperatorPublicKey;
 use subspace_runtime_primitives::SSC;
-
-use crate::domains::utils::AccountId32ToAccountId20Converter;
 
 /// Chain spec type for the system domain
 pub type ChainSpec = ExecutionChainSpec<RuntimeGenesisConfig>;
@@ -52,11 +46,6 @@ pub fn create_domain_spec(chain_id: &str, raw_genesis: RawGenesis) -> Result<Cha
     Ok(chain_spec)
 }
 
-// HACK: `ChainSpec::from_genesis` is only allow to create hardcoded spec and
-// `RuntimeGenesisConfig` dosen't derive `Clone`, using global variable and
-// serialization/deserialization to workaround these limits.
-static GENESIS_CONFIG: OnceCell<Vec<u8>> = OnceCell::new();
-
 /// Development keys that will be injected automatically on polkadotjs apps
 fn get_dev_accounts() -> Vec<AccountId> {
     vec![
@@ -82,12 +71,6 @@ pub fn get_testnet_genesis_by_spec_id(
                     accounts.clone(),
                     // Alith is Sudo
                     Some(accounts[0]),
-                    vec![(
-                        accounts[0],
-                        AccountId32ToAccountId20Converter::convert(get_account_id_from_seed(
-                            "Alice",
-                        )),
-                    )],
                     1000,
                 ),
                 GenesisDomainParams {
@@ -105,7 +88,6 @@ pub fn get_testnet_genesis_by_spec_id(
                         sudo_account,
                     ],
                     Some(sudo_account),
-                    Default::default(),
                     1002,
                 ),
                 GenesisDomainParams {
@@ -125,11 +107,6 @@ pub fn get_testnet_genesis_by_spec_id(
                         sudo_account,
                     ],
                     Some(sudo_account),
-                    vec![(
-                        sudo_account,
-                        AccountId::from_str("5b267fd1ba3ace6e3c3234f9576c49c877b5beb9")
-                            .expect("Wrong relayer account address"),
-                    )],
                     1003,
                 ),
                 GenesisDomainParams {
@@ -146,7 +123,6 @@ pub fn get_testnet_genesis_by_spec_id(
                     accounts.clone(),
                     // Alith is sudo
                     Some(accounts[0]),
-                    vec![(accounts[0], accounts[0]), (accounts[1], accounts[1])],
                     1001,
                 ),
                 GenesisDomainParams {
@@ -254,7 +230,6 @@ pub fn devnet_config<F: Fn() -> RuntimeGenesisConfig + 'static + Send + Sync>(
 fn testnet_genesis(
     endowed_accounts: Vec<AccountId>,
     maybe_sudo_account: Option<AccountId>,
-    relayers: Vec<(AccountId, AccountId)>,
     chain_id: u64,
 ) -> RuntimeGenesisConfig {
     // This is the simplest bytecode to revert without returning any data.

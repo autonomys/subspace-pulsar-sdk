@@ -22,7 +22,7 @@ use sp_domains::DomainId;
 use sp_runtime::traits::Block as BlockT;
 use subspace_runtime::RuntimeApi as CRuntimeApi;
 use subspace_runtime_primitives::opaque::Block as CBlock;
-use subspace_service::{FullClient as CFullClient, FullSelectChain};
+use subspace_service::FullClient as CFullClient;
 use tokio::sync::{oneshot, RwLock};
 
 use crate::domains::domain::{Domain, DomainBuildingProgress};
@@ -44,8 +44,6 @@ pub struct ConsensusNodeLink {
         Arc<sc_network::NetworkService<CBlock, <CBlock as BlockT>::Hash>>,
     /// Reference to the consensus node's network sync service
     pub consensus_sync_service: Arc<sc_network_sync::SyncingService<CBlock>>,
-    /// Consensus node's select chain
-    pub select_chain: FullSelectChain,
     /// Consensus tx pool
     pub consensus_transaction_pool:
         Arc<FullPool<CBlock, CFullClient<CRuntimeApi, CExecutorDispatch>>>,
@@ -168,7 +166,6 @@ impl DomainConfig {
             new_slot_notification_stream,
             consensus_network_service,
             consensus_sync_service,
-            select_chain,
             consensus_transaction_pool,
         } = consensus_node_link;
         let printable_domain_id: u32 = self.domain_id.into();
@@ -345,7 +342,6 @@ impl DomainConfig {
                     let domain_starter = DomainInstanceStarter {
                         service_config,
                         domain_id: self.domain_id,
-                        relayer_id: self.relayer_id.clone(),
                         runtime_type,
                         additional_arguments: self.additional_args.clone(),
                         consensus_client,
@@ -353,7 +349,6 @@ impl DomainConfig {
                         new_slot_notification_stream,
                         consensus_network_service,
                         consensus_sync_service,
-                        select_chain,
                         consensus_offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
                             consensus_transaction_pool.clone(),
                         ),

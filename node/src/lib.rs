@@ -51,7 +51,7 @@ pub use builder::*;
 pub use domains::builder::{DomainConfig, DomainConfigBuilder};
 pub use domains::domain::Domain;
 pub use subspace_runtime::RuntimeEvent as Event;
-use tracing::{log, Instrument};
+use tracing::Instrument;
 
 use crate::domains::builder::ConsensusNodeLink;
 
@@ -219,7 +219,7 @@ impl<F: Farmer + 'static> Config<F> {
             network_service,
 
             backend: _,
-            select_chain,
+            select_chain: _,
             reward_signing_notification_stream: _,
             archived_segment_notification_stream: _,
             transaction_pool,
@@ -280,7 +280,6 @@ impl<F: Farmer + 'static> Config<F> {
                         new_slot_notification_stream: new_slot_notification_stream.clone(),
                         consensus_network_service: network_service.clone(),
                         consensus_sync_service: sync_service.clone(),
-                        select_chain: select_chain.clone(),
                         consensus_transaction_pool: transaction_pool.clone(),
                     },
                 )
@@ -573,7 +572,7 @@ impl<F: Farmer + 'static> Node<F> {
             .build();
         let check_synced_backoff = backoff::ExponentialBackoffBuilder::new()
             .with_initial_interval(Duration::from_secs(1))
-            .with_max_elapsed_time(Some(Duration::from_secs(10)))
+            .with_max_elapsed_time(Some(Duration::from_secs(10 * 60)))
             .build();
 
         backoff::future::retry(check_offline_backoff, || {

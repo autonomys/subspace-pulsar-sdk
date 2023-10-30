@@ -13,8 +13,8 @@ use sp_domains::storage::RawGenesis;
 use sp_domains::{OperatorAllowList, RuntimeType};
 use sp_runtime::{BuildStorage, Percent};
 use subspace_runtime::{
-    AllowAuthoringBy, BalancesConfig, DomainsConfig, GenesisConfig, MaxDomainBlockSize,
-    MaxDomainBlockWeight, RuntimeConfigsConfig, SubspaceConfig, SudoConfig, SystemConfig,
+    AllowAuthoringBy, BalancesConfig, DomainsConfig, MaxDomainBlockSize, MaxDomainBlockWeight,
+    RuntimeConfigsConfig, RuntimeGenesisConfig, SubspaceConfig, SudoConfig, SystemConfig,
     VestingConfig, MILLISECS_PER_BLOCK, WASM_BINARY,
 };
 use subspace_runtime_primitives::{AccountId, Balance, BlockNumber, SSC};
@@ -59,7 +59,7 @@ pub struct GenesisParams {
 }
 
 /// Chain spec type for the subspace
-pub type ChainSpec = SerializableChainSpec<GenesisConfig>;
+pub type ChainSpec = SerializableChainSpec<RuntimeGenesisConfig>;
 
 /// Gemini 3f chain spec
 pub fn gemini_3f() -> ChainSpec {
@@ -344,7 +344,7 @@ fn subspace_genesis_config(
     // who, start, period, period_count, per_period
     vesting: Vec<(AccountId, BlockNumber, BlockNumber, u32, Balance)>,
     genesis_params: GenesisParams,
-) -> GenesisConfig {
+) -> RuntimeGenesisConfig {
     let GenesisParams {
         enable_rewards,
         enable_storage_access,
@@ -355,7 +355,7 @@ fn subspace_genesis_config(
         confirmation_depth_k,
     } = genesis_params;
 
-    let (mut domain_genesis_config, genesis_domain_params) =
+    let (domain_genesis_config, genesis_domain_params) =
         evm_chain_spec::get_testnet_genesis_by_spec_id(evm_domain_spec_id);
 
     let raw_genesis_storage = {
@@ -366,7 +366,7 @@ fn subspace_genesis_config(
         raw_genesis.encode()
     };
 
-    GenesisConfig {
+    RuntimeGenesisConfig {
         domains: DomainsConfig {
             genesis_domain: Some(sp_domains::GenesisDomain {
                 runtime_name: "evm".into(),

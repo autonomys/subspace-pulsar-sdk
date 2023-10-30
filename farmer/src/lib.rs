@@ -564,7 +564,8 @@ impl Config {
             }
         })?;
 
-        readers_and_pieces.lock().replace(create_readers_and_pieces(&single_disk_farms).await?);
+        let readers_and_pieces_instance = create_readers_and_pieces(&single_disk_farms).await?;
+        readers_and_pieces.lock().replace(readers_and_pieces_instance);
         destructors.add_sync_destructor({
             let farmer_reader_and_pieces = node.dsn().farmer_readers_and_pieces.clone();
             move || {
@@ -672,6 +673,8 @@ impl Config {
     }
 }
 
+type ResultReceiver = mpsc::Receiver<anyhow::Result<TaskOutput<Option<SingleDiskFarmId>, String>>>;
+
 /// Farmer structure
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -679,8 +682,7 @@ impl Config {
 pub struct Farmer<T: subspace_proof_of_space::Table> {
     reward_address: PublicKey,
     farm_info: HashMap<PathBuf, Farm<T>>,
-    result_receiver:
-        Option<mpsc::Receiver<anyhow::Result<TaskOutput<Option<SingleDiskFarmId>, String>>>>,
+    result_receiver: Option<ResultReceiver>,
     node_name: String,
     app_info: FarmerAppInfo,
     _destructors: DestructorSet,
