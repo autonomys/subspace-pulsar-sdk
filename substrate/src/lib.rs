@@ -10,7 +10,7 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![feature(concat_idents)]
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
 
 use derivative::Derivative;
@@ -347,6 +347,17 @@ impl RpcBuilder {
     /// Dev configuration
     pub fn dev() -> Self {
         Self::default()
+    }
+
+    /// Local test configuration to have rpc exposed locally
+    pub fn local_test(port: u16) -> Self {
+        Self::dev()
+            .addr(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port))
+            .port(port)
+            .max_connections(100)
+            .max_request_size(10 * 1024)
+            .max_response_size(10 * 1024)
+            .max_subs_per_conn(Some(100))
     }
 
     /// Gemini 3f configuration
