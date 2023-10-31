@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
+use cross_domain_message_gossip::Message;
 use derivative::Derivative;
 use derive_builder::Builder;
 use domain_client_operator::{BootstrapResult, Bootstrapper};
@@ -12,14 +13,13 @@ use sc_consensus_subspace::notification::SubspaceNotificationStream;
 use sc_consensus_subspace::{BlockImportingNotification, NewSlotNotification};
 use sc_transaction_pool::FullPool;
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
-use sc_utils::mpsc::tracing_unbounded;
+use sc_utils::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
 use sdk_substrate::{Base, BaseBuilder};
 use sdk_utils::chain_spec::get_account_id_from_seed;
 use sdk_utils::{DestructorSet, TaskOutput};
 use serde::{Deserialize, Serialize};
 use sp_core::crypto::AccountId32;
 use sp_domains::DomainId;
-use sp_runtime::traits::Block as BlockT;
 use subspace_runtime::RuntimeApi as CRuntimeApi;
 use subspace_runtime_primitives::opaque::Block as CBlock;
 use subspace_service::FullClient as CFullClient;
@@ -39,14 +39,15 @@ pub struct ConsensusNodeLink {
         SubspaceNotificationStream<BlockImportingNotification<CBlock>>,
     /// New slot notification stream for consensus chain
     pub new_slot_notification_stream: SubspaceNotificationStream<NewSlotNotification>,
-    /// Reference to the consensus node network service
-    pub consensus_network_service:
-        Arc<sc_network::NetworkService<CBlock, <CBlock as BlockT>::Hash>>,
     /// Reference to the consensus node's network sync service
     pub consensus_sync_service: Arc<sc_network_sync::SyncingService<CBlock>>,
     /// Consensus tx pool
     pub consensus_transaction_pool:
         Arc<FullPool<CBlock, CFullClient<CRuntimeApi, CExecutorDispatch>>>,
+    /// Cross domain message gossip worker's message sink
+    pub gossip_message_sink: TracingUnboundedSender<Message>,
+    /// Cross domain message receiver for the domain
+    pub domain_message_receiver: TracingUnboundedReceiver<Vec<u8>>,
 }
 
 /// Domain node configuration
@@ -164,9 +165,10 @@ impl DomainConfig {
             consensus_client,
             block_importing_notification_stream,
             new_slot_notification_stream,
-            consensus_network_service,
             consensus_sync_service,
             consensus_transaction_pool,
+            gossip_message_sink,
+            domain_message_receiver,
         } = consensus_node_link;
         let printable_domain_id: u32 = self.domain_id.into();
         let mut destructor_set =
@@ -336,9 +338,6 @@ impl DomainConfig {
                     let service_config =
                         self.base.configuration(domains_directory, domain_spec).await;
 
-                    let (domain_message_sink, domain_message_receiver) =
-                        tracing_unbounded("domain_message_channel", 100);
-
                     let domain_starter = DomainInstanceStarter {
                         service_config,
                         domain_id: self.domain_id,
@@ -347,12 +346,11 @@ impl DomainConfig {
                         consensus_client,
                         block_importing_notification_stream,
                         new_slot_notification_stream,
-                        consensus_network_service,
                         consensus_sync_service,
                         consensus_offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
                             consensus_transaction_pool.clone(),
                         ),
-                        domain_message_sink,
+                        gossip_message_sink,
                         domain_message_receiver,
                     };
 

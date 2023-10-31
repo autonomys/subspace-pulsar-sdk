@@ -9842,6 +9842,7 @@ dependencies = [
  "derivative",
  "derive_builder 0.12.0",
  "derive_more",
+ "domain-client-message-relayer",
  "domain-client-operator",
  "domain-eth-service",
  "domain-runtime-primitives",

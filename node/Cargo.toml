@@ -11,6 +11,7 @@ cross-domain-message-gossip = { git = "https://github.com/subspace/subspace", re
 derivative = "2.2.0"
 derive_builder = "0.12"
 derive_more = "0.99"
+domain-client-message-relayer = { git = "https://github.com/subspace/subspace", rev = "aa2ca80b42b460dd73c1567057d6c07151a626dd" }
 domain-client-operator = { git = "https://github.com/subspace/subspace", rev = "aa2ca80b42b460dd73c1567057d6c07151a626dd" }
 domain-eth-service = { git = "https://github.com/subspace/subspace", rev = "aa2ca80b42b460dd73c1567057d6c07151a626dd" }
 domain-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "aa2ca80b42b460dd73c1567057d6c07151a626dd" }

@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
+use cross_domain_message_gossip::GossipWorkerBuilder;
 use derivative::Derivative;
 use frame_system::pallet_prelude::BlockNumberFor;
 use futures::{FutureExt, Stream, StreamExt};
@@ -24,11 +25,14 @@ use sc_network::network_state::NetworkState;
 use sc_network::{NetworkService, NetworkStateInfo, SyncState};
 use sc_rpc_api::state::StateApiClient;
 use sc_service::Configuration;
+use sc_utils::mpsc::tracing_unbounded;
 use sdk_dsn::{DsnOptions, DsnShared};
 use sdk_traits::Farmer;
 use sdk_utils::{DestructorSet, MultiaddrWithPeerId, PublicKey, TaskOutput};
 use sp_consensus::SyncOracle;
 use sp_consensus_subspace::digests::PreDigest;
+use sp_core::traits::SpawnEssentialNamed;
+use sp_messenger::messages::ChainId;
 use sp_runtime::DigestItem;
 use subspace_core_primitives::{HistorySize, SegmentIndex};
 use subspace_farmer::node_client::NodeClient;
@@ -39,7 +43,7 @@ use subspace_networking::{
 };
 use subspace_rpc_primitives::MAX_SEGMENT_HEADERS_PER_REQUEST;
 use subspace_runtime::RuntimeApi;
-use subspace_runtime_primitives::opaque::{Block as RuntimeBlock, Header};
+use subspace_runtime_primitives::opaque::{Block as OpaqueBlock, Header};
 use subspace_service::SubspaceConfiguration;
 use tokio::sync::oneshot;
 
@@ -238,6 +242,83 @@ impl<F: Farmer + 'static> Config<F> {
 
         let mut destructors = DestructorSet::new("node-destructors");
 
+        let mut maybe_domain = None;
+        if let Some(domain_config) = self.domain {
+            let base_directory = directory.as_ref().to_owned().clone();
+
+            let mut xdm_gossip_worker_builder = GossipWorkerBuilder::new();
+
+            let relayer_worker =
+                domain_client_message_relayer::worker::relay_consensus_chain_messages(
+                    client.clone(),
+                    sync_service.clone(),
+                    xdm_gossip_worker_builder.gossip_msg_sink(),
+                );
+
+            task_manager.spawn_essential_handle().spawn_essential_blocking(
+                "consensus-chain-relayer",
+                None,
+                Box::pin(relayer_worker),
+            );
+
+            let (consensus_msg_sink, consensus_msg_receiver) =
+                tracing_unbounded("consensus_message_channel", 100);
+
+            // Start cross domain message listener for Consensus chain to receive messages
+            // from domains in the network
+            let consensus_listener =
+                cross_domain_message_gossip::start_cross_chain_message_listener(
+                    ChainId::Consensus,
+                    client.clone(),
+                    transaction_pool.clone(),
+                    consensus_msg_receiver,
+                );
+
+            task_manager.spawn_essential_handle().spawn_essential_blocking(
+                "consensus-message-listener",
+                None,
+                Box::pin(consensus_listener),
+            );
+
+            xdm_gossip_worker_builder
+                .push_chain_tx_pool_sink(ChainId::Consensus, consensus_msg_sink);
+
+            let (domain_message_sink, domain_message_receiver) =
+                tracing_unbounded("domain_message_channel", 100);
+
+            xdm_gossip_worker_builder.push_chain_tx_pool_sink(
+                ChainId::Domain(domain_config.domain_id),
+                domain_message_sink,
+            );
+
+            let domain = domain_config
+                .build(
+                    base_directory,
+                    ConsensusNodeLink {
+                        consensus_client: client.clone(),
+                        block_importing_notification_stream: block_importing_notification_stream
+                            .clone(),
+                        new_slot_notification_stream: new_slot_notification_stream.clone(),
+                        consensus_sync_service: sync_service.clone(),
+                        consensus_transaction_pool: transaction_pool.clone(),
+                        gossip_message_sink: xdm_gossip_worker_builder.gossip_msg_sink(),
+                        domain_message_receiver,
+                    },
+                )
+                .await?;
+
+            let cross_domain_message_gossip_worker = xdm_gossip_worker_builder
+                .build::<OpaqueBlock, _, _>(network_service.clone(), sync_service.clone());
+
+            task_manager.spawn_essential_handle().spawn_essential_blocking(
+                "cross-domain-gossip-message-worker",
+                None,
+                Box::pin(cross_domain_message_gossip_worker.run()),
+            );
+
+            maybe_domain = Some(domain);
+        }
+
         let (task_manager_drop_sender, task_manager_drop_receiver) = oneshot::channel();
         let (task_manager_result_sender, task_manager_result_receiver) = oneshot::channel();
         let task_manager_join_handle = sdk_utils::task_spawn(
@@ -265,28 +346,6 @@ impl<F: Farmer + 'static> Config<F> {
                 task_manager_join_handle.await.expect("joining should not fail; qed");
             }
         })?;
-
-        let mut maybe_domain = None;
-        if let Some(domain_config) = self.domain {
-            let base_directory = directory.as_ref().to_owned().clone();
-
-            let domain = domain_config
-                .build(
-                    base_directory,
-                    ConsensusNodeLink {
-                        consensus_client: client.clone(),
-                        block_importing_notification_stream: block_importing_notification_stream
-                            .clone(),
-                        new_slot_notification_stream: new_slot_notification_stream.clone(),
-                        consensus_network_service: network_service.clone(),
-                        consensus_sync_service: sync_service.clone(),
-                        consensus_transaction_pool: transaction_pool.clone(),
-                    },
-                )
-                .await?;
-
-            maybe_domain = Some(domain);
-        }
 
         let rpc_handle = sdk_utils::Rpc::new(&rpc_handlers);
         network_starter.start_network();
@@ -359,9 +418,9 @@ pub struct Node<F: Farmer> {
     #[derivative(Debug = "ignore")]
     client: Arc<FullClient>,
     #[derivative(Debug = "ignore")]
-    sync_service: Arc<sc_network_sync::service::chain_sync::SyncingService<RuntimeBlock>>,
+    sync_service: Arc<sc_network_sync::service::chain_sync::SyncingService<OpaqueBlock>>,
     #[derivative(Debug = "ignore")]
-    network_service: Arc<NetworkService<RuntimeBlock, Hash>>,
+    network_service: Arc<NetworkService<OpaqueBlock, Hash>>,
     rpc_handle: sdk_utils::Rpc,
     name: String,
     dsn: DsnShared,
