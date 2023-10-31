@@ -141,15 +141,15 @@ impl DsnBuilder {
         Self::new().allow_non_global_addresses_in_dht(true)
     }
 
-    /// Gemini 3f configuration
-    pub fn gemini_3f() -> Self {
+    /// Gemini 3g configuration
+    pub fn gemini_3g() -> Self {
         Self::new().listen_addresses(vec![
             "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
             "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
         ])
     }
 
-    /// Gemini 3f configuration
+    /// Gemini 3g configuration
     pub fn devnet() -> Self {
         Self::new().listen_addresses(vec![
             "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),

@@ -103,9 +103,9 @@ impl<F: Farmer + 'static> Config<F> {
         Builder::dev()
     }
 
-    /// Gemini 3f configuraiton
-    pub fn gemini_3f() -> Builder<F> {
-        Builder::gemini_3f()
+    /// Gemini 3g configuraiton
+    pub fn gemini_3g() -> Builder<F> {
+        Builder::gemini_3g()
     }
 
     /// Devnet configuraiton
@@ -127,13 +127,13 @@ impl<F: Farmer + 'static> Builder<F> {
             .dsn_sync_parallelism_level(5)
     }
 
-    /// Gemini 3f configuration
-    pub fn gemini_3f() -> Self {
+    /// Gemini 3g configuration
+    pub fn gemini_3g() -> Self {
         Self::new()
-            .network(NetworkBuilder::gemini_3f())
-            .dsn(DsnBuilder::gemini_3f())
-            .rpc(RpcBuilder::gemini_3f())
-            .offchain_worker(OffchainWorkerBuilder::gemini_3f())
+            .network(NetworkBuilder::gemini_3g())
+            .dsn(DsnBuilder::gemini_3g())
+            .rpc(RpcBuilder::gemini_3g())
+            .offchain_worker(OffchainWorkerBuilder::gemini_3g())
             .role(Role::Authority)
             .state_pruning(PruningMode::ArchiveAll)
             .blocks_pruning(BlocksPruning::Some(256))

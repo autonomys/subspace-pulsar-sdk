@@ -82,8 +82,8 @@ async fn main() -> anyhow::Result<()> {
 
     let node_dir = base_path.join("node");
     let node = match chain {
-        Chain::Gemini3f => Node::gemini_3f().dsn(
-            subspace_sdk::node::DsnBuilder::gemini_3f()
+        Chain::Gemini3f => Node::gemini_3g().dsn(
+            subspace_sdk::node::DsnBuilder::gemini_3g()
                 .provider_storage_path(node_dir.join("provider_storage")),
         ),
         Chain::Devnet => Node::devnet().dsn(
@@ -112,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
         .build(
             &node_dir,
             match chain {
-                Chain::Gemini3f => node::chain_spec::gemini_3f(),
+                Chain::Gemini3f => node::chain_spec::gemini_3g(),
                 Chain::Devnet => node::chain_spec::devnet_config(),
                 Chain::Dev => node::chain_spec::dev_config(),
             },
