@@ -182,6 +182,22 @@ impl<F: Farmer + 'static> Config<F> {
             )
         };
 
+        let chain_spec_domains_bootstrap_nodes_map: serde_json::map::Map<
+            String,
+            serde_json::Value,
+        > = base
+            .chain_spec
+            .properties()
+            .get("domainsBootstrapNodes")
+            .map(|d| serde_json::from_value(d.clone()))
+            .transpose()
+            .map_err(|error| {
+                sc_service::Error::Other(format!(
+                    "Failed to decode Domains bootstrap nodes: {error:?}"
+                ))
+            })?
+            .unwrap_or_default();
+
         // Default value are used for many of parameters
         let configuration = SubspaceConfiguration {
             base,
@@ -246,6 +262,18 @@ impl<F: Farmer + 'static> Config<F> {
         if let Some(domain_config) = self.domain {
             let base_directory = directory.as_ref().to_owned().clone();
 
+            let chain_spec_domains_bootstrap_nodes = chain_spec_domains_bootstrap_nodes_map
+                .get(&format!("{}", domain_config.domain_id))
+                .map(|d| serde_json::from_value(d.clone()))
+                .transpose()
+                .map_err(|error| {
+                    sc_service::Error::Other(format!(
+                        "Failed to decode Domain: {} bootstrap nodes: {error:?}",
+                        domain_config.domain_id
+                    ))
+                })?
+                .unwrap_or_default();
+
             let mut xdm_gossip_worker_builder = GossipWorkerBuilder::new();
 
             let relayer_worker =
@@ -303,6 +331,7 @@ impl<F: Farmer + 'static> Config<F> {
                         consensus_transaction_pool: transaction_pool.clone(),
                         gossip_message_sink: xdm_gossip_worker_builder.gossip_msg_sink(),
                         domain_message_receiver,
+                        chain_spec_domains_bootstrap_nodes,
                     },
                 )
                 .await?;
@@ -581,9 +610,9 @@ impl<F: Farmer + 'static> Node<F> {
         Builder::dev()
     }
 
-    /// Gemini 3f configuration
-    pub fn gemini_3f() -> Builder<F> {
-        Builder::gemini_3f()
+    /// Gemini 3g configuration
+    pub fn gemini_3g() -> Builder<F> {
+        Builder::gemini_3g()
     }
 
     /// Devnet configuration

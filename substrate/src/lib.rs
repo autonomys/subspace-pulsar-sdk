@@ -360,8 +360,8 @@ impl RpcBuilder {
             .max_subs_per_conn(Some(100))
     }
 
-    /// Gemini 3f configuration
-    pub fn gemini_3f() -> Self {
+    /// Gemini 3g configuration
+    pub fn gemini_3g() -> Self {
         Self::new().addr("127.0.0.1:9944".parse().expect("hardcoded value is true")).cors(vec![
             "http://localhost:*".to_owned(),
             "http://127.0.0.1:*".to_owned(),
@@ -428,8 +428,8 @@ impl NetworkBuilder {
         Self::default().force_synced(true).allow_private_ip(true)
     }
 
-    /// Gemini 3f configuration
-    pub fn gemini_3f() -> Self {
+    /// Gemini 3g configuration
+    pub fn gemini_3g() -> Self {
         Self::default()
             .listen_addresses(vec![
                 "/ip6/::/tcp/30333".parse().expect("hardcoded value is true"),

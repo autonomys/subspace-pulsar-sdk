@@ -21,7 +21,6 @@ pub use builder::{Builder, Config};
 use derivative::Derivative;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
-use rayon::{ThreadPool, ThreadPoolBuilder};
 use sdk_traits::Node;
 use sdk_utils::{ByteSize, DestructorSet, PublicKey, TaskOutput};
 use serde::{Deserialize, Serialize};
@@ -36,7 +35,6 @@ use subspace_farmer::single_disk_farm::{
 use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 use subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
-use subspace_farmer::utils::tokio_rayon_spawn_handler;
 use subspace_farmer::Identity;
 use subspace_farmer_components::plotting::PlottedSector;
 use subspace_farmer_components::sector::{sector_size, SectorMetadataChecksummed};
@@ -175,13 +173,30 @@ mod builder {
         /// Maximum number of pieces in single sector
         #[builder(default)]
         pub max_pieces_in_sector: Option<u16>,
-        /// Farming thread pool size
+        /// Size of PER FARM thread pool used for farming (mostly for blocking
+        /// I/O, but also for some compute-intensive operations during
+        /// proving), defaults to number of CPU cores available in
+        /// the system
         #[builder(default = "available_parallelism()")]
         pub farming_thread_pool_size: usize,
-        /// Plotting thread pool size
+        /// Size of PER FARM thread pool used for plotting, defaults to number
+        /// of CPU cores available in the system.
+        ///
+        /// NOTE: The fact that this parameter is per farm doesn't mean farmer
+        /// will plot multiple sectors concurrently, see
+        /// `sector_downloading_concurrency` and
+        /// `sector_encoding_concurrency` options.
         #[builder(default = "available_parallelism()")]
         pub plotting_thread_pool_size: usize,
-        /// Replotting thread pool size
+        /// Size of PER FARM thread pool used for replotting, typically smaller
+        /// pool than for plotting to not affect farming as much,
+        /// defaults to half of the number of CPU cores available in the
+        /// system.
+        ///
+        /// NOTE: The fact that this parameter is per farm doesn't mean farmer
+        /// will replot multiple sectors concurrently, see
+        /// `sector-downloading-concurrency` and
+        /// `sector-encoding-concurrency` options.
         #[builder(default = "available_parallelism() / 2")]
         pub replotting_thread_pool_size: usize,
         /// Sector downloading concurrency
@@ -467,20 +482,6 @@ impl Config {
             Some(m) => m,
             None => farmer_app_info.protocol_info.max_pieces_in_sector,
         };
-        let plotting_thread_pool = Arc::new(
-            ThreadPoolBuilder::new()
-                .thread_name(move |thread_index| format!("plotting#{thread_index}"))
-                .num_threads(plotting_thread_pool_size)
-                .spawn_handler(tokio_rayon_spawn_handler())
-                .build()?,
-        );
-        let replotting_thread_pool = Arc::new(
-            ThreadPoolBuilder::new()
-                .thread_name(move |thread_index| format!("replotting#{thread_index}"))
-                .num_threads(replotting_thread_pool_size)
-                .spawn_handler(tokio_rayon_spawn_handler())
-                .build()?,
-        );
 
         let mut plotting_delay_senders = Vec::with_capacity(farms.len());
         let downloading_semaphore = Arc::new(Semaphore::new(sector_downloading_concurrency.get()));
@@ -502,8 +503,8 @@ impl Config {
                 kzg: kzg.clone(),
                 erasure_coding: erasure_coding.clone(),
                 farming_thread_pool_size,
-                plotting_thread_pool: plotting_thread_pool.clone(),
-                replotting_thread_pool: replotting_thread_pool.clone(),
+                plotting_thread_pool_size,
+                replotting_thread_pool_size,
                 plotting_delay: Some(plotting_delay_receiver),
                 downloading_semaphore: Arc::clone(&downloading_semaphore),
                 encoding_semaphore: Arc::clone(&encoding_semaphore),
@@ -834,8 +835,8 @@ struct FarmOptions<'a, PG, N: sdk_traits::Node> {
     pub erasure_coding: ErasureCoding,
     pub max_pieces_in_sector: u16,
     pub farming_thread_pool_size: usize,
-    pub plotting_thread_pool: Arc<ThreadPool>,
-    pub replotting_thread_pool: Arc<ThreadPool>,
+    pub plotting_thread_pool_size: usize,
+    pub replotting_thread_pool_size: usize,
     pub plotting_delay: Option<futures::channel::oneshot::Receiver<()>>,
     pub downloading_semaphore: Arc<Semaphore>,
     pub encoding_semaphore: Arc<Semaphore>,
@@ -854,14 +855,14 @@ impl<T: subspace_proof_of_space::Table> Farm<T> {
             erasure_coding,
             max_pieces_in_sector,
             farming_thread_pool_size,
-            plotting_thread_pool,
-            replotting_thread_pool,
+            plotting_thread_pool_size,
+            replotting_thread_pool_size,
             plotting_delay,
             downloading_semaphore,
             encoding_semaphore,
         }: FarmOptions<
             '_,
-            impl subspace_farmer_components::plotting::PieceGetter + Clone + Send + 'static,
+            impl subspace_farmer_components::plotting::PieceGetter + Clone + Send + Sync + 'static,
             impl sdk_traits::Node,
         >,
     ) -> Result<(Self, SingleDiskFarm), BuildError> {
@@ -886,8 +887,8 @@ impl<T: subspace_proof_of_space::Table> Farm<T> {
             encoding_semaphore,
             farm_during_initial_plotting: false,
             farming_thread_pool_size,
-            plotting_thread_pool,
-            replotting_thread_pool,
+            plotting_thread_pool_size,
+            replotting_thread_pool_size,
             plotting_delay,
         };
         let single_disk_farm_fut = SingleDiskFarm::new::<_, _, T>(description, disk_farm_idx);

@@ -9,9 +9,9 @@ async-trait = "0.1"
 parking_lot = "0.12"
 sc-client-api = { version = "4.0.0-dev", git = "https://github.com/subspace/polkadot-sdk", rev = "892bf8e938c6bd2b893d3827d1093cd81baa59a1" }
 sdk-dsn = { path = "../dsn" }
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "aa2ca80b42b460dd73c1567057d6c07151a626dd" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "aa2ca80b42b460dd73c1567057d6c07151a626dd" }
-subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "aa2ca80b42b460dd73c1567057d6c07151a626dd" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "24712853776a743f5d3b6fb42e918fc87470af05" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "24712853776a743f5d3b6fb42e918fc87470af05" }
+subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "24712853776a743f5d3b6fb42e918fc87470af05" }
 
 [features]
 default = []
