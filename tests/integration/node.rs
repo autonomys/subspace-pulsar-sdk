@@ -115,7 +115,8 @@ async fn sync_farm_inner() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[cfg_attr(any(tarpaulin, not(target_os = "linux")), ignore = "Slow tests are run only on linux")]
+// TODO: Fix sync farm test
+#[ignore = "Ignored due to bug in test infrastructure/setup."]
 async fn sync_farm() {
     tokio::time::timeout(std::time::Duration::from_secs(60 * 60), sync_farm_inner()).await.unwrap()
 }
