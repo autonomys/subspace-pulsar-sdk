@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
+use cross_domain_message_gossip::Message;
 use derivative::Derivative;
 use derive_builder::Builder;
 use domain_client_operator::{BootstrapResult, Bootstrapper};
@@ -10,16 +11,18 @@ use futures::future;
 use futures::future::Either::{Left, Right};
 use sc_consensus_subspace::notification::SubspaceNotificationStream;
 use sc_consensus_subspace::{BlockImportingNotification, NewSlotNotification};
+use sc_transaction_pool::FullPool;
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
+use sc_utils::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
 use sdk_substrate::{Base, BaseBuilder};
 use sdk_utils::chain_spec::get_account_id_from_seed;
-use sdk_utils::{DestructorSet, TaskOutput};
+use sdk_utils::{DestructorSet, MultiaddrWithPeerId, TaskOutput};
 use serde::{Deserialize, Serialize};
 use sp_core::crypto::AccountId32;
 use sp_domains::DomainId;
-use sp_runtime::traits::Block as BlockT;
 use subspace_runtime::RuntimeApi as CRuntimeApi;
 use subspace_runtime_primitives::opaque::Block as CBlock;
-use subspace_service::{FullClient as CFullClient, FullSelectChain};
+use subspace_service::FullClient as CFullClient;
 use tokio::sync::{oneshot, RwLock};
 
 use crate::domains::domain::{Domain, DomainBuildingProgress};
@@ -36,13 +39,17 @@ pub struct ConsensusNodeLink {
         SubspaceNotificationStream<BlockImportingNotification<CBlock>>,
     /// New slot notification stream for consensus chain
     pub new_slot_notification_stream: SubspaceNotificationStream<NewSlotNotification>,
-    /// Reference to the consensus node network service
-    pub consensus_network_service:
-        Arc<sc_network::NetworkService<CBlock, <CBlock as BlockT>::Hash>>,
     /// Reference to the consensus node's network sync service
     pub consensus_sync_service: Arc<sc_network_sync::SyncingService<CBlock>>,
-    /// Consensus node's select chain
-    pub select_chain: FullSelectChain,
+    /// Consensus tx pool
+    pub consensus_transaction_pool:
+        Arc<FullPool<CBlock, CFullClient<CRuntimeApi, CExecutorDispatch>>>,
+    /// Cross domain message gossip worker's message sink
+    pub gossip_message_sink: TracingUnboundedSender<Message>,
+    /// Cross domain message receiver for the domain
+    pub domain_message_receiver: TracingUnboundedReceiver<Vec<u8>>,
+    /// Domain boot node property read from chain-spec
+    pub chain_spec_domains_bootstrap_nodes: Vec<MultiaddrWithPeerId>,
 }
 
 /// Domain node configuration
@@ -98,9 +105,9 @@ impl DomainConfig {
         DomainConfigBuilder::dev()
     }
 
-    /// Gemini 3f configuraiton
-    pub fn gemini_3f() -> DomainConfigBuilder {
-        DomainConfigBuilder::gemini_3f()
+    /// Gemini 3g configuraiton
+    pub fn gemini_3g() -> DomainConfigBuilder {
+        DomainConfigBuilder::gemini_3g()
     }
 
     /// Devnet configuraiton
@@ -124,9 +131,9 @@ impl DomainConfigBuilder {
             .dev_key_seed("//Alice")
     }
 
-    /// Gemini 3f configuration
-    pub fn gemini_3f() -> Self {
-        Self::new().chain_id("gemini-3f").domain_id(DomainId::new(0))
+    /// Gemini 3g configuration
+    pub fn gemini_3g() -> Self {
+        Self::new().chain_id("gemini-3g").domain_id(DomainId::new(0))
     }
 
     /// Devnet chain configuration
@@ -160,9 +167,11 @@ impl DomainConfig {
             consensus_client,
             block_importing_notification_stream,
             new_slot_notification_stream,
-            consensus_network_service,
             consensus_sync_service,
-            select_chain,
+            consensus_transaction_pool,
+            gossip_message_sink,
+            domain_message_receiver,
+            chain_spec_domains_bootstrap_nodes,
         } = consensus_node_link;
         let printable_domain_id: u32 = self.domain_id.into();
         let mut destructor_set =
@@ -311,9 +320,8 @@ impl DomainConfig {
                     let runtime_type = domain_instance_data.runtime_type.clone();
 
                     let domain_spec_result = evm_chain_spec::create_domain_spec(
-                        self.domain_id,
                         self.chain_id.as_str(),
-                        domain_instance_data,
+                        domain_instance_data.raw_genesis,
                     );
 
                     let domain_spec = match domain_spec_result {
@@ -330,21 +338,31 @@ impl DomainConfig {
 
                     let domains_directory =
                         directory.as_ref().join(format!("domain-{}", printable_domain_id));
-                    let service_config =
+                    let mut service_config =
                         self.base.configuration(domains_directory, domain_spec).await;
+
+                    if service_config.network.boot_nodes.is_empty() {
+                        service_config.network.boot_nodes = chain_spec_domains_bootstrap_nodes
+                            .clone()
+                            .into_iter()
+                            .map(Into::into)
+                            .collect::<Vec<_>>();
+                    }
 
                     let domain_starter = DomainInstanceStarter {
                         service_config,
                         domain_id: self.domain_id,
-                        relayer_id: self.relayer_id.clone(),
                         runtime_type,
                         additional_arguments: self.additional_args.clone(),
                         consensus_client,
                         block_importing_notification_stream,
                         new_slot_notification_stream,
-                        consensus_network_service,
                         consensus_sync_service,
-                        select_chain,
+                        consensus_offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+                            consensus_transaction_pool.clone(),
+                        ),
+                        gossip_message_sink,
+                        domain_message_receiver,
                     };
 
                     *shared_progress_data.write().await = DomainBuildingProgress::PreparingToStart;

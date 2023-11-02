@@ -10,7 +10,7 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![feature(concat_idents)]
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
 
 use derivative::Derivative;
@@ -47,10 +47,6 @@ pub struct Base {
     #[builder(default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub state_pruning: PruningMode,
-    /// Set execution strategies
-    #[builder(default)]
-    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
-    pub execution_strategy: ExecutionStrategy,
     /// Implementation name
     #[builder(default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
@@ -119,8 +115,6 @@ macro_rules! derive_base {
             blocks_pruning: $crate::BlocksPruning,
             /// State pruning options
             state_pruning: $crate::PruningMode,
-            /// Set execution strategies
-            execution_strategy: $crate::ExecutionStrategy,
             /// Implementation name
             impl_name: $crate::ImplName,
             /// Implementation version
@@ -164,7 +158,6 @@ impl Base {
             role,
             blocks_pruning,
             state_pruning,
-            execution_strategy,
             impl_name: ImplName(impl_name),
             impl_version: ImplVersion(impl_version),
             rpc:
@@ -276,7 +269,6 @@ impl Base {
                 instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
             },
             wasm_runtime_overrides: None,
-            execution_strategies: execution_strategy.into(),
             rpc_addr,
             rpc_port: rpc_port.unwrap_or_default(),
             rpc_methods: rpc_methods.into(),
@@ -357,8 +349,19 @@ impl RpcBuilder {
         Self::default()
     }
 
-    /// Gemini 3f configuration
-    pub fn gemini_3f() -> Self {
+    /// Local test configuration to have rpc exposed locally
+    pub fn local_test(port: u16) -> Self {
+        Self::dev()
+            .addr(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port))
+            .port(port)
+            .max_connections(100)
+            .max_request_size(10 * 1024)
+            .max_response_size(10 * 1024)
+            .max_subs_per_conn(Some(100))
+    }
+
+    /// Gemini 3g configuration
+    pub fn gemini_3g() -> Self {
         Self::new().addr("127.0.0.1:9944".parse().expect("hardcoded value is true")).cors(vec![
             "http://localhost:*".to_owned(),
             "http://127.0.0.1:*".to_owned(),
@@ -425,8 +428,8 @@ impl NetworkBuilder {
         Self::default().force_synced(true).allow_private_ip(true)
     }
 
-    /// Gemini 3f configuration
-    pub fn gemini_3f() -> Self {
+    /// Gemini 3g configuration
+    pub fn gemini_3g() -> Self {
         Self::default()
             .listen_addresses(vec![
                 "/ip6/::/tcp/30333".parse().expect("hardcoded value is true"),

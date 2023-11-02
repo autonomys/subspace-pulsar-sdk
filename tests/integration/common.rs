@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut};
-use sdk_node::{DomainConfigBuilder, PotConfiguration};
+use sdk_node::DomainConfigBuilder;
 use sdk_utils::ByteSize;
 use subspace_sdk::farmer::FarmDescription;
 use subspace_sdk::node::{chain_spec, ChainSpec, DsnBuilder, NetworkBuilder, Role};
@@ -93,7 +93,8 @@ impl NodeBuilder {
                     .listen_addresses(vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()])
                     .boot_nodes(boot_nodes),
             )
-            .role(if not_authority { Role::Full } else { Role::Authority });
+            .role(if not_authority { Role::Full } else { Role::Authority })
+            .is_timekeeper(!not_authority);
 
         let node = if enable_domains {
             node.domain(Some(DomainConfigBuilder::dev().configuration()))
@@ -110,14 +111,7 @@ impl NodeBuilder {
             node
         };
 
-        let node = node
-            .build(
-                path.path().join("node"),
-                chain.clone(),
-                PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
-            )
-            .await
-            .unwrap();
+        let node = node.build(path.path().join("node"), chain.clone()).await.unwrap();
 
         Node { node, path, chain }
     }

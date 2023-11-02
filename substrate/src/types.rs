@@ -89,57 +89,6 @@ impl From<sc_service::PruningMode> for PruningMode {
     }
 }
 
-/// Strategy for executing a call into the runtime.
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Deserialize, Serialize)]
-pub enum ExecutionStrategy {
-    /// Execute with the native equivalent if it is compatible with the
-    /// given wasm module; otherwise fall back to the wasm.
-    #[default]
-    NativeWhenPossible,
-    /// Use the given wasm module.
-    AlwaysWasm,
-    /// Run with both the wasm and the native variant (if compatible).
-    /// Report any discrepancy as an error.
-    Both,
-    /// First native, then if that fails or is not possible, wasm.
-    NativeElseWasm,
-}
-
-impl From<sc_service::config::ExecutionStrategy> for ExecutionStrategy {
-    fn from(value: sc_service::config::ExecutionStrategy) -> Self {
-        use sc_service::config::ExecutionStrategy as Other;
-        match value {
-            Other::Both => Self::Both,
-            Other::AlwaysWasm => Self::AlwaysWasm,
-            Other::NativeWhenPossible => Self::NativeWhenPossible,
-            Other::NativeElseWasm => Self::NativeElseWasm,
-        }
-    }
-}
-
-impl From<ExecutionStrategy> for sc_service::config::ExecutionStrategy {
-    fn from(value: ExecutionStrategy) -> Self {
-        match value {
-            ExecutionStrategy::Both => Self::Both,
-            ExecutionStrategy::AlwaysWasm => Self::AlwaysWasm,
-            ExecutionStrategy::NativeWhenPossible => Self::NativeWhenPossible,
-            ExecutionStrategy::NativeElseWasm => Self::NativeElseWasm,
-        }
-    }
-}
-
-impl From<ExecutionStrategy> for sc_service::config::ExecutionStrategies {
-    fn from(value: ExecutionStrategy) -> Self {
-        sc_service::config::ExecutionStrategies {
-            syncing: value.into(),
-            importing: value.into(),
-            block_construction: value.into(),
-            offchain_worker: value.into(),
-            other: value.into(),
-        }
-    }
-}
-
 /// Type wrapper with default value for implementation name
 #[derive(
     Debug, Clone, Derivative, Deserialize, Serialize, PartialEq, Eq, From, Deref, DerefMut, Display,
@@ -211,8 +160,8 @@ impl OffchainWorkerBuilder {
         Self::default()
     }
 
-    /// Gemini 3f configuration
-    pub fn gemini_3f() -> Self {
+    /// Gemini 3g configuration
+    pub fn gemini_3g() -> Self {
         Self::default().enabled(true)
     }
 

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::num::NonZeroUsize;
 use std::path::Path;
 
@@ -7,15 +8,14 @@ use derive_more::{Deref, DerefMut, Display, From};
 use sc_service::BlocksPruning;
 use sdk_dsn::{Dsn, DsnBuilder};
 use sdk_substrate::{
-    Base, BaseBuilder, ExecutionStrategy, NetworkBuilder, OffchainWorkerBuilder, PruningMode, Role,
-    RpcBuilder, StorageMonitor,
+    Base, BaseBuilder, NetworkBuilder, OffchainWorkerBuilder, PruningMode, Role, RpcBuilder,
+    StorageMonitor,
 };
 use sdk_utils::ByteSize;
 use serde::{Deserialize, Serialize};
 
 use super::{ChainSpec, Farmer, Node};
 use crate::domains::builder::DomainConfig;
-use crate::PotConfiguration;
 
 /// Wrapper with default value for piece cache size
 #[derive(
@@ -79,6 +79,18 @@ pub struct Config<F: Farmer> {
     #[builder(setter(into), default)]
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub domain: Option<DomainConfig>,
+    /// Flag indicating if the node is authority for Proof of time consensus
+    #[builder(setter(into), default)]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
+    pub is_timekeeper: bool,
+    /// CPU cores that timekeeper can use
+    #[builder(setter(into), default)]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
+    pub timekeeper_cpu_cores: HashSet<usize>,
+    /// Proof of time entropy
+    #[builder(setter(into), default)]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
+    pub pot_external_entropy: Option<Vec<u8>>,
 }
 
 impl<F: Farmer + 'static> Config<F> {
@@ -87,9 +99,9 @@ impl<F: Farmer + 'static> Config<F> {
         Builder::dev()
     }
 
-    /// Gemini 3f configuraiton
-    pub fn gemini_3f() -> Builder<F> {
-        Builder::gemini_3f()
+    /// Gemini 3g configuraiton
+    pub fn gemini_3g() -> Builder<F> {
+        Builder::gemini_3g()
     }
 
     /// Devnet configuraiton
@@ -102,6 +114,7 @@ impl<F: Farmer + 'static> Builder<F> {
     /// Dev chain configuration
     pub fn dev() -> Self {
         Self::new()
+            .is_timekeeper(true)
             .force_authoring(true)
             .network(NetworkBuilder::dev())
             .dsn(DsnBuilder::dev())
@@ -109,14 +122,13 @@ impl<F: Farmer + 'static> Builder<F> {
             .offchain_worker(OffchainWorkerBuilder::dev())
     }
 
-    /// Gemini 3f configuration
-    pub fn gemini_3f() -> Self {
+    /// Gemini 3g configuration
+    pub fn gemini_3g() -> Self {
         Self::new()
-            .execution_strategy(ExecutionStrategy::AlwaysWasm)
-            .network(NetworkBuilder::gemini_3f())
-            .dsn(DsnBuilder::gemini_3f())
-            .rpc(RpcBuilder::gemini_3f())
-            .offchain_worker(OffchainWorkerBuilder::gemini_3f())
+            .network(NetworkBuilder::gemini_3g())
+            .dsn(DsnBuilder::gemini_3g())
+            .rpc(RpcBuilder::gemini_3g())
+            .offchain_worker(OffchainWorkerBuilder::gemini_3g())
             .role(Role::Authority)
             .state_pruning(PruningMode::ArchiveAll)
             .blocks_pruning(BlocksPruning::Some(256))
@@ -125,7 +137,6 @@ impl<F: Farmer + 'static> Builder<F> {
     /// Devnet chain configuration
     pub fn devnet() -> Self {
         Self::new()
-            .execution_strategy(ExecutionStrategy::AlwaysWasm)
             .network(NetworkBuilder::devnet())
             .dsn(DsnBuilder::devnet())
             .rpc(RpcBuilder::devnet())
@@ -150,9 +161,8 @@ impl<F: Farmer + 'static> Builder<F> {
         self,
         directory: impl AsRef<Path>,
         chain_spec: ChainSpec,
-        pot_configuration: PotConfiguration,
     ) -> anyhow::Result<Node<F>> {
-        self.configuration().build(directory, chain_spec, pot_configuration).await
+        self.configuration().build(directory, chain_spec).await
     }
 }
 

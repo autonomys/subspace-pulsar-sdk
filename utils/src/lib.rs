@@ -15,6 +15,7 @@ use std::vec::Drain;
 
 use anyhow::{anyhow, Context, Result};
 use derive_more::{Deref, DerefMut, Display, From, FromStr, Into};
+use frame_system::pallet_prelude::{BlockNumberFor, HeaderFor};
 use futures::prelude::*;
 use jsonrpsee_core::client::{
     BatchResponse, ClientT, Subscription, SubscriptionClientT, SubscriptionKind,
@@ -58,17 +59,17 @@ impl Rpc {
     /// Subscribe to new block headers
     pub async fn subscribe_new_heads<'a, 'b, T>(
         &'a self,
-    ) -> Result<impl Stream<Item = T::Header> + Send + Sync + Unpin + 'static, Error>
+    ) -> Result<impl Stream<Item = HeaderFor<T>> + Send + Sync + Unpin + 'static, Error>
     where
         T: frame_system::Config + sp_runtime::traits::GetRuntimeBlockType,
         T::RuntimeBlock: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
-        T::Header: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
+        HeaderFor<T>: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
         'a: 'b,
     {
         let stream = sc_rpc::chain::ChainApiClient::<
-            T::BlockNumber,
+            BlockNumberFor<T>,
             T::Hash,
-            T::Header,
+            HeaderFor<T>,
             sp_runtime::generic::SignedBlock<T::RuntimeBlock>,
         >::subscribe_new_heads(self)
         .await?
@@ -80,17 +81,17 @@ impl Rpc {
     /// Subscribe to new finalized block headers
     pub async fn subscribe_finalized_heads<'a, 'b, T>(
         &'a self,
-    ) -> Result<impl Stream<Item = T::Header> + Send + Sync + Unpin + 'static, Error>
+    ) -> Result<impl Stream<Item = HeaderFor<T>> + Send + Sync + Unpin + 'static, Error>
     where
         T: frame_system::Config + sp_runtime::traits::GetRuntimeBlockType,
         T::RuntimeBlock: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
-        T::Header: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
+        HeaderFor<T>: serde::de::DeserializeOwned + sp_runtime::DeserializeOwned + 'static,
         'a: 'b,
     {
         let stream = sc_rpc::chain::ChainApiClient::<
-            T::BlockNumber,
+            BlockNumberFor<T>,
             T::Hash,
-            T::Header,
+            HeaderFor<T>,
             sp_runtime::generic::SignedBlock<T::RuntimeBlock>,
         >::subscribe_finalized_heads(self)
         .await?
@@ -836,6 +837,8 @@ pub mod chain_spec {
 
     use frame_support::traits::Get;
     use sc_service::Properties;
+    use serde_json::map::Map;
+    use serde_json::Value;
     use sp_core::crypto::AccountId32;
     use sp_core::{sr25519, Pair, Public};
     use sp_runtime::traits::IdentifyAccount;
@@ -847,9 +850,12 @@ pub mod chain_spec {
     pub fn chain_spec_properties() -> Properties {
         let mut properties = Properties::new();
 
-        properties.insert("ss58Format".into(), <SS58Prefix as Get<u16>>::get().into());
-        properties.insert("tokenDecimals".into(), DECIMAL_PLACES.into());
-        properties.insert("tokenSymbol".into(), "tSSC".into());
+        properties.insert("dsnBootstrapNodes".to_string(), Vec::<String>::new().into());
+        properties.insert("ss58Format".to_string(), <SS58Prefix as Get<u16>>::get().into());
+        properties.insert("tokenDecimals".to_string(), DECIMAL_PLACES.into());
+        properties.insert("tokenSymbol".to_string(), "tSSC".into());
+        let domains_bootstrap_nodes = Map::<String, Value>::new();
+        properties.insert("domainsBootstrapNodes".to_string(), domains_bootstrap_nodes.into());
 
         properties
     }

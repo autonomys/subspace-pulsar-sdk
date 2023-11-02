@@ -21,7 +21,6 @@ pub use builder::{Builder, Config};
 use derivative::Derivative;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
-use rayon::{ThreadPool, ThreadPoolBuilder};
 use sdk_traits::Node;
 use sdk_utils::{ByteSize, DestructorSet, PublicKey, TaskOutput};
 use serde::{Deserialize, Serialize};
@@ -36,7 +35,6 @@ use subspace_farmer::single_disk_farm::{
 use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 use subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
-use subspace_farmer::utils::tokio_rayon_spawn_handler;
 use subspace_farmer::Identity;
 use subspace_farmer_components::plotting::PlottedSector;
 use subspace_farmer_components::sector::{sector_size, SectorMetadataChecksummed};
@@ -44,7 +42,7 @@ use subspace_networking::libp2p::kad::RecordKey;
 use subspace_networking::utils::multihash::ToMultihash;
 use subspace_networking::NetworkingParametersManager;
 use subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
-use tokio::sync::{mpsc, oneshot, watch, Mutex};
+use tokio::sync::{mpsc, oneshot, watch, Mutex, Semaphore};
 use tracing::{debug, error, warn};
 use tracing_futures::Instrument;
 
@@ -175,15 +173,40 @@ mod builder {
         /// Maximum number of pieces in single sector
         #[builder(default)]
         pub max_pieces_in_sector: Option<u16>,
-        /// Farming thread pool size
+        /// Size of PER FARM thread pool used for farming (mostly for blocking
+        /// I/O, but also for some compute-intensive operations during
+        /// proving), defaults to number of CPU cores available in
+        /// the system
         #[builder(default = "available_parallelism()")]
         pub farming_thread_pool_size: usize,
-        /// Plotting thread pool size
+        /// Size of PER FARM thread pool used for plotting, defaults to number
+        /// of CPU cores available in the system.
+        ///
+        /// NOTE: The fact that this parameter is per farm doesn't mean farmer
+        /// will plot multiple sectors concurrently, see
+        /// `sector_downloading_concurrency` and
+        /// `sector_encoding_concurrency` options.
         #[builder(default = "available_parallelism()")]
         pub plotting_thread_pool_size: usize,
-        /// Replotting thread pool size
+        /// Size of PER FARM thread pool used for replotting, typically smaller
+        /// pool than for plotting to not affect farming as much,
+        /// defaults to half of the number of CPU cores available in the
+        /// system.
+        ///
+        /// NOTE: The fact that this parameter is per farm doesn't mean farmer
+        /// will replot multiple sectors concurrently, see
+        /// `sector-downloading-concurrency` and
+        /// `sector-encoding-concurrency` options.
         #[builder(default = "available_parallelism() / 2")]
         pub replotting_thread_pool_size: usize,
+        /// Sector downloading concurrency
+        #[builder(default = "NonZeroUsize::new(2).expect(\"2 > 0\")")]
+        #[derivative(Default(value = "NonZeroUsize::new(2).expect(\"2 > 0\")"))]
+        pub sector_downloading_concurrency: NonZeroUsize,
+        /// Sector encoding concurrency
+        #[builder(default = "NonZeroUsize::new(1).expect(\"1 > 0\")")]
+        #[derivative(Default(value = "NonZeroUsize::new(1).expect(\"1 > 0\")"))]
+        pub sector_encoding_concurrency: NonZeroUsize,
     }
 
     impl Builder {
@@ -287,7 +310,7 @@ impl<T: subspace_proof_of_space::Table> sdk_traits::Farmer for Farmer<T> {
 const SEGMENT_COMMITMENTS_CACHE_SIZE: NonZeroUsize =
     NonZeroUsize::new(1_000_000).expect("Not zero; qed");
 
-fn create_readers_and_pieces(
+async fn create_readers_and_pieces(
     single_disk_farms: &[SingleDiskFarm],
 ) -> Result<ReadersAndPieces, BuildError> {
     // Store piece readers so we can reference them later
@@ -296,32 +319,40 @@ fn create_readers_and_pieces(
 
     tracing::debug!("Collecting already plotted pieces");
 
-    // Collect already plotted pieces
-    single_disk_farms.iter().enumerate().try_for_each(|(disk_farm_index, single_disk_farm)| {
-        let disk_farm_index = disk_farm_index.try_into().map_err(|_error| {
-            anyhow!(
-                "More than 256 farms are not supported, consider running multiple farmer instances"
-            )
-        })?;
+    let mut plotted_sectors_iters = futures::future::join_all(
+        single_disk_farms.iter().map(|single_disk_farm| single_disk_farm.plotted_sectors()),
+    )
+    .await;
 
-        (0 as SectorIndex..).zip(single_disk_farm.plotted_sectors()).for_each(
-            |(sector_index, plotted_sector_result)| match plotted_sector_result {
-                Ok(plotted_sector) => {
-                    readers_and_pieces.add_sector(disk_farm_index, &plotted_sector);
-                }
-                Err(error) => {
-                    error!(
-                        %error,
-                        %disk_farm_index,
-                        %sector_index,
-                        "Failed reading plotted sector on startup, skipping"
-                    );
-                }
-            },
-        );
+    plotted_sectors_iters.drain(..).enumerate().try_for_each(
+        |(disk_farm_index, plotted_sectors_iter)| {
+            let disk_farm_index = disk_farm_index.try_into().map_err(|_error| {
+                anyhow!(
+                    "More than 256 farms are not supported, consider running multiple farmer \
+                     instances"
+                )
+            })?;
 
-        Ok::<_, anyhow::Error>(())
-    })?;
+            (0 as SectorIndex..).zip(plotted_sectors_iter).for_each(
+                |(sector_index, plotted_sector_result)| match plotted_sector_result {
+                    Ok(plotted_sector) => {
+                        readers_and_pieces.add_sector(disk_farm_index, &plotted_sector);
+                    }
+                    Err(error) => {
+                        error!(
+                            %error,
+                            %disk_farm_index,
+                            %sector_index,
+                            "Failed reading plotted sector on startup, skipping"
+                        );
+                    }
+                },
+            );
+
+            Ok::<_, anyhow::Error>(())
+        },
+    )?;
+
     tracing::debug!("Finished collecting already plotted pieces");
 
     Ok(readers_and_pieces)
@@ -372,6 +403,8 @@ impl Config {
             farming_thread_pool_size,
             plotting_thread_pool_size,
             replotting_thread_pool_size,
+            sector_downloading_concurrency,
+            sector_encoding_concurrency,
         } = self;
 
         let mut single_disk_farms = Vec::with_capacity(farms.len());
@@ -449,22 +482,16 @@ impl Config {
             Some(m) => m,
             None => farmer_app_info.protocol_info.max_pieces_in_sector,
         };
-        let plotting_thread_pool = Arc::new(
-            ThreadPoolBuilder::new()
-                .thread_name(move |thread_index| format!("plotting#{thread_index}"))
-                .num_threads(plotting_thread_pool_size)
-                .spawn_handler(tokio_rayon_spawn_handler())
-                .build()?,
-        );
-        let replotting_thread_pool = Arc::new(
-            ThreadPoolBuilder::new()
-                .thread_name(move |thread_index| format!("replotting#{thread_index}"))
-                .num_threads(replotting_thread_pool_size)
-                .spawn_handler(tokio_rayon_spawn_handler())
-                .build()?,
-        );
+
+        let mut plotting_delay_senders = Vec::with_capacity(farms.len());
+        let downloading_semaphore = Arc::new(Semaphore::new(sector_downloading_concurrency.get()));
+        let encoding_semaphore = Arc::new(Semaphore::new(sector_encoding_concurrency.get()));
 
         for (disk_farm_idx, description) in farms.iter().enumerate() {
+            let (plotting_delay_sender, plotting_delay_receiver) =
+                futures::channel::oneshot::channel();
+            plotting_delay_senders.push(plotting_delay_sender);
+
             let (farm, single_disk_farm) = Farm::new(FarmOptions {
                 disk_farm_idx,
                 cache_percentage,
@@ -476,10 +503,14 @@ impl Config {
                 kzg: kzg.clone(),
                 erasure_coding: erasure_coding.clone(),
                 farming_thread_pool_size,
-                plotting_thread_pool: plotting_thread_pool.clone(),
-                replotting_thread_pool: replotting_thread_pool.clone(),
+                plotting_thread_pool_size,
+                replotting_thread_pool_size,
+                plotting_delay: Some(plotting_delay_receiver),
+                downloading_semaphore: Arc::clone(&downloading_semaphore),
+                encoding_semaphore: Arc::clone(&encoding_semaphore),
             })
             .await?;
+
             farm_info.insert(farm.directory.clone(), farm);
             single_disk_farms.push(single_disk_farm);
         }
@@ -492,7 +523,7 @@ impl Config {
             }
         })?;
 
-        farmer_piece_cache
+        let cache_acknowledgement_receiver = farmer_piece_cache
             .replace_backing_caches(
                 single_disk_farms
                     .iter()
@@ -502,7 +533,40 @@ impl Config {
             .await;
         drop(farmer_piece_cache);
 
-        readers_and_pieces.lock().replace(create_readers_and_pieces(&single_disk_farms)?);
+        let (plotting_delay_task_drop_sender, plotting_delay_task_drop_receiver) =
+            oneshot::channel::<()>();
+        let plotting_delay_task_join_handle = sdk_utils::task_spawn_blocking(
+            format!("subspace-sdk-farmer-{node_name}-plotting-delay-task"),
+            {
+                let handle = tokio::runtime::Handle::current();
+
+                move || {
+                    handle.block_on(future::select(
+                        Box::pin(async {
+                            if cache_acknowledgement_receiver.await.is_ok() {
+                                for plotting_delay_sender in plotting_delay_senders {
+                                    // Doesn't matter if receiver is gone
+                                    let _ = plotting_delay_sender.send(());
+                                }
+                            }
+                        }),
+                        plotting_delay_task_drop_receiver,
+                    ));
+                }
+            },
+        );
+
+        destructors.add_async_destructor({
+            async move {
+                let _ = plotting_delay_task_drop_sender.send(());
+                plotting_delay_task_join_handle.await.expect(
+                    "awaiting worker should not fail except panic by the worker itself; qed",
+                );
+            }
+        })?;
+
+        let readers_and_pieces_instance = create_readers_and_pieces(&single_disk_farms).await?;
+        readers_and_pieces.lock().replace(readers_and_pieces_instance);
         destructors.add_sync_destructor({
             let farmer_reader_and_pieces = node.dsn().farmer_readers_and_pieces.clone();
             move || {
@@ -555,10 +619,12 @@ impl Config {
                             Left((maybe_result, _)) => {
                                 let send_result = match maybe_result {
                                     None => farm_driver_result_sender
-                                        .try_send(Ok(TaskOutput::Value(()))),
+                                        .try_send(Ok(TaskOutput::Value(None))),
                                     Some(result) => match result {
-                                        Ok(()) => farm_driver_result_sender
-                                            .try_send(Ok(TaskOutput::Value(()))),
+                                        Ok(single_disk_farm_id) => farm_driver_result_sender
+                                            .try_send(Ok(TaskOutput::Value(Some(
+                                                single_disk_farm_id,
+                                            )))),
                                         Err(e) => farm_driver_result_sender.try_send(Err(e)),
                                     },
                                 };
@@ -608,6 +674,8 @@ impl Config {
     }
 }
 
+type ResultReceiver = mpsc::Receiver<anyhow::Result<TaskOutput<Option<SingleDiskFarmId>, String>>>;
+
 /// Farmer structure
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -615,7 +683,7 @@ impl Config {
 pub struct Farmer<T: subspace_proof_of_space::Table> {
     reward_address: PublicKey,
     farm_info: HashMap<PathBuf, Farm<T>>,
-    result_receiver: Option<mpsc::Receiver<anyhow::Result<TaskOutput<(), String>>>>,
+    result_receiver: Option<ResultReceiver>,
     node_name: String,
     app_info: FarmerAppInfo,
     _destructors: DestructorSet,
@@ -767,8 +835,11 @@ struct FarmOptions<'a, PG, N: sdk_traits::Node> {
     pub erasure_coding: ErasureCoding,
     pub max_pieces_in_sector: u16,
     pub farming_thread_pool_size: usize,
-    pub plotting_thread_pool: Arc<ThreadPool>,
-    pub replotting_thread_pool: Arc<ThreadPool>,
+    pub plotting_thread_pool_size: usize,
+    pub replotting_thread_pool_size: usize,
+    pub plotting_delay: Option<futures::channel::oneshot::Receiver<()>>,
+    pub downloading_semaphore: Arc<Semaphore>,
+    pub encoding_semaphore: Arc<Semaphore>,
 }
 
 impl<T: subspace_proof_of_space::Table> Farm<T> {
@@ -784,11 +855,14 @@ impl<T: subspace_proof_of_space::Table> Farm<T> {
             erasure_coding,
             max_pieces_in_sector,
             farming_thread_pool_size,
-            plotting_thread_pool,
-            replotting_thread_pool,
+            plotting_thread_pool_size,
+            replotting_thread_pool_size,
+            plotting_delay,
+            downloading_semaphore,
+            encoding_semaphore,
         }: FarmOptions<
             '_,
-            impl subspace_farmer_components::plotting::PieceGetter + Clone + Send + 'static,
+            impl subspace_farmer_components::plotting::PieceGetter + Clone + Send + Sync + 'static,
             impl sdk_traits::Node,
         >,
     ) -> Result<(Self, SingleDiskFarm), BuildError> {
@@ -797,6 +871,7 @@ impl<T: subspace_proof_of_space::Table> Farm<T> {
         let farmer_app_info = subspace_farmer::NodeClient::farmer_app_info(node.rpc())
             .await
             .expect("Node is always reachable");
+
         let description = SingleDiskFarmOptions {
             allocated_space,
             directory: directory.clone(),
@@ -808,9 +883,13 @@ impl<T: subspace_proof_of_space::Table> Farm<T> {
             erasure_coding,
             piece_getter,
             cache_percentage,
+            downloading_semaphore,
+            encoding_semaphore,
+            farm_during_initial_plotting: false,
             farming_thread_pool_size,
-            plotting_thread_pool,
-            replotting_thread_pool,
+            plotting_thread_pool_size,
+            replotting_thread_pool_size,
+            plotting_delay,
         };
         let single_disk_farm_fut = SingleDiskFarm::new::<_, _, T>(description, disk_farm_idx);
         let single_disk_farm = match single_disk_farm_fut.await {
@@ -874,9 +953,9 @@ impl<T: subspace_proof_of_space::Table> Farm<T> {
                 progress,
                 solutions,
                 initial_plotting_progress: Arc::new(Mutex::new(InitialPlottingProgress {
-                    starting_sector: u64::try_from(single_disk_farm.plotted_sectors_count())
+                    starting_sector: u64::try_from(single_disk_farm.plotted_sectors_count().await)
                         .expect("Sector count is less than u64::MAX"),
-                    current_sector: u64::try_from(single_disk_farm.plotted_sectors_count())
+                    current_sector: u64::try_from(single_disk_farm.plotted_sectors_count().await)
                         .expect("Sector count is less than u64::MAX"),
                     total_sectors: target_sector_count,
                 })),

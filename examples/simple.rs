@@ -1,7 +1,6 @@
 use std::num::NonZeroU8;
 
 use futures::prelude::*;
-use sdk_node::PotConfiguration;
 
 #[tokio::main]
 async fn main() {
@@ -11,11 +10,7 @@ async fn main() {
         .force_authoring(true)
         .role(subspace_sdk::node::Role::Authority)
         // Starting a new chain
-        .build(
-            "node",
-            subspace_sdk::chain_spec::dev_config(),
-            PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
-        )
+        .build("node", subspace_sdk::chain_spec::dev_config())
         .await
         .unwrap();
 

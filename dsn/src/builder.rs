@@ -7,14 +7,17 @@ use derivative::Derivative;
 use derive_builder::Builder;
 use derive_more::{Deref, DerefMut, Display, From};
 use futures::prelude::*;
+use prometheus_client::registry::Registry;
 use sc_consensus_subspace::archiver::SegmentHeadersStore;
 use sdk_utils::{self, DestructorSet, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
 use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
+use subspace_networking::libp2p::kad::Mode;
+use subspace_networking::libp2p::metrics::Metrics;
 use subspace_networking::utils::strip_peer_id;
 use subspace_networking::{
-    PeerInfo, PeerInfoProvider, PieceByIndexRequest, PieceByIndexRequestHandler,
+    KademliaMode, PeerInfo, PeerInfoProvider, PieceByIndexRequest, PieceByIndexRequestHandler,
     PieceByIndexResponse, SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest,
     SegmentHeaderResponse,
 };
@@ -138,15 +141,15 @@ impl DsnBuilder {
         Self::new().allow_non_global_addresses_in_dht(true)
     }
 
-    /// Gemini 3f configuration
-    pub fn gemini_3f() -> Self {
+    /// Gemini 3g configuration
+    pub fn gemini_3g() -> Self {
         Self::new().listen_addresses(vec![
             "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
             "/ip4/0.0.0.0/tcp/30433".parse().expect("hardcoded value is true"),
         ])
     }
 
-    /// Gemini 3f configuration
+    /// Gemini 3g configuration
     pub fn devnet() -> Self {
         Self::new().listen_addresses(vec![
             "/ip6/::/tcp/30433".parse().expect("hardcoded value is true"),
@@ -169,6 +172,8 @@ pub struct DsnOptions<C, PieceByIndex, SegmentHeaderByIndexes> {
     pub get_segment_header_by_segment_indexes: SegmentHeaderByIndexes,
     /// Segment header store
     pub segment_header_store: SegmentHeadersStore<C>,
+    /// Is libp2p metrics enabled
+    pub is_metrics_enabled: bool,
 }
 
 /// Shared Dsn structure between node and farmer
@@ -189,7 +194,11 @@ impl Dsn {
     pub fn build_dsn<B, C, PieceByIndex, F1, SegmentHeaderByIndexes>(
         self,
         options: DsnOptions<C, PieceByIndex, SegmentHeaderByIndexes>,
-    ) -> anyhow::Result<(DsnShared, subspace_networking::NodeRunner<LocalRecordProvider>)>
+    ) -> anyhow::Result<(
+        DsnShared,
+        subspace_networking::NodeRunner<LocalRecordProvider>,
+        Option<Registry>,
+    )>
     where
         B: sp_runtime::traits::Block,
         C: sc_client_api::AuxStore + sp_blockchain::HeaderBackend<B> + Send + Sync + 'static,
@@ -214,11 +223,15 @@ impl Dsn {
             get_piece_by_index,
             get_segment_header_by_segment_indexes,
             segment_header_store,
+            is_metrics_enabled,
         } = options;
         let farmer_readers_and_pieces = Arc::new(parking_lot::Mutex::new(None));
         let protocol_version = hex::encode(client.info().genesis_hash);
         let farmer_piece_cache = Arc::new(parking_lot::RwLock::new(None));
         let local_records_provider = MaybeLocalRecordProvider::new(farmer_piece_cache.clone());
+
+        let mut metrics_registry = Registry::default();
+        let metrics = is_metrics_enabled.then(|| Metrics::new(&mut metrics_registry));
 
         tracing::debug!(genesis_hash = protocol_version, "Setting DSN protocol version...");
 
@@ -295,7 +308,9 @@ impl Dsn {
             max_pending_incoming_connections,
             max_pending_outgoing_connections,
             bootstrap_addresses: bootstrap_nodes,
+            kademlia_mode: KademliaMode::Dynamic { initial_mode: Mode::Client },
             external_addresses: external_addresses.into_iter().map(Into::into).collect(),
+            metrics,
             ..default_networking_config
         };
 
@@ -324,6 +339,7 @@ impl Dsn {
                 farmer_piece_cache,
             },
             runner,
+            is_metrics_enabled.then_some(metrics_registry),
         ))
     }
 }

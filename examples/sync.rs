@@ -3,7 +3,6 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use futures::stream::StreamExt;
-use sdk_node::PotConfiguration;
 use subspace_sdk::node::NetworkBuilder;
 use subspace_sdk::{
     chain_spec, ByteSize, FarmDescription, Farmer, MultiaddrWithPeerId, Node, PublicKey,
@@ -65,11 +64,7 @@ async fn main() -> anyhow::Result<()> {
                 )
                 .force_authoring(true)
                 .role(subspace_sdk::node::Role::Authority)
-                .build(
-                    node,
-                    chain_spec,
-                    PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
-                )
+                .build(node, chain_spec)
                 .await?;
 
             let _farmer: Farmer = Farmer::builder()
@@ -96,11 +91,7 @@ async fn main() -> anyhow::Result<()> {
                 .force_authoring(true)
                 .role(subspace_sdk::node::Role::Authority)
                 .network(NetworkBuilder::new().boot_nodes(boot_nodes))
-                .build(
-                    node.as_ref(),
-                    chain_spec,
-                    PotConfiguration { is_pot_enabled: false, is_node_time_keeper: true },
-                )
+                .build(node.as_ref(), chain_spec)
                 .await?;
 
             node.sync().await.unwrap();
