@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `node/src/builder.rs`."><title>builder.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sdk_node" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0-nightly (399b06823 2023-07-20)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-6d2c9675f3d09c26.css" data-theme-dark-css="dark-45ceb8f2e522f4d1.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-6d2c9675f3d09c26.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-45ceb8f2e522f4d1.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../sdk_node/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `node/src/builder.rs`."><title>builder.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-deb46770fd761b69.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sdk_node" data-themes="" data-resource-suffix="" data-rustdoc-version="1.75.0-nightly (42b1224e9 2023-10-15)" data-channel="nightly" data-search-js="search-8fbf244ebcf71464.js" data-settings-js="settings-74424d7eec62a23e.js" ><script src="../../static.files/storage-fec3eaa3851e447d.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5f34af1a0ee6bacd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-5d8b3c7633ad77ba.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -157,7 +157,18 @@
 <a href="#157" id="157">157</a>
 <a href="#158" id="158">158</a>
 <a href="#159" id="159">159</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::num::NonZeroUsize;
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
+<span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>derivative::Derivative;
@@ -166,15 +177,14 @@
 <span class="kw">use </span>sc_service::BlocksPruning;
 <span class="kw">use </span>sdk_dsn::{Dsn, DsnBuilder};
 <span class="kw">use </span>sdk_substrate::{
-    Base, BaseBuilder, ExecutionStrategy, NetworkBuilder, OffchainWorkerBuilder, PruningMode, Role,
-    RpcBuilder, StorageMonitor,
+    Base, BaseBuilder, NetworkBuilder, OffchainWorkerBuilder, PruningMode, Role, RpcBuilder,
+    StorageMonitor,
 };
 <span class="kw">use </span>sdk_utils::ByteSize;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use super</span>::{ChainSpec, Farmer, Node};
 <span class="kw">use </span><span class="kw">crate</span>::domains::builder::DomainConfig;
-<span class="kw">use </span><span class="kw">crate</span>::PotConfiguration;
 
 <span class="doccomment">/// Wrapper with default value for piece cache size
 </span><span class="attr">#[derive(
@@ -238,6 +248,18 @@
     </span><span class="attr">#[builder(setter(into), default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
     </span><span class="kw">pub </span>domain: <span class="prelude-ty">Option</span>&lt;DomainConfig&gt;,
+    <span class="doccomment">/// Flag indicating if the node is authority for Proof of time consensus
+    </span><span class="attr">#[builder(setter(into), default)]
+    #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
+    </span><span class="kw">pub </span>is_timekeeper: bool,
+    <span class="doccomment">/// CPU cores that timekeeper can use
+    </span><span class="attr">#[builder(setter(into), default)]
+    #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
+    </span><span class="kw">pub </span>timekeeper_cpu_cores: HashSet&lt;usize&gt;,
+    <span class="doccomment">/// Proof of time entropy
+    </span><span class="attr">#[builder(setter(into), default)]
+    #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
+    </span><span class="kw">pub </span>pot_external_entropy: <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;,
 }
 
 <span class="kw">impl</span>&lt;F: Farmer + <span class="lifetime">&#39;static</span>&gt; Config&lt;F&gt; {
@@ -246,9 +268,9 @@
         Builder::dev()
     }
 
-    <span class="doccomment">/// Gemini 3f configuraiton
-    </span><span class="kw">pub fn </span>gemini_3f() -&gt; Builder&lt;F&gt; {
-        Builder::gemini_3f()
+    <span class="doccomment">/// Gemini 3g configuraiton
+    </span><span class="kw">pub fn </span>gemini_3g() -&gt; Builder&lt;F&gt; {
+        Builder::gemini_3g()
     }
 
     <span class="doccomment">/// Devnet configuraiton
@@ -261,6 +283,7 @@
     <span class="doccomment">/// Dev chain configuration
     </span><span class="kw">pub fn </span>dev() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new()
+            .is_timekeeper(<span class="bool-val">true</span>)
             .force_authoring(<span class="bool-val">true</span>)
             .network(NetworkBuilder::dev())
             .dsn(DsnBuilder::dev())
@@ -268,14 +291,13 @@
             .offchain_worker(OffchainWorkerBuilder::dev())
     }
 
-    <span class="doccomment">/// Gemini 3f configuration
-    </span><span class="kw">pub fn </span>gemini_3f() -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Gemini 3g configuration
+    </span><span class="kw">pub fn </span>gemini_3g() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new()
-            .execution_strategy(ExecutionStrategy::AlwaysWasm)
-            .network(NetworkBuilder::gemini_3f())
-            .dsn(DsnBuilder::gemini_3f())
-            .rpc(RpcBuilder::gemini_3f())
-            .offchain_worker(OffchainWorkerBuilder::gemini_3f())
+            .network(NetworkBuilder::gemini_3g())
+            .dsn(DsnBuilder::gemini_3g())
+            .rpc(RpcBuilder::gemini_3g())
+            .offchain_worker(OffchainWorkerBuilder::gemini_3g())
             .role(Role::Authority)
             .state_pruning(PruningMode::ArchiveAll)
             .blocks_pruning(BlocksPruning::Some(<span class="number">256</span>))
@@ -284,7 +306,6 @@
     <span class="doccomment">/// Devnet chain configuration
     </span><span class="kw">pub fn </span>devnet() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new()
-            .execution_strategy(ExecutionStrategy::AlwaysWasm)
             .network(NetworkBuilder::devnet())
             .dsn(DsnBuilder::devnet())
             .rpc(RpcBuilder::devnet())
@@ -309,9 +330,8 @@
         <span class="self">self</span>,
         directory: <span class="kw">impl </span>AsRef&lt;Path&gt;,
         chain_spec: ChainSpec,
-        pot_configuration: PotConfiguration,
     ) -&gt; anyhow::Result&lt;Node&lt;F&gt;&gt; {
-        <span class="self">self</span>.configuration().build(directory, chain_spec, pot_configuration).<span class="kw">await
+        <span class="self">self</span>.configuration().build(directory, chain_spec).<span class="kw">await
     </span>}
 }
 

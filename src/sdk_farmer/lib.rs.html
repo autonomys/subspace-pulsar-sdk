@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `farmer/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sdk_farmer" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0-nightly (399b06823 2023-07-20)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-6d2c9675f3d09c26.css" data-theme-dark-css="dark-45ceb8f2e522f4d1.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-6d2c9675f3d09c26.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-45ceb8f2e522f4d1.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../sdk_farmer/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `farmer/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-deb46770fd761b69.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sdk_farmer" data-themes="" data-resource-suffix="" data-rustdoc-version="1.75.0-nightly (42b1224e9 2023-10-15)" data-channel="nightly" data-search-js="search-8fbf244ebcf71464.js" data-settings-js="settings-74424d7eec62a23e.js" ><script src="../../static.files/storage-fec3eaa3851e447d.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5f34af1a0ee6bacd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-5d8b3c7633ad77ba.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -998,6 +998,85 @@
 <a href="#998" id="998">998</a>
 <a href="#999" id="999">999</a>
 <a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
+<a href="#1005" id="1005">1005</a>
+<a href="#1006" id="1006">1006</a>
+<a href="#1007" id="1007">1007</a>
+<a href="#1008" id="1008">1008</a>
+<a href="#1009" id="1009">1009</a>
+<a href="#1010" id="1010">1010</a>
+<a href="#1011" id="1011">1011</a>
+<a href="#1012" id="1012">1012</a>
+<a href="#1013" id="1013">1013</a>
+<a href="#1014" id="1014">1014</a>
+<a href="#1015" id="1015">1015</a>
+<a href="#1016" id="1016">1016</a>
+<a href="#1017" id="1017">1017</a>
+<a href="#1018" id="1018">1018</a>
+<a href="#1019" id="1019">1019</a>
+<a href="#1020" id="1020">1020</a>
+<a href="#1021" id="1021">1021</a>
+<a href="#1022" id="1022">1022</a>
+<a href="#1023" id="1023">1023</a>
+<a href="#1024" id="1024">1024</a>
+<a href="#1025" id="1025">1025</a>
+<a href="#1026" id="1026">1026</a>
+<a href="#1027" id="1027">1027</a>
+<a href="#1028" id="1028">1028</a>
+<a href="#1029" id="1029">1029</a>
+<a href="#1030" id="1030">1030</a>
+<a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
+<a href="#1039" id="1039">1039</a>
+<a href="#1040" id="1040">1040</a>
+<a href="#1041" id="1041">1041</a>
+<a href="#1042" id="1042">1042</a>
+<a href="#1043" id="1043">1043</a>
+<a href="#1044" id="1044">1044</a>
+<a href="#1045" id="1045">1045</a>
+<a href="#1046" id="1046">1046</a>
+<a href="#1047" id="1047">1047</a>
+<a href="#1048" id="1048">1048</a>
+<a href="#1049" id="1049">1049</a>
+<a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
+<a href="#1052" id="1052">1052</a>
+<a href="#1053" id="1053">1053</a>
+<a href="#1054" id="1054">1054</a>
+<a href="#1055" id="1055">1055</a>
+<a href="#1056" id="1056">1056</a>
+<a href="#1057" id="1057">1057</a>
+<a href="#1058" id="1058">1058</a>
+<a href="#1059" id="1059">1059</a>
+<a href="#1060" id="1060">1060</a>
+<a href="#1061" id="1061">1061</a>
+<a href="#1062" id="1062">1062</a>
+<a href="#1063" id="1063">1063</a>
+<a href="#1064" id="1064">1064</a>
+<a href="#1065" id="1065">1065</a>
+<a href="#1066" id="1066">1066</a>
+<a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This crate is related to abstract farmer implementation
 
 </span><span class="attr">#![warn(
@@ -1021,7 +1100,6 @@
 <span class="kw">use </span>derivative::Derivative;
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
-<span class="kw">use </span>rayon::{ThreadPool, ThreadPoolBuilder};
 <span class="kw">use </span>sdk_traits::Node;
 <span class="kw">use </span>sdk_utils::{ByteSize, DestructorSet, PublicKey, TaskOutput};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1036,7 +1114,6 @@
 <span class="kw">use </span>subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 <span class="kw">use </span>subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
-<span class="kw">use </span>subspace_farmer::utils::tokio_rayon_spawn_handler;
 <span class="kw">use </span>subspace_farmer::Identity;
 <span class="kw">use </span>subspace_farmer_components::plotting::PlottedSector;
 <span class="kw">use </span>subspace_farmer_components::sector::{sector_size, SectorMetadataChecksummed};
@@ -1044,7 +1121,7 @@
 <span class="kw">use </span>subspace_networking::utils::multihash::ToMultihash;
 <span class="kw">use </span>subspace_networking::NetworkingParametersManager;
 <span class="kw">use </span>subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
-<span class="kw">use </span>tokio::sync::{mpsc, oneshot, watch, Mutex};
+<span class="kw">use </span>tokio::sync::{mpsc, oneshot, watch, Mutex, Semaphore};
 <span class="kw">use </span>tracing::{debug, error, warn};
 <span class="kw">use </span>tracing_futures::Instrument;
 
@@ -1175,15 +1252,40 @@
         <span class="doccomment">/// Maximum number of pieces in single sector
         </span><span class="attr">#[builder(default)]
         </span><span class="kw">pub </span>max_pieces_in_sector: <span class="prelude-ty">Option</span>&lt;u16&gt;,
-        <span class="doccomment">/// Farming thread pool size
+        <span class="doccomment">/// Size of PER FARM thread pool used for farming (mostly for blocking
+        /// I/O, but also for some compute-intensive operations during
+        /// proving), defaults to number of CPU cores available in
+        /// the system
         </span><span class="attr">#[builder(default = <span class="string">&quot;available_parallelism()&quot;</span>)]
         </span><span class="kw">pub </span>farming_thread_pool_size: usize,
-        <span class="doccomment">/// Plotting thread pool size
+        <span class="doccomment">/// Size of PER FARM thread pool used for plotting, defaults to number
+        /// of CPU cores available in the system.
+        ///
+        /// NOTE: The fact that this parameter is per farm doesn&#39;t mean farmer
+        /// will plot multiple sectors concurrently, see
+        /// `sector_downloading_concurrency` and
+        /// `sector_encoding_concurrency` options.
         </span><span class="attr">#[builder(default = <span class="string">&quot;available_parallelism()&quot;</span>)]
         </span><span class="kw">pub </span>plotting_thread_pool_size: usize,
-        <span class="doccomment">/// Replotting thread pool size
+        <span class="doccomment">/// Size of PER FARM thread pool used for replotting, typically smaller
+        /// pool than for plotting to not affect farming as much,
+        /// defaults to half of the number of CPU cores available in the
+        /// system.
+        ///
+        /// NOTE: The fact that this parameter is per farm doesn&#39;t mean farmer
+        /// will replot multiple sectors concurrently, see
+        /// `sector-downloading-concurrency` and
+        /// `sector-encoding-concurrency` options.
         </span><span class="attr">#[builder(default = <span class="string">&quot;available_parallelism() / 2&quot;</span>)]
         </span><span class="kw">pub </span>replotting_thread_pool_size: usize,
+        <span class="doccomment">/// Sector downloading concurrency
+        </span><span class="attr">#[builder(default = <span class="string">&quot;NonZeroUsize::new(2).expect(\&quot;2 &gt; 0\&quot;)&quot;</span>)]
+        #[derivative(Default(value = <span class="string">&quot;NonZeroUsize::new(2).expect(\&quot;2 &gt; 0\&quot;)&quot;</span>))]
+        </span><span class="kw">pub </span>sector_downloading_concurrency: NonZeroUsize,
+        <span class="doccomment">/// Sector encoding concurrency
+        </span><span class="attr">#[builder(default = <span class="string">&quot;NonZeroUsize::new(1).expect(\&quot;1 &gt; 0\&quot;)&quot;</span>)]
+        #[derivative(Default(value = <span class="string">&quot;NonZeroUsize::new(1).expect(\&quot;1 &gt; 0\&quot;)&quot;</span>))]
+        </span><span class="kw">pub </span>sector_encoding_concurrency: NonZeroUsize,
     }
 
     <span class="kw">impl </span>Builder {
@@ -1287,7 +1389,7 @@
 <span class="kw">const </span>SEGMENT_COMMITMENTS_CACHE_SIZE: NonZeroUsize =
     NonZeroUsize::new(<span class="number">1_000_000</span>).expect(<span class="string">&quot;Not zero; qed&quot;</span>);
 
-<span class="kw">fn </span>create_readers_and_pieces(
+<span class="kw">async fn </span>create_readers_and_pieces(
     single_disk_farms: <span class="kw-2">&amp;</span>[SingleDiskFarm],
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ReadersAndPieces, BuildError&gt; {
     <span class="comment">// Store piece readers so we can reference them later
@@ -1296,32 +1398,40 @@
 
     <span class="macro">tracing::debug!</span>(<span class="string">&quot;Collecting already plotted pieces&quot;</span>);
 
-    <span class="comment">// Collect already plotted pieces
-    </span>single_disk_farms.iter().enumerate().try_for_each(|(disk_farm_index, single_disk_farm)| {
-        <span class="kw">let </span>disk_farm_index = disk_farm_index.try_into().map_err(|_error| {
-            <span class="macro">anyhow!</span>(
-                <span class="string">&quot;More than 256 farms are not supported, consider running multiple farmer instances&quot;
-            </span>)
-        })<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>plotted_sectors_iters = futures::future::join_all(
+        single_disk_farms.iter().map(|single_disk_farm| single_disk_farm.plotted_sectors()),
+    )
+    .<span class="kw">await</span>;
 
-        (<span class="number">0 </span><span class="kw">as </span>SectorIndex..).zip(single_disk_farm.plotted_sectors()).for_each(
-            |(sector_index, plotted_sector_result)| <span class="kw">match </span>plotted_sector_result {
-                <span class="prelude-val">Ok</span>(plotted_sector) =&gt; {
-                    readers_and_pieces.add_sector(disk_farm_index, <span class="kw-2">&amp;</span>plotted_sector);
-                }
-                <span class="prelude-val">Err</span>(error) =&gt; {
-                    <span class="macro">error!</span>(
-                        %error,
-                        %disk_farm_index,
-                        %sector_index,
-                        <span class="string">&quot;Failed reading plotted sector on startup, skipping&quot;
-                    </span>);
-                }
-            },
-        );
+    plotted_sectors_iters.drain(..).enumerate().try_for_each(
+        |(disk_farm_index, plotted_sectors_iter)| {
+            <span class="kw">let </span>disk_farm_index = disk_farm_index.try_into().map_err(|_error| {
+                <span class="macro">anyhow!</span>(
+                    <span class="string">&quot;More than 256 farms are not supported, consider running multiple farmer \
+                     instances&quot;
+                </span>)
+            })<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(())
-    })<span class="question-mark">?</span>;
+            (<span class="number">0 </span><span class="kw">as </span>SectorIndex..).zip(plotted_sectors_iter).for_each(
+                |(sector_index, plotted_sector_result)| <span class="kw">match </span>plotted_sector_result {
+                    <span class="prelude-val">Ok</span>(plotted_sector) =&gt; {
+                        readers_and_pieces.add_sector(disk_farm_index, <span class="kw-2">&amp;</span>plotted_sector);
+                    }
+                    <span class="prelude-val">Err</span>(error) =&gt; {
+                        <span class="macro">error!</span>(
+                            %error,
+                            %disk_farm_index,
+                            %sector_index,
+                            <span class="string">&quot;Failed reading plotted sector on startup, skipping&quot;
+                        </span>);
+                    }
+                },
+            );
+
+            <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(())
+        },
+    )<span class="question-mark">?</span>;
+
     <span class="macro">tracing::debug!</span>(<span class="string">&quot;Finished collecting already plotted pieces&quot;</span>);
 
     <span class="prelude-val">Ok</span>(readers_and_pieces)
@@ -1372,6 +1482,8 @@
             farming_thread_pool_size,
             plotting_thread_pool_size,
             replotting_thread_pool_size,
+            sector_downloading_concurrency,
+            sector_encoding_concurrency,
         } = <span class="self">self</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>single_disk_farms = Vec::with_capacity(farms.len());
@@ -1449,22 +1561,16 @@
             <span class="prelude-val">Some</span>(m) =&gt; m,
             <span class="prelude-val">None </span>=&gt; farmer_app_info.protocol_info.max_pieces_in_sector,
         };
-        <span class="kw">let </span>plotting_thread_pool = Arc::new(
-            ThreadPoolBuilder::new()
-                .thread_name(<span class="kw">move </span>|thread_index| <span class="macro">format!</span>(<span class="string">&quot;plotting#{thread_index}&quot;</span>))
-                .num_threads(plotting_thread_pool_size)
-                .spawn_handler(tokio_rayon_spawn_handler())
-                .build()<span class="question-mark">?</span>,
-        );
-        <span class="kw">let </span>replotting_thread_pool = Arc::new(
-            ThreadPoolBuilder::new()
-                .thread_name(<span class="kw">move </span>|thread_index| <span class="macro">format!</span>(<span class="string">&quot;replotting#{thread_index}&quot;</span>))
-                .num_threads(replotting_thread_pool_size)
-                .spawn_handler(tokio_rayon_spawn_handler())
-                .build()<span class="question-mark">?</span>,
-        );
+
+        <span class="kw">let </span><span class="kw-2">mut </span>plotting_delay_senders = Vec::with_capacity(farms.len());
+        <span class="kw">let </span>downloading_semaphore = Arc::new(Semaphore::new(sector_downloading_concurrency.get()));
+        <span class="kw">let </span>encoding_semaphore = Arc::new(Semaphore::new(sector_encoding_concurrency.get()));
 
         <span class="kw">for </span>(disk_farm_idx, description) <span class="kw">in </span>farms.iter().enumerate() {
+            <span class="kw">let </span>(plotting_delay_sender, plotting_delay_receiver) =
+                futures::channel::oneshot::channel();
+            plotting_delay_senders.push(plotting_delay_sender);
+
             <span class="kw">let </span>(farm, single_disk_farm) = Farm::new(FarmOptions {
                 disk_farm_idx,
                 cache_percentage,
@@ -1476,10 +1582,14 @@
                 kzg: kzg.clone(),
                 erasure_coding: erasure_coding.clone(),
                 farming_thread_pool_size,
-                plotting_thread_pool: plotting_thread_pool.clone(),
-                replotting_thread_pool: replotting_thread_pool.clone(),
+                plotting_thread_pool_size,
+                replotting_thread_pool_size,
+                plotting_delay: <span class="prelude-val">Some</span>(plotting_delay_receiver),
+                downloading_semaphore: Arc::clone(<span class="kw-2">&amp;</span>downloading_semaphore),
+                encoding_semaphore: Arc::clone(<span class="kw-2">&amp;</span>encoding_semaphore),
             })
             .<span class="kw">await</span><span class="question-mark">?</span>;
+
             farm_info.insert(farm.directory.clone(), farm);
             single_disk_farms.push(single_disk_farm);
         }
@@ -1492,7 +1602,7 @@
             }
         })<span class="question-mark">?</span>;
 
-        farmer_piece_cache
+        <span class="kw">let </span>cache_acknowledgement_receiver = farmer_piece_cache
             .replace_backing_caches(
                 single_disk_farms
                     .iter()
@@ -1502,7 +1612,40 @@
             .<span class="kw">await</span>;
         drop(farmer_piece_cache);
 
-        readers_and_pieces.lock().replace(create_readers_and_pieces(<span class="kw-2">&amp;</span>single_disk_farms)<span class="question-mark">?</span>);
+        <span class="kw">let </span>(plotting_delay_task_drop_sender, plotting_delay_task_drop_receiver) =
+            oneshot::channel::&lt;()&gt;();
+        <span class="kw">let </span>plotting_delay_task_join_handle = sdk_utils::task_spawn_blocking(
+            <span class="macro">format!</span>(<span class="string">&quot;subspace-sdk-farmer-{node_name}-plotting-delay-task&quot;</span>),
+            {
+                <span class="kw">let </span>handle = tokio::runtime::Handle::current();
+
+                <span class="kw">move </span>|| {
+                    handle.block_on(future::select(
+                        Box::pin(<span class="kw">async </span>{
+                            <span class="kw">if </span>cache_acknowledgement_receiver.<span class="kw">await</span>.is_ok() {
+                                <span class="kw">for </span>plotting_delay_sender <span class="kw">in </span>plotting_delay_senders {
+                                    <span class="comment">// Doesn&#39;t matter if receiver is gone
+                                    </span><span class="kw">let _ </span>= plotting_delay_sender.send(());
+                                }
+                            }
+                        }),
+                        plotting_delay_task_drop_receiver,
+                    ));
+                }
+            },
+        );
+
+        destructors.add_async_destructor({
+            <span class="kw">async move </span>{
+                <span class="kw">let _ </span>= plotting_delay_task_drop_sender.send(());
+                plotting_delay_task_join_handle.<span class="kw">await</span>.expect(
+                    <span class="string">&quot;awaiting worker should not fail except panic by the worker itself; qed&quot;</span>,
+                );
+            }
+        })<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>readers_and_pieces_instance = create_readers_and_pieces(<span class="kw-2">&amp;</span>single_disk_farms).<span class="kw">await</span><span class="question-mark">?</span>;
+        readers_and_pieces.lock().replace(readers_and_pieces_instance);
         destructors.add_sync_destructor({
             <span class="kw">let </span>farmer_reader_and_pieces = node.dsn().farmer_readers_and_pieces.clone();
             <span class="kw">move </span>|| {
@@ -1555,10 +1698,12 @@
                             Left((maybe_result, <span class="kw">_</span>)) =&gt; {
                                 <span class="kw">let </span>send_result = <span class="kw">match </span>maybe_result {
                                     <span class="prelude-val">None </span>=&gt; farm_driver_result_sender
-                                        .try_send(<span class="prelude-val">Ok</span>(TaskOutput::Value(()))),
+                                        .try_send(<span class="prelude-val">Ok</span>(TaskOutput::Value(<span class="prelude-val">None</span>))),
                                     <span class="prelude-val">Some</span>(result) =&gt; <span class="kw">match </span>result {
-                                        <span class="prelude-val">Ok</span>(()) =&gt; farm_driver_result_sender
-                                            .try_send(<span class="prelude-val">Ok</span>(TaskOutput::Value(()))),
+                                        <span class="prelude-val">Ok</span>(single_disk_farm_id) =&gt; farm_driver_result_sender
+                                            .try_send(<span class="prelude-val">Ok</span>(TaskOutput::Value(<span class="prelude-val">Some</span>(
+                                                single_disk_farm_id,
+                                            )))),
                                         <span class="prelude-val">Err</span>(e) =&gt; farm_driver_result_sender.try_send(<span class="prelude-val">Err</span>(e)),
                                     },
                                 };
@@ -1608,6 +1753,8 @@
     }
 }
 
+<span class="kw">type </span>ResultReceiver = mpsc::Receiver&lt;anyhow::Result&lt;TaskOutput&lt;<span class="prelude-ty">Option</span>&lt;SingleDiskFarmId&gt;, String&gt;&gt;&gt;;
+
 <span class="doccomment">/// Farmer structure
 </span><span class="attr">#[derive(Derivative)]
 #[derivative(Debug)]
@@ -1615,7 +1762,7 @@
 </span><span class="kw">pub struct </span>Farmer&lt;T: subspace_proof_of_space::Table&gt; {
     reward_address: PublicKey,
     farm_info: HashMap&lt;PathBuf, Farm&lt;T&gt;&gt;,
-    result_receiver: <span class="prelude-ty">Option</span>&lt;mpsc::Receiver&lt;anyhow::Result&lt;TaskOutput&lt;(), String&gt;&gt;&gt;&gt;,
+    result_receiver: <span class="prelude-ty">Option</span>&lt;ResultReceiver&gt;,
     node_name: String,
     app_info: FarmerAppInfo,
     _destructors: DestructorSet,
@@ -1767,8 +1914,11 @@
     <span class="kw">pub </span>erasure_coding: ErasureCoding,
     <span class="kw">pub </span>max_pieces_in_sector: u16,
     <span class="kw">pub </span>farming_thread_pool_size: usize,
-    <span class="kw">pub </span>plotting_thread_pool: Arc&lt;ThreadPool&gt;,
-    <span class="kw">pub </span>replotting_thread_pool: Arc&lt;ThreadPool&gt;,
+    <span class="kw">pub </span>plotting_thread_pool_size: usize,
+    <span class="kw">pub </span>replotting_thread_pool_size: usize,
+    <span class="kw">pub </span>plotting_delay: <span class="prelude-ty">Option</span>&lt;futures::channel::oneshot::Receiver&lt;()&gt;&gt;,
+    <span class="kw">pub </span>downloading_semaphore: Arc&lt;Semaphore&gt;,
+    <span class="kw">pub </span>encoding_semaphore: Arc&lt;Semaphore&gt;,
 }
 
 <span class="kw">impl</span>&lt;T: subspace_proof_of_space::Table&gt; Farm&lt;T&gt; {
@@ -1784,11 +1934,14 @@
             erasure_coding,
             max_pieces_in_sector,
             farming_thread_pool_size,
-            plotting_thread_pool,
-            replotting_thread_pool,
+            plotting_thread_pool_size,
+            replotting_thread_pool_size,
+            plotting_delay,
+            downloading_semaphore,
+            encoding_semaphore,
         }: FarmOptions&lt;
             <span class="lifetime">&#39;_</span>,
-            <span class="kw">impl </span>subspace_farmer_components::plotting::PieceGetter + Clone + Send + <span class="lifetime">&#39;static</span>,
+            <span class="kw">impl </span>subspace_farmer_components::plotting::PieceGetter + Clone + Send + Sync + <span class="lifetime">&#39;static</span>,
             <span class="kw">impl </span>sdk_traits::Node,
         &gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="self">Self</span>, SingleDiskFarm), BuildError&gt; {
@@ -1797,6 +1950,7 @@
         <span class="kw">let </span>farmer_app_info = subspace_farmer::NodeClient::farmer_app_info(node.rpc())
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Node is always reachable&quot;</span>);
+
         <span class="kw">let </span>description = SingleDiskFarmOptions {
             allocated_space,
             directory: directory.clone(),
@@ -1808,9 +1962,13 @@
             erasure_coding,
             piece_getter,
             cache_percentage,
+            downloading_semaphore,
+            encoding_semaphore,
+            farm_during_initial_plotting: <span class="bool-val">false</span>,
             farming_thread_pool_size,
-            plotting_thread_pool,
-            replotting_thread_pool,
+            plotting_thread_pool_size,
+            replotting_thread_pool_size,
+            plotting_delay,
         };
         <span class="kw">let </span>single_disk_farm_fut = SingleDiskFarm::new::&lt;<span class="kw">_</span>, <span class="kw">_</span>, T&gt;(description, disk_farm_idx);
         <span class="kw">let </span>single_disk_farm = <span class="kw">match </span>single_disk_farm_fut.<span class="kw">await </span>{
@@ -1874,9 +2032,9 @@
                 progress,
                 solutions,
                 initial_plotting_progress: Arc::new(Mutex::new(InitialPlottingProgress {
-                    starting_sector: u64::try_from(single_disk_farm.plotted_sectors_count())
+                    starting_sector: u64::try_from(single_disk_farm.plotted_sectors_count().<span class="kw">await</span>)
                         .expect(<span class="string">&quot;Sector count is less than u64::MAX&quot;</span>),
-                    current_sector: u64::try_from(single_disk_farm.plotted_sectors_count())
+                    current_sector: u64::try_from(single_disk_farm.plotted_sectors_count().<span class="kw">await</span>)
                         .expect(<span class="string">&quot;Sector count is less than u64::MAX&quot;</span>),
                     total_sectors: target_sector_count,
                 })),

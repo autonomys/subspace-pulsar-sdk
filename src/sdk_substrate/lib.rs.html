@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `substrate/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sdk_substrate" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0-nightly (399b06823 2023-07-20)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-6d2c9675f3d09c26.css" data-theme-dark-css="dark-45ceb8f2e522f4d1.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-6d2c9675f3d09c26.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-45ceb8f2e522f4d1.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../sdk_substrate/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `substrate/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-deb46770fd761b69.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sdk_substrate" data-themes="" data-resource-suffix="" data-rustdoc-version="1.75.0-nightly (42b1224e9 2023-10-15)" data-channel="nightly" data-search-js="search-8fbf244ebcf71464.js" data-settings-js="settings-74424d7eec62a23e.js" ><script src="../../static.files/storage-fec3eaa3851e447d.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5f34af1a0ee6bacd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-5d8b3c7633ad77ba.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -447,6 +447,9 @@
 <a href="#447" id="447">447</a>
 <a href="#448" id="448">448</a>
 <a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Crate with abstraction over substrate logic
 
 </span><span class="attr">#![warn(
@@ -459,7 +462,7 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![feature(concat_idents)]
 
-</span><span class="kw">use </span>std::net::SocketAddr;
+</span><span class="kw">use </span>std::net::{IpAddr, Ipv4Addr, SocketAddr};
 <span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>derivative::Derivative;
@@ -496,10 +499,6 @@
     </span><span class="attr">#[builder(default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
     </span><span class="kw">pub </span>state_pruning: PruningMode,
-    <span class="doccomment">/// Set execution strategies
-    </span><span class="attr">#[builder(default)]
-    #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
-    </span><span class="kw">pub </span>execution_strategy: ExecutionStrategy,
     <span class="doccomment">/// Implementation name
     </span><span class="attr">#[builder(default)]
     #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
@@ -568,8 +567,6 @@
             </span>blocks_pruning: <span class="macro-nonterminal">$crate::BlocksPruning</span>,
             <span class="doccomment">/// State pruning options
             </span>state_pruning: <span class="macro-nonterminal">$crate::PruningMode</span>,
-            <span class="doccomment">/// Set execution strategies
-            </span>execution_strategy: <span class="macro-nonterminal">$crate::ExecutionStrategy</span>,
             <span class="doccomment">/// Implementation name
             </span>impl_name: <span class="macro-nonterminal">$crate::ImplName</span>,
             <span class="doccomment">/// Implementation version
@@ -613,7 +610,6 @@
             role,
             blocks_pruning,
             state_pruning,
-            execution_strategy,
             impl_name: ImplName(impl_name),
             impl_version: ImplVersion(impl_version),
             rpc:
@@ -725,7 +721,6 @@
                 instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
             },
             wasm_runtime_overrides: <span class="prelude-val">None</span>,
-            execution_strategies: execution_strategy.into(),
             rpc_addr,
             rpc_port: rpc_port.unwrap_or_default(),
             rpc_methods: rpc_methods.into(),
@@ -806,8 +801,19 @@
         <span class="self">Self</span>::default()
     }
 
-    <span class="doccomment">/// Gemini 3f configuration
-    </span><span class="kw">pub fn </span>gemini_3f() -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Local test configuration to have rpc exposed locally
+    </span><span class="kw">pub fn </span>local_test(port: u16) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::dev()
+            .addr(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(<span class="number">127</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>)), port))
+            .port(port)
+            .max_connections(<span class="number">100</span>)
+            .max_request_size(<span class="number">10 </span>* <span class="number">1024</span>)
+            .max_response_size(<span class="number">10 </span>* <span class="number">1024</span>)
+            .max_subs_per_conn(<span class="prelude-val">Some</span>(<span class="number">100</span>))
+    }
+
+    <span class="doccomment">/// Gemini 3g configuration
+    </span><span class="kw">pub fn </span>gemini_3g() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new().addr(<span class="string">&quot;127.0.0.1:9944&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>)).cors(<span class="macro">vec!</span>[
             <span class="string">&quot;http://localhost:*&quot;</span>.to_owned(),
             <span class="string">&quot;http://127.0.0.1:*&quot;</span>.to_owned(),
@@ -874,8 +880,8 @@
         <span class="self">Self</span>::default().force_synced(<span class="bool-val">true</span>).allow_private_ip(<span class="bool-val">true</span>)
     }
 
-    <span class="doccomment">/// Gemini 3f configuration
-    </span><span class="kw">pub fn </span>gemini_3f() -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Gemini 3g configuration
+    </span><span class="kw">pub fn </span>gemini_3g() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::default()
             .listen_addresses(<span class="macro">vec!</span>[
                 <span class="string">&quot;/ip6/::/tcp/30333&quot;</span>.parse().expect(<span class="string">&quot;hardcoded value is true&quot;</span>),
