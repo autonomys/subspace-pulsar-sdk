@@ -5,13 +5,13 @@ use anyhow::{anyhow, Result};
 use cross_domain_message_gossip::Message;
 use derivative::Derivative;
 use derive_builder::Builder;
+use sp_runtime::traits::Block as BlockT;
 use domain_client_operator::{BootstrapResult, Bootstrapper};
 use domain_runtime_primitives::opaque::Block as DomainBlock;
 use futures::future;
 use futures::future::Either::{Left, Right};
 use sc_consensus_subspace::notification::SubspaceNotificationStream;
 use sc_consensus_subspace::{BlockImportingNotification, NewSlotNotification};
-use sc_transaction_pool::FullPool;
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sc_utils::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
 use sdk_substrate::{Base, BaseBuilder};
@@ -23,6 +23,7 @@ use sp_domains::DomainId;
 use subspace_runtime::RuntimeApi as CRuntimeApi;
 use subspace_runtime_primitives::opaque::Block as CBlock;
 use subspace_service::FullClient as CFullClient;
+use subspace_service::transaction_pool::FullPool;
 use tokio::sync::{oneshot, RwLock};
 
 use crate::domains::domain::{Domain, DomainBuildingProgress};
@@ -43,7 +44,7 @@ pub struct ConsensusNodeLink {
     pub consensus_sync_service: Arc<sc_network_sync::SyncingService<CBlock>>,
     /// Consensus tx pool
     pub consensus_transaction_pool:
-        Arc<FullPool<CBlock, CFullClient<CRuntimeApi, CExecutorDispatch>>>,
+        Arc<FullPool<CFullClient<CRuntimeApi, CExecutorDispatch>, CBlock, <DomainBlock as BlockT>::Header>>,
     /// Cross domain message gossip worker's message sink
     pub gossip_message_sink: TracingUnboundedSender<Message>,
     /// Cross domain message receiver for the domain
