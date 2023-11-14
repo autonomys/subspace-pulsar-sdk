@@ -45,7 +45,7 @@ pub struct ListenAddresses(
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct InConnections(#[derivative(Default(value = "100"))] pub u32);
+pub struct InConnections(#[derivative(Default(value = "125"))] pub u32);
 
 /// Wrapper with default value for number of outgoing connections
 #[derive(
@@ -53,7 +53,7 @@ pub struct InConnections(#[derivative(Default(value = "100"))] pub u32);
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct OutConnections(#[derivative(Default(value = "100"))] pub u32);
+pub struct OutConnections(#[derivative(Default(value = "150"))] pub u32);
 
 /// Wrapper with default value for number of target connections
 #[derive(
@@ -77,7 +77,7 @@ pub struct PendingInConnections(#[derivative(Default(value = "100"))] pub u32);
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct PendingOutConnections(#[derivative(Default(value = "100"))] pub u32);
+pub struct PendingOutConnections(#[derivative(Default(value = "150"))] pub u32);
 
 /// Node DSN builder
 #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
@@ -307,13 +307,13 @@ impl Dsn {
             special_connected_peers_handler: Some(Arc::new(PeerInfo::is_farmer)),
             // Maintain proactive connections with all peers (least restrictive value taken from node)
             general_connected_peers_handler: Some(Arc::new(|_| true)),
-            // Maintain some number of persistent connections (least restrictive value taken from node)
-            general_connected_peers_target: target_connections,
-            // Special peers (least restrictive value taken from farmer)
+            // Maintain some number of persistent connections (taken from farmer)
+            general_connected_peers_target: 0,
+            // Special peers (taken from farmer)
             special_connected_peers_target: target_connections,
-            // Allow up to quarter of incoming connections to be maintained (least restrictive value taken from node)
-            general_connected_peers_limit: target_connections + max_established_incoming_connections / 4,
-            // Allow to maintain some extra farmer connections beyond direct interest too (least restrictive value taken from farmer)
+            // Allow up to quarter of incoming connections to be maintained (taken from node)
+            general_connected_peers_limit: max_established_incoming_connections / 4,
+            // Allow to maintain some extra farmer connections beyond direct interest too (taken from farmer)
             special_connected_peers_limit: target_connections + max_established_incoming_connections / 4,
             metrics,
             ..default_networking_config
