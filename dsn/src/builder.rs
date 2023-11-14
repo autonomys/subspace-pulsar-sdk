@@ -303,9 +303,11 @@ impl Dsn {
             bootstrap_addresses: bootstrap_nodes,
             kademlia_mode: KademliaMode::Dynamic { initial_mode: Mode::Client },
             external_addresses: external_addresses.into_iter().map(Into::into).collect(),
-            // Proactively maintain permanent connections with farmers (least restrictive value taken from farmer)
+            // Proactively maintain permanent connections with farmers (least restrictive value
+            // taken from farmer)
             special_connected_peers_handler: Some(Arc::new(PeerInfo::is_farmer)),
-            // Maintain proactive connections with all peers (least restrictive value taken from node)
+            // Maintain proactive connections with all peers (least restrictive value taken from
+            // node)
             general_connected_peers_handler: Some(Arc::new(|_| true)),
             // Maintain some number of persistent connections (taken from farmer)
             general_connected_peers_target: 0,
@@ -313,8 +315,10 @@ impl Dsn {
             special_connected_peers_target: target_connections,
             // Allow up to quarter of incoming connections to be maintained (taken from node)
             general_connected_peers_limit: max_established_incoming_connections / 4,
-            // Allow to maintain some extra farmer connections beyond direct interest too (taken from farmer)
-            special_connected_peers_limit: target_connections + max_established_incoming_connections / 4,
+            // Allow to maintain some extra farmer connections beyond direct interest too (taken
+            // from farmer)
+            special_connected_peers_limit: target_connections
+                + max_established_incoming_connections / 4,
             metrics,
             ..default_networking_config
         };
