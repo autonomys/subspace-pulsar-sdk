@@ -343,6 +343,15 @@
 <a href="#343" id="343">343</a>
 <a href="#344" id="344">344</a>
 <a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::{Arc, Weak};
@@ -390,7 +399,7 @@
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-</span><span class="kw">pub struct </span>InConnections(<span class="attr">#[derivative(Default(value = <span class="string">&quot;100&quot;</span>))] </span><span class="kw">pub </span>u32);
+</span><span class="kw">pub struct </span>InConnections(<span class="attr">#[derivative(Default(value = <span class="string">&quot;125&quot;</span>))] </span><span class="kw">pub </span>u32);
 
 <span class="doccomment">/// Wrapper with default value for number of outgoing connections
 </span><span class="attr">#[derive(
@@ -398,7 +407,7 @@
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-</span><span class="kw">pub struct </span>OutConnections(<span class="attr">#[derivative(Default(value = <span class="string">&quot;100&quot;</span>))] </span><span class="kw">pub </span>u32);
+</span><span class="kw">pub struct </span>OutConnections(<span class="attr">#[derivative(Default(value = <span class="string">&quot;150&quot;</span>))] </span><span class="kw">pub </span>u32);
 
 <span class="doccomment">/// Wrapper with default value for number of target connections
 </span><span class="attr">#[derive(
@@ -406,7 +415,7 @@
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-</span><span class="kw">pub struct </span>TargetConnections(<span class="attr">#[derivative(Default(value = <span class="string">&quot;50&quot;</span>))] </span><span class="kw">pub </span>u32);
+</span><span class="kw">pub struct </span>TargetConnections(<span class="attr">#[derivative(Default(value = <span class="string">&quot;15&quot;</span>))] </span><span class="kw">pub </span>u32);
 
 <span class="doccomment">/// Wrapper with default value for number of pending incoming connections
 </span><span class="attr">#[derive(
@@ -422,7 +431,7 @@
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-</span><span class="kw">pub struct </span>PendingOutConnections(<span class="attr">#[derivative(Default(value = <span class="string">&quot;100&quot;</span>))] </span><span class="kw">pub </span>u32);
+</span><span class="kw">pub struct </span>PendingOutConnections(<span class="attr">#[derivative(Default(value = <span class="string">&quot;150&quot;</span>))] </span><span class="kw">pub </span>u32);
 
 <span class="doccomment">/// Node DSN builder
 </span><span class="attr">#[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
@@ -643,18 +652,27 @@
             reserved_peers: reserved_nodes.into_iter().map(Into::into).collect(),
             max_established_incoming_connections,
             max_established_outgoing_connections,
-            general_target_connections: target_connections,
-            <span class="comment">// maintain permanent connections between farmers
-            </span>special_connected_peers_handler: <span class="prelude-val">Some</span>(Arc::new(PeerInfo::is_farmer)),
-            <span class="comment">// other (non-farmer) connections
-            </span>general_connected_peers_handler: <span class="prelude-val">Some</span>(Arc::new(|peer_info| {
-                !PeerInfo::is_farmer(peer_info)
-            })),
             max_pending_incoming_connections,
             max_pending_outgoing_connections,
             bootstrap_addresses: bootstrap_nodes,
             kademlia_mode: KademliaMode::Dynamic { initial_mode: Mode::Client },
             external_addresses: external_addresses.into_iter().map(Into::into).collect(),
+            <span class="comment">// Proactively maintain permanent connections with farmers (least restrictive value
+            // taken from farmer)
+            </span>special_connected_peers_handler: <span class="prelude-val">Some</span>(Arc::new(PeerInfo::is_farmer)),
+            <span class="comment">// Maintain proactive connections with all peers (least restrictive value taken from
+            // node)
+            </span>general_connected_peers_handler: <span class="prelude-val">Some</span>(Arc::new(|<span class="kw">_</span>| <span class="bool-val">true</span>)),
+            <span class="comment">// Maintain some number of persistent connections (taken from farmer)
+            </span>general_connected_peers_target: <span class="number">0</span>,
+            <span class="comment">// Special peers (taken from farmer)
+            </span>special_connected_peers_target: target_connections,
+            <span class="comment">// Allow up to quarter of incoming connections to be maintained (taken from node)
+            </span>general_connected_peers_limit: max_established_incoming_connections / <span class="number">4</span>,
+            <span class="comment">// Allow to maintain some extra farmer connections beyond direct interest too (taken
+            // from farmer)
+            </span>special_connected_peers_limit: target_connections
+                + max_established_incoming_connections / <span class="number">4</span>,
             metrics,
             ..default_networking_config
         };
