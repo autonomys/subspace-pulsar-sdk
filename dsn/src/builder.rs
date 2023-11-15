@@ -45,7 +45,7 @@ pub struct ListenAddresses(
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct InConnections(#[derivative(Default(value = "100"))] pub u32);
+pub struct InConnections(#[derivative(Default(value = "125"))] pub u32);
 
 /// Wrapper with default value for number of outgoing connections
 #[derive(
@@ -53,7 +53,7 @@ pub struct InConnections(#[derivative(Default(value = "100"))] pub u32);
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct OutConnections(#[derivative(Default(value = "100"))] pub u32);
+pub struct OutConnections(#[derivative(Default(value = "150"))] pub u32);
 
 /// Wrapper with default value for number of target connections
 #[derive(
@@ -61,7 +61,7 @@ pub struct OutConnections(#[derivative(Default(value = "100"))] pub u32);
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct TargetConnections(#[derivative(Default(value = "50"))] pub u32);
+pub struct TargetConnections(#[derivative(Default(value = "15"))] pub u32);
 
 /// Wrapper with default value for number of pending incoming connections
 #[derive(
@@ -77,7 +77,7 @@ pub struct PendingInConnections(#[derivative(Default(value = "100"))] pub u32);
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct PendingOutConnections(#[derivative(Default(value = "100"))] pub u32);
+pub struct PendingOutConnections(#[derivative(Default(value = "150"))] pub u32);
 
 /// Node DSN builder
 #[derive(Debug, Clone, Derivative, Builder, Deserialize, Serialize, PartialEq)]
@@ -298,18 +298,27 @@ impl Dsn {
             reserved_peers: reserved_nodes.into_iter().map(Into::into).collect(),
             max_established_incoming_connections,
             max_established_outgoing_connections,
-            general_target_connections: target_connections,
-            // maintain permanent connections between farmers
-            special_connected_peers_handler: Some(Arc::new(PeerInfo::is_farmer)),
-            // other (non-farmer) connections
-            general_connected_peers_handler: Some(Arc::new(|peer_info| {
-                !PeerInfo::is_farmer(peer_info)
-            })),
             max_pending_incoming_connections,
             max_pending_outgoing_connections,
             bootstrap_addresses: bootstrap_nodes,
             kademlia_mode: KademliaMode::Dynamic { initial_mode: Mode::Client },
             external_addresses: external_addresses.into_iter().map(Into::into).collect(),
+            // Proactively maintain permanent connections with farmers (least restrictive value
+            // taken from farmer)
+            special_connected_peers_handler: Some(Arc::new(PeerInfo::is_farmer)),
+            // Maintain proactive connections with all peers (least restrictive value taken from
+            // node)
+            general_connected_peers_handler: Some(Arc::new(|_| true)),
+            // Maintain some number of persistent connections (taken from farmer)
+            general_connected_peers_target: 0,
+            // Special peers (taken from farmer)
+            special_connected_peers_target: target_connections,
+            // Allow up to quarter of incoming connections to be maintained (taken from node)
+            general_connected_peers_limit: max_established_incoming_connections / 4,
+            // Allow to maintain some extra farmer connections beyond direct interest too (taken
+            // from farmer)
+            special_connected_peers_limit: target_connections
+                + max_established_incoming_connections / 4,
             metrics,
             ..default_networking_config
         };
