@@ -351,7 +351,6 @@
 <a href="#351" id="351">351</a>
 <a href="#352" id="352">352</a>
 <a href="#353" id="353">353</a>
-<a href="#354" id="354">354</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::{Arc, Weak};
@@ -367,7 +366,6 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>subspace_farmer::piece_cache::PieceCache <span class="kw">as </span>FarmerPieceCache;
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
-<span class="kw">use </span>subspace_networking::libp2p::kad::Mode;
 <span class="kw">use </span>subspace_networking::libp2p::metrics::Metrics;
 <span class="kw">use </span>subspace_networking::utils::strip_peer_id;
 <span class="kw">use </span>subspace_networking::{
@@ -655,7 +653,7 @@
             max_pending_incoming_connections,
             max_pending_outgoing_connections,
             bootstrap_addresses: bootstrap_nodes,
-            kademlia_mode: KademliaMode::Dynamic { initial_mode: Mode::Client },
+            kademlia_mode: KademliaMode::Dynamic,
             external_addresses: external_addresses.into_iter().map(Into::into).collect(),
             <span class="comment">// Proactively maintain permanent connections with farmers (least restrictive value
             // taken from farmer)
