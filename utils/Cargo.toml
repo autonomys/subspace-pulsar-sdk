@@ -17,9 +17,9 @@ frame-support = { version = "4.0.0-dev", git = "https://github.com/subspace/polk
 frame-system = { version = "4.0.0-dev", git = "https://github.com/subspace/polkadot-sdk", rev = "892bf8e938c6bd2b893d3827d1093cd81baa59a1" }
 futures = "0.3"
 jsonrpsee-core = "0.16"
-libp2p-core = { git = "https://github.com/subspace/rust-libp2p", rev = "7a9328fc0a5f9e28575192d5f4f8663fde6752af" }
+libp2p-core = "0.41.1"
 parity-scale-codec = "3.6.3"
-sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "2ba5de0bb6886b088f0b956b621d53ae05b5ad6d" }
+sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "165c319ca4f6e178b7d09c401386205cacb8f443" }
 sc-network = { version = "0.10.0-dev", git = "https://github.com/subspace/polkadot-sdk", rev = "892bf8e938c6bd2b893d3827d1093cd81baa59a1", default-features = false }
 sc-rpc = { version = "4.0.0-dev", git = "https://github.com/subspace/polkadot-sdk", rev = "892bf8e938c6bd2b893d3827d1093cd81baa59a1", default-features = false }
 sc-rpc-api = { version = "0.10.0-dev", git = "https://github.com/subspace/polkadot-sdk", rev = "892bf8e938c6bd2b893d3827d1093cd81baa59a1", default-features = false }
@@ -32,11 +32,11 @@ sp-runtime = { version = "24.0.0", git = "https://github.com/subspace/polkadot-s
 sp-storage = { version = "13.0.0", git = "https://github.com/subspace/polkadot-sdk", rev = "892bf8e938c6bd2b893d3827d1093cd81baa59a1" }
 ss58-registry = "1.33"
 # Unused for now. TODO: add `serde` feature to `subspace-core-primitives` in `subspace-archiver`
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "2ba5de0bb6886b088f0b956b621d53ae05b5ad6d" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "2ba5de0bb6886b088f0b956b621d53ae05b5ad6d" }
-subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "2ba5de0bb6886b088f0b956b621d53ae05b5ad6d" }
-subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "2ba5de0bb6886b088f0b956b621d53ae05b5ad6d" }
-subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "2ba5de0bb6886b088f0b956b621d53ae05b5ad6d" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "165c319ca4f6e178b7d09c401386205cacb8f443" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "165c319ca4f6e178b7d09c401386205cacb8f443" }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "165c319ca4f6e178b7d09c401386205cacb8f443" }
+subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "165c319ca4f6e178b7d09c401386205cacb8f443" }
+subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "165c319ca4f6e178b7d09c401386205cacb8f443" }
 thiserror = "1"
 tokio = { version = "1.28.2", features = ["fs", "rt", "tracing", "macros", "parking_lot", "rt-multi-thread", "signal"] }
 tracing = "0.1"
