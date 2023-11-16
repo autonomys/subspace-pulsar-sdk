@@ -13,7 +13,6 @@ use sdk_utils::{self, DestructorSet, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
 use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
-use subspace_networking::libp2p::kad::Mode;
 use subspace_networking::libp2p::metrics::Metrics;
 use subspace_networking::utils::strip_peer_id;
 use subspace_networking::{
@@ -301,7 +300,7 @@ impl Dsn {
             max_pending_incoming_connections,
             max_pending_outgoing_connections,
             bootstrap_addresses: bootstrap_nodes,
-            kademlia_mode: KademliaMode::Dynamic { initial_mode: Mode::Client },
+            kademlia_mode: KademliaMode::Dynamic,
             external_addresses: external_addresses.into_iter().map(Into::into).collect(),
             // Proactively maintain permanent connections with farmers (least restrictive value
             // taken from farmer)
