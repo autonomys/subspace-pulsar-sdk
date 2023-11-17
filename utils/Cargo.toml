@@ -19,7 +19,7 @@ futures = "0.3"
 jsonrpsee-core = "0.16"
 libp2p-core = "0.41.1"
 parity-scale-codec = "3.6.3"
-sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "165c319ca4f6e178b7d09c401386205cacb8f443" }
+sc-consensus-subspace-rpc = { git = "https://github.com/subspace/subspace", rev = "7f3001167ddcb2f5ecedd7c00d699361378366b9" }
 sc-network = { version = "0.10.0-dev", git = "https://github.com/subspace/polkadot-sdk", rev = "892bf8e938c6bd2b893d3827d1093cd81baa59a1", default-features = false }
 sc-rpc = { version = "4.0.0-dev", git = "https://github.com/subspace/polkadot-sdk", rev = "892bf8e938c6bd2b893d3827d1093cd81baa59a1", default-features = false }
 sc-rpc-api = { version = "0.10.0-dev", git = "https://github.com/subspace/polkadot-sdk", rev = "892bf8e938c6bd2b893d3827d1093cd81baa59a1", default-features = false }
@@ -32,11 +32,11 @@ sp-runtime = { version = "24.0.0", git = "https://github.com/subspace/polkadot-s
 sp-storage = { version = "13.0.0", git = "https://github.com/subspace/polkadot-sdk", rev = "892bf8e938c6bd2b893d3827d1093cd81baa59a1" }
 ss58-registry = "1.33"
 # Unused for now. TODO: add `serde` feature to `subspace-core-primitives` in `subspace-archiver`
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "165c319ca4f6e178b7d09c401386205cacb8f443" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "165c319ca4f6e178b7d09c401386205cacb8f443" }
-subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "165c319ca4f6e178b7d09c401386205cacb8f443" }
-subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "165c319ca4f6e178b7d09c401386205cacb8f443" }
-subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "165c319ca4f6e178b7d09c401386205cacb8f443" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "7f3001167ddcb2f5ecedd7c00d699361378366b9" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "7f3001167ddcb2f5ecedd7c00d699361378366b9" }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "7f3001167ddcb2f5ecedd7c00d699361378366b9" }
+subspace-runtime = { git = "https://github.com/subspace/subspace", rev = "7f3001167ddcb2f5ecedd7c00d699361378366b9" }
+subspace-runtime-primitives = { git = "https://github.com/subspace/subspace", rev = "7f3001167ddcb2f5ecedd7c00d699361378366b9" }
 thiserror = "1"
 tokio = { version = "1.28.2", features = ["fs", "rt", "tracing", "macros", "parking_lot", "rt-multi-thread", "signal"] }
 tracing = "0.1"
