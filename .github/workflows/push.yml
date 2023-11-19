@@ -1,9 +1,5 @@
 name: Rust checks and tests
 on:
-  push:
-    paths-ignore:
-      - '**.md'
-      - '.gitignore'
   pull_request:
     paths-ignore:
       - '**.md'
