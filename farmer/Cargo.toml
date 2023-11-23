@@ -19,13 +19,13 @@ rayon = "1.7.0"
 sdk-traits = { path = "../traits" }
 sdk-utils = { path = "../utils" }
 serde = { version = "1", features = ["derive"] }
-subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "f54777f180569810f9607a552ea461164af5afe4" }
-subspace-erasure-coding = { git = "https://github.com/subspace/subspace", rev = "f54777f180569810f9607a552ea461164af5afe4" }
-subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "f54777f180569810f9607a552ea461164af5afe4" }
-subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "f54777f180569810f9607a552ea461164af5afe4" }
-subspace-networking = { git = "https://github.com/subspace/subspace", rev = "f54777f180569810f9607a552ea461164af5afe4" }
-subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "f54777f180569810f9607a552ea461164af5afe4", features = ["parallel"] }
-subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "f54777f180569810f9607a552ea461164af5afe4" }
+subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "f2fc438d8505a7d5febe41c460c80ff27a979774" }
+subspace-erasure-coding = { git = "https://github.com/subspace/subspace", rev = "f2fc438d8505a7d5febe41c460c80ff27a979774" }
+subspace-farmer = { git = "https://github.com/subspace/subspace", rev = "f2fc438d8505a7d5febe41c460c80ff27a979774" }
+subspace-farmer-components = { git = "https://github.com/subspace/subspace", rev = "f2fc438d8505a7d5febe41c460c80ff27a979774" }
+subspace-networking = { git = "https://github.com/subspace/subspace", rev = "f2fc438d8505a7d5febe41c460c80ff27a979774" }
+subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "f2fc438d8505a7d5febe41c460c80ff27a979774", features = ["parallel"] }
+subspace-rpc-primitives = { git = "https://github.com/subspace/subspace", rev = "f2fc438d8505a7d5febe41c460c80ff27a979774" }
 thiserror = "1"
 tokio = { version = "1.34.0", features = ["fs", "rt", "tracing", "macros", "parking_lot", "rt-multi-thread", "signal"] }
 tokio-stream = { version = "0.1", features = ["sync", "time"] }
