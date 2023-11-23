@@ -211,6 +211,8 @@ fn testnet_genesis(
         balances: BalancesConfig {
             balances: endowed_accounts.iter().cloned().map(|k| (k, 1_000_000 * SSC)).collect(),
         },
+        // this is set to default and chain_id will be set into genesis during the domain
+        // instantiation on Consensus runtime.
         evm_chain_id: EVMChainIdConfig::default(),
         evm: EVMConfig {
             // We need _some_ code inserted at the precompile address so that
