@@ -44,7 +44,7 @@ pub struct ListenAddresses(
 )]
 #[derivative(Default)]
 #[serde(transparent)]
-pub struct InConnections(#[derivative(Default(value = "125"))] pub u32);
+pub struct InConnections(#[derivative(Default(value = "300"))] pub u32);
 
 /// Wrapper with default value for number of outgoing connections
 #[derive(
