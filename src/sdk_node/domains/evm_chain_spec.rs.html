@@ -236,9 +236,6 @@
 <a href="#236" id="236">236</a>
 <a href="#237" id="237">237</a>
 <a href="#238" id="238">238</a>
-<a href="#239" id="239">239</a>
-<a href="#240" id="240">240</a>
-<a href="#241" id="241">241</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! System domain chain specs
 
 </span><span class="kw">use </span>std::str::FromStr;
@@ -303,7 +300,6 @@
                 accounts.clone(),
                 <span class="comment">// Alith is Sudo
                 </span><span class="prelude-val">Some</span>(accounts[<span class="number">0</span>]),
-                <span class="number">1000</span>,
             )
         }
         SpecId::Gemini =&gt; {
@@ -315,7 +311,6 @@
                     </span>sudo_account,
                 ],
                 <span class="prelude-val">Some</span>(sudo_account),
-                <span class="number">1002</span>,
             )
         }
         SpecId::DevNet =&gt; {
@@ -327,7 +322,6 @@
                     </span>sudo_account,
                 ],
                 <span class="prelude-val">Some</span>(sudo_account),
-                <span class="number">1003</span>,
             )
         }
         SpecId::Local =&gt; {
@@ -336,7 +330,6 @@
                 accounts.clone(),
                 <span class="comment">// Alith is sudo
                 </span><span class="prelude-val">Some</span>(accounts[<span class="number">0</span>]),
-                <span class="number">1001</span>,
             )
         }
     }
@@ -439,7 +432,6 @@
 <span class="kw">fn </span>testnet_genesis(
     endowed_accounts: Vec&lt;AccountId&gt;,
     maybe_sudo_account: <span class="prelude-ty">Option</span>&lt;AccountId&gt;,
-    chain_id: u64,
 ) -&gt; RuntimeGenesisConfig {
     <span class="comment">// This is the simplest bytecode to revert without returning any data.
     // We will pre-deploy it under all of our precompiles to ensure they can be
@@ -457,7 +449,9 @@
         balances: BalancesConfig {
             balances: endowed_accounts.iter().cloned().map(|k| (k, <span class="number">1_000_000 </span>* SSC)).collect(),
         },
-        evm_chain_id: EVMChainIdConfig { chain_id, ..Default::default() },
+        <span class="comment">// this is set to default and chain_id will be set into genesis during the domain
+        // instantiation on Consensus runtime.
+        </span>evm_chain_id: EVMChainIdConfig::default(),
         evm: EVMConfig {
             <span class="comment">// We need _some_ code inserted at the precompile address so that
             // the evm will actually call the address.
