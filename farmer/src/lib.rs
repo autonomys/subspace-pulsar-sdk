@@ -35,12 +35,12 @@ use subspace_farmer::single_disk_farm::{
 use subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 use subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
-use subspace_farmer::Identity;
+use subspace_farmer::{Identity, KNOWN_PEERS_CACHE_SIZE};
 use subspace_farmer_components::plotting::PlottedSector;
 use subspace_farmer_components::sector::{sector_size, SectorMetadataChecksummed};
 use subspace_networking::libp2p::kad::RecordKey;
 use subspace_networking::utils::multihash::ToMultihash;
-use subspace_networking::NetworkingParametersManager;
+use subspace_networking::KnownPeersManager;
 use subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
 use tokio::sync::{mpsc, oneshot, watch, Mutex, Semaphore};
 use tracing::{debug, error, warn};
@@ -933,7 +933,7 @@ impl<T: subspace_proof_of_space::Table> Farm<T> {
         // internal calculation of farm. Remove it once we have public function.
         let fixed_space_usage = 2 * 1024 * 1024
             + Identity::file_size() as u64
-            + NetworkingParametersManager::file_size() as u64;
+            + KnownPeersManager::file_size(KNOWN_PEERS_CACHE_SIZE) as u64;
         // Calculate how many sectors can fit
         let target_sector_count = {
             let potentially_plottable_space = allocated_space.saturating_sub(fixed_space_usage)

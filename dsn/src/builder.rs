@@ -13,12 +13,13 @@ use sdk_utils::{self, DestructorSet, Multiaddr, MultiaddrWithPeerId};
 use serde::{Deserialize, Serialize};
 use subspace_farmer::piece_cache::PieceCache as FarmerPieceCache;
 use subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
+use subspace_farmer::KNOWN_PEERS_CACHE_SIZE;
 use subspace_networking::libp2p::metrics::Metrics;
 use subspace_networking::utils::strip_peer_id;
 use subspace_networking::{
-    KademliaMode, PeerInfo, PeerInfoProvider, PieceByIndexRequest, PieceByIndexRequestHandler,
-    PieceByIndexResponse, SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest,
-    SegmentHeaderResponse,
+    KademliaMode, KnownPeersManager, KnownPeersManagerConfig, PeerInfo, PeerInfoProvider,
+    PieceByIndexRequest, PieceByIndexRequestHandler, PieceByIndexResponse,
+    SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
 };
 
 use super::local_provider_record_utils::MaybeLocalRecordProvider;
@@ -252,13 +253,15 @@ impl Dsn {
 
         let listen_on = listen_addresses.0.into_iter().map(Into::into).collect();
 
-        let networking_parameters_registry = subspace_networking::NetworkingParametersManager::new(
-            &base_path.join("known_addresses.bin"),
-            strip_peer_id(bootstrap_nodes.clone())
+        let networking_parameters_registry = KnownPeersManager::new(KnownPeersManagerConfig {
+            path: Some(base_path.join("known_addresses.bin").into_boxed_path()),
+            ignore_peer_list: strip_peer_id(bootstrap_nodes.clone())
                 .into_iter()
                 .map(|(peer_id, _)| peer_id)
                 .collect::<HashSet<_>>(),
-        )
+            cache_size: KNOWN_PEERS_CACHE_SIZE,
+            ..Default::default()
+        })
         .context("Failed to open known addresses database for DSN")?
         .boxed();
 
@@ -272,7 +275,7 @@ impl Dsn {
         let config = subspace_networking::Config {
             listen_on,
             allow_non_global_addresses_in_dht,
-            networking_parameters_registry: Some(networking_parameters_registry),
+            networking_parameters_registry,
             request_response_protocols: vec![
                 PieceByIndexRequestHandler::create({
                     let weak_readers_and_pieces = Arc::downgrade(&farmer_readers_and_pieces);

@@ -9,16 +9,15 @@ use domain_client_operator::{BootstrapResult, Bootstrapper};
 use domain_runtime_primitives::opaque::Block as DomainBlock;
 use futures::future;
 use futures::future::Either::{Left, Right};
+use sc_consensus_subspace::block_import::BlockImportingNotification;
 use sc_consensus_subspace::notification::SubspaceNotificationStream;
-use sc_consensus_subspace::{BlockImportingNotification, NewSlotNotification};
+use sc_consensus_subspace::slot_worker::NewSlotNotification;
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sc_utils::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
 use sdk_substrate::{Base, BaseBuilder};
-use sdk_utils::chain_spec::get_account_id_from_seed;
 use sdk_utils::{DestructorSet, MultiaddrWithPeerId, TaskOutput};
 use serde::{Deserialize, Serialize};
-use sp_core::crypto::AccountId32;
-use sp_domains::DomainId;
+use sp_domains::{DomainId, OperatorId};
 use sp_runtime::traits::Block as BlockT;
 use subspace_runtime::RuntimeApi as CRuntimeApi;
 use subspace_runtime_primitives::opaque::Block as CBlock;
@@ -73,9 +72,10 @@ pub struct DomainConfig {
     #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
     pub domain_id: DomainId,
 
-    /// XDM Relayer's account id
-    #[builder(setter(into))]
-    pub relayer_id: AccountId32,
+    /// Operator Id
+    #[builder(setter(into), default)]
+    #[serde(default, skip_serializing_if = "sdk_utils::is_default")]
+    pub maybe_operator_id: Option<OperatorId>,
 
     /// Additional arguments to pass to domain instance starter
     #[builder(setter(into), default)]
@@ -96,7 +96,7 @@ impl Default for DomainConfig {
         DomainConfig {
             chain_id: "".to_string(),
             domain_id: Default::default(),
-            relayer_id: get_account_id_from_seed("Alice"),
+            maybe_operator_id: None,
             additional_args: vec![],
             base: Default::default(),
         }
@@ -130,11 +130,7 @@ impl DomainConfigBuilder {
 
     /// Dev chain configuration
     pub fn dev() -> Self {
-        Self::new()
-            .chain_id("dev")
-            .domain_id(DomainId::new(0))
-            .relayer_id(get_account_id_from_seed("Alice"))
-            .dev_key_seed("//Alice")
+        Self::new().chain_id("dev").domain_id(DomainId::new(0)).dev_key_seed("//Alice")
     }
 
     /// Gemini 3g configuration
@@ -357,6 +353,7 @@ impl DomainConfig {
 
                     let domain_starter = DomainInstanceStarter {
                         service_config,
+                        maybe_operator_id: self.maybe_operator_id,
                         domain_id: self.domain_id,
                         runtime_type,
                         additional_arguments: self.additional_args.clone(),

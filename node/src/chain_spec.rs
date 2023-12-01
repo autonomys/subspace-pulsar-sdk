@@ -7,7 +7,7 @@ use std::num::NonZeroU32;
 use hex_literal::hex;
 use parity_scale_codec::Encode;
 use sc_service::{ChainType, NoExtension};
-use sc_subspace_chain_specs::SerializableChainSpec;
+use sc_subspace_chain_specs::{SerializableChainSpec, DEVNET_CHAIN_SPEC, GEMINI_3G_CHAIN_SPEC};
 use sc_telemetry::TelemetryEndpoints;
 use sdk_utils::chain_spec as utils;
 use sdk_utils::chain_spec::{chain_spec_properties, get_public_key_from_seed};
@@ -28,8 +28,6 @@ use crate::domains::evm_chain_spec;
 use crate::domains::evm_chain_spec::SpecId;
 
 const SUBSPACE_TELEMETRY_URL: &str = "wss://telemetry.subspace.network/submit/";
-const GEMINI_3G_CHAIN_SPEC: &[u8] = include_bytes!("../res/chain-spec-raw-gemini-3g.json");
-const DEVNET_CHAIN_SPEC: &[u8] = include_bytes!("../res/chain-spec-raw-devnet.json");
 
 /// List of accounts which should receive token grants, amounts are specified in
 /// SSC.
