@@ -198,6 +198,8 @@ impl<F: Farmer + 'static> Config<F> {
             })?
             .unwrap_or_default();
 
+        let consensus_state_pruning_mode = base.state_pruning.clone().unwrap_or_default();
+
         // Default value are used for many of parameters
         let configuration = SubspaceConfiguration {
             base,
@@ -279,6 +281,7 @@ impl<F: Farmer + 'static> Config<F> {
             let relayer_worker =
                 domain_client_message_relayer::worker::relay_consensus_chain_messages(
                     client.clone(),
+                    consensus_state_pruning_mode,
                     sync_service.clone(),
                     xdm_gossip_worker_builder.gossip_msg_sink(),
                 );

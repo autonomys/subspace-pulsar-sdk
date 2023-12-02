@@ -7,12 +7,13 @@ use domain_runtime_primitives::opaque::Block as DomainBlock;
 use domain_service::{FullBackend, FullClient};
 use futures::StreamExt;
 use sc_client_api::ImportNotifications;
+use sc_consensus_subspace::block_import::BlockImportingNotification;
 use sc_consensus_subspace::notification::SubspaceNotificationStream;
-use sc_consensus_subspace::{BlockImportingNotification, NewSlotNotification};
+use sc_consensus_subspace::slot_worker::NewSlotNotification;
 use sc_service::{BasePath, Configuration, RpcHandlers};
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sc_utils::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
-use sp_domains::{DomainId, RuntimeType};
+use sp_domains::{DomainId, OperatorId, RuntimeType};
 use sp_runtime::traits::NumberFor;
 use subspace_runtime::RuntimeApi as CRuntimeApi;
 use subspace_runtime_primitives::opaque::Block as CBlock;
@@ -27,6 +28,7 @@ use crate::ExecutorDispatch as CExecutorDispatch;
 /// given bootstrap result
 pub struct DomainInstanceStarter {
     pub service_config: Configuration,
+    pub maybe_operator_id: Option<OperatorId>,
     pub domain_id: DomainId,
     pub runtime_type: RuntimeType,
     pub additional_arguments: Vec<String>,
@@ -48,6 +50,7 @@ impl DomainInstanceStarter {
     ) -> anyhow::Result<(RpcHandlers, JoinHandle<anyhow::Result<()>>)> {
         let DomainInstanceStarter {
             domain_id,
+            maybe_operator_id,
             runtime_type,
             mut additional_arguments,
             service_config,
@@ -111,6 +114,7 @@ impl DomainInstanceStarter {
                     domain_id,
                     domain_config: service_config,
                     domain_created_at,
+                    maybe_operator_id,
                     consensus_client,
                     consensus_offchain_tx_pool_factory,
                     consensus_network_sync_oracle: consensus_sync_service.clone(),
