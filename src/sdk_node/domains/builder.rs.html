@@ -454,9 +454,6 @@
 <a href="#454" id="454">454</a>
 <a href="#455" id="455">455</a>
 <a href="#456" id="456">456</a>
-<a href="#457" id="457">457</a>
-<a href="#458" id="458">458</a>
-<a href="#459" id="459">459</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -468,16 +465,15 @@
 <span class="kw">use </span>domain_runtime_primitives::opaque::Block <span class="kw">as </span>DomainBlock;
 <span class="kw">use </span>futures::future;
 <span class="kw">use </span>futures::future::Either::{Left, Right};
+<span class="kw">use </span>sc_consensus_subspace::block_import::BlockImportingNotification;
 <span class="kw">use </span>sc_consensus_subspace::notification::SubspaceNotificationStream;
-<span class="kw">use </span>sc_consensus_subspace::{BlockImportingNotification, NewSlotNotification};
+<span class="kw">use </span>sc_consensus_subspace::slot_worker::NewSlotNotification;
 <span class="kw">use </span>sc_transaction_pool_api::OffchainTransactionPoolFactory;
 <span class="kw">use </span>sc_utils::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
 <span class="kw">use </span>sdk_substrate::{Base, BaseBuilder};
-<span class="kw">use </span>sdk_utils::chain_spec::get_account_id_from_seed;
 <span class="kw">use </span>sdk_utils::{DestructorSet, MultiaddrWithPeerId, TaskOutput};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>sp_core::crypto::AccountId32;
-<span class="kw">use </span>sp_domains::DomainId;
+<span class="kw">use </span>sp_domains::{DomainId, OperatorId};
 <span class="kw">use </span>sp_runtime::traits::Block <span class="kw">as </span>BlockT;
 <span class="kw">use </span>subspace_runtime::RuntimeApi <span class="kw">as </span>CRuntimeApi;
 <span class="kw">use </span>subspace_runtime_primitives::opaque::Block <span class="kw">as </span>CBlock;
@@ -532,9 +528,10 @@
     #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
     </span><span class="kw">pub </span>domain_id: DomainId,
 
-    <span class="doccomment">/// XDM Relayer&#39;s account id
-    </span><span class="attr">#[builder(setter(into))]
-    </span><span class="kw">pub </span>relayer_id: AccountId32,
+    <span class="doccomment">/// Operator Id
+    </span><span class="attr">#[builder(setter(into), default)]
+    #[serde(default, skip_serializing_if = <span class="string">&quot;sdk_utils::is_default&quot;</span>)]
+    </span><span class="kw">pub </span>maybe_operator_id: <span class="prelude-ty">Option</span>&lt;OperatorId&gt;,
 
     <span class="doccomment">/// Additional arguments to pass to domain instance starter
     </span><span class="attr">#[builder(setter(into), default)]
@@ -555,7 +552,7 @@
         DomainConfig {
             chain_id: <span class="string">&quot;&quot;</span>.to_string(),
             domain_id: Default::default(),
-            relayer_id: get_account_id_from_seed(<span class="string">&quot;Alice&quot;</span>),
+            maybe_operator_id: <span class="prelude-val">None</span>,
             additional_args: <span class="macro">vec!</span>[],
             base: Default::default(),
         }
@@ -589,11 +586,7 @@
 
     <span class="doccomment">/// Dev chain configuration
     </span><span class="kw">pub fn </span>dev() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new()
-            .chain_id(<span class="string">&quot;dev&quot;</span>)
-            .domain_id(DomainId::new(<span class="number">0</span>))
-            .relayer_id(get_account_id_from_seed(<span class="string">&quot;Alice&quot;</span>))
-            .dev_key_seed(<span class="string">&quot;//Alice&quot;</span>)
+        <span class="self">Self</span>::new().chain_id(<span class="string">&quot;dev&quot;</span>).domain_id(DomainId::new(<span class="number">0</span>)).dev_key_seed(<span class="string">&quot;//Alice&quot;</span>)
     }
 
     <span class="doccomment">/// Gemini 3g configuration
@@ -816,6 +809,7 @@
 
                     <span class="kw">let </span>domain_starter = DomainInstanceStarter {
                         service_config,
+                        maybe_operator_id: <span class="self">self</span>.maybe_operator_id,
                         domain_id: <span class="self">self</span>.domain_id,
                         runtime_type,
                         additional_arguments: <span class="self">self</span>.additional_args.clone(),

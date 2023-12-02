@@ -149,6 +149,10 @@
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>domain_client_operator::OperatorStreams;
@@ -158,12 +162,13 @@
 <span class="kw">use </span>domain_service::{FullBackend, FullClient};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>sc_client_api::ImportNotifications;
+<span class="kw">use </span>sc_consensus_subspace::block_import::BlockImportingNotification;
 <span class="kw">use </span>sc_consensus_subspace::notification::SubspaceNotificationStream;
-<span class="kw">use </span>sc_consensus_subspace::{BlockImportingNotification, NewSlotNotification};
+<span class="kw">use </span>sc_consensus_subspace::slot_worker::NewSlotNotification;
 <span class="kw">use </span>sc_service::{BasePath, Configuration, RpcHandlers};
 <span class="kw">use </span>sc_transaction_pool_api::OffchainTransactionPoolFactory;
 <span class="kw">use </span>sc_utils::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
-<span class="kw">use </span>sp_domains::{DomainId, RuntimeType};
+<span class="kw">use </span>sp_domains::{DomainId, OperatorId, RuntimeType};
 <span class="kw">use </span>sp_runtime::traits::NumberFor;
 <span class="kw">use </span>subspace_runtime::RuntimeApi <span class="kw">as </span>CRuntimeApi;
 <span class="kw">use </span>subspace_runtime_primitives::opaque::Block <span class="kw">as </span>CBlock;
@@ -178,6 +183,7 @@
 /// given bootstrap result
 </span><span class="kw">pub struct </span>DomainInstanceStarter {
     <span class="kw">pub </span>service_config: Configuration,
+    <span class="kw">pub </span>maybe_operator_id: <span class="prelude-ty">Option</span>&lt;OperatorId&gt;,
     <span class="kw">pub </span>domain_id: DomainId,
     <span class="kw">pub </span>runtime_type: RuntimeType,
     <span class="kw">pub </span>additional_arguments: Vec&lt;String&gt;,
@@ -199,6 +205,7 @@
     ) -&gt; anyhow::Result&lt;(RpcHandlers, JoinHandle&lt;anyhow::Result&lt;()&gt;&gt;)&gt; {
         <span class="kw">let </span>DomainInstanceStarter {
             domain_id,
+            maybe_operator_id,
             runtime_type,
             <span class="kw-2">mut </span>additional_arguments,
             service_config,
@@ -262,6 +269,7 @@
                     domain_id,
                     domain_config: service_config,
                     domain_created_at,
+                    maybe_operator_id,
                     consensus_client,
                     consensus_offchain_tx_pool_factory,
                     consensus_network_sync_oracle: consensus_sync_service.clone(),

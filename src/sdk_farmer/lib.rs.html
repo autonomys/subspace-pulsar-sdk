@@ -1114,12 +1114,12 @@
 <span class="kw">use </span>subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 <span class="kw">use </span>subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
-<span class="kw">use </span>subspace_farmer::Identity;
+<span class="kw">use </span>subspace_farmer::{Identity, KNOWN_PEERS_CACHE_SIZE};
 <span class="kw">use </span>subspace_farmer_components::plotting::PlottedSector;
 <span class="kw">use </span>subspace_farmer_components::sector::{sector_size, SectorMetadataChecksummed};
 <span class="kw">use </span>subspace_networking::libp2p::kad::RecordKey;
 <span class="kw">use </span>subspace_networking::utils::multihash::ToMultihash;
-<span class="kw">use </span>subspace_networking::NetworkingParametersManager;
+<span class="kw">use </span>subspace_networking::KnownPeersManager;
 <span class="kw">use </span>subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
 <span class="kw">use </span>tokio::sync::{mpsc, oneshot, watch, Mutex, Semaphore};
 <span class="kw">use </span>tracing::{debug, error, warn};
@@ -2012,7 +2012,7 @@
         // internal calculation of farm. Remove it once we have public function.
         </span><span class="kw">let </span>fixed_space_usage = <span class="number">2 </span>* <span class="number">1024 </span>* <span class="number">1024
             </span>+ Identity::file_size() <span class="kw">as </span>u64
-            + NetworkingParametersManager::file_size() <span class="kw">as </span>u64;
+            + KnownPeersManager::file_size(KNOWN_PEERS_CACHE_SIZE) <span class="kw">as </span>u64;
         <span class="comment">// Calculate how many sectors can fit
         </span><span class="kw">let </span>target_sector_count = {
             <span class="kw">let </span>potentially_plottable_space = allocated_space.saturating_sub(fixed_space_usage)

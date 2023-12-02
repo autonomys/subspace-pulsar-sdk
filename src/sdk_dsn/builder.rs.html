@@ -351,6 +351,9 @@
 <a href="#351" id="351">351</a>
 <a href="#352" id="352">352</a>
 <a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::{Arc, Weak};
@@ -366,12 +369,13 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>subspace_farmer::piece_cache::PieceCache <span class="kw">as </span>FarmerPieceCache;
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
+<span class="kw">use </span>subspace_farmer::KNOWN_PEERS_CACHE_SIZE;
 <span class="kw">use </span>subspace_networking::libp2p::metrics::Metrics;
 <span class="kw">use </span>subspace_networking::utils::strip_peer_id;
 <span class="kw">use </span>subspace_networking::{
-    KademliaMode, PeerInfo, PeerInfoProvider, PieceByIndexRequest, PieceByIndexRequestHandler,
-    PieceByIndexResponse, SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest,
-    SegmentHeaderResponse,
+    KademliaMode, KnownPeersManager, KnownPeersManagerConfig, PeerInfo, PeerInfoProvider,
+    PieceByIndexRequest, PieceByIndexRequestHandler, PieceByIndexResponse,
+    SegmentHeaderBySegmentIndexesRequestHandler, SegmentHeaderRequest, SegmentHeaderResponse,
 };
 
 <span class="kw">use </span><span class="kw">super</span>::local_provider_record_utils::MaybeLocalRecordProvider;
@@ -605,13 +609,15 @@
 
         <span class="kw">let </span>listen_on = listen_addresses.<span class="number">0</span>.into_iter().map(Into::into).collect();
 
-        <span class="kw">let </span>networking_parameters_registry = subspace_networking::NetworkingParametersManager::new(
-            <span class="kw-2">&amp;</span>base_path.join(<span class="string">&quot;known_addresses.bin&quot;</span>),
-            strip_peer_id(bootstrap_nodes.clone())
+        <span class="kw">let </span>networking_parameters_registry = KnownPeersManager::new(KnownPeersManagerConfig {
+            path: <span class="prelude-val">Some</span>(base_path.join(<span class="string">&quot;known_addresses.bin&quot;</span>).into_boxed_path()),
+            ignore_peer_list: strip_peer_id(bootstrap_nodes.clone())
                 .into_iter()
                 .map(|(peer_id, <span class="kw">_</span>)| peer_id)
                 .collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;(),
-        )
+            cache_size: KNOWN_PEERS_CACHE_SIZE,
+            ..Default::default()
+        })
         .context(<span class="string">&quot;Failed to open known addresses database for DSN&quot;</span>)<span class="question-mark">?
         </span>.boxed();
 
@@ -625,7 +631,7 @@
         <span class="kw">let </span>config = subspace_networking::Config {
             listen_on,
             allow_non_global_addresses_in_dht,
-            networking_parameters_registry: <span class="prelude-val">Some</span>(networking_parameters_registry),
+            networking_parameters_registry,
             request_response_protocols: <span class="macro">vec!</span>[
                 PieceByIndexRequestHandler::create({
                     <span class="kw">let </span>weak_readers_and_pieces = Arc::downgrade(<span class="kw-2">&amp;</span>farmer_readers_and_pieces);
