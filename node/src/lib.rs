@@ -212,12 +212,10 @@ impl<F: Farmer + 'static> Config<F> {
         };
 
         let node_runner_future = subspace_farmer::utils::run_future_in_dedicated_thread(
-            Box::pin({
-                async move {
-                    runner.run().await;
-                    tracing::error!("Exited from node runner future");
-                }
-            }),
+            move || async move {
+                runner.run().await;
+                tracing::error!("Exited from node runner future");
+            },
             format!("subspace-sdk-networking-{name}"),
         )
         .context("Failed to run node runner future")?;
@@ -302,6 +300,7 @@ impl<F: Farmer + 'static> Config<F> {
                     ChainId::Consensus,
                     client.clone(),
                     transaction_pool.clone(),
+                    network_service.clone(),
                     consensus_msg_receiver,
                 );
 
@@ -326,6 +325,7 @@ impl<F: Farmer + 'static> Config<F> {
                 .build(
                     base_directory,
                     ConsensusNodeLink {
+                        consensus_network: network_service.clone(),
                         consensus_client: client.clone(),
                         block_importing_notification_stream: block_importing_notification_stream
                             .clone(),

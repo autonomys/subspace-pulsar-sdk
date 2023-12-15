@@ -26,13 +26,17 @@ use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::Error;
 use parity_scale_codec::{Decode, Encode};
 pub use parse_ss58::Ss58ParsingError;
+use sc_consensus_subspace_rpc::SubspaceRpcApiClient;
 use sc_rpc_api::state::StateApiClient;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use subspace_core_primitives::PUBLIC_KEY_LENGTH;
+use subspace_core_primitives::{Piece, PieceIndex, SegmentHeader, SegmentIndex, PUBLIC_KEY_LENGTH};
 use subspace_farmer::jsonrpsee::tracing;
-
-mod rpc_client;
+use subspace_farmer::node_client::{Error as NodeClientError, NodeClient};
+use subspace_rpc_primitives::{
+    FarmerAppInfo, NodeSyncStatus, RewardSignatureResponse, RewardSigningInfo, SlotInfo,
+    SolutionResponse,
+};
 
 /// Output that indicates whether the task was cancelled or successfully
 /// completed
@@ -120,6 +124,95 @@ impl Rpc {
                     .context("Failed to decode events"),
             None => Ok(vec![]),
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl NodeClient for Rpc {
+    async fn farmer_app_info(&self) -> Result<FarmerAppInfo, NodeClientError> {
+        Ok(self.get_farmer_app_info().await?)
+    }
+
+    async fn subscribe_slot_info(
+        &self,
+    ) -> Result<Pin<Box<dyn Stream<Item = SlotInfo> + Send + 'static>>, NodeClientError> {
+        Ok(Box::pin(
+            SubspaceRpcApiClient::subscribe_slot_info(self)
+                .await?
+                .filter_map(|result| futures::future::ready(result.ok())),
+        ))
+    }
+
+    async fn submit_solution_response(
+        &self,
+        solution_response: SolutionResponse,
+    ) -> Result<(), NodeClientError> {
+        Ok(SubspaceRpcApiClient::submit_solution_response(self, solution_response).await?)
+    }
+
+    async fn subscribe_reward_signing(
+        &self,
+    ) -> Result<Pin<Box<dyn Stream<Item = RewardSigningInfo> + Send + 'static>>, NodeClientError>
+    {
+        Ok(Box::pin(
+            SubspaceRpcApiClient::subscribe_reward_signing(self)
+                .await?
+                .filter_map(|result| futures::future::ready(result.ok())),
+        ))
+    }
+
+    async fn submit_reward_signature(
+        &self,
+        reward_signature: RewardSignatureResponse,
+    ) -> Result<(), NodeClientError> {
+        Ok(SubspaceRpcApiClient::submit_reward_signature(self, reward_signature).await?)
+    }
+
+    async fn subscribe_archived_segment_headers(
+        &self,
+    ) -> Result<Pin<Box<dyn Stream<Item = SegmentHeader> + Send + 'static>>, NodeClientError> {
+        Ok(Box::pin(
+            SubspaceRpcApiClient::subscribe_archived_segment_header(self)
+                .await?
+                .filter_map(|result| futures::future::ready(result.ok())),
+        ))
+    }
+
+    async fn subscribe_node_sync_status_change(
+        &self,
+    ) -> Result<Pin<Box<dyn Stream<Item = NodeSyncStatus> + Send + 'static>>, NodeClientError> {
+        Ok(Box::pin(
+            SubspaceRpcApiClient::subscribe_node_sync_status_change(self)
+                .await?
+                .filter_map(|result| futures::future::ready(result.ok())),
+        ))
+    }
+
+    async fn segment_headers(
+        &self,
+        segment_indexes: Vec<SegmentIndex>,
+    ) -> Result<Vec<Option<SegmentHeader>>, NodeClientError> {
+        Ok(SubspaceRpcApiClient::segment_headers(self, segment_indexes).await?)
+    }
+
+    async fn piece(&self, piece_index: PieceIndex) -> Result<Option<Piece>, NodeClientError> {
+        let result = SubspaceRpcApiClient::piece(self, piece_index).await?;
+
+        if let Some(bytes) = result {
+            let piece = Piece::try_from(bytes.as_slice())
+                .map_err(|_| format!("Cannot convert piece. PieceIndex={}", piece_index))?;
+
+            return Ok(Some(piece));
+        }
+
+        Ok(None)
+    }
+
+    async fn acknowledge_archived_segment_header(
+        &self,
+        segment_index: SegmentIndex,
+    ) -> Result<(), NodeClientError> {
+        Ok(SubspaceRpcApiClient::acknowledge_archived_segment_header(self, segment_index).await?)
     }
 }
 
