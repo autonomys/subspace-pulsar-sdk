@@ -128,7 +128,7 @@ impl Rpc {
 }
 
 #[async_trait::async_trait]
-impl NodeClient for crate::Rpc {
+impl NodeClient for Rpc {
     async fn farmer_app_info(&self) -> Result<FarmerAppInfo, NodeClientError> {
         Ok(self.get_farmer_app_info().await?)
     }
