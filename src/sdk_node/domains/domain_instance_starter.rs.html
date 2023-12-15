@@ -153,8 +153,16 @@
 <a href="#153" id="153">153</a>
 <a href="#154" id="154">154</a>
 <a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
+<span class="kw">use </span>cross_domain_message_gossip::ChainTxPoolMsg;
 <span class="kw">use </span>domain_client_operator::OperatorStreams;
 <span class="kw">use </span>domain_eth_service::provider::EthProvider;
 <span class="kw">use </span>domain_eth_service::DefaultEthConfig;
@@ -165,9 +173,11 @@
 <span class="kw">use </span>sc_consensus_subspace::block_import::BlockImportingNotification;
 <span class="kw">use </span>sc_consensus_subspace::notification::SubspaceNotificationStream;
 <span class="kw">use </span>sc_consensus_subspace::slot_worker::NewSlotNotification;
+<span class="kw">use </span>sc_network::NetworkService;
 <span class="kw">use </span>sc_service::{BasePath, Configuration, RpcHandlers};
 <span class="kw">use </span>sc_transaction_pool_api::OffchainTransactionPoolFactory;
 <span class="kw">use </span>sc_utils::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
+<span class="kw">use </span>sp_core::H256;
 <span class="kw">use </span>sp_domains::{DomainId, OperatorId, RuntimeType};
 <span class="kw">use </span>sp_runtime::traits::NumberFor;
 <span class="kw">use </span>subspace_runtime::RuntimeApi <span class="kw">as </span>CRuntimeApi;
@@ -188,12 +198,13 @@
     <span class="kw">pub </span>runtime_type: RuntimeType,
     <span class="kw">pub </span>additional_arguments: Vec&lt;String&gt;,
     <span class="kw">pub </span>consensus_client: Arc&lt;CFullClient&lt;CRuntimeApi, CExecutorDispatch&gt;&gt;,
+    <span class="kw">pub </span>consensus_network: Arc&lt;NetworkService&lt;CBlock, H256&gt;&gt;,
     <span class="kw">pub </span>block_importing_notification_stream:
         SubspaceNotificationStream&lt;BlockImportingNotification&lt;CBlock&gt;&gt;,
     <span class="kw">pub </span>new_slot_notification_stream: SubspaceNotificationStream&lt;NewSlotNotification&gt;,
     <span class="kw">pub </span>consensus_sync_service: Arc&lt;sc_network_sync::SyncingService&lt;CBlock&gt;&gt;,
     <span class="kw">pub </span>consensus_offchain_tx_pool_factory: OffchainTransactionPoolFactory&lt;CBlock&gt;,
-    <span class="kw">pub </span>domain_message_receiver: TracingUnboundedReceiver&lt;Vec&lt;u8&gt;&gt;,
+    <span class="kw">pub </span>domain_message_receiver: TracingUnboundedReceiver&lt;ChainTxPoolMsg&gt;,
     <span class="kw">pub </span>gossip_message_sink: TracingUnboundedSender&lt;cross_domain_message_gossip::Message&gt;,
 }
 
@@ -205,6 +216,7 @@
     ) -&gt; anyhow::Result&lt;(RpcHandlers, JoinHandle&lt;anyhow::Result&lt;()&gt;&gt;)&gt; {
         <span class="kw">let </span>DomainInstanceStarter {
             domain_id,
+            consensus_network,
             maybe_operator_id,
             runtime_type,
             <span class="kw-2">mut </span>additional_arguments,
@@ -271,6 +283,7 @@
                     domain_created_at,
                     maybe_operator_id,
                     consensus_client,
+                    consensus_network,
                     consensus_offchain_tx_pool_factory,
                     consensus_network_sync_oracle: consensus_sync_service.clone(),
                     operator_streams,
@@ -290,6 +303,7 @@
                     evm_domain_runtime::RuntimeApi,
                     EVMDomainExecutorDispatch,
                     AccountId20,
+                    <span class="kw">_</span>,
                     <span class="kw">_</span>,
                 &gt;(domain_params)
                 .<span class="kw">await

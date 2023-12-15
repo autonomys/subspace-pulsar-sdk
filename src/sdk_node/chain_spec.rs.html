@@ -573,7 +573,7 @@
 
 <span class="doccomment">/// Gemini 3g chain spec
 </span><span class="kw">pub fn </span>gemini_3g() -&gt; ChainSpec {
-    ChainSpec::from_json_bytes(GEMINI_3G_CHAIN_SPEC).expect(<span class="string">&quot;Always valid&quot;</span>)
+    ChainSpec::from_json_bytes(GEMINI_3G_CHAIN_SPEC.as_bytes()).expect(<span class="string">&quot;Always valid&quot;</span>)
 }
 
 <span class="doccomment">/// Gemini 3g compiled chain spec
@@ -678,7 +678,7 @@
 
 <span class="doccomment">/// Dev net raw configuration
 </span><span class="kw">pub fn </span>devnet_config() -&gt; ChainSpec {
-    ChainSpec::from_json_bytes(DEVNET_CHAIN_SPEC).expect(<span class="string">&quot;Always valid&quot;</span>)
+    ChainSpec::from_json_bytes(DEVNET_CHAIN_SPEC.as_bytes()).expect(<span class="string">&quot;Always valid&quot;</span>)
 }
 
 <span class="doccomment">/// Dev net compiled configuration
