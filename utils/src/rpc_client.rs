@@ -3,11 +3,18 @@ use std::pin::Pin;
 use futures::prelude::*;
 use sc_consensus_subspace_rpc::SubspaceRpcApiClient;
 use subspace_core_primitives::{Piece, PieceIndex, SegmentHeader, SegmentIndex};
-use subspace_farmer::node_client::{Error, NodeClient};
+use subspace_farmer::node_client::{Error, NodeClient, NodeClientExt};
 use subspace_rpc_primitives::{
     FarmerAppInfo, NodeSyncStatus, RewardSignatureResponse, RewardSigningInfo, SlotInfo,
     SolutionResponse,
 };
+
+#[async_trait::async_trait]
+impl NodeClientExt for crate::Rpc {
+    async fn last_segment_headers(&self, limit: u64) -> Result<Vec<Option<SegmentHeader>>, Error> {
+        Ok(SubspaceRpcApiClient::last_segment_headers(self, limit).await?)
+    }
+}
 
 #[async_trait::async_trait]
 impl NodeClient for crate::Rpc {
@@ -94,9 +101,5 @@ impl NodeClient for crate::Rpc {
         segment_index: SegmentIndex,
     ) -> Result<(), Error> {
         Ok(SubspaceRpcApiClient::acknowledge_archived_segment_header(self, segment_index).await?)
-    }
-
-    async fn last_segment_headers(&self, limit: u64) -> Result<Vec<Option<SegmentHeader>>, Error> {
-        Ok(SubspaceRpcApiClient::last_segment_headers(self, limit).await?)
     }
 }

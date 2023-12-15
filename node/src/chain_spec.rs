@@ -73,7 +73,7 @@ pub type ChainSpec = SerializableChainSpec<RuntimeGenesisConfig>;
 
 /// Gemini 3g chain spec
 pub fn gemini_3g() -> ChainSpec {
-    ChainSpec::from_json_bytes(GEMINI_3G_CHAIN_SPEC).expect("Always valid")
+    ChainSpec::from_json_bytes(GEMINI_3G_CHAIN_SPEC.as_bytes()).expect("Always valid")
 }
 
 /// Gemini 3g compiled chain spec
@@ -178,7 +178,7 @@ pub fn gemini_3g_compiled() -> ChainSpec {
 
 /// Dev net raw configuration
 pub fn devnet_config() -> ChainSpec {
-    ChainSpec::from_json_bytes(DEVNET_CHAIN_SPEC).expect("Always valid")
+    ChainSpec::from_json_bytes(DEVNET_CHAIN_SPEC.as_bytes()).expect("Always valid")
 }
 
 /// Dev net compiled configuration

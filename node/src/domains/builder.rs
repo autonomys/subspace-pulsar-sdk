@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use cross_domain_message_gossip::Message;
+use cross_domain_message_gossip::{ChainTxPoolMsg, Message};
 use derivative::Derivative;
 use derive_builder::Builder;
 use domain_client_operator::{BootstrapResult, Bootstrapper};
@@ -12,11 +12,13 @@ use futures::future::Either::{Left, Right};
 use sc_consensus_subspace::block_import::BlockImportingNotification;
 use sc_consensus_subspace::notification::SubspaceNotificationStream;
 use sc_consensus_subspace::slot_worker::NewSlotNotification;
+use sc_network::NetworkService;
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sc_utils::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
 use sdk_substrate::{Base, BaseBuilder};
 use sdk_utils::{DestructorSet, MultiaddrWithPeerId, TaskOutput};
 use serde::{Deserialize, Serialize};
+use sp_core::H256;
 use sp_domains::{DomainId, OperatorId};
 use sp_runtime::traits::Block as BlockT;
 use subspace_runtime::RuntimeApi as CRuntimeApi;
@@ -34,6 +36,8 @@ use crate::ExecutorDispatch as CExecutorDispatch;
 pub struct ConsensusNodeLink {
     /// Consensus client
     pub consensus_client: Arc<CFullClient<CRuntimeApi, CExecutorDispatch>>,
+    /// Consensus network
+    pub consensus_network: Arc<NetworkService<CBlock, H256>>,
     /// Block import notification stream for consensus chain
     pub block_importing_notification_stream:
         SubspaceNotificationStream<BlockImportingNotification<CBlock>>,
@@ -52,7 +56,7 @@ pub struct ConsensusNodeLink {
     /// Cross domain message gossip worker's message sink
     pub gossip_message_sink: TracingUnboundedSender<Message>,
     /// Cross domain message receiver for the domain
-    pub domain_message_receiver: TracingUnboundedReceiver<Vec<u8>>,
+    pub domain_message_receiver: TracingUnboundedReceiver<ChainTxPoolMsg>,
     /// Domain boot node property read from chain-spec
     pub chain_spec_domains_bootstrap_nodes: Vec<MultiaddrWithPeerId>,
 }
@@ -167,6 +171,7 @@ impl DomainConfig {
     ) -> Result<Domain> {
         let ConsensusNodeLink {
             consensus_client,
+            consensus_network,
             block_importing_notification_stream,
             new_slot_notification_stream,
             consensus_sync_service,
@@ -353,6 +358,7 @@ impl DomainConfig {
 
                     let domain_starter = DomainInstanceStarter {
                         service_config,
+                        consensus_network,
                         maybe_operator_id: self.maybe_operator_id,
                         domain_id: self.domain_id,
                         runtime_type,
