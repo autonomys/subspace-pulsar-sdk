@@ -120,8 +120,11 @@ impl Rpc {
             .context("Failed to get events from storage")?
         {
             Some(sp_storage::StorageData(events)) =>
-                parity_scale_codec::DecodeAll::decode_all(&mut events.as_ref())
-                    .context("Failed to decode events"),
+                {
+                    println!("Raw events from the RPC: {:?}", events);
+                    parity_scale_codec::DecodeAll::decode_all(&mut events.as_ref())
+                        .context("Failed to decode events")
+                },
             None => Ok(vec![]),
         }
     }
