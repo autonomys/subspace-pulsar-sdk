@@ -5,7 +5,7 @@ use futures::prelude::*;
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt().init();
-    let plots = [subspace_sdk::FarmDescription::new("plot", subspace_sdk::ByteSize::mb(100))];
+    let plots = [subspace_sdk::FarmDescription::new("plot", subspace_sdk::ByteSize::mb(1072))];
     let node = subspace_sdk::Node::builder()
         .force_authoring(true)
         .role(subspace_sdk::node::Role::Authority)
