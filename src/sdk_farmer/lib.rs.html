@@ -1077,6 +1077,41 @@
 <a href="#1077" id="1077">1077</a>
 <a href="#1078" id="1078">1078</a>
 <a href="#1079" id="1079">1079</a>
+<a href="#1080" id="1080">1080</a>
+<a href="#1081" id="1081">1081</a>
+<a href="#1082" id="1082">1082</a>
+<a href="#1083" id="1083">1083</a>
+<a href="#1084" id="1084">1084</a>
+<a href="#1085" id="1085">1085</a>
+<a href="#1086" id="1086">1086</a>
+<a href="#1087" id="1087">1087</a>
+<a href="#1088" id="1088">1088</a>
+<a href="#1089" id="1089">1089</a>
+<a href="#1090" id="1090">1090</a>
+<a href="#1091" id="1091">1091</a>
+<a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+<a href="#1098" id="1098">1098</a>
+<a href="#1099" id="1099">1099</a>
+<a href="#1100" id="1100">1100</a>
+<a href="#1101" id="1101">1101</a>
+<a href="#1102" id="1102">1102</a>
+<a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This crate is related to abstract farmer implementation
 
 </span><span class="attr">#![warn(
@@ -1111,9 +1146,13 @@
     SingleDiskFarm, SingleDiskFarmError, SingleDiskFarmId, SingleDiskFarmInfo,
     SingleDiskFarmOptions, SingleDiskFarmSummary,
 };
+<span class="kw">use </span>subspace_farmer::thread_pool_manager::PlottingThreadPoolManager;
 <span class="kw">use </span>subspace_farmer::utils::farmer_piece_getter::FarmerPieceGetter;
 <span class="kw">use </span>subspace_farmer::utils::piece_validator::SegmentCommitmentPieceValidator;
 <span class="kw">use </span>subspace_farmer::utils::readers_and_pieces::ReadersAndPieces;
+<span class="kw">use </span>subspace_farmer::utils::{
+    all_cpu_cores, create_plotting_thread_pool_manager, thread_pool_core_indices,
+};
 <span class="kw">use </span>subspace_farmer::{Identity, KNOWN_PEERS_CACHE_SIZE};
 <span class="kw">use </span>subspace_farmer_components::plotting::PlottedSector;
 <span class="kw">use </span>subspace_farmer_components::sector::{sector_size, SectorMetadataChecksummed};
@@ -1122,7 +1161,7 @@
 <span class="kw">use </span>subspace_networking::KnownPeersManager;
 <span class="kw">use </span>subspace_rpc_primitives::{FarmerAppInfo, SolutionResponse};
 <span class="kw">use </span>tokio::sync::{mpsc, oneshot, watch, Mutex, Semaphore};
-<span class="kw">use </span>tracing::{debug, error, warn};
+<span class="kw">use </span>tracing::{debug, error, info, warn};
 <span class="kw">use </span>tracing_futures::Instrument;
 
 <span class="doccomment">/// Description of the farm
@@ -1156,25 +1195,9 @@
     <span class="kw">use </span>sdk_traits::Node;
     <span class="kw">use </span>sdk_utils::{ByteSize, PublicKey};
     <span class="kw">use </span>serde::{Deserialize, Serialize};
-    <span class="kw">use </span>tracing::warn;
 
     <span class="kw">use </span><span class="kw">super</span>::BuildError;
     <span class="kw">use crate</span>::{FarmDescription, Farmer};
-
-    <span class="kw">fn </span>available_parallelism() -&gt; usize {
-        <span class="kw">match </span>std::thread::available_parallelism() {
-            <span class="prelude-val">Ok</span>(parallelism) =&gt; parallelism.get(),
-            <span class="prelude-val">Err</span>(error) =&gt; {
-                <span class="macro">warn!</span>(
-                    %error,
-                    <span class="string">&quot;Unable to identify available parallelism, you might want to configure thread pool sizes with CLI \
-                    options manually&quot;
-                </span>);
-
-                <span class="number">0
-            </span>}
-        }
-    }
 
     <span class="attr">#[derive(
         Debug,
@@ -1254,38 +1277,36 @@
         </span><span class="kw">pub </span>max_pieces_in_sector: <span class="prelude-ty">Option</span>&lt;u16&gt;,
         <span class="doccomment">/// Size of PER FARM thread pool used for farming (mostly for blocking
         /// I/O, but also for some compute-intensive operations during
-        /// proving), defaults to number of CPU cores available in
-        /// the system
-        </span><span class="attr">#[builder(default = <span class="string">&quot;available_parallelism()&quot;</span>)]
-        </span><span class="kw">pub </span>farming_thread_pool_size: usize,
-        <span class="doccomment">/// Size of PER FARM thread pool used for plotting, defaults to number
-        /// of CPU cores available in the system.
+        /// proving), defaults to number of logical CPUs
+        /// available on UMA system and number of logical CPUs in
+        /// first NUMA node on NUMA system.
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>farming_thread_pool_size: <span class="prelude-ty">Option</span>&lt;NonZeroUsize&gt;,
+        <span class="doccomment">/// Size of one thread pool used for plotting, defaults to number of
+        /// logical CPUs available on UMA system and number of logical
+        /// CPUs available in NUMA node on NUMA system.
         ///
-        /// NOTE: The fact that this parameter is per farm doesn&#39;t mean farmer
-        /// will plot multiple sectors concurrently, see
-        /// `sector_downloading_concurrency` and
-        /// `sector_encoding_concurrency` options.
-        </span><span class="attr">#[builder(default = <span class="string">&quot;available_parallelism()&quot;</span>)]
-        </span><span class="kw">pub </span>plotting_thread_pool_size: usize,
-        <span class="doccomment">/// Size of PER FARM thread pool used for replotting, typically smaller
-        /// pool than for plotting to not affect farming as much,
-        /// defaults to half of the number of CPU cores available in the
-        /// system.
+        /// Number of thread pools is defined by `--sector-encoding-concurrency`
+        /// option, different thread pools might have different number
+        /// of threads if NUMA nodes do not have the same size.
         ///
-        /// NOTE: The fact that this parameter is per farm doesn&#39;t mean farmer
-        /// will replot multiple sectors concurrently, see
-        /// `sector-downloading-concurrency` and
-        /// `sector-encoding-concurrency` options.
-        </span><span class="attr">#[builder(default = <span class="string">&quot;available_parallelism() / 2&quot;</span>)]
-        </span><span class="kw">pub </span>replotting_thread_pool_size: usize,
-        <span class="doccomment">/// Sector downloading concurrency
-        </span><span class="attr">#[builder(default = <span class="string">&quot;NonZeroUsize::new(2).expect(\&quot;2 &gt; 0\&quot;)&quot;</span>)]
-        #[derivative(Default(value = <span class="string">&quot;NonZeroUsize::new(2).expect(\&quot;2 &gt; 0\&quot;)&quot;</span>))]
-        </span><span class="kw">pub </span>sector_downloading_concurrency: NonZeroUsize,
-        <span class="doccomment">/// Sector encoding concurrency
-        </span><span class="attr">#[builder(default = <span class="string">&quot;NonZeroUsize::new(1).expect(\&quot;1 &gt; 0\&quot;)&quot;</span>)]
-        #[derivative(Default(value = <span class="string">&quot;NonZeroUsize::new(1).expect(\&quot;1 &gt; 0\&quot;)&quot;</span>))]
-        </span><span class="kw">pub </span>sector_encoding_concurrency: NonZeroUsize,
+        /// Threads will be pinned to corresponding CPU cores at creation.
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>plotting_thread_pool_size: <span class="prelude-ty">Option</span>&lt;NonZeroUsize&gt;,
+        <span class="doccomment">/// the plotting process, defaults to `--sector-downloading-concurrency`
+        /// + 1 to download future sector ahead of time
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>sector_downloading_concurrency: <span class="prelude-ty">Option</span>&lt;NonZeroUsize&gt;,
+        <span class="doccomment">/// Defines how many sectors farmer will encode concurrently, defaults
+        /// to 1 on UMA system and number of NUMA nodes on NUMA system.
+        /// It is further restricted by `sector_downloading_concurrency`
+        /// and setting this option higher than
+        /// `sector_downloading_concurrency` will have no effect.
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>sector_encoding_concurrency: <span class="prelude-ty">Option</span>&lt;NonZeroUsize&gt;,
+        <span class="doccomment">/// Threads will be pinned to corresponding CPU cores at creation.
+        </span><span class="attr">#[builder(default)]
+        </span><span class="kw">pub </span>replotting_thread_pool_size: <span class="prelude-ty">Option</span>&lt;NonZeroUsize&gt;,
     }
 
     <span class="kw">impl </span>Builder {
@@ -1563,8 +1584,65 @@
         };
 
         <span class="kw">let </span><span class="kw-2">mut </span>plotting_delay_senders = Vec::with_capacity(farms.len());
-        <span class="kw">let </span>downloading_semaphore = Arc::new(Semaphore::new(sector_downloading_concurrency.get()));
-        <span class="kw">let </span>encoding_semaphore = Arc::new(Semaphore::new(sector_encoding_concurrency.get()));
+
+        <span class="kw">let </span>plotting_thread_pool_core_indices =
+            thread_pool_core_indices(plotting_thread_pool_size, sector_encoding_concurrency);
+        <span class="kw">let </span>replotting_thread_pool_core_indices = {
+            <span class="kw">let </span><span class="kw-2">mut </span>replotting_thread_pool_core_indices =
+                thread_pool_core_indices(replotting_thread_pool_size, sector_encoding_concurrency);
+            <span class="kw">if </span>replotting_thread_pool_size.is_none() {
+                <span class="comment">// The default behavior is to use all CPU cores, but for replotting we just want
+                // half
+                </span>replotting_thread_pool_core_indices
+                    .iter_mut()
+                    .for_each(|set| set.truncate(set.cpu_cores().len() / <span class="number">2</span>));
+            }
+            replotting_thread_pool_core_indices
+        };
+
+        <span class="kw">let </span>downloading_semaphore = Arc::new(Semaphore::new(
+            sector_downloading_concurrency
+                .map(|sector_downloading_concurrency| sector_downloading_concurrency.get())
+                .unwrap_or(plotting_thread_pool_core_indices.len() + <span class="number">1</span>),
+        ));
+
+        <span class="kw">let </span>all_cpu_cores = all_cpu_cores();
+        <span class="kw">let </span>plotting_thread_pool_manager = create_plotting_thread_pool_manager(
+            plotting_thread_pool_core_indices.into_iter().zip(replotting_thread_pool_core_indices),
+        )<span class="question-mark">?</span>;
+        <span class="kw">let </span>farming_thread_pool_size = farming_thread_pool_size
+            .map(|farming_thread_pool_size| farming_thread_pool_size.get())
+            .unwrap_or_else(|| {
+                all_cpu_cores
+                    .first()
+                    .expect(<span class="string">&quot;Not empty according to function description; qed&quot;</span>)
+                    .cpu_cores()
+                    .len()
+            });
+
+        <span class="kw">if </span>all_cpu_cores.len() &gt; <span class="number">1 </span>{
+            <span class="macro">info!</span>(numa_nodes = %all_cpu_cores.len(), <span class="string">&quot;NUMA system detected&quot;</span>);
+
+            <span class="kw">if </span>all_cpu_cores.len() &gt; farms.len() {
+                <span class="macro">warn!</span>(
+                    numa_nodes = %all_cpu_cores.len(),
+                    farms_count = %farms.len(),
+                    <span class="string">&quot;Too few disk farms, CPU will not be utilized fully during plotting, same number of farms as NUMA \
+                    nodes or more is recommended&quot;
+                </span>);
+            }
+        }
+
+        <span class="comment">// TODO: Remove code or environment variable once identified whether it helps or
+        // not
+        </span><span class="kw">if </span>std::env::var(<span class="string">&quot;NUMA_ALLOCATOR&quot;</span>).is_ok() &amp;&amp; all_cpu_cores.len() &gt; <span class="number">1 </span>{
+            <span class="kw">unsafe </span>{
+                libmimalloc_sys::mi_option_set(
+                    libmimalloc_sys::mi_option_use_numa_nodes,
+                    all_cpu_cores.len() <span class="kw">as </span>std::ffi::c_long,
+                );
+            }
+        }
 
         <span class="kw">for </span>(disk_farm_idx, description) <span class="kw">in </span>farms.iter().enumerate() {
             <span class="kw">let </span>(plotting_delay_sender, plotting_delay_receiver) =
@@ -1582,11 +1660,9 @@
                 kzg: kzg.clone(),
                 erasure_coding: erasure_coding.clone(),
                 farming_thread_pool_size,
-                plotting_thread_pool_size,
-                replotting_thread_pool_size,
                 plotting_delay: <span class="prelude-val">Some</span>(plotting_delay_receiver),
                 downloading_semaphore: Arc::clone(<span class="kw-2">&amp;</span>downloading_semaphore),
-                encoding_semaphore: Arc::clone(<span class="kw-2">&amp;</span>encoding_semaphore),
+                plotting_thread_pool_manager: plotting_thread_pool_manager.clone(),
             })
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1914,11 +1990,9 @@
     <span class="kw">pub </span>erasure_coding: ErasureCoding,
     <span class="kw">pub </span>max_pieces_in_sector: u16,
     <span class="kw">pub </span>farming_thread_pool_size: usize,
-    <span class="kw">pub </span>plotting_thread_pool_size: usize,
-    <span class="kw">pub </span>replotting_thread_pool_size: usize,
     <span class="kw">pub </span>plotting_delay: <span class="prelude-ty">Option</span>&lt;futures::channel::oneshot::Receiver&lt;()&gt;&gt;,
     <span class="kw">pub </span>downloading_semaphore: Arc&lt;Semaphore&gt;,
-    <span class="kw">pub </span>encoding_semaphore: Arc&lt;Semaphore&gt;,
+    <span class="kw">pub </span>plotting_thread_pool_manager: PlottingThreadPoolManager,
 }
 
 <span class="kw">impl</span>&lt;T: subspace_proof_of_space::Table&gt; Farm&lt;T&gt; {
@@ -1934,11 +2008,9 @@
             erasure_coding,
             max_pieces_in_sector,
             farming_thread_pool_size,
-            plotting_thread_pool_size,
-            replotting_thread_pool_size,
             plotting_delay,
             downloading_semaphore,
-            encoding_semaphore,
+            plotting_thread_pool_manager,
         }: FarmOptions&lt;
             <span class="lifetime">&#39;_</span>,
             <span class="kw">impl </span>subspace_farmer_components::plotting::PieceGetter + Clone + Send + Sync + <span class="lifetime">&#39;static</span>,
@@ -1963,11 +2035,9 @@
             piece_getter,
             cache_percentage,
             downloading_semaphore,
-            encoding_semaphore,
             farm_during_initial_plotting: <span class="bool-val">false</span>,
             farming_thread_pool_size,
-            plotting_thread_pool_size,
-            replotting_thread_pool_size,
+            plotting_thread_pool_manager,
             plotting_delay,
         };
         <span class="kw">let </span>single_disk_farm_fut = SingleDiskFarm::new::&lt;<span class="kw">_</span>, <span class="kw">_</span>, T&gt;(description, disk_farm_idx);
