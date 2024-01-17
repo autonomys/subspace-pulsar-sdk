@@ -17,8 +17,8 @@ libmimalloc-sys = { version = "0.1.35", features = ["extended"] }
 parking_lot = "0.12"
 pin-project = "1"
 rayon = "1.7.0"
-sdk-traits = { path = "../traits", default-features = false }
-sdk-utils = { path = "../utils", default-features = false }
+sdk-traits = { path = "../traits" }
+sdk-utils = { path = "../utils" }
 serde = { version = "1", features = ["derive"] }
 subspace-core-primitives = { git = "https://github.com/subspace/subspace", rev = "bd435100200b3dcce6d6f50534d52e3cd039ca8e" }
 subspace-erasure-coding = { git = "https://github.com/subspace/subspace", rev = "bd435100200b3dcce6d6f50534d52e3cd039ca8e" }
@@ -37,8 +37,6 @@ tracing-futures = "0.2"
 default = ["numa"]
 numa = [
     "subspace-farmer/numa",
-    "sdk-traits/numa",
-    "sdk-utils/numa"
 ]
 integration-test = [
     "sdk-utils/integration-test",

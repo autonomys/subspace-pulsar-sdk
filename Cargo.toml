@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-sdk-dsn = { path = "dsn", default-features = false }
+sdk-dsn = { path = "dsn" }
 sdk-farmer = { path = "farmer", default-features = false }
-sdk-node = { path = "node", default-features = false }
-sdk-substrate = { path = "substrate", default-features = false }
-sdk-utils = { path = "utils", default-features = false }
+sdk-node = { path = "node" }
+sdk-substrate = { path = "substrate" }
+sdk-utils = { path = "utils" }
 static_assertions = "1.1.0"
 
 subspace-proof-of-space = { git = "https://github.com/subspace/subspace", rev = "bd435100200b3dcce6d6f50534d52e3cd039ca8e" }
@@ -153,10 +153,6 @@ members = [
 default = ["numa"]
 numa = [
     "sdk-farmer/numa",
-    "sdk-dsn/numa",
-    "sdk-utils/numa",
-    "sdk-node/numa",
-    "sdk-substrate/numa"
 ]
 integration-test = [
     "sdk-utils/integration-test",
