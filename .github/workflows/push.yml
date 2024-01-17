@@ -2,8 +2,8 @@ name: Rust checks and tests
 on:
   pull_request:
     paths-ignore:
-      - '**.md'
-      - '.gitignore'
+      - "**.md"
+      - ".gitignore"
 
   workflow_dispatch:
     inputs:
@@ -68,31 +68,47 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Needed for hwloc
+      - name: Install automake (macOS)
+        run: brew install automake
+        if: runner.os == 'macOS'
+
       # Workaround to resolve link error with C:\msys64\mingw64\bin\libclang.dll
       - name: Remove msys64
         run: Remove-Item -LiteralPath "C:\msys64\" -Force -Recurse
         if: runner.os == 'Windows'
         continue-on-error: true
 
-      - name: Add cache
-        uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
+      - name: Configure cache
+        uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # @v3.3.2
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/bin
+            ~/.cargo/git
           key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-cargo-
 
       - name: Clean unused crate source checkouts and git repo checkouts
         run: cargo cache
 
-      - uses: actions-rs/clippy-check@b5b5f21f4797c02da247df37026fcd0a5024aa4d # v1.0.7
+      - name: cargo clippy (Linux & Windows)
+        uses: actions-rs/clippy-check@b5b5f21f4797c02da247df37026fcd0a5024aa4d # v1.0.7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --locked -- -D warnings
+          args: --locked --all-targets -- -D warnings
+        if: runner.os != 'macOS'
+
+      - name: cargo clippy (MacOS)
+        uses: actions-rs/clippy-check@b5b5f21f4797c02da247df37026fcd0a5024aa4d # @v1.0.7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --locked  --no-default-features -- -D warnings
+        if: runner.os == 'macOS'
 
       - name: Clean unused artifacts
         run: cargo sweep --maxsize ${{ env.MAX_TARGET_SIZE }}
-
 
   test:
     strategy:
@@ -100,11 +116,11 @@ jobs:
         os: ${{ fromJson(github.repository_owner == 'subspace' && '[["self-hosted", "ubuntu-20.04-x86-64"], ["self-hosted", "macos-12-arm64"], ["self-hosted", "windows-server-2022-x86-64"]]' || '["ubuntu-20.04", "macos-12", "windows-2022"]') }}
         run-all:
           - ${{ inputs.test-macos-and-windows || github.ref == 'refs/heads/master' }}
-        exclude:  # exclude macos-12 and window-2022 when the condition is false
-        - run-all: false
-          os: macos-12
-        - run-all: false
-          os: windows-2022
+        exclude: # exclude macos-12 and window-2022 when the condition is false
+          - run-all: false
+            os: macos-12
+          - run-all: false
+            os: windows-2022
 
     runs-on: ${{ matrix.os }}
 
@@ -124,6 +140,11 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Needed for hwloc
+      - name: Install automake (macOS)
+        run: brew install automake
+        if: runner.os == 'macOS'
+
       # Workaround to resolve link error with C:\msys64\mingw64\bin\libclang.dll
       - name: Remove msys64
         run: Remove-Item -LiteralPath "C:\msys64\" -Force -Recurse
@@ -131,7 +152,7 @@ jobs:
         continue-on-error: true
 
       - name: Add cache
-        uses: actions/cache@69d9d449aced6a2ede0bc19182fadc3a0a42d2b0 # v3.2.6
+        uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # @v3.3.2
         if: runner.os != 'Windows'
         with:
           path: |
@@ -152,8 +173,13 @@ jobs:
         if: runner.os != 'Windows'
         run: cargo cache
 
-      - name: Build and run tests
+      - name: Build and run tests (linux & windows)
         run: cargo test --locked --test integration --release --features=integration-test -- --test-threads=1 --nocapture
+        if: runner.os != 'macOS'
+
+      - name: Build and run tests (macOS)
+        run: cargo test --locked --test integration --release --no-default-features --features=integration-test -- --test-threads=1 --nocapture
+        if: runner.os == 'macOS'
 
       - name: Clean unused artifacts
         if: runner.os != 'Windows'
