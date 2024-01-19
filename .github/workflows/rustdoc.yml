@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths-ignore:
-      - '**.md'
-      - '.gitignore'
+      - "**.md"
+      - ".gitignore"
 
 env:
   CARGO_INCREMENTAL: 0
@@ -21,10 +21,11 @@ jobs:
       - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
 
       # On macOS, we need a proper Clang version, not Apple's custom version without wasm32 support
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@8852e4d5c58653ed05135c0a5d949d9c2febcb00 # v1.6.1
+      - name: Install LLVM and Clang for macOS
+        uses: KyleMayes/install-llvm-action@be40c5af3a4adc3e4a03199995ab73aa37536712 # v1.9.0
         with:
-          version: "15.0"
+          # TODO: Switch to LLVM 17 on arm64 runners once https://github.com/KyleMayes/install-llvm-action/issues/61 is resolved
+          version: 15.0.7
 
       - name: Install Protoc
         uses: arduino/setup-protoc@149f6c87b92550901b26acd1632e11c3662e381f # v1.3.0
